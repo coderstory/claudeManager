@@ -2,14 +2,24 @@
 # scripts/build-only.sh — 仅编译（不复制、不冒烟）
 #
 # 用法：
-#   ./scripts/build-only.sh            # cargo build（debug）
-#   ./scripts/build-only.sh --release  # cargo build --release
-#   ./scripts/build-only.sh --clean    # 先 cargo clean 再 build（强制全量重编）
-#   ./scripts/build-only.sh --check    # 只跑 cargo check（不生成 exe）
+#   ./scripts/build-only.sh            # cargo build --release
+#   ./scripts/build-only.sh --release  # 同上（默认就是 release）
+#   ./scripts/build-only.sh --check    # 只跑 cargo check
+#   ./scripts/build-only.sh --clean    # 先 cargo clean 再 build
 #
 # 用于：开发循环快速验证编译通过 / 全量重建 / 类型检查
 
 set -euo pipefail
+
+# Auto-add mingw64 bin for windres/dlltool (same as build-and-ship.sh)
+if ! command -v windres >/dev/null 2>&1; then
+  for candidate in "/c/msys64/mingw64/bin" "/mingw64/bin" "/c/MinGW/msys/1.0/bin"; do
+    if [[ -x "$candidate/windres.exe" ]]; then
+      export PATH="$candidate:$PATH"
+      break
+    fi
+  done
+fi
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"

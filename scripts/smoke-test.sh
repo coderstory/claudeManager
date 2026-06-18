@@ -62,7 +62,9 @@ echo ">>> Test 1: Launch & process running"
 powershell.exe -NoProfile -Command "Start-Process -FilePath '$EXE_PATH'" 2>&1 || true
 sleep 5
 
-PROC_COUNT=$(tasklist 2>/dev/null | grep -ic "${EXE_NAME_NO_EXT}" || echo "0")
+PROC_COUNT=$(powershell.exe -NoProfile -Command "
+  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+" 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_COUNT" -ge "1" ]]; then
   record "1_launch" "PASS" "process running (count=$PROC_COUNT)"
 else
@@ -94,7 +96,9 @@ powershell.exe -NoProfile -Command "
 " 2>&1 || true
 sleep 2
 
-PROC_AFTER_CLOSE=$(tasklist 2>/dev/null | grep -ic "${EXE_NAME_NO_EXT}" || echo "0")
+PROC_AFTER_CLOSE=$(powershell.exe -NoProfile -Command "
+  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+" 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_CLOSE" -ge "1" ]]; then
   record "3_tray" "PASS" "process survived close (in tray)"
 else
@@ -109,7 +113,9 @@ powershell.exe -NoProfile -Command "
 " 2>&1 || true
 sleep 2
 
-PROC_AFTER_KILL=$(tasklist 2>/dev/null | grep -ic "${EXE_NAME_NO_EXT}" || echo "0")
+PROC_AFTER_KILL=$(powershell.exe -NoProfile -Command "
+  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+" 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_KILL" == "0" ]]; then
   record "4_kill" "PASS" "process gone within 2s"
 else

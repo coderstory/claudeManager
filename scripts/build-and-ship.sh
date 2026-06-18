@@ -5,13 +5,27 @@
 #   ./scripts/build-and-ship.sh --milestone M1 --task 1.1 --slug scaffold
 #
 # 流程：
-#   1. cargo build 生成 debug exe
+#   1. cargo build --release 生成 release exe
 #   2. 复制 exe + WebView2Loader.dll 到桌面
 #   3. 跑 smoke test
 #   4. smoke test 失败 → 从桌面删除 exe，exit 1
 #   5. smoke test 通过 → 输出报告，等用户核定
 
 set -euo pipefail
+
+# === Auto-fix: ensure MinGW64 bin (windres/dlltool) on PATH for cargo build ===
+# This machine's Git Bash PATH does not include msys2 mingw64 bin, but Rust's
+# windows-gnu toolchain requires windres.exe to compile .rc → .res for PE
+# resources. Auto-detect and add if present.
+if ! command -v windres >/dev/null 2>&1; then
+  for candidate in "/c/msys64/mingw64/bin" "/mingw64/bin" "/c/MinGW/msys/1.0/bin"; do
+    if [[ -x "$candidate/windres.exe" ]]; then
+      export PATH="$candidate:$PATH"
+      echo ">>> Auto-added $candidate to PATH (windres found)"
+      break
+    fi
+  done
+fi
 
 # Parse args
 MILESTONE=""
@@ -58,7 +72,7 @@ sleep 1
 
 # === Step 2: Build ===
 echo ""
-echo "[2/5] Building debug exe..."
+echo "[2/5] Building release exe..."
 cd "$PROJECT_ROOT"
 BUILD_START=$(date +%s)
 cargo build --release --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20

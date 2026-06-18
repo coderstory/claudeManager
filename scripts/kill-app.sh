@@ -48,7 +48,9 @@ else
   echo ">>> Waiting up to 5s for graceful exit..."
   for i in {1..10}; do
     sleep 0.5
-    REMAINING=$(tasklist 2>/dev/null | grep -ic "${EXE_NAME%.exe}" || echo "0")
+    REMAINING=$(powershell.exe -NoProfile -Command "
+      @(Get-Process -Name '${EXE_NAME%.exe}' -ErrorAction SilentlyContinue).Count
+    " 2>&1 | tr -d '\r' | head -1)
     if [[ "$REMAINING" == "0" ]]; then
       echo ">>> Graceful exit successful."
       exit 0
@@ -60,7 +62,9 @@ else
 fi
 
 sleep 1
-REMAINING=$(tasklist 2>/dev/null | grep -ic "${EXE_NAME%.exe}" || echo "0")
+REMAINING=$(powershell.exe -NoProfile -Command "
+  @(Get-Process -Name '${EXE_NAME%.exe}' -ErrorAction SilentlyContinue).Count
+" 2>&1 | tr -d '\r' | head -1)
 if [[ "$REMAINING" == "0" ]]; then
   echo ">>> All processes cleaned."
   exit 0
