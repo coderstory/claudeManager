@@ -35,8 +35,8 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP_BASE="/c/Users/e-Yunfei.Qian/Desktop"
 DEST_DIR="$DESKTOP_BASE/ClaudeConfigManager-${MILESTONE}"
 DEST_EXE="$DEST_DIR/ClaudeConfigManager-${MILESTONE}.${TASK}-${SLUG}.exe"
-SOURCE_EXE="$PROJECT_ROOT/src-tauri/target/debug/claude-config-manager.exe"
-WEBVIEW2_DLL_SRC="$PROJECT_ROOT/src-tauri/target/debug/WebView2Loader.dll"
+SOURCE_EXE="$PROJECT_ROOT/src-tauri/target/release/claude-config-manager.exe"
+WEBVIEW2_DLL_SRC="$PROJECT_ROOT/src-tauri/target/release/WebView2Loader.dll"
 WEBVIEW2_DLL_DST="$DEST_DIR/WebView2Loader.dll"
 
 EXE_NAME="claude-config-manager.exe"
@@ -61,7 +61,7 @@ echo ""
 echo "[2/5] Building debug exe..."
 cd "$PROJECT_ROOT"
 BUILD_START=$(date +%s)
-cargo build --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20
+cargo build --release --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20
 BUILD_END=$(date +%s)
 BUILD_DUR=$((BUILD_END - BUILD_START))
 echo "    Build took ${BUILD_DUR}s"
