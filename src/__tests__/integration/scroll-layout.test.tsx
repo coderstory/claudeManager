@@ -18,14 +18,44 @@
  * intentionally narrow — they should fail before the fix and pass
  * after it.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
-import tokensCss from '../../design-system/tokens.css?raw';
+
+// Vite's `?raw` query returns an empty string inside vitest, so we
+// read tokens.css off disk instead. The path is computed at module
+// load via __dirname (vitest's CJS-ish wrapper for .test.tsx).
+const tokensCss = readFileSync(
+  resolve(__dirname, '../../design-system/tokens.css'),
+  'utf-8',
+);
+
+// jsdom doesn't auto-apply CSS module imports — inject the shipping
+// stylesheet into a fresh <style> tag so getComputedStyle can see
+// the rules our Tauri webview actually delivers at runtime.
+let _styleTag: HTMLStyleElement | null = null;
+function ensureTokensLoaded(): void {
+  for (const el of Array.from(
+    document.head.querySelectorAll('style[data-test-tokens]'),
+  )) {
+    el.remove();
+  }
+  _styleTag = document.createElement('style');
+  _styleTag.setAttribute('data-test-tokens', '1');
+  _styleTag.textContent = tokensCss;
+  document.head.appendChild(_styleTag);
+}
+
+beforeAll(() => {
+  ensureTokensLoaded();
+});
 
 beforeEach(() => {
   localStorage.clear();
+  ensureTokensLoaded();
 });
 
 function renderApp(): void {
