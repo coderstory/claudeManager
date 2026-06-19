@@ -15,6 +15,29 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_positioner::init())
+        // M1.6 — Tauri 官方 plugin 注册（顺序按白名单表）
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // F20 单实例锁：第二实例启动时聚焦已有主窗口
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+        }))
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
             // macOS impls based on target_os). Must run before any
