@@ -9,8 +9,8 @@
  */
 import type { ReactElement } from 'react';
 import type { ViewId } from '../hooks/useViewState';
-import { ALL_VIEWS, HOME_VIEW } from '../hooks/useViewState';
-import { cn } from '../lib/utils';
+import { ALL_VIEWS, HOME_VIEW } from '../../hooks/useViewState';
+import { cn } from '../../lib/utils';
 
 export interface HomeViewProps {
   onNavigate: (view: ViewId) => void;
