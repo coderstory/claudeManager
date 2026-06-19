@@ -1,10 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the Claude Config Manager main window (M1.4 + M1.6). WHY: covers the main window's needs across the M1+M2 SPEC feature surface (F1-F24). Permissions are organised by Tauri namespace. Each permission entry includes a `_why` field with a short rationale tied to a SPEC rule, so reviewers can map a permission back to the requirement that justifies it. DO NOT enable shell:allow-execute in production builds (use a custom command that wraps git invocations in the IGitHost interface, per SPEC §3.2 and §5.10). ROADMAP: tauri-plugin-updater permissions (v1.1 release pipeline, NOT M1) — wire when release build is configured.",
+  "description": "Default capabilities for the Claude Config Manager main window (M1.4 + M1.6). WHY: covers the main window's needs across the M1+M2 SPEC feature surface (F1-F24). Permissions are organised by Tauri namespace. Each permission entry includes a `_why` field with a short rationale tied to a SPEC rule, so reviewers can map a permission back to the requirement that justifies it. DO NOT enable shell:allow-execute in production builds (use a custom command that wraps git invocations in the IGitHost interface, per SPEC §3.2 and §5.10). ROADMAP: tauri-plugin-updater permissions (v1.1 release pipeline, NOT M1) — wire when release build is configured. M1.9.2: the four explicit core:window:allow-* entries below are required because the `core:window:default` set does not include them (verified against src-tauri/gen/schemas/acl-manifests.json). They back the custom chrome buttons in src/components/WindowControls.tsx (min / maximize / close) and the liquid-glass bootstrap in src/design-system/applyEffects.ts.",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-set-effects",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
     "opener:default",
     "opener:allow-open-path",
     "positioner:default",
