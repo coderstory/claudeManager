@@ -121,8 +121,15 @@ export function AppSidebar({
       aria-label="主导航"
       style={{
         width: SIDEBAR_WIDTH,
+        // flexShrink:0 so the rail never compresses to fit a
+        // narrower window; minHeight:0 lets the flex parent
+        // constrain its height so overflowY:auto actually engages
+        // when the 12 nav items exceed the viewport. The earlier
+        // height:'100%' was a no-op in the flex chain (parent
+        // wasn't a definite-height block container) and made the
+        // sidebar silently clip instead of scroll.
         flexShrink: 0,
-        height: '100%',
+        minHeight: 0,
         overflowY: 'auto',
         background: 'var(--bg-elevated)',
         borderRight: '1px solid var(--border)',

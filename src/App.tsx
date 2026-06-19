@@ -146,6 +146,17 @@ export default function App(): ReactElement {
     <div
       className="flex flex-col h-screen overflow-hidden"
       style={{
+        // App-shell layout: the outer box is a vertical flex
+        // container that exactly fills the WebView2 viewport. The
+        // flex-direction+height combination is what gives the
+        // sidebar + main pane a known height to scroll inside. We
+        // set these inline (rather than relying on Tailwind
+        // utility classes) because this project doesn't ship a
+        // Tailwind config — see CLAUDE.md §2.4 / M1.9.1-fix note.
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
         background: 'var(--bg-primary)',
         color: 'var(--text-primary)',
       }}
@@ -156,12 +167,26 @@ export default function App(): ReactElement {
         onNavigate={handleNavigate}
         pageTitle={pageTitleFn}
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div
+        className="flex flex-1 overflow-hidden"
+        style={{ minHeight: 0 }}
+      >
         <AppSidebar currentView={view} onNavigate={handleNavigate} />
         <main
           className="flex-1 overflow-hidden relative"
           data-testid="app-main"
-          style={{ background: 'var(--bg-primary)' }}
+          style={{
+            // min-height:0 is the fix for the silent-clip sidebar /
+            // main-pane symptom — without it, flex items default
+            // to min-height:auto and refuse to shrink below their
+            // content height, so overflow:hidden just clips
+            // instead of letting the internal scroller engage.
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            position: 'relative',
+            background: 'var(--bg-primary)',
+          }}
         >
           {/* AnimatePresence drives the opacity fade between views.
               Default (non-`wait`) mode lets old + new briefly coexist
@@ -176,7 +201,11 @@ export default function App(): ReactElement {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              style={{ height: '100%' }}
+              // No explicit height — the parent <main> is a flex
+              // column with min-height:0, and HomeView /
+              // PluginPlaceholder fill the available space via their
+              // own h-full + overflow-auto. Setting height:100%
+              // inside an unconstrained flex parent collapses to 0.
               data-testid="app-view"
             >
               {view === 'home' ? (
