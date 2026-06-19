@@ -26,6 +26,22 @@ serde_json = "1"
 dirs = "5"
 thiserror = "1"
 
+# M1.6 — 10 个 Tauri 官方 plugin（version 锁，按 SPEC.md F1-F24 需求白名单）
+# 所有版本必须为 =X.Y.Z 精确锁定（CLAUDE.md §2.3），不写 ^/~。
+# 顺序按白名单表，便于 review。
+tauri-plugin-fs          = "=2.5.1"   # F2/F6/F13/F18/F19 文件 IO（~/.claude/**, appdata）
+tauri-plugin-dialog      = "=2.7.1"   # F3 .sql picker / F5/F14 save-open 对话框
+tauri-plugin-notification = "=2.3.3"  # M1.1 tray+notify 系统通知
+tauri-plugin-shell       = "=2.3.5"   # shell.open / execute（M2+ reveal in explorer / git fallback）
+tauri-plugin-os          = "=2.3.2"   # locale + version（About 页用）
+tauri-plugin-deep-link   = "=2.4.9"   # F4 ccswitch:// deeplink 导入 provider
+tauri-plugin-single-instance = { version = "=2.4.2", features = ["deep-link"] }  # F20 单实例锁（+deep-link 联动 F4）
+tauri-plugin-store       = "=2.4.3"   # provider library + settings KV 持久化
+tauri-plugin-log         = "=2.8.0"   # 结构化 app 日志
+tauri-plugin-updater     = "=2.10.1"  # v1.1 release 自动更新（M3 阶段启用）
+tauri-plugin-autostart   = "=2.5.1"   # M1.7 开机自启（IPlatformAutostart trait 实现）
+tauri-plugin-process     = "=2.3.1"   # 进程管理（kill 重启 / exit 用）
+
 [dev-dependencies]
 tempfile = "3"
 mockall = "0.13"
