@@ -44,6 +44,7 @@
  */
 import type { ReactElement } from 'react';
 import { useCallback, useMemo } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -158,22 +159,40 @@ export default function App(): ReactElement {
       <div className="flex flex-1 overflow-hidden">
         <AppSidebar currentView={view} onNavigate={handleNavigate} />
         <main
-          className="flex-1 overflow-hidden"
+          className="flex-1 overflow-hidden relative"
           data-testid="app-main"
           style={{ background: 'var(--bg-primary)' }}
         >
-          {view === 'home' ? (
-            <HomeView
-              onNavigate={handleNavigate}
-              pageTitle={pageTitleFn}
-            />
-          ) : (
-            <PluginPlaceholder
-              pluginId={view}
-              title={pageTitle(view)}
-              description={pageDescription(view)}
-            />
-          )}
+          {/* AnimatePresence drives the opacity fade between views.
+              Default (non-`wait`) mode lets old + new briefly coexist
+              during the 150ms fade — this is what cc-switch uses and
+              feels snappier than `wait`. Each view is keyed by its
+              view id so framer-motion treats each transition as a
+              distinct scene. */}
+          <AnimatePresence initial={false}>
+            <motion.div
+              key={view}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              style={{ height: '100%' }}
+              data-testid="app-view"
+            >
+              {view === 'home' ? (
+                <HomeView
+                  onNavigate={handleNavigate}
+                  pageTitle={pageTitleFn}
+                />
+              ) : (
+                <PluginPlaceholder
+                  pluginId={view}
+                  title={pageTitle(view)}
+                  description={pageDescription(view)}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>
