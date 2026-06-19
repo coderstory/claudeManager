@@ -21,9 +21,9 @@
  *   — they don't render in the webview at all.
  */
 import type { ReactElement } from 'react';
-import { ArrowLeft, Moon, Settings, Sun } from 'lucide-react';
+import { ArrowLeft, Moon, Monitor, Settings, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTheme } from '../design-system/ThemeProvider';
+import { useTheme, type Theme } from '../design-system/ThemeProvider';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
 import { WindowControls } from './WindowControls';
@@ -136,10 +136,28 @@ export function AppHeader({
       <div className="flex items-center gap-2" style={noDragStyle}>
         <button
           type="button"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => {
+            // M1.11 fix (BP-3.01): cycle light → dark → auto → light
+            // so the 'auto' mode survives a click. The previous
+            // binary toggle silently destroyed 'auto' on the first
+            // click, defeating ThemeProvider's 3-state contract.
+            const next: Theme =
+              theme === 'light' ? 'dark' :
+              theme === 'dark' ? 'auto' :
+              'light';
+            setTheme(next);
+          }}
           data-testid="app-header-theme-toggle"
-          aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
-          title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+          aria-label={
+            theme === 'light' ? '切换到深色主题' :
+            theme === 'dark' ? '切换到自动模式' :
+            '切换到浅色主题'
+          }
+          title={
+            theme === 'light' ? '切换到深色' :
+            theme === 'dark' ? '切换到自动' :
+            '切换到浅色'
+          }
           className={cn(
             'flex items-center justify-center',
             'transition-colors hover:bg-black/5 dark:hover:bg-white/5',
@@ -155,6 +173,8 @@ export function AppHeader({
         >
           {theme === 'dark' ? (
             <Sun size={16} style={{ color: 'var(--text-primary)' }} />
+          ) : theme === 'auto' ? (
+            <Monitor size={16} style={{ color: 'var(--text-primary)' }} />
           ) : (
             <Moon size={16} style={{ color: 'var(--text-primary)' }} />
           )}

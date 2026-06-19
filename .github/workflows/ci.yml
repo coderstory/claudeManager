@@ -21,7 +21,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        # M1.11 fix (F-1.06): pin to a specific stable version so CI
+        # behaviour does not drift when Rust publishes a new minor.
+        # Bump via PR when intentional.
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Cache cargo target
         uses: Swatinem/rust-cache@v2
@@ -69,7 +72,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # M1.11 fix (F-1.06): pin Node to a specific patch version.
+          # Bump via PR when intentional.
+          node-version: '22.18.0'
           cache: 'npm'
 
       - name: Install dependencies
@@ -94,7 +99,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # M1.11 fix (F-1.06): pin Node to a specific patch version.
+          # Bump via PR when intentional.
+          node-version: '22.18.0'
           cache: 'npm'
 
       - uses: msys2/setup-msys2@v2
@@ -107,7 +114,10 @@ jobs:
             mingw-w64-x86_64-cc
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        # M1.11 fix (F-1.06): pin to a specific stable version so CI
+        # behaviour does not drift when Rust publishes a new minor.
+        # Bump via PR when intentional.
+        uses: dtolnay/rust-toolchain@1.86.0
 
       - name: Cache cargo target
         uses: Swatinem/rust-cache@v2
@@ -127,7 +137,10 @@ jobs:
         run: npm install -g @tauri-apps/tauri-driver
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # M1.11 fix (F-1.06): pin Playwright to the project-declared version
+        # (see package.json devDependencies) so CI does not silently
+        # upgrade to the latest release.
+        run: npx -y playwright@1.49.1 install --with-deps chromium
 
       - name: Run Playwright e2e
         shell: msys2 {0}
