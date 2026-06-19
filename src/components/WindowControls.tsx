@@ -133,7 +133,21 @@ function CloseButton(): ReactElement {
       )}
       style={baseButtonStyle}
       onClick={() => {
-        void safeCall(() => getCurrentWindow().close());
+        // M1.11 fix (BP-4.01 / P-7): close button MUST NOT silently
+        // swallow errors. If the IPC call rejects, the user clicks
+        // close and nothing happens — they are stuck with a
+        // frozen-feeling window. Re-throw so the React error
+        // boundary (or a future toast) surfaces it.
+        // The other two buttons (min / max) keep safeCall because
+        // their failure is cosmetic — close is the only one whose
+        // failure leaves the user stuck.
+        // `Promise.resolve(...)` guards against tests that mock
+        // `close` as a non-Promise return value.
+        Promise.resolve(getCurrentWindow().close()).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[WindowControls] close() failed:', err);
+          throw err;
+        });
       }}
     >
       <X size={16} aria-hidden="true" />

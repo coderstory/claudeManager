@@ -55,6 +55,12 @@ export function ThemeProvider({ children }: { children: ReactNode }): ReactEleme
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'light';
     const stored = window.localStorage.getItem(STORAGE_KEY);
+    // M1.11 fix (F-1.04 / BP-3.01): if the persisted value is 'auto',
+    // resolve to the system theme NOW so the first render paints with
+    // the correct data-theme. Previously the initial state was the
+    // literal string 'auto', leaving documentElement.dataset.theme
+    // unset until the useEffect ran on the next render.
+    if (stored === 'auto') return 'auto';
     return isTheme(stored) ? stored : 'light';
   });
 
