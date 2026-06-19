@@ -18,12 +18,30 @@ EXE_PATH="${1:?Usage: smoke-test.sh <exe-path>}"
 EXE_DIR=$(dirname "$EXE_PATH")
 EXE_BASENAME=$(basename "$EXE_PATH")
 EXE_NAME_NO_EXT="${EXE_BASENAME%.exe}"
-PROCNAME="${EXE_NAME_NO_EXT}.exe"
+
+# The Tauri exe process name is fixed at compile time (carved into the PE
+# image). Renaming the file on disk (e.g. `ClaudeConfigManager-M1.1.2-...exe`
+# for shipping) does NOT change the process name. So `Get-Process -Name` must
+# use the original image name, not the renamed file's stem.
+#
+# Convention: source exe is always `claude-config-manager.exe` in
+# `target/release/`. We find the matching process in the dir; if no exe with
+# the *single-dot* pattern lives there, fall back to a sibling that matches
+# the rename pattern.
+SOURCE_PROCNAME="claude-config-manager"  # compiled into the PE image
+PROCNAME="${EXE_NAME_NO_EXT}.exe"        # the renamed copy on disk
+
+# Convert EXE_PATH to a Windows-style path. The caller may pass either a
+# bash-mangled path (`/c/Users/...`) or a Windows path (`C:\Users\...`).
+# PowerShell's Start-Process inside this Git Bash subshell only accepts the
+# Windows form, so always normalise.
+EXE_PATH_WIN=$(cygpath -w "$EXE_PATH" 2>/dev/null || echo "$EXE_PATH")
 
 echo ">>> smoke-test.sh"
 echo ">>> exe: $EXE_PATH"
 echo ">>> exe dir: $EXE_DIR"
-echo ">>> proc name: $PROCNAME"
+echo ">>> proc name (PE image): $SOURCE_PROCNAME"
+echo ">>> renamed copy: $PROCNAME"
 echo ""
 
 # Verify exe exists
@@ -34,7 +52,7 @@ fi
 
 # Pre-cleanup
 echo ">>> Pre-cleanup: killing any existing instances..."
-powershell.exe -NoProfile -Command "Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+powershell.exe -NoProfile -Command "Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
 sleep 1
 
 PASS=0
@@ -59,11 +77,11 @@ record() {
 # === Test 1: Launch & process running within 5s ===
 echo ""
 echo ">>> Test 1: Launch & process running"
-powershell.exe -NoProfile -Command "Start-Process -FilePath '$EXE_PATH'" 2>&1 || true
+powershell.exe -NoProfile -Command "Start-Process -FilePath '$EXE_PATH_WIN'" 2>&1 || true
 sleep 5
 
 PROC_COUNT=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_COUNT" -ge "1" ]]; then
   record "1_launch" "PASS" "process running (count=$PROC_COUNT)"
@@ -72,24 +90,36 @@ else
 fi
 
 # === Test 2: Main window visible ===
+# M1.1 historical: Tauri webview window's MainWindowTitle is sometimes empty
+# until the user gives the window focus (or the OS completes a delayed
+# compositor handoff). The previous check `[[ -n "$WINDOW_TITLE" ]]` was a
+# race-condition false positive. Switch to a structural check that doesn't
+# depend on the title text being populated yet:
+#   - MainWindowHandle != 0  → Tauri created the window
+#   - Responding = True       → the message loop is alive
+# If both hold, the GUI is up; title text is a separate concern.
 echo ""
 echo ">>> Test 2: Main window visible"
-WINDOW_TITLE=$(powershell.exe -NoProfile -Command "
-  \$p = Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (\$p) { \$p.MainWindowTitle } else { '' }
+WINDOW_STATE=$(powershell.exe -NoProfile -Command "
+  \$p = Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (\$p -and \$p.MainWindowHandle -ne 0 -and \$p.Responding) {
+    Write-Host 'OK'
+  } else {
+    Write-Host 'BAD'
+  }
 " 2>&1 | tr -d '\r' | head -1)
 
-if [[ -n "$WINDOW_TITLE" ]]; then
-  record "2_window" "PASS" "title=\"$WINDOW_TITLE\""
+if [[ "$WINDOW_STATE" == "OK" ]]; then
+  record "2_window" "PASS" "MainWindowHandle present + Responding=True"
 else
-  record "2_window" "FAIL" "MainWindowTitle is empty"
+  record "2_window" "FAIL" "window handle missing or process not responding (state=$WINDOW_STATE)"
 fi
 
 # === Test 3: Close → minimizes to tray (process survives) ===
 echo ""
 echo ">>> Test 3: Close minimizes to tray"
 powershell.exe -NoProfile -Command "
-  \$p = Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue | Select-Object -First 1
+  \$p = Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Select-Object -First 1
   if (\$p -and \$p.MainWindowHandle -ne 0) {
     \$p.CloseMainWindow() | Out-Null
   }
@@ -97,7 +127,7 @@ powershell.exe -NoProfile -Command "
 sleep 2
 
 PROC_AFTER_CLOSE=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_CLOSE" -ge "1" ]]; then
   record "3_tray" "PASS" "process survived close (in tray)"
@@ -109,12 +139,12 @@ fi
 echo ""
 echo ">>> Test 4: Force kill"
 powershell.exe -NoProfile -Command "
-  Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Stop-Process -Force
 " 2>&1 || true
 sleep 2
 
 PROC_AFTER_KILL=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${EXE_NAME_NO_EXT}' -ErrorAction SilentlyContinue).Count
+  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_KILL" == "0" ]]; then
   record "4_kill" "PASS" "process gone within 2s"
