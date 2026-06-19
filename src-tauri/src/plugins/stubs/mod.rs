@@ -1,0 +1,36 @@
+//! Plugin stubs — one per F1..F12 feature.
+//!
+//! M1.3 ships only **stubs** per [`CLAUDE.md` §3.3`]. Each stub:
+//! - returns a stable id + display name,
+//! - contributes routes / services as appropriate,
+//! - does no business logic (default `init` / `shutdown` no-ops).
+//!
+//! Real implementations land in M2+.
+//!
+//! [`CLAUDE.md` §3.3`]: ../../../../../CLAUDE.md
+
+pub mod provider_list;
+pub mod provider_switch;
+pub mod import_sql;
+pub mod deeplink_import;
+pub mod json_editor;
+pub mod mcp_management;
+pub mod usage_query;
+pub mod single_file_deploy;
+pub mod resource_browser;
+pub mod marketplace;
+pub mod optimizer;
+pub mod backup_restore;
+
+pub use provider_list::ProviderListPlugin;
+pub use provider_switch::ProviderSwitchPlugin;
+pub use import_sql::ImportSqlPlugin;
+pub use deeplink_import::DeeplinkImportPlugin;
+pub use json_editor::JsonEditorPlugin;
+pub use mcp_management::McpManagementPlugin;
+pub use usage_query::UsageQueryPlugin;
+pub use single_file_deploy::SingleFileDeployPlugin;
+pub use resource_browser::ResourceBrowserPlugin;
+pub use marketplace::MarketplacePlugin;
+pub use optimizer::OptimizerPlugin;
+pub use backup_restore::BackupRestorePlugin;
