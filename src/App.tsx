@@ -173,17 +173,19 @@ export default function App(): ReactElement {
       >
         <AppSidebar currentView={view} onNavigate={handleNavigate} />
         <main
-          className="flex-1 overflow-hidden relative"
+          className="flex-1 relative"
           data-testid="app-main"
           style={{
-            // min-height:0 is the fix for the silent-clip sidebar /
-            // main-pane symptom — without it, flex items default
-            // to min-height:auto and refuse to shrink below their
-            // content height, so overflow:hidden just clips
-            // instead of letting the internal scroller engage.
+            // M1.9.2 (CLAUDE.md §9 / scroll regression): the pane
+            // flips from `overflow: hidden` (M1.9.1 clip) to
+            // `overflow: auto` so HomeView / PluginPlaceholder /
+            // future M2+ content scrolls INSIDE the pane, not by
+            // the window. The Tauri WebView2 viewport stays
+            // unmoving; the app-root below keeps its `hidden`
+            // so we never get a window-level scrollbar.
             flex: 1,
             minHeight: 0,
-            overflow: 'hidden',
+            overflow: 'auto',
             position: 'relative',
             background: 'var(--bg-primary)',
           }}
