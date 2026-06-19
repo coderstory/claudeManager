@@ -74,6 +74,23 @@ sleep 1
 echo ""
 echo "[2/5] Building release exe..."
 cd "$PROJECT_ROOT"
+
+# Why we touch src-tauri/src/lib.rs:
+# - `tauri build` runs `beforeBuildCommand: "npm run build"` automatically
+# - But we're using `cargo build --release` directly, which does NOT
+# - So we must rebuild frontend manually + invalidate Cargo's cache
+# - Without the touch, Cargo sees unchanged Rust source and skips relink,
+#   leaving the new `dist/` unused and the exe rendering the old bundle
+# - This is a workaround until we migrate to `tauri build` (M1.10)
+#
+# Step 1/3: rebuild frontend so dist/ is fresh
+echo "    Step 1/3: Rebuilding frontend (npm run build)..."
+npm run build 2>&1 | tail -5
+# Step 2/3: invalidate Cargo's cache so it actually re-links
+echo "    Step 2/3: Touching src-tauri/src/lib.rs to invalidate Cargo cache..."
+touch src-tauri/src/lib.rs
+# Step 3/3: build the Rust binary (now re-links because lib.rs mtime changed)
+echo "    Step 3/3: cargo build --release..."
 BUILD_START=$(date +%s)
 cargo build --release --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20
 BUILD_END=$(date +%s)

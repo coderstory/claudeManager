@@ -49,10 +49,23 @@ case "$ACTION" in
   build)
     if [[ "$MODE" == "release" ]]; then
       echo ">>> cargo build --release" >&2
+      # Touch src-tauri/src/lib.rs to invalidate Cargo's cache.
+      # Why: `cargo build --release` does NOT run `beforeBuildCommand`
+      # (`npm run build`) automatically — only `tauri build` does.
+      # If you regenerated dist/ (e.g. after editing src/App.tsx), Cargo
+      # will otherwise see unchanged Rust source and skip relink, shipping
+      # the OLD frontend. Touch forces relink so the new dist/ is embedded.
+      # NOTE: this only invalidates cache — it does NOT rebuild the frontend.
+      # If you edited src/*, run `npm run build` yourself first, OR just use
+      # `scripts/build-and-ship.sh` which does the full pipeline.
+      # build-only.sh is for fast Rust-only iteration.
+      touch src-tauri/src/lib.rs
       cargo build --release --manifest-path src-tauri/Cargo.toml 2>&1 | tail -30
       OUTPUT_DIR="src-tauri/target/release"
     else
       echo ">>> cargo build (debug)" >&2
+      # Same caveat as above — touch to invalidate cache for debug builds.
+      touch src-tauri/src/lib.rs
       cargo build --manifest-path src-tauri/Cargo.toml 2>&1 | tail -30
       OUTPUT_DIR="src-tauri/target/debug"
     fi
