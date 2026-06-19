@@ -1,0 +1,76 @@
+/* === Claude 配置管理器 — 设计系统基线（CLAUDE.md §4） ===
+ * 所有 UI 必须从这里读 token，禁止硬编码颜色 / 字号 / 间距。
+ * Tailwind 在 tailwind.config.ts 里把这些 var() 映射到 utility class。 */
+
+:root {
+  /* --- Backgrounds (§4.2) --- */
+  --bg-primary:  #FAFAF7;             /* 瓷白基底 */
+  --bg-elevated: #FFFFFF;
+  --bg-overlay:  rgba(255, 255, 255, 0.7);
+
+  /* --- Text (§4.2) --- */
+  --text-primary:   #1F2328;
+  --text-secondary: #656D76;
+  --text-muted:     #8B949E;
+
+  /* --- Accent / status (§4.2 + §4.5) --- */
+  --accent:  #0969DA;
+  --success: #388E3C;
+  --warning: #F57C00;
+  --danger:  #D32F2F;
+  --disabled: rgba(0, 0, 0, 0.4);
+
+  /* --- Border / shadow (§4.2) --- */
+  --border:    #E1E4E8;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* --- Spacing (§4.4 — 4px 网格) --- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+
+  /* --- Radius (§4.4) --- */
+  --radius-card:   8px;
+  --radius-button: 4px;
+  --radius-modal:  12px;
+
+  /* --- Font size (§4.4) --- */
+  --fs-heading: 18px;
+  --fs-body:    14px;
+  --fs-caption: 12px;
+
+  /* --- Font families (§4.3) --- */
+  --font-ui:   -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* --- Dark 主题 stub (§4.1 — 留接口，M2 接入) --- */
+[data-theme="dark"] {
+  --bg-primary:     #1F2328;
+  --bg-elevated:    #2D333B;
+  --bg-overlay:     rgba(45, 51, 59, 0.7);
+  --text-primary:   #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted:     #6E7681;
+  --border:         #373E47;
+  --accent:         #2F81F7;
+}
+
+/* --- 全局基线：让 body / 等宽走 token --- */
+body {
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
