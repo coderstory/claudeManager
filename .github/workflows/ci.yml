@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+# Cancel duplicate runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Rust — unit tests + clippy
+  # ---------------------------------------------------------------------------
+  test-rust:
+    name: Rust tests (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install MSYS2 + MinGW windres (Tauri build deps)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            git
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-cc
+
+      - name: Build & test (integration tests in tests/)
+        shell: msys2 {0}
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          cd src-tauri
+          cargo test --no-default-features --no-run
+          # Run integration tests directly (avoid the lib-test DLL load
+          # issue on Windows — see Rust Windows dev box reference).
+          for t in tests/*.rs; do
+            name=$(basename "$t" .rs)
+            cargo test --test "$name" --no-default-features
+          done
+
+      - name: Clippy
+        shell: msys2 {0}
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          cd src-tauri
+          cargo clippy --all-targets --no-deps -- -D warnings
+
+  # ---------------------------------------------------------------------------
+  # 2. Frontend — Vitest unit tests
+  # ---------------------------------------------------------------------------
+  test-frontend:
+    name: Frontend unit tests (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run Vitest
+        run: npm test -- --run
+
+  # ---------------------------------------------------------------------------
+  # 3. E2E — Playwright via tauri-driver
+  # ---------------------------------------------------------------------------
+  # NOTE: macos-latest deferred to M1.10 (mac platform impls land in M1.x
+  # in stages — see CLAUDE.md §1 "目标平台").
+  e2e:
+    name: E2E (tauri-driver, windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            git
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-cc
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the Tauri debug exe
+        shell: msys2 {0}
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          npm run tauri build -- --debug
+
+      - name: Install tauri-driver
+        run: npm install -g @tauri-apps/tauri-driver
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright e2e
+        shell: msys2 {0}
+        env:
+          TAURI_DRIVER_PORT: 4444
+        run: |
+          export PATH="/mingw64/bin:$PATH"
+          # Start tauri-driver in the background; it serves WebDriver on
+          # $TAURI_DRIVER_PORT. Playwright connects to it via the
+          # `wdio`-style remote URL configured in playwright.config.ts.
+          tauri-driver --port 4444 &
+          sleep 5
+          npx playwright test

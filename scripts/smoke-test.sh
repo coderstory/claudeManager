@@ -21,15 +21,19 @@ EXE_NAME_NO_EXT="${EXE_BASENAME%.exe}"
 
 # The Tauri exe process name is fixed at compile time (carved into the PE
 # image). Renaming the file on disk (e.g. `ClaudeConfigManager-M1.1.2-...exe`
-# for shipping) does NOT change the process name. So `Get-Process -Name` must
-# use the original image name, not the renamed file's stem.
+# for shipping) does NOT change the PE subsystem name, BUT `Start-Process`
+# on Windows uses the FILE NAME as the process name unless the image
+# resource specifies otherwise. We observed that the spawned process
+# shows up as `ClaudeConfigManager-M1.x-...` (the renamed stem), not
+# `claude-config-manager`. So we check BOTH names.
 #
 # Convention: source exe is always `claude-config-manager.exe` in
-# `target/release/`. We find the matching process in the dir; if no exe with
-# the *single-dot* pattern lives there, fall back to a sibling that matches
-# the rename pattern.
+# `target/release/`. Shipped copies on the desktop have a different
+# stem; the smoke test accepts either name.
 SOURCE_PROCNAME="claude-config-manager"  # compiled into the PE image
 PROCNAME="${EXE_NAME_NO_EXT}.exe"        # the renamed copy on disk
+# Process names to query (Get-Process -Name is OR across these)
+ALL_PROCNAMES=("${SOURCE_PROCNAME}" "${EXE_NAME_NO_EXT}")
 
 # Convert EXE_PATH to a Windows-style path. The caller may pass either a
 # bash-mangled path (`/c/Users/...`) or a Windows path (`C:\Users\...`).
@@ -52,7 +56,12 @@ fi
 
 # Pre-cleanup
 echo ">>> Pre-cleanup: killing any existing instances..."
-powershell.exe -NoProfile -Command "Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+# Kill any process matching either name (original PE image or renamed copy)
+powershell.exe -NoProfile -Command "
+  foreach (\$n in @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')) {
+    Get-Process -Name \$n -ErrorAction SilentlyContinue | Stop-Process -Force
+  }
+" 2>&1 || true
 sleep 1
 
 PASS=0
@@ -81,7 +90,8 @@ powershell.exe -NoProfile -Command "Start-Process -FilePath '$EXE_PATH_WIN'" 2>&
 sleep 5
 
 PROC_COUNT=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  @(Get-Process -Name \$n -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_COUNT" -ge "1" ]]; then
   record "1_launch" "PASS" "process running (count=$PROC_COUNT)"
@@ -101,7 +111,8 @@ fi
 echo ""
 echo ">>> Test 2: Main window visible"
 WINDOW_STATE=$(powershell.exe -NoProfile -Command "
-  \$p = Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Select-Object -First 1
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
   if (\$p -and \$p.MainWindowHandle -ne 0 -and \$p.Responding) {
     Write-Host 'OK'
   } else {
@@ -119,7 +130,8 @@ fi
 echo ""
 echo ">>> Test 3: Close minimizes to tray"
 powershell.exe -NoProfile -Command "
-  \$p = Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Select-Object -First 1
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
   if (\$p -and \$p.MainWindowHandle -ne 0) {
     \$p.CloseMainWindow() | Out-Null
   }
@@ -127,7 +139,8 @@ powershell.exe -NoProfile -Command "
 sleep 2
 
 PROC_AFTER_CLOSE=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  @(Get-Process -Name \$n -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_CLOSE" -ge "1" ]]; then
   record "3_tray" "PASS" "process survived close (in tray)"
@@ -139,12 +152,15 @@ fi
 echo ""
 echo ">>> Test 4: Force kill"
 powershell.exe -NoProfile -Command "
-  Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue | Stop-Process -Force
+  foreach (\$n in @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')) {
+    Get-Process -Name \$n -ErrorAction SilentlyContinue | Stop-Process -Force
+  }
 " 2>&1 || true
 sleep 2
 
 PROC_AFTER_KILL=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${SOURCE_PROCNAME}' -ErrorAction SilentlyContinue).Count
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  @(Get-Process -Name \$n -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$PROC_AFTER_KILL" == "0" ]]; then
   record "4_kill" "PASS" "process gone within 2s"
