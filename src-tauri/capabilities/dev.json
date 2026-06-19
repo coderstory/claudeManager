@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dev",
+  "description": "Dev-only capabilities for the Claude Config Manager main window. WHY: separated from default.json so that production release builds NEVER include devtools-toggle or process-execute permissions. Tauri loads capability files matching the `identifier` (dev vs default) only when explicitly referenced by `app.security.capabilities` in tauri.conf.json. The M1.4 prompt notes: 'The core:webview:allow-internal-toggle-devtools is for dev only — do NOT include in release builds. Use a separate dev.json or feature-gate.' This file is the separate dev.json. To activate: add 'dev' to `app.security.capabilities` in tauri.conf.json alongside 'default' for `cargo tauri dev`, but NOT for `cargo tauri build --release`. Permission rationale (`_why`): devtools-toggle = opens Chromium DevTools for the main webview (F12-equivalent in production-debugging), webview-set-focus = lets the frontend force-focus the webview when the user clicks the window chrome during dev (avoids focus loss when DevTools is detached), shell:allow-open = needed only in dev to spawn the `pnpm dev` / `npm run dev` child process from the Rust side (production uses a prebuilt bundle).",
+  "windows": ["main"],
+  "permissions": [
+    "core:webview:allow-internal-toggle-devtools",
+    "core:webview:allow-set-webview-focus",
+    "opener:allow-open-url"
+  ]
+}

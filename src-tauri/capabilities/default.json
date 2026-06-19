@@ -1,10 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Default capabilities for the Claude Config Manager main window (M1.4). WHY: covers the main window's needs across the M1+M2 SPEC feature surface (F1-F24). Permissions are organised by Tauri namespace. Each permission entry includes a `_why` field with a short rationale tied to a SPEC rule, so reviewers can map a permission back to the requirement that justifies it. Permissions for plugins that are not yet in src-tauri/Cargo.toml are intentionally omitted (see ROADMAP section at the bottom of this description). DO NOT enable shell:allow-execute in production builds (use a custom command that wraps git invocations in the IGitHost interface, per SPEC §3.2 and §5.10). ROADMAP (not yet in Cargo.toml, defer): tauri-plugin-fs (F2/F6/F13/F18/F19 file IO of ~/.claude/** and appdata), tauri-plugin-dialog (F3 .sql picker, F5/F14 save/open), tauri-plugin-notification (M1.1 tray+notify), tauri-plugin-shell (deprecated in favour of opener for URL+reveal; keep for git fallback if IGitHost is unavailable), tauri-plugin-os (locale + version shown in About), tauri-plugin-deep-link (F4 ccswitch:// deeplink), tauri-plugin-single-instance (F20 already implemented in lib.rs as on_window_event fallback; add tauri-plugin-single-instance in M1.5 to be OS-idiomatic), tauri-plugin-store (provider library + settings), tauri-plugin-log (structured app log), tauri-plugin-updater (v1.1 release pipeline, NOT M1). When any of those plugins land in Cargo.toml, append the matching permission block below with a `_why` annotation.",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    "opener:allow-open-path",
+    "positioner:default"
   ]
 }
