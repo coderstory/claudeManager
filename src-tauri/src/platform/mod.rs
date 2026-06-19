@@ -39,6 +39,8 @@ pub use traits::{
 // just uses `Box<dyn IPlatformXxx>` returned from these helpers.
 
 pub mod runtime {
+    use tauri::AppHandle;
+
     use super::*;
 
     /// Path resolver for the host OS.
@@ -66,14 +68,19 @@ pub mod runtime {
     }
 
     /// Boot-on-login integration for the host OS.
-    pub fn autostart() -> Box<dyn IPlatformAutostart> {
+    ///
+    /// Requires a live [`AppHandle`] because the underlying
+    /// `tauri-plugin-autostart` registers its `AutoLaunchManager` as
+    /// Tauri state. The plugin must be `.plugin(...::init(...))`-ed in
+    /// `lib.rs` before this is called.
+    pub fn autostart(app: &AppHandle) -> Box<dyn IPlatformAutostart> {
         #[cfg(windows)]
         {
-            Box::new(windows::WindowsAutostart)
+            Box::new(windows::WindowsAutostart::new(app))
         }
         #[cfg(target_os = "macos")]
         {
-            Box::new(macos::MacAutostart)
+            Box::new(macos::MacAutostart::new(app))
         }
     }
 
