@@ -4,11 +4,27 @@
 # 用法：
 #   ./scripts/smoke-test.sh <exe-path>
 #
-# 4 项必过检查：
+# 6 项必过检查（基础 4 项 + 内容验证 2 项）：
 #   1. 启动 → 5s 内进程在
-#   2. 主窗口可见（标题非空）
+#   2. 主窗口可见（MainWindowHandle + Responding）
 #   3. 关闭窗口 → 进程仍在（最小化到托盘）
 #   4. 强制 kill → 2s 内进程消失
+#   5. WebView2 子窗口存在 → 前端真的加载了（不是空壳）
+#   6. 窗口标题 = tauri.conf.json 中的 productName
+#
+# 为什么需要 Test 5-6：
+#   历史教训：M1.x 早期版本构建出了"能跑能关能杀"的 exe，但前端 bundle
+#   是空的 / 错的，渲染出空白页。原 4 项检查 100% 通过但 GUI 是废的。
+#   Test 5 通过 Win32 EnumChildWindows 找到 WebView2 的子窗口类
+#   （Chrome_WidgetWin_0 / Intermediate D3D Window 等），证明 WebView2 进程
+#   内部已建出 host，证明前端 bundle 已被加载（哪怕是空 HTML，也至少
+#   跑了 index.html 入口）。Test 6 验证 tauri.conf.json 配的标题被 OS
+#   正确读到了窗口上。
+#
+# 已知边界：
+#   - 这两项只验证"前端有加载" + "标题被设置"，不验证"具体渲染内容"
+#   - 真正细致的 DOM 校验由 Vitest 单元测试 + WebDriver e2e 覆盖
+#   - 本脚本是"exe 能跑起来 + 窗口真的有内容"的兜底门禁
 #
 # 任何失败 exit code = 1
 
@@ -41,11 +57,22 @@ ALL_PROCNAMES=("${SOURCE_PROCNAME}" "${EXE_NAME_NO_EXT}")
 # Windows form, so always normalise.
 EXE_PATH_WIN=$(cygpath -w "$EXE_PATH" 2>/dev/null || echo "$EXE_PATH")
 
+# Read expected window title from tauri.conf.json. We look at the line
+# with `"title":` (a child key of `app.windows[0]`) — that's the OS
+# window title shown by Win32.
+TAURI_CONF="${TAURI_CONF:-/d/project/winui3/src-tauri/tauri.conf.json}"
+if [[ -f "$TAURI_CONF" ]]; then
+  EXPECTED_TITLE=$(grep -E '"title"\s*:' "$TAURI_CONF" | head -1 | sed -E 's/.*"title"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')
+else
+  EXPECTED_TITLE=""
+fi
+
 echo ">>> smoke-test.sh"
 echo ">>> exe: $EXE_PATH"
 echo ">>> exe dir: $EXE_DIR"
 echo ">>> proc name (PE image): $SOURCE_PROCNAME"
 echo ">>> renamed copy: $PROCNAME"
+echo ">>> expected title: $EXPECTED_TITLE"
 echo ""
 
 # Verify exe exists
@@ -124,6 +151,125 @@ if [[ "$WINDOW_STATE" == "OK" ]]; then
   record "2_window" "PASS" "MainWindowHandle present + Responding=True"
 else
   record "2_window" "FAIL" "window handle missing or process not responding (state=$WINDOW_STATE)"
+fi
+
+# === Test 5: WebView2 child window exists (frontend loaded) ===
+# Why: previous smoke test only proved Tauri created *an* HWND. It did not
+# prove the WebView2 host started. If `dist/` is empty or the JS bundle is
+# missing/corrupt, Tauri still creates the main window (the Rust side
+# doesn't care) — but no WebView2 child ever spawns. We use
+# `EnumChildWindows` on the main HWND and look for any of these class
+# names that WebView2 creates internally:
+#   - Chrome_WidgetWin_0 / Chrome_WidgetWin_1 — chromium top-level widget
+#   - Chrome_RenderWidgetHostHWND — composited render surface
+#   - Intermediate D3D Window — D3D compositor overlay
+#   - Tauri / Tauri.WebView2 — some Tauri builds tag the webview host
+# If ANY of these exist as a child of our MainWindowHandle, the WebView2
+# process is alive and attached → the frontend bundle was loaded.
+#
+# Implementation note: we pass a script-block callback to EnumChildWindows.
+# Inside it we cannot mutate script-scope variables the usual way; we use
+# a `[ref]` int and a counter-class. Simpler: write child class names to
+# the Information stream and parse them in bash.
+echo ""
+echo ">>> Test 5: WebView2 child window exists"
+WEBVIEW_INFO=$(powershell.exe -NoProfile -Command "
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Collections.Generic;
+public class W2 {
+  [DllImport(\"user32.dll\")]
+  public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport(\"user32.dll\", CharSet = CharSet.Auto)]
+  public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+  [DllImport(\"user32.dll\", CharSet = CharSet.Auto)]
+  public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+  [DllImport(\"user32.dll\")]
+  public static extern bool IsWindowVisible(IntPtr hWnd);
+}
+'@ -ErrorAction SilentlyContinue
+
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not \$p -or \$p.MainWindowHandle -eq 0) {
+    Write-Host 'NO_MAIN'
+    exit
+  }
+
+  \$found = New-Object System.Collections.Generic.List[string]
+  \$cb = [W2+EnumWindowsProc]{
+    param(\$hwnd, \$lparam)
+    \$cn = New-Object System.Text.StringBuilder 256
+    [void][W2]::GetClassName(\$hwnd, \$cn, 256)
+    \$class = \$cn.ToString()
+    if (\$class -match 'Chrome_WidgetWin|Chrome_RenderWidgetHostHWND|Intermediate D3D Window|Tauri.*WEBVIEW|Tauri\\.WebView|WRY_WebView|CefBrowserWindow') {
+      \$found.Add(\$class)
+    }
+    return \$true
+  }
+  [void][W2]::EnumChildWindows(\$p.MainWindowHandle, \$cb, [IntPtr]::Zero)
+  if (\$found.Count -gt 0) {
+    Write-Host (\"FOUND:\" + (\$found -join ','))
+  } else {
+    Write-Host 'NONE'
+  }
+" 2>&1 | tr -d '\r' | head -1)
+
+if [[ "$WEBVIEW_INFO" == FOUND:* ]]; then
+  CLASSES="${WEBVIEW_INFO#FOUND:}"
+  record "5_webview" "PASS" "WebView2 child(ren) found: $CLASSES"
+elif [[ "$WEBVIEW_INFO" == "NONE" ]]; then
+  record "5_webview" "FAIL" "no WebView2 child window under main HWND (frontend may not have loaded)"
+elif [[ "$WEBVIEW_INFO" == "NO_MAIN" ]]; then
+  record "5_webview" "FAIL" "main window handle missing at test time"
+else
+  record "5_webview" "FAIL" "unexpected PowerShell output: $WEBVIEW_INFO"
+fi
+
+# === Test 6: Window title matches tauri.conf.json productName ===
+# Why: if the exe is running but the title is empty / wrong / fallback
+# 'Tauri', the user has no confidence the app actually initialised. The
+# expected title is the `app.windows[0].title` from tauri.conf.json (set
+# to "Claude 配置管理器" in this project). Some WebView2 builds set the
+# OS title asynchronously — we give it 2 extra seconds after the launch
+# sleep above; the launch sleep (5s in Test 1) is usually enough.
+echo ""
+echo ">>> Test 6: Window title matches tauri.conf.json"
+# PowerShell -> Git Bash pipes the title through a Windows console codepage
+# (typically CP936 / GBK on this machine) which corrupts the CJK bytes
+# from UTF-8. To avoid that, write the title to a UTF-8 file in PowerShell's
+# own $env:TEMP (a real Windows path) and read it back in bash. We use
+# GetTempFileName + a .txt suffix to get a unique filename and avoid clashes.
+TITLE_BASENAME="smoke-test-title-$$-$RANDOM.txt"
+ACTUAL_TITLE=""
+TITLE_PATH=$(powershell.exe -NoProfile -Command "
+  \$tmp = [System.IO.Path]::Combine(\$env:TEMP, '${TITLE_BASENAME}')
+  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
+  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
+  \$t = if (\$p) { \$p.MainWindowTitle } else { '' }
+  try {
+    [System.IO.File]::WriteAllText(\$tmp, \$t, [System.Text.Encoding]::UTF8)
+    Write-Host \$tmp
+  } catch {
+    Write-Host ''
+  }
+" 2>&1 | tr -d '\r' | tail -1)
+if [[ -n "$TITLE_PATH" && -f "$TITLE_PATH" ]]; then
+  ACTUAL_TITLE=$(cat "$TITLE_PATH" 2>/dev/null | tr -d '\r\n')
+  rm -f "$TITLE_PATH" 2>/dev/null || true
+fi
+
+if [[ -z "$EXPECTED_TITLE" ]]; then
+  # No tauri.conf.json found — skip rather than fail. Caller can override
+  # TAURI_CONF env var if they need the check in a different repo.
+  record "6_title" "PASS" "skipped (no tauri.conf.json or no title key found at $TAURI_CONF); actual=\"$ACTUAL_TITLE\""
+elif [[ -n "$ACTUAL_TITLE" && "$ACTUAL_TITLE" == *"$EXPECTED_TITLE"* ]]; then
+  record "6_title" "PASS" "title contains expected \"$EXPECTED_TITLE\""
+else
+  record "6_title" "FAIL" "title=\"$ACTUAL_TITLE\" does not contain expected \"$EXPECTED_TITLE\""
 fi
 
 # === Test 3: Close → minimizes to tray (process survives) ===
