@@ -26,6 +26,7 @@ import { cn } from '../lib/utils';
 import { useTheme } from '../design-system/ThemeProvider';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
+import { WindowControls } from './WindowControls';
 
 /**
  * dragRegionStyle — CSS that opts a node into "drag the OS window".
@@ -121,7 +122,9 @@ export function AppHeader({
         </h1>
       </div>
 
-      {/* Right zone — theme toggle + settings (no-drag so clicks work) */}
+      {/* Right zone — theme + settings + window controls.
+          All three groups sit in the no-drag zone so the OS
+          doesn't intercept their clicks as drag gestures. */}
       <div className="flex items-center gap-2" style={noDragStyle}>
         <button
           type="button"
@@ -168,6 +171,13 @@ export function AppHeader({
         >
           <Settings size={16} style={{ color: 'var(--text-primary)' }} />
         </button>
+        {/* Custom chrome (M1.9.2): OS native title bar is off
+            (decorations:false + titleBarStyle:Overlay in
+            tauri.conf.json) so we render our own min/max/close
+            cluster on the far right. On macOS the OS still paints
+            the traffic lights via the overlay style; the buttons
+            remain visible and clickable as a backup. */}
+        <WindowControls />
       </div>
     </header>
   );
