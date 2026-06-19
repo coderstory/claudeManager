@@ -11,12 +11,18 @@
  * accidentally drag the window by grabbing the rail.
  *
  * Layout:
- *   - fixed-ish width (220px) so the sidebar feels like a
- *     navigation rail, not a burger menu.
+ *   - fixed-ish width (var(--sidebar-width) = 220px) so the
+ *     sidebar feels like a navigation rail, not a burger menu.
  *   - one tile per ViewId, including 'home'.
  *   - icon comes from lucide-react (consistent stroke + size).
  *   - the icon is a stand-in for the eventual per-plugin glyph —
  *     we don't want to invent fake icons for every plugin in M1.
+ *
+ * M1.9.3: the previously exported `SIDEBAR_WIDTH = 220` constant
+ * has been removed. The single source of truth is now
+ * `--sidebar-width` in tokens.css (CLAUDE.md §4: token discipline).
+ * <main> in App.tsx reads the same token for its `left: var(...)`
+ * inset, so resizing the rail only requires editing one line.
  */
 import type { ReactElement } from 'react';
 import {
@@ -40,12 +46,6 @@ import {
   ALL_VIEWS,
   type ViewId,
 } from '../hooks/useViewState';
-
-/**
- * sidebarWidth — kept as a constant so App.tsx can mirror it on the
- * main pane (e.g. when computing AnimatePresence offsets).
- */
-export const SIDEBAR_WIDTH = 220;
 
 /** Map each ViewId → lucide icon component + Chinese subtitle. */
 const VIEW_META: Record<
@@ -120,7 +120,9 @@ export function AppSidebar({
       data-testid="app-sidebar"
       aria-label="主导航"
       style={{
-        width: SIDEBAR_WIDTH,
+        // M1.9.3: width comes from --sidebar-width token (single
+        // source of truth shared with <main>'s left: var(...) inset).
+        width: 'var(--sidebar-width)',
         // flexShrink:0 so the rail never compresses to fit a
         // narrower window; minHeight:0 lets the flex parent
         // constrain its height so overflowY:auto actually engages

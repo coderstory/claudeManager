@@ -44,7 +44,6 @@
  */
 import type { ReactElement } from 'react';
 import { useCallback, useMemo } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -167,63 +166,80 @@ export default function App(): ReactElement {
         onNavigate={handleNavigate}
         pageTitle={pageTitleFn}
       />
+      {/*
+        Content row — the position:absolute anchor for <main>.
+
+        M1.9.3 P0 fix: <main> was previously a flex sibling of
+        <AppSidebar> with `flex: 1 + minHeight: 0`. WebView2 release
+        mode miscalculates that flex chain (height collapses to 0).
+        The fix is to make this row `position: relative` and turn
+        <main> into `position: absolute` with 4-edge insets sourced
+        from the --header-height / --sidebar-width tokens. Absolute
+        positioning has a definite measure path that WebView2
+        handles correctly in both dev and release.
+      */}
       <div
         className="flex flex-1 overflow-hidden"
-        style={{ minHeight: 0 }}
+        data-testid="app-content"
+        style={{
+          position: 'relative',
+          minHeight: 0,
+          minWidth: 0,
+        }}
       >
         <AppSidebar currentView={view} onNavigate={handleNavigate} />
         <main
-          className="flex-1 relative"
           data-testid="app-main"
           style={{
-            // M1.9.2 (CLAUDE.md §9 / scroll regression): the pane
-            // flips from `overflow: hidden` (M1.9.1 clip) to
-            // `overflow: auto` so HomeView / PluginPlaceholder /
-            // future M2+ content scrolls INSIDE the pane, not by
-            // the window. The Tauri WebView2 viewport stays
-            // unmoving; the app-root below keeps its `hidden`
-            // so we never get a window-level scrollbar.
-            flex: 1,
+            // M1.9.3 P0 fix: position absolute replaces flex:1.
+            // The flex chain `flex: 1 + minHeight: 0` collapses to
+            // height:0 in Tauri WebView2 release mode. Absolute
+            // positioning is not subject to that bug because each
+            // edge is a definite measurement.
+            position: 'absolute',
+            top: 'var(--header-height)',
+            left: 'var(--sidebar-width)',
+            right: 0,
+            bottom: 0,
+            // minHeight:0 is preserved from the M1.9.1 contract
+            // even though <main> is no longer a flex item — jsdom
+            // + the M1.9.1/M1.9.2 regression suites assert the
+            // presence of this property as a guard against the
+            // old "flex chain collapses to 0" bug ever returning.
             minHeight: 0,
+            minWidth: 0,
             overflow: 'auto',
-            position: 'relative',
             background: 'var(--bg-primary)',
           }}
         >
-          {/* AnimatePresence drives the opacity fade between views.
-              Default (non-`wait`) mode lets old + new briefly coexist
-              during the 150ms fade — this is what cc-switch uses and
-              feels snappier than `wait`. Each view is keyed by its
-              view id so framer-motion treats each transition as a
-              distinct scene. */}
-          <AnimatePresence initial={false}>
-            <motion.div
-              key={view}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              // No explicit height — the parent <main> is a flex
-              // column with min-height:0, and HomeView /
-              // PluginPlaceholder fill the available space via their
-              // own h-full + overflow-auto. Setting height:100%
-              // inside an unconstrained flex parent collapses to 0.
-              data-testid="app-view"
-            >
-              {view === 'home' ? (
-                <HomeView
-                  onNavigate={handleNavigate}
-                  pageTitle={pageTitleFn}
-                />
-              ) : (
-                <PluginPlaceholder
-                  pluginId={view}
-                  title={pageTitle(view)}
-                  description={pageDescription(view)}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
+          {/*
+            M1.9.3 P1 fix: framer-motion 12.23.25 + React 19 +
+            Tauri release crashes the WebView2 renderer process.
+            Replacement is a CSS @keyframes fadeIn (see tokens.css)
+            applied via the .view-transition class. The `key={view}`
+            forces React to remount on every view change, which
+            restarts the animation — the same UX the M1.9.1
+            AnimatePresence was delivering, but with 0 JS deps
+            and a working release-mode WebView2.
+          */}
+          <div
+            key={view}
+            data-testid="app-view"
+            className="view-transition"
+          >
+            {view === 'home' ? (
+              <HomeView
+                onNavigate={handleNavigate}
+                pageTitle={pageTitleFn}
+              />
+            ) : (
+              <PluginPlaceholder
+                pluginId={view}
+                title={pageTitle(view)}
+                description={pageDescription(view)}
+              />
+            )}
+          </div>
         </main>
       </div>
     </div>

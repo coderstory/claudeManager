@@ -72,7 +72,12 @@ export function AppHeader({
       data-testid="app-header"
       style={{
         ...dragRegionStyle,
-        height: 48,
+        // M1.9.3: read the height from the --header-height token so
+        // <main> in App.tsx can inset from the same source of truth.
+        // Previously hardcoded to 48 here and a separate 48 reference
+        // in App.tsx, which is a CLAUDE.md §4 violation (token
+        // discipline: dimensions in tokens.css only).
+        height: 'var(--header-height)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
