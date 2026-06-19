@@ -125,7 +125,13 @@ describe('App shell — scroll layout regression (M1.9.1-fix)', () => {
     // HomeView / PluginPlaceholder) actually engages. Without
     // min-height:0 the pane is silently clipped — same symptom as
     // the sidebar.
-    expect(cs.overflow).toBe('hidden');
+    //
+    // M1.9.2 (scroll regression guard): the pane flipped from
+    // `overflow: hidden` (M1.9.1 clip) to `overflow: auto` so the
+    // page content scrolls INSIDE the pane. The Bug B contract
+    // here is the min-height:0 half; the overflow is now 'auto'
+    // and is asserted in the M1.9.2 integration suite.
+    expect(['auto', 'scroll']).toContain(cs.overflow);
     expect(['0', '0px']).toContain(cs.minHeight);
   });
 
