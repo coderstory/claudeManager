@@ -1,19 +1,64 @@
 /* App shell + plugin placeholder page styling.
  * Keep this minimal — design system lives under
- * `src/design-system/` (planned for M2+). */
+ * `src/design-system/` (planned for M2+).
+ */
+
+/* --- Desktop-app viewport reset ---------------------------------------
+ * Tauri webview reports the OS window inner size as the document
+ * viewport. Without these rules the browser applies its default body
+ * margin (8px) and lets the document overflow vertically/horizontally,
+ * producing native scrollbars that don't belong in a desktop app. */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* No browser scrollbars — scroll inside content area */
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1F2328;
+  background: #FAFAF7; /* Cream white per CLAUDE.md §4.2 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- App shell ------------------------------------------------------- */
 
 .app-shell {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .container {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 16px 64px;
+  padding: 24px 16px;
   margin: 0;
-  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  overflow: auto; /* Scroll inside content area, not the browser */
 }
 
 .container > h1 {
