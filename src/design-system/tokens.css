@@ -2,6 +2,29 @@
  * 所有 UI 必须从这里读 token，禁止硬编码颜色 / 字号 / 间距。
  * Tailwind 在 tailwind.config.ts 里把这些 var() 映射到 utility class。 */
 
+/* === Reset — keep window scrollbars out of desktop app shell ===
+ * 副作用：M1.9 重构时把 src/index.css 的 reset 弄丢了（M1.3-fix 在那条规则上写的）。
+ * 写在 tokens.css 顶部，所有 main.tsx 入口都会带上。
+ * 任何 M2+ 接入原生 chrome（Mica / vibrancy）时这条仍要保留 —— desktop window
+ * 的 inner size 由 WebView2 / WKWebView 报告成 document viewport，
+ * 不加 overflow:hidden 浏览器就会画原生滚动条。 */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 :root {
   /* --- Backgrounds (§4.2) --- */
   --bg-primary:  #FAFAF7;             /* 瓷白基底 */
