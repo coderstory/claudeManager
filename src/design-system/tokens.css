@@ -48,6 +48,26 @@ body,
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 
+  /* --- Backdrop / Liquid Glass (CLAUDE.md §4.1 — M1 stage)
+   * backdrop-filter: blur() is the M1 approximation; v1.1 will
+   * swap to native Win11 Mica / macOS vibrancy (the M1.9.2
+   * applyEffects bootstrap already requests the native effect
+   * at startup; these tokens give the CSS-side fallback the
+   * right colours + blur radii so the visual is consistent
+   * on both Win10 / older macOS where the native effect
+   * silently no-ops). */
+  --blur-sm:  10px;
+  --blur-md:  20px;
+  --blur-lg:  30px;
+
+  /* Translucent surfaces laid on top of the (Mica / vibrancy /
+   * CSS-blur) backdrop. Keep the alpha high enough that text
+   * contrast stays WCAG-AA at the default 14px body size. */
+  --glass-bg:        rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.75);
+  --glass-border:    rgba(255, 255, 255, 0.18);
+  --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.08);
+
   /* --- Spacing (§4.4 — 4px 网格) --- */
   --space-1:  4px;
   --space-2:  8px;
@@ -82,6 +102,14 @@ body,
   --text-muted:     #6E7681;
   --border:         #373E47;
   --accent:         #2F81F7;
+
+  /* Dark-mode glass — lower alpha so the Mica / vibrancy
+   * backdrop can still bleed through. Pure dark surfaces
+   * would defeat the entire point of the M1.9.2 effect. */
+  --glass-bg:        rgba(31, 35, 40, 0.55);
+  --glass-bg-strong: rgba(31, 35, 40, 0.75);
+  --glass-border:    rgba(255, 255, 255, 0.08);
+  --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.32);
 }
 
 /* --- 全局基线：让 body / 等宽走 token --- */
