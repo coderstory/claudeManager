@@ -45,6 +45,20 @@ export function PluginPlaceholder({
         className,
       )}
       data-plugin-id={pluginId}
+      style={{
+        // M1.9.2 liquid glass: the placeholder card uses the
+        // stronger glass tier so it reads as a distinct surface
+        // against the (now also-glass) header + sidebar rail.
+        // Tighter blur (sm) because the card is a smaller surface
+        // — md would over-blur and visually disappear.
+        background: 'var(--glass-bg-strong)',
+        backdropFilter: 'blur(var(--blur-sm)) saturate(160%)',
+        WebkitBackdropFilter: 'blur(var(--blur-sm)) saturate(160%)',
+        border: '1px solid var(--glass-border)',
+        boxShadow: 'var(--glass-shadow)',
+        borderRadius: 'var(--radius-card)',
+        margin: '24px',
+      }}
     >
       <Construction
         size={48}

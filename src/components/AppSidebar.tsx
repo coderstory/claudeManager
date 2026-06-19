@@ -131,8 +131,15 @@ export function AppSidebar({
         flexShrink: 0,
         minHeight: 0,
         overflowY: 'auto',
-        background: 'var(--bg-elevated)',
-        borderRight: '1px solid var(--border)',
+        // M1.9.2 liquid glass: same token family as AppHeader so
+        // the rail visually belongs to the same layer. The right
+        // border is glass (translucent) rather than the opaque
+        // --border so the divider picks up the backdrop tint.
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(var(--blur-md)) saturate(180%)',
+        WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(180%)',
+        borderRight: '1px solid var(--glass-border)',
+        boxShadow: 'var(--glass-shadow)',
         padding: '8px 0',
       }}
     >

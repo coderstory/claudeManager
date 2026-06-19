@@ -77,8 +77,16 @@ export function AppHeader({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        background: 'var(--bg-elevated)',
-        borderBottom: '1px solid var(--border)',
+        // M1.9.2 liquid glass: translucent surface + backdrop blur
+        // so the native Mica (Win11) / vibrancy (macOS) backdrop
+        // shows through the header. The Webkit prefix is required
+        // for Safari (macOS WKWebView) and the bare property
+        // covers Chromium (WebView2 / Win11).
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(var(--blur-md)) saturate(180%)',
+        WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(180%)',
+        borderBottom: '1px solid var(--glass-border)',
+        boxShadow: 'var(--glass-shadow)',
         flexShrink: 0,
       }}
     >
