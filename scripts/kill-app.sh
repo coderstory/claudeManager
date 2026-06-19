@@ -29,8 +29,9 @@ fi
 echo ">>> Found PIDs: $PIDS"
 
 if [[ "$FORCE" == "true" ]]; then
-  echo ">>> FORCE mode: taskkill /F /IM $EXE_NAME"
-  taskkill /F /IM "$EXE_NAME" 2>&1 || true
+  echo ">>> FORCE mode: taskkill -F -IM $EXE_NAME"
+  # Use -F (dash) not /F — Git Bash mangles forward-slash flags
+  taskkill -F -IM "$EXE_NAME" 2>&1 || true
 else
   echo ">>> Graceful mode: sending CloseMainWindow via PowerShell..."
   for pid in $PIDS; do
@@ -58,7 +59,8 @@ else
   done
 
   echo ">>> Graceful exit timeout. Falling back to force kill..."
-  taskkill /F /IM "$EXE_NAME" 2>&1 || true
+  # Use -F (dash) not /F — Git Bash mangles forward-slash flags
+  taskkill -F -IM "$EXE_NAME" 2>&1 || true
 fi
 
 sleep 1
