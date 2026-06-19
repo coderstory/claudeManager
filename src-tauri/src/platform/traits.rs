@@ -200,6 +200,10 @@ pub enum PlatformError {
     #[error("path error: {0}")]
     Path(String),
 
+    /// Autostart backend (tauri-plugin-autostart) failed.
+    #[error("autostart error: {0}")]
+    Autostart(String),
+
     /// Catch-all for unexpected platform-specific failures.
     #[error("platform error: {0}")]
     Other(String),
