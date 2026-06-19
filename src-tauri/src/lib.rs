@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+pub mod commands;
 pub mod platform;
 pub mod plugins;
 
@@ -38,6 +39,10 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_process::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::autostart::get_autostart_status,
+            commands::autostart::set_autostart_enabled,
+        ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
             // macOS impls based on target_os). Must run before any
