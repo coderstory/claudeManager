@@ -126,12 +126,21 @@ describe('M1.9.3 — main pane absolute positioning (P0 fix)', () => {
   it('<main> insets match the header / sidebar token dimensions', () => {
     renderApp();
     const main = screen.getByTestId('app-main');
+    // jsdom does NOT resolve CSS var() in computed style, so
+    // getComputedStyle().top returns the literal "var(...)" string.
+    // The reliable assertion is therefore on the inline style,
+    // which is what the Tauri webview ships verbatim. CSS var()
+    // resolution happens in the production engine (Chromium /
+    // WebView2 / WKWebView) and is what actually puts the pane
+    // at the right pixel offset.
+    const inlineTop = (main as HTMLElement).style.top;
+    const inlineLeft = (main as HTMLElement).style.left;
+    expect(inlineTop).toBe('var(--header-height)');
+    expect(inlineLeft).toBe('var(--sidebar-width)');
+    // right + bottom pin to 0 (the standard inset trick) —
+    // these ARE resolved in computed style because they're bare
+    // pixel values, not var() expressions.
     const cs = getComputedStyle(main);
-    // top: var(--header-height) — pushes main below the 48px header
-    expect(cs.top).toBe('48px');
-    // left: var(--sidebar-width) — pushes main past the 220px sidebar
-    expect(cs.left).toBe('220px');
-    // right + bottom pin to 0 (the standard inset trick)
     expect(cs.right).toBe('0px');
     expect(cs.bottom).toBe('0px');
   });
@@ -165,7 +174,7 @@ describe('M1.9.3 — main pane absolute positioning (P0 fix)', () => {
 });
 
 describe('M1.9.3 — view transition (P1 fix: framer-motion removed)', () => {
-  it('App.tsx no longer imports framer-motion (P1 root cause removed)', () => {
+  it('App.tsx no longer imports or uses framer-motion (P1 root cause removed)', () => {
     // Reading the source is the reliable way to assert "we are
     // not shipping a 12.23.25 import path that crashes the
     // WebView2 renderer". A rendered-DOM test could pass on
@@ -174,9 +183,15 @@ describe('M1.9.3 — view transition (P1 fix: framer-motion removed)', () => {
       resolve(__dirname, '../../App.tsx'),
       'utf-8',
     );
+    // 1. No import line — the only place `framer-motion` should
+    //    appear in a TS file is `from "framer-motion"`.
     expect(appSrc).not.toMatch(/from\s+["']framer-motion["']/);
-    expect(appSrc).not.toMatch(/AnimatePresence/);
-    expect(appSrc).not.toMatch(/motion\.(div|span|main)/);
+    // 2. No JSX usage of the AnimatePresence / motion components.
+    //    We anchor on the JSX-style usage (`<AnimatePresence` or
+    //    `motion.div`/`motion.span`/`motion.main`) so that prose
+    //    mentions in a comment are NOT flagged — only real code.
+    expect(appSrc).not.toMatch(/<AnimatePresence\b/);
+    expect(appSrc).not.toMatch(/<motion\.(div|span|main|section|article)\b/);
   });
 
   it('package.json no longer declares framer-motion as a dependency', () => {
@@ -215,18 +230,100 @@ describe('M1.9.3 — view transition (P1 fix: framer-motion removed)', () => {
     expect(view.className).toContain('view-transition');
   });
 
-  it('the view-transition element has the fadeIn animation applied', () => {
-    renderApp();
-    const view = screen.getByTestId('app-view');
-    const cs = getComputedStyle(view);
-    // jsdom returns the literal CSS `animation` value when a
-    // @keyframes rule is referenced. We assert both the
-    // animation-name and a duration token to make the intent
-    // explicit (snappy 150ms is the M1.9.1 contract).
-    expect(cs.animationName).toBe('fadeIn');
-    // duration may be serialised as "0.15s" or "150ms" — both
-    // express the same M1.9.1 fade length. We accept either.
-    expect(['0.15s', '150ms']).toContain(cs.animationDuration);
+  it('the view-transition class declares the fadeIn animation in the loaded CSS', () => {
+    // jsdom does NOT process @keyframes rules nor does it
+    // resolve shorthand `animation:` declarations from a
+    // CSSRule onto a matched element's getComputedStyle.
+    // We assert the contract at the source level: the
+    // .view-transition rule must exist on the loaded
+    // stylesheet and its body must include the fadeIn
+    // animation with the M1.9.1 150ms duration.
+    //
+    // This is what the Tauri webview will receive at runtime
+    // (Chromium / WebView2 / WKWebView all parse the
+    // <style> tag injected from main.tsx → tokens.css).
+    const sheets = Array.from(document.styleSheets);
+    let viewTransitionRule: CSSStyleRule | null = null;
+    for (const sheet of sheets) {
+      let rules: CSSRuleList | null = null;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      if (!rules) continue;
+      for (const rule of Array.from(rules)) {
+        // jsdom does NOT expose `instanceof CSSStyleRule` for
+        // STYLE_RULE typed rules (the typed constructors are
+        // not in the jsdom global). We use the `selectorText`
+        // property as a duck-type instead — only CSSStyleRule
+        // (and CSSStyleDeclaration children) carry that field.
+        const maybeStyleRule = rule as CSSStyleRule;
+        if (
+          typeof maybeStyleRule.selectorText === 'string' &&
+          maybeStyleRule.selectorText === '.view-transition'
+        ) {
+          viewTransitionRule = maybeStyleRule;
+          break;
+        }
+      }
+      if (viewTransitionRule) break;
+    }
+    expect(viewTransitionRule).not.toBeNull();
+    // The animation shorthand on the rule must reference
+    // `fadeIn` (the keyframe) and a duration token — we
+    // ship the duration as the var(--view-transition-duration)
+    // token so the value lives in tokens.css (CLAUDE.md §4
+    // token discipline). jsdom does NOT resolve the var(),
+    // so the literal value is what we assert against.
+    const animationDecl = viewTransitionRule!.style.animation;
+    expect(animationDecl).toMatch(/fadeIn/);
+    // Duration reference (either the token or a literal ms/s
+    // form is acceptable — the token is the canonical ship).
+    expect(animationDecl).toMatch(
+      /var\(--view-transition-duration\)|0\.15s|150ms/,
+    );
+    // Easing keyword (any standard easing is fine; the
+    // important thing is that the shorthand is syntactically
+    // complete — animation-name, duration, timing-function).
+    expect(animationDecl).toMatch(/ease/);
+  });
+
+  it('the fadeIn @keyframes rule itself is reachable via the loaded stylesheet', () => {
+    // Defence-in-depth: even if the .view-transition rule
+    // was renamed, the @keyframes rule must exist so the
+    // webview can resolve the animation name. jsdom
+    // exposes keyframe rules as CSSKeyframesRule instances
+    // (in modern jsdom versions), but the global constructor
+    // is not always defined — so we use a duck-type on
+    // `name` + `cssRules` properties.
+    const sheets = Array.from(document.styleSheets);
+    let foundName: string | null = null;
+    for (const sheet of sheets) {
+      let rules: CSSRuleList | null = null;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      if (!rules) continue;
+      for (const rule of Array.from(rules)) {
+        const maybe = rule as { name?: string; cssRules?: { length: number } | null };
+        if (
+          typeof maybe.name === 'string' &&
+          maybe.name === 'fadeIn'
+        ) {
+          foundName = maybe.name;
+          // Sanity-check the keyframe has both `from` and `to`
+          // stops, which is the minimum the @keyframes spec
+          // requires for the animation to render.
+          expect(maybe.cssRules?.length).toBe(2);
+          break;
+        }
+      }
+      if (foundName) break;
+    }
+    expect(foundName).toBe('fadeIn');
   });
 });
 
@@ -236,7 +333,12 @@ describe('M1.9.3 — regression: dark theme still works after P0/P1 changes', ()
     // The pane must STILL be position:absolute (the fix is
     // independent of the theme system) and the data-theme
     // attribute on <html> must reflect the switch.
-    localStorage.setItem('claude-config-manager:theme', 'dark');
+    //
+    // The storage key is `ccm.theme` (per ThemeProvider.tsx
+    // STORAGE_KEY) — not the platform-default key. The provider
+    // reads from this key on initial mount; clearing it would
+    // default to 'light'.
+    localStorage.setItem('ccm.theme', 'dark');
     renderApp();
     const main = screen.getByTestId('app-main');
     const cs = getComputedStyle(main);
