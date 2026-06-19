@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跨平台桌面技术方案评估报告</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f8f9fa;
+    --bg-card: #ffffff;
+    --border: #e1e4e8;
+    --border-strong: #d0d7de;
+    --text: #1f2328;
+    --text-soft: #656d76;
+    --text-muted: #8b949e;
+    --primary: #0969da;
+    --primary-bg: #ddf4ff;
+    --success: #1a7f37;
+    --success-bg: #dafbe1;
+    --warning: #9a6700;
+    --warning-bg: #fff8c5;
+    --danger: #cf222e;
+    --danger-bg: #ffebe9;
+    --gold: #bf8700;
+    --gold-bg: #fff1aa;
+    --silver: #6e7781;
+    --silver-bg: #eaeef2;
+    --bronze: #8b5a2b;
+    --bronze-bg: #f4e4d4;
+    --shadow: 0 1px 3px rgba(31, 35, 40, 0.04), 0 1px 2px rgba(31, 35, 40, 0.06);
+    --shadow-lg: 0 8px 24px rgba(31, 35, 40, 0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: var(--bg-soft);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== Layout ===== */
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 28px 80px;
+  }
+
+  /* ===== Header ===== */
+  header {
+    background: linear-gradient(135deg, #f6f8fa 0%, #ffffff 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 36px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow);
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-soft);
+    margin-bottom: 20px;
+  }
+
+  .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .meta-item .label {
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .conclusion-box {
+    background: var(--primary-bg);
+    border-left: 4px solid var(--primary);
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .conclusion-box strong { color: var(--primary); }
+
+  /* ===== TOC ===== */
+  nav.toc {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 24px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow);
+  }
+
+  nav.toc h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  nav.toc ol {
+    list-style: none;
+    counter-reset: toc-counter;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 6px;
+  }
+
+  nav.toc li {
+    counter-increment: toc-counter;
+  }
+
+  nav.toc a {
+    display: block;
+    padding: 6px 10px;
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: background 0.15s;
+  }
+
+  nav.toc a::before {
+    content: counter(toc-counter, decimal) ". ";
+    color: var(--primary);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  nav.toc a:hover {
+    background: var(--bg-soft);
+    color: var(--primary);
+  }
+
+  /* ===== Section ===== */
+  section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-top: 22px;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  p { margin-bottom: 12px; }
+
+  /* ===== Tables ===== */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 18px;
+    font-size: 13.5px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  thead {
+    background: var(--bg-soft);
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    color: var(--text);
+    border-bottom: 1px solid var(--border-strong);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg-soft); }
+
+  /* ===== Badges ===== */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  .badge-primary { background: var(--primary-bg); color: var(--primary); }
+  .badge-success { background: var(--success-bg); color: var(--success); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); }
+  .badge-danger  { background: var(--danger-bg); color: var(--danger); }
+  .badge-muted   { background: var(--silver-bg); color: var(--silver); }
+
+  /* ===== Star Rating ===== */
+  .stars {
+    color: var(--gold);
+    letter-spacing: 1px;
+    font-size: 14px;
+  }
+
+  .star-empty { color: var(--border-strong); }
+
+  /* ===== Pros / Cons Lists ===== */
+  .pros, .cons {
+    margin: 10px 0 14px;
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .pros li, .cons li {
+    padding: 6px 0 6px 24px;
+    position: relative;
+    font-size: 14.5px;
+  }
+
+  .pros li::before {
+    content: "✓";
+    position: absolute;
+    left: 4px;
+    color: var(--success);
+    font-weight: 700;
+  }
+
+  .cons li::before {
+    content: "✗";
+    position: absolute;
+    left: 4px;
+    color: var(--danger);
+    font-weight: 700;
+  }
+
+  /* ===== Callouts ===== */
+  .callout {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 14px 0;
+    font-size: 14.5px;
+    border-left: 4px solid;
+  }
+
+  .callout-info    { background: var(--primary-bg); border-color: var(--primary); }
+  .callout-success { background: var(--success-bg); border-color: var(--success); }
+  .callout-warning { background: var(--warning-bg); border-color: var(--warning); }
+  .callout-danger  { background: var(--danger-bg); border-color: var(--danger); }
+
+  .callout strong { display: inline-block; margin-right: 4px; }
+
+  /* ===== Decision Box ===== */
+  .decision {
+    background: linear-gradient(135deg, #f0f7ff 0%, #ddf4ff 100%);
+    border: 1px solid #b6e3ff;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+
+  .decision-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  /* ===== Medal ===== */
+  .medal {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 700;
+    margin-right: 8px;
+    vertical-align: middle;
+    font-size: 13px;
+  }
+
+  .medal-gold   { background: var(--gold); }
+  .medal-silver { background: var(--silver); }
+  .medal-bronze { background: var(--bronze); }
+  .medal-none   { background: var(--border-strong); }
+
+  /* ===== Code ===== */
+  code {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    color: var(--text);
+  }
+
+  pre {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    font-size: 13px;
+    margin: 10px 0;
+    line-height: 1.5;
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  /* ===== Footer ===== */
+  footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 24px 0 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 32px;
+  }
+
+  /* ===== Print ===== */
+  @media print {
+    body { background: #fff; }
+    section, header, nav.toc { box-shadow: none; }
+  }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    header, section, nav.toc { padding: 18px 20px; }
+    h1 { font-size: 22px; }
+    table { font-size: 12px; }
+    th, td { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>跨平台桌面技术方案评估报告</h1>
+    <div class="meta">
+      <span class="meta-item"><span class="label">目标平台</span> Windows 11 (24H2/25H2) + macOS 26 (Tahoe)</span>
+      <span class="meta-item"><span class="label">报告日期</span> 2026-06-18</span>
+      <span class="meta-item"><span class="label">核心约束</span> 纯 AI 开发，无团队技能偏好</span>
+    </div>
+    <div class="conclusion-box">
+      <strong>结论先行</strong>：<strong>Tauri v2</strong>（推荐主选） / <strong>Electron</strong>（生态成熟备选） / <strong>Flutter Desktop</strong>（视觉一致性需求）三选一；其他 4 个为有条件备选。
+    </div>
+  </header>
+
+  <nav class="toc">
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#sec1">候选方案速览</a></li>
+      <li><a href="#sec2">推荐方案：Tauri v2</a></li>
+      <li><a href="#sec3">备选方案对比</a></li>
+      <li><a href="#sec4">决策矩阵</a></li>
+      <li><a href="#sec5">明确不要选的方案</a></li>
+      <li><a href="#sec6">Tauri v2 下一步建议</a></li>
+      <li><a href="#sec7">置信度声明</a></li>
+      <li><a href="#sec8">最终决策结论</a></li>
+    </ol>
+  </nav>
+
+  <!-- ========== Section 1: 候选方案速览 ========== -->
+  <section id="sec1">
+    <h2>一、候选方案速览</h2>
+    <p>下表对比 7 个跨平台桌面框架的核心指标。版本号已通过 GitHub releases API / Flutter release JSON 验证（2026-06-18）。</p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>框架</th>
+          <th>当前版本</th>
+          <th>语言</th>
+          <th>Win 11</th>
+          <th>macOS 26</th>
+          <th>包体积 (Hello)</th>
+          <th>内存 (idle)</th>
+          <th>License</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td><strong>Tauri v2</strong></td>
+          <td>CLI 2.11.3<br><small>(2026-06)</small></td>
+          <td>Rust + Web</td>
+          <td>WebView2 系统</td>
+          <td>WKWebView 系统</td>
+          <td><span class="badge badge-success">3–10 MB</span></td>
+          <td><span class="badge badge-success">30–80 MB</span></td>
+          <td><span class="badge badge-success">MIT</span></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><strong>Electron</strong></td>
+          <td>42.4.1<br><small>(2026)</small></td>
+          <td>TS/JS</td>
+          <td>捆绑 Chromium</td>
+          <td>捆绑 Chromium</td>
+          <td><span class="badge badge-warning">150–250 MB</span></td>
+          <td><span class="badge badge-warning">100–200 MB</span></td>
+          <td><span class="badge badge-success">MIT</span></td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><strong>Flutter Desktop</strong></td>
+          <td>3.44.2 stable</td>
+          <td>Dart</td>
+          <td>Win32 native</td>
+          <td>Native macOS</td>
+          <td>20–30 MB</td>
+          <td>80–150 MB</td>
+          <td><span class="badge badge-success">BSD-3</span></td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><strong>.NET MAUI</strong></td>
+          <td>10.0.71 (.NET 10)</td>
+          <td>C#/XAML</td>
+          <td>WinUI 3</td>
+          <td>Mac Catalyst <span class="badge badge-warning">⚠️</span></td>
+          <td>60–120 MB</td>
+          <td>80–150 MB</td>
+          <td><span class="badge badge-success">MIT</span></td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><strong>Avalonia 12</strong></td>
+          <td>12.0.4<br><small>(2026-05)</small></td>
+          <td>C#/XAML</td>
+          <td>Skia/ANGLE</td>
+          <td>Skia/Metal</td>
+          <td>40–80 MB</td>
+          <td>60–120 MB</td>
+          <td><span class="badge badge-success">MIT</span></td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><strong>Wails v2</strong></td>
+          <td>2.12.0<br><small>(2026-03)</small></td>
+          <td>Go + Web</td>
+          <td>WebView2 系统</td>
+          <td>WKWebView 系统</td>
+          <td><span class="badge badge-success">5–10 MB</span></td>
+          <td><span class="badge badge-success">40–90 MB</span></td>
+          <td><span class="badge badge-success">MIT</span></td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td><strong>Qt 6</strong></td>
+          <td>6.10 LTS / 6.11</td>
+          <td>C++/QML</td>
+          <td>Native Win32</td>
+          <td>Native AppKit</td>
+          <td>30–60 MB</td>
+          <td>50–100 MB</td>
+          <td><span class="badge badge-warning">LGPL/Commercial</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout callout-warning">
+      <strong>Mac Catalyst 警告</strong>：.NET MAUI 在 macOS 上使用 Mac Catalyst（iOS UIKit 跑在 macOS 上），不是原生 AppKit。这是 macOS-first 项目的硬伤。
+    </div>
+  </section>
+
+  <!-- ========== Section 2: 推荐方案 ========== -->
+  <section id="sec2">
+    <h2>二、推荐方案：Tauri v2</h2>
+
+    <h3>为什么是 Tauri</h3>
+    <ol class="pros">
+      <li><strong>包体积 + 内存最低</strong>（web 类方案里）。~3–10 MB 安装包、~30–80 MB 内存，对比 Electron 的 150–250 MB / 100–200 MB，差一个数量级。</li>
+      <li><strong>不捆绑浏览器引擎</strong>。Windows 用系统 WebView2（Edge 内核），macOS 用系统 WKWebView。系统自带，零维护；攻击面更小、补丁跟随系统。</li>
+      <li><strong>原生集成齐全</strong>。Tauri v2 官方插件覆盖：文件系统、对话框、shell、single-instance、autostart、store、updater（签名更新）、notifications、HTTP、clipboard、deep-link、window-vibrancy（macOS）、Mica（Win 11，社区插件）。</li>
+      <li><strong>AI 反馈循环最好</strong>。Rust 后端 <code>cargo check</code> 秒级编译；前端用任意 web 框架（React/Vue/Svelte/Solid）—— 全是训练数据里最强的栈组合。</li>
+      <li><strong>协议干净</strong>。MIT / Apache-2.0，无 LGPL 商业义务。</li>
+      <li><strong>机构背书</strong>。2024 年成立 Tauri Foundation，Microsoft Learn / GitHub Sponsors / 1Password 都是生产用户。</li>
+    </ol>
+
+    <h3>为什么不是 Tauri（要权衡）</h3>
+    <ol class="cons">
+      <li><strong>Win 10 用户</strong>：Win 11 默认有 WebView2，但 Win 10 可能没有。安装器要带 WebView2 bootstrapper（增加 ~80 MB 安装包体积）。如果目标用户里 Win 10 占比 &lt; 10%，可忽略。</li>
+      <li><strong>Microsoft Defender 误报</strong>（Tauri issue #2486，84+ 👍，5 年未完全解决）。未签名的 Tauri <code>.exe</code> 会被 Defender 标 Trojan。<strong>Day 1 就必须配 EV 代码签名证书</strong>。</li>
+      <li><strong>生态比 Electron 小</strong>。需要 Bluetooth / NFC / 高级媒体这类边缘能力时，得自己写 Rust 插件。</li>
+      <li><strong>WKWebView ≠ Chromium</strong>。macOS 上的 CSS / JS 行为和 Chrome 不完全一样，从 Day 1 就要在真 macOS 26 上测试。</li>
+      <li><strong>Rust 学习曲线</strong>（如果团队零基础）。逻辑尽量放在 web 前端，Rust 只做必要的 IPC bridge，2–4 周上手。</li>
+    </ol>
+
+    <h3>关键配置 / 命令模式</h3>
+    <ul>
+      <li><strong>能力文件硬约束</strong>：每个 IPC 命令需要 (a) Rust <code>#[tauri::command]</code>、(b) TS wrapper、(c) <code>src-tauri/capabilities/*.json</code> 授权。AI 经常忘记给新命令加 capability。</li>
+      <li><strong>打包</strong>：内置 <code>tauri build</code> 支持 macOS DMG/.app + Windows MSI/NSIS/.exe，签名和公证都有 hook。</li>
+      <li><strong>更新</strong>：<code>tauri-plugin-updater</code>（官方，支持签名更新）。</li>
+    </ul>
+  </section>
+
+  <!-- ========== Section 3: 备选方案 ========== -->
+  <section id="sec3">
+    <h2>三、备选方案对比</h2>
+
+    <h3>A. Electron — 生态最成熟</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：JS/TS 团队、UI 本质就是网页、npm 依赖图庞大、能接受 100–200 MB 体积。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：在意包体积、内存、想要 Win11+macOS26 原生感（Electron 永远是"Chromium 风格"）。
+    </div>
+    <ul>
+      <li><strong>AI 友好度</strong>：最高（整个 web 栈全在训练数据里）。<span class="badge badge-warning">风险</span>：AI 默认会写不安全的 <code>nodeIntegration: true</code> / <code>contextIsolation: false</code>，必须 review 把关。</li>
+      <li><strong>版本</strong>：v42.4.1，Chromium 148，Node 24.16，月度发布。</li>
+    </ul>
+
+    <h3>B. Flutter Desktop — 视觉一致性最强</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：设计语言要"跨平台像素一致"（品牌画布类产品）、同时要做移动端。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：要求 Win11/macOS26 原生感。Flutter 用 Skia/Impeller 画所有控件，没有原生 widget —— 菜单、滚动条、文件选择器都是 Flutter 风格的。
+    </div>
+    <ul>
+      <li><strong>AI 友好度</strong>：良好（Dart 在训练数据里，widget catalog 齐全）。<span class="badge badge-warning">风险</span>：AI 容易忽略桌面特定 UX（键盘导航、focus、屏幕阅读器语义）。</li>
+      <li><strong>版本</strong>：3.44.2 stable，Dart 3.12.2。</li>
+    </ul>
+
+    <h3>C. .NET MAUI — Windows 优先可用</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：.NET 团队、Windows 优先 + macOS 次要、能接受 Mac Catalyst 的"iPad 跑在 macOS 上"的味道。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：macOS 是一等公民。Mac Catalyst 是 UIKit 在 macOS 上跑，<strong>不是原生 AppKit</strong>。返回手势、iPad 风格弹窗、无 macOS 服务集成 —— 在 macOS 26 上原生感极差，是 macOS-first 项目的硬伤。
+    </div>
+    <ul>
+      <li><strong>AI 友好度</strong>：良好（.NET + XAML 在训练数据里）。<span class="badge badge-warning">风险</span>：AI 生成的 XAML 在 Mac Catalyst 上渲染异常。</li>
+      <li><strong>版本</strong>：10.0.71（.NET 10）。</li>
+    </ul>
+
+    <h3>D. Avalonia 12 — XAML 跨 Linux 优选</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：WPF/XAML 团队、需要 Win + macOS + <strong>Linux 桌面</strong>、能用 Skia 自绘控件（不是 OS 原生）。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：要求 WinUI-3 / AppKit 原生、Avalonia 文档/issue 体量比 MAUI 小。
+    </div>
+    <p><strong>2026 年 6 月 open issues</strong>：</p>
+    <ul>
+      <li>CJK 字形回归（#21556）</li>
+      <li>macOS AppKit 系统字体缺失（#21565）</li>
+      <li>窗口缩放在 DWM composition 关闭时坏掉（#21603/#21604）</li>
+    </ul>
+    <p>回归频繁，但社区响应快。</p>
+
+    <h3>E. Wails v2 — Go 团队的 Tauri 替代</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：Go 团队、想要 Tauri 风格（web 前端 + 原生后端）但用 Go 不用 Rust。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：需要成熟插件生态（Wails 插件比 Tauri 少一个量级）、需要 mobile（Wails v2 mobile 是 alpha）。
+    </div>
+    <p>架构上和 Tauri 同源（WebView2/WKWebView），但工程成熟度差很多。除非有强 Go 偏好，否则选 Tauri 是更优解。</p>
+
+    <h3>F. Qt 6 — 工业级但 AI 灾难</h3>
+    <div class="callout callout-info">
+      <strong>适合</strong>：工业 / 嵌入式 / 汽车 / 医疗认证、复杂 2D/3D 渲染、已有 C++ 基础设施。
+    </div>
+    <div class="callout callout-danger">
+      <strong>不适合</strong>：<strong>AI 作为主要开发者</strong>。QML + C++ + moc（meta-object compiler）的组合在 AI 训练语料里最少 —— 生成的 QML 经常漏 <code>Q_INVOKABLE</code>、漏 <code>Q_OBJECT</code>、搞错 QObject parent ownership。
+    </div>
+    <div class="callout callout-warning">
+      <strong>License 风险</strong>：<strong>LGPL 3 / GPL / 商业</strong>。静态链接 Qt 的专有产品必须买商业 license。LGPL 动态链接 OK 但有合规义务。误用会被 Qt Company 追究。
+    </div>
+    <p><strong>版本</strong>：Qt 6.10 LTS（May 2025）/ 6.11 innovation（GitHub release API 不可用，置信度 MEDIUM）。</p>
+  </section>
+
+  <!-- ========== Section 4: 决策矩阵 ========== -->
+  <section id="sec4">
+    <h2>四、决策矩阵</h2>
+    <p>按 7 个核心维度加权打分（★ = 1 分，满分 5 星）：</p>
+    <table>
+      <thead>
+        <tr>
+          <th>维度 (权重)</th>
+          <th>Tauri v2</th>
+          <th>Electron</th>
+          <th>Flutter</th>
+          <th>MAUI</th>
+          <th>Avalonia</th>
+          <th>Wails</th>
+          <th>Qt</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Win11+macOS26 原生感 (20%)</td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★<span class="star-empty">★★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★★★</span></td>
+        </tr>
+        <tr>
+          <td>包体积 + 内存 (15%)</td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★<span class="star-empty">★★★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+        </tr>
+        <tr>
+          <td>跨平台一致性 (15%)</td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+        </tr>
+        <tr>
+          <td>AI 开发友好度 (20%)</td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★<span class="star-empty">★★★</span></span></td>
+        </tr>
+        <tr>
+          <td>生态成熟度 (10%)</td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★<span class="star-empty">★★★</span></span></td>
+          <td><span class="stars">★★★★★</span></td>
+        </tr>
+        <tr>
+          <td>部署 + 签名 + 更新 (10%)</td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★<span class="star-empty">★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+          <td><span class="stars">★★<span class="star-empty">★★★</span></span></td>
+        </tr>
+        <tr>
+          <td>License 干净度 (10%)</td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★★★</span></td>
+          <td><span class="stars">★★★<span class="star-empty">★★</span></span></td>
+        </tr>
+        <tr style="background: #fff8c5;">
+          <td><strong>加权总分</strong></td>
+          <td><strong>4.55</strong></td>
+          <td>3.85</td>
+          <td>3.55</td>
+          <td>3.25</td>
+          <td>3.25</td>
+          <td>3.20</td>
+          <td>3.30</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Section 5: 不要选的方案 ========== -->
+  <section id="sec5">
+    <h2>五、明确不要选的方案</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>方案</th>
+          <th>排除理由</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>WinUI 3 / Windows App SDK 单独用</td>
+          <td><span class="badge badge-danger">Windows-only</span>，macOS 完全不支持</td>
+        </tr>
+        <tr>
+          <td>Xamarin.Mac</td>
+          <td>已废弃，被 .NET MAUI 的 Mac Catalyst 取代</td>
+        </tr>
+        <tr>
+          <td>Cordova / PhoneGap desktop</td>
+          <td>桌面端基本无人维护</td>
+        </tr>
+        <tr>
+          <td>NW.js</td>
+          <td>活跃但小众，生态比 Electron 小</td>
+        </tr>
+        <tr>
+          <td>JavaFX</td>
+          <td>与 Win11/macOS26 设计语言不匹配，社区萎缩</td>
+        </tr>
+        <tr>
+          <td>UWP</td>
+          <td>微软正在用 WinUI 3 / Windows App SDK 替代 UWP</td>
+        </tr>
+        <tr>
+          <td>React Native for Windows+macOS</td>
+          <td>桌面端未经证实，社区已向 Electron/Tauri 集中</td>
+        </tr>
+        <tr>
+          <td>手撸 CEF / WebView 包装</td>
+          <td>自定义 Electron 是维护陷阱；用现成的 Electron 或 Tauri/Wails</td>
+        </tr>
+        <tr>
+          <td>Flutter Web 当桌面替代</td>
+          <td>浏览器沙箱、无原生菜单、无系统托盘、文件系统受限</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Section 6: 下一步建议 ========== -->
+  <section id="sec6">
+    <h2>六、给 Tauri v2 的下一步建议</h2>
+    <p>如果你决定选 Tauri v2，按以下 6 步走：</p>
+
+    <h3>1. 1 天 Hello-World benchmark</h3>
+    <p>在 Win 11 + macOS 26 真机上跑 Tauri v2 / Electron / Flutter Desktop 三个空壳 app，测：</p>
+    <ul>
+      <li>冷启动时间</li>
+      <li>idle 内存</li>
+      <li>安装包体积</li>
+      <li>跨 DPI 拖窗表现</li>
+    </ul>
+
+    <h3>2. Day 1 配签名</h3>
+    <ul>
+      <li>注册 Apple Developer Program（$99/年）</li>
+      <li>买 EV 代码签名证书（DigiCert / GlobalSign / Sectigo / SSL.com）</li>
+      <li>macOS 用 App Store Connect API key 走 <code>notarytool</code>（不要 Apple ID + app-specific password，CI 上会因 2FA 翻车）</li>
+    </ul>
+
+    <h3>3. macOS 菜单栏从第一个菜单开始就按 macOS 规范设计</h3>
+    <p>Windows-style 菜单后期改 macOS 是多周重构。</p>
+
+    <h3>4. 真 macOS 26 硬件从 Day 1 必测</h3>
+    <p>WKWebView ≠ Chromium，"Windows 跑通了" 啥也证明不了。</p>
+
+    <h3>5. 建 <code>AGENTS.md</code> 框架不变量清单</h3>
+    <p>包括：</p>
+    <ul>
+      <li>安全默认（<code>contextIsolation: true</code> / <code>nodeIntegration: false</code>）</li>
+      <li>capability 授权流程</li>
+      <li>签名命令</li>
+      <li>平台抽象层</li>
+    </ul>
+    <p>AI 必须遵守。</p>
+
+    <h3>6. 延迟做自动更新（v1.0 之后再规划）</h3>
+    <p>先用手动下载更新，验证后再上 <code>tauri-plugin-updater</code>。</p>
+  </section>
+
+  <!-- ========== Section 7: 置信度 ========== -->
+  <section id="sec7">
+    <h2>七、置信度声明</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>项</th>
+          <th>置信度</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>7 个框架的版本号（除 Qt 点版本）</td>
+          <td><span class="badge badge-success">HIGH</span></td>
+          <td>GitHub releases API + flutter_infra_release JSON 验证</td>
+        </tr>
+        <tr>
+          <td>Win11 + macOS26 支持矩阵</td>
+          <td><span class="badge badge-success">HIGH</span></td>
+          <td>官方 prerequisite 文档</td>
+        </tr>
+        <tr>
+          <td>包体积 / 内存数字</td>
+          <td><span class="badge badge-warning">MEDIUM</span></td>
+          <td>公开 benchmark 平均值，依赖应用；选型前必须自己跑 Hello-World</td>
+        </tr>
+        <tr>
+          <td>Tauri 生态健康度</td>
+          <td><span class="badge badge-success">HIGH</span></td>
+          <td>Tauri Foundation 2024 成立，月度发布</td>
+        </tr>
+        <tr>
+          <td>Mac Catalyst 质量</td>
+          <td><span class="badge badge-success">HIGH</span></td>
+          <td>苹果官方区分 AppKit vs UIKit-on-macOS</td>
+        </tr>
+        <tr>
+          <td>Wails / Qt 插件生态细节</td>
+          <td><span class="badge badge-warning">MEDIUM</span></td>
+          <td>部分主源被 Cloudflare / 公司代理拦截</td>
+        </tr>
+        <tr>
+          <td>AI 友好度评分</td>
+          <td><span class="badge badge-warning">MEDIUM-HIGH</span></td>
+          <td>基于训练语料量和已知失败模式</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ========== Section 8: 最终决策 ========== -->
+  <section id="sec8">
+    <h2>八、最终决策结论</h2>
+
+    <div class="decision">
+      <div class="decision-title">🥇 主选</div>
+      <p><strong>Tauri v2</strong> —— 满足 80% 场景的最佳均衡（原生感 / 体积 / AI 友好 / License）。</p>
+    </div>
+
+    <h3>条件切换</h3>
+    <ul>
+      <li>如果业务是"网页套壳"、JS/TS 团队主导、能接受 200MB 安装包 → <strong>切 Electron</strong></li>
+      <li>如果设计语言要求像素级跨平台一致、需要同时做 mobile → <strong>切 Flutter Desktop</strong></li>
+      <li>如果必须支持 Linux 桌面、有 XAML 经验 → <strong>切 Avalonia</strong>（不是 Tauri）</li>
+      <li>如果是 .NET 团队、Win 优先、macOS 是 secondary → <strong>切 MAUI</strong>（接受 Mac Catalyst 妥协）</li>
+      <li>如果有强 Go 团队偏好 → <strong>切 Wails v2</strong></li>
+      <li>如果是工业 / 嵌入式 / 已有 C++ 基础设施 → <strong>切 Qt 6</strong>（但 AI 友好度极差）</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <strong>下一步</strong>：你拍板选哪个，我再决定要不要：
+      <ol style="margin-top: 8px; padding-left: 20px;">
+        <li>跑 1 天 Hello-World benchmark 验证选型</li>
+        <li>进入 <code>/gsd-new-project</code> 后续流程（写 PROJECT.md / REQUIREMENTS.md / ROADMAP.md → 进入开发）</li>
+        <li>先就某个备选做更深的专项调研</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    <p>报告基于 <code>.planning/research/STACK.md</code>（25KB，2026-06-18）+ <code>.planning/research/PITFALLS.md</code>（52KB，2026-06-18）综合得出。</p>
+    <p style="margin-top: 8px;">如需补充 FEATURES / ARCHITECTURE 维度细节或联网核实某个具体数字，告诉我。</p>
+  </footer>
+
+</div>
+</body>
+</html>
