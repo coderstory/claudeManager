@@ -11,21 +11,32 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
 import { ThemeProvider, useTheme, type Theme } from '../../design-system/ThemeProvider';
 
 // --- matchMedia mock (jsdom doesn't ship it) -------------------------------
 type Listener = (ev: { matches: boolean }) => void;
 const listeners = new Set<Listener>();
 let prefersDark = false;
-const matchMediaMock = vi.fn((query: string) => {
+const matchMediaMock = vi.fn((query: string): MediaQueryList => {
   if (!query.includes('prefers-color-scheme')) {
-    return { matches: false, addEventListener: () => {}, removeEventListener: () => {} } as MediaQueryList;
+    return {
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    } as unknown as MediaQueryList;
   }
   return {
     get matches() {
       return prefersDark;
     },
     media: query,
+    onchange: null,
     addEventListener: (_: string, cb: Listener) => {
       listeners.add(cb);
     },
@@ -33,7 +44,6 @@ const matchMediaMock = vi.fn((query: string) => {
       listeners.delete(cb);
     },
     dispatchEvent: () => true,
-    onchange: null,
     addListener: () => {},
     removeListener: () => {},
   } as unknown as MediaQueryList;
@@ -57,7 +67,7 @@ afterEach(() => {
 });
 
 // --- helpers ----------------------------------------------------------------
-function Probe(): JSX.Element {
+function Probe(): ReactElement {
   const { theme, setTheme } = useTheme();
   return (
     <div>
@@ -147,14 +157,12 @@ describe('ThemeProvider', () => {
   });
 
   it('keeps the same setTheme reference across re-renders (referential stability)', () => {
-    const { result, rerender } = renderHook(
-      ({ children }: { children: React.ReactNode }) => (
-        <ThemeProvider>{children}</ThemeProvider>
-      ),
-      { initialProps: { children: null as React.ReactNode } },
+    const wrapper = ({ children }: { children: ReactNode }): ReactElement => (
+      <ThemeProvider>{children}</ThemeProvider>
     );
+    const { result, rerender } = renderHook(() => useTheme(), { wrapper });
     const firstSetter = result.current.setTheme;
-    rerender({ children: null });
+    rerender();
     expect(result.current.setTheme).toBe(firstSetter);
   });
 

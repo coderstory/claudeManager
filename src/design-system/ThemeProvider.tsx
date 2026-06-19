@@ -19,6 +19,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ReactElement,
   type ReactNode,
 } from 'react';
 
@@ -50,7 +51,7 @@ function applyTheme(theme: Theme): void {
   root.dataset.theme = theme === 'auto' ? readSystemTheme() : theme;
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }): JSX.Element {
+export function ThemeProvider({ children }: { children: ReactNode }): ReactElement {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'light';
     const stored = window.localStorage.getItem(STORAGE_KEY);
