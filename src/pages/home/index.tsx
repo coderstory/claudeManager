@@ -8,7 +8,7 @@
  * drop zone (see SPEC §4.1 cold start journey).
  */
 import type { ReactElement } from 'react';
-import type { ViewId } from '../hooks/useViewState';
+import type { ViewId } from '../../hooks/useViewState';
 import { ALL_VIEWS, HOME_VIEW } from '../../hooks/useViewState';
 import { cn } from '../../lib/utils';
 

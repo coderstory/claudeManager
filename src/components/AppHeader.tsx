@@ -20,7 +20,7 @@
  *   by the OS chrome via Tauri config (src-tauri/tauri.conf.json)
  *   — they don't render in the webview at all.
  */
-import type { CSSProperties, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { ArrowLeft, Moon, Settings, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../design-system/ThemeProvider';
@@ -33,18 +33,22 @@ import { HOME_VIEW } from '../hooks/useViewState';
  * Applied to the whole <header>. Every interactive child that
  * should *not* drag (buttons) must set `WebkitAppRegion: 'no-drag'`
  * locally — see AppHeader's button elements.
+ *
+ * The CSSProperties type doesn't include the non-standard
+ * `-webkit-app-region` key, so we cast through `React.CSSProperties`
+ * with an explicit index signature to suppress TS2353.
  */
-const dragRegionStyle: CSSProperties = {
+const dragRegionStyle = {
   WebkitAppRegion: 'drag',
-};
+} as React.CSSProperties;
 
 /**
  * noDragStyle — applied to interactive controls inside the header
  * so the OS doesn't intercept their click events as drag gestures.
  */
-const noDragStyle: CSSProperties = {
+const noDragStyle = {
   WebkitAppRegion: 'no-drag',
-};
+} as React.CSSProperties;
 
 export interface AppHeaderProps {
   currentView: ViewId;

@@ -18,11 +18,10 @@
  *   - the icon is a stand-in for the eventual per-plugin glyph —
  *     we don't want to invent fake icons for every plugin in M1.
  */
-import type { CSSProperties, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import {
   Archive,
   Boxes,
-  Cog,
   Database,
   FileSearch,
   Gauge,
@@ -39,7 +38,6 @@ import {
 import { cn } from '../lib/utils';
 import {
   ALL_VIEWS,
-  HOME_VIEW,
   type ViewId,
 } from '../hooks/useViewState';
 
@@ -146,8 +144,7 @@ export function AppSidebar({
                   'w-full flex items-center gap-2 transition-colors',
                   'hover:bg-black/5 dark:hover:bg-white/5',
                 )}
-                style={
-                  {
+                style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
@@ -166,8 +163,7 @@ export function AppSidebar({
                     cursor: 'pointer',
                     fontSize: 'var(--fs-body)',
                     textAlign: 'left',
-                  } satisfies CSSProperties
-                }
+                  }}
               >
                 <span
                   style={{
