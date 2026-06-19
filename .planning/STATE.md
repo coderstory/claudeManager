@@ -72,3 +72,127 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - M1.10: 构建/打包/签名/CI matrix
 - M1.11: CI + 框架不变量文档 + 三阶段评审
 - M1.12: 最终自审 + 头脑风暴 + 同行评审 + 业务流程分析
+
+---
+
+# === M1 实际进度补丁（2026-06-20 M1.12 追加） ===
+
+> 上方"Outstanding M1 tasks"列表已陈旧 —— 自 `98df994 wip: M1 架构期暂停` commit 之后，M1.5 / M1.6 / M1.7 / M1.9 / M1.9.1 / M1.9.2 全部已落地代码 + commit。本节补全实际状态。
+
+## M1.5 — 前端 deps + 设计系统基线（瓷白主题）
+- Status: ✅ 代码落地（无独立 ship exe，与 M1.9 合并 ship）
+- 关键 commit: `5b46d51` (deps: tailwind + postcss + shadcn utils + lucide 锁定版本), `3343db5` (wire: tokens.css import in main.tsx), `e44972e` (cn util + TDD), `16c90ae` (ThemeProvider: light/dark/auto + localStorage), `be955c3` (wire: ThemeProvider 包裹 App)
+- 交付: tailwind 3.4.17 + autoprefixer 10.4.20 + clsx 2.1.1 + tailwind-merge 3.3.1 + lucide-react 0.542.0 + class-variance-authority 0.7.1（**全锁定版本**，CLAUDE.md §2.3）
+- 风险: Tailwind utility class **未真正接入**（tokens.css 直接用 CSS var()），M2 评估是否补 tailwind.config.ts
+
+## M1.6 — Rust 后端 deps 版本锁
+- Status: ✅ 代码落地（无独立 ship exe）
+- 关键 commit: `0397b43` (deps: 10 个 tauri-plugin-* =version 锁), `875b300` (register: lib.rs 10 个 init()), `6beeff8` (caps: 11 个 capability entries), `92a80b3` (lock: Cargo.lock)
+- 交付: tauri-plugin-{fs 2.5.1, dialog 2.7.1, notification 2.3.3, shell 2.3.5, os 2.3.2, deep-link 2.4.9, single-instance 2.4.2 (with deep-link feature), store 2.4.3, log 2.8.0, updater 2.10.1, autostart 2.5.1, process 2.3.1}
+
+## M1.7 — 自启动集成
+- Status: ⏳ 代码落地待用户 review
+- Ship: `ClaudeConfigManager-M1.1.7-chrome-with-autostart.exe` (29.9 MB)
+- 关键 commit: `bb8e873` (PlatformError::Autostart variant), `de8fffa` (rewrite: Win+Mac autostart delegate to tauri-plugin-autostart), `8a1f48a` (commands: get_autostart_status / set_autostart_enabled), `bda412f` (updater pubkey placeholder)
+- **已知缺口 (R2)**: `--minimized` CLI flag 注册到 launcher args 但**没有**读取端，M2.1 补
+- 风险: updater 缺 pubkey（M1.7+1.9-updater-pubkey 用空 placeholder 抑制 warning，M3 release 阶段换真 key）
+
+## M1.9 — 主窗口框架 + 12 路由占位
+- Status: ⏳ 代码落地待用户 review
+- 关键 commit: `13ff10a` (useViewState hook + TDD), `cb586a7` (PluginPlaceholder + 12 plugin pages), `6e27b71` (AppHeader + AppSidebar), `0de4713` (App.tsx 路由 12 stubs + integration test), `3186043` (framer-motion 12.23.25 locked + AnimatePresence), `67cb23f` (TS strict-mode fixes)
+- 风险: placeholder 文案"该功能将在 M2+ 开发"**未渲染 SPEC 摘要**（CLAUDE.md §2.5 UI/UX 头等大事）
+
+## M1.9.1 — 滚动布局修复
+- Status: ⏳ 代码落地待用户 review
+- Ship: `ClaudeConfigManager-M1.9.1-scroll-layout-fix.exe`
+- 关键 commit: `56f716f` (test: scroll-layout regression TDD), `cf0f8b6` (refine: tokens.css inject jsdom <head>), `f98f45a` (fixA: html/body/#root overflow:hidden reset in tokens.css), `e3533ff` (fixB: min-h-0 in flex chain so sidebar internal-scroll)
+- 教训: 滚动布局两层契约——外层 `overflow:hidden` 去浏览器滚动条 + 内层 `overflow:auto` 自滚——必须并存
+
+## M1.9.2 — 自定义 chrome + Liquid Glass
+- Status: ⏳ 代码落地待用户 review（**最新 ship**）
+- Ship: `ClaudeConfigManager-M1.9.2-chrome-and-glass.exe` (29.9 MB, 2026-06-20)
+- 关键 commit: `13076bc` (test), `6737fd3` (fix-scroll), `e5b0d92` (window controls minimize/maximize/close via @tauri-apps/api/window), `63a096c` (tauri.conf: decorations=false + titleBarStyle=Overlay), `f4bffca` (glass tokens: backdrop-filter + glass-bg), `ac94f11` (apply: header + sidebar + placeholder backdrop-filter blur), `b716b01` (effects: setEffects(Mica) fire-and-forget), `28abeed` (caps: 4 core:window permissions), `04395dd` (test refine: align asserts with shipped reality)
+- 教训: Mica 在 Win10 / 旧 Mac 静默 no-op，必须 CSS 兜底
+
+---
+
+# === M1 收尾（2026-06-20 M1.12 关闭） ===
+
+## 完成日期
+- M1 架构期主线完成: 2026-06-20（commit `04395dd` M1.9.2-test-refine）
+
+## 已完成 / 待 review 总览（47 commits，13 个 ship exe）
+| ID | 描述 | Ship exe | 状态 |
+|---|---|---|---|
+| M1.1 | Tauri v2 scaffold + tray + minimize-to-tray | `M1.1-scaffold-release.exe` | ✅ accepted 2026-06-19 00:26:16 |
+| M1.2 | OS 抽象层（8 traits × Win+Mac） | `M1.1.2-platform-abstractions.exe` | ⏳ 待审 |
+| M1.3 | Plugin host + 12 stubs | `M1.1.3-plugin-host-fix-v3.exe` | ⏳ 待审 |
+| M1.3-fix | stale dist → touch lib.rs | `M1.1.3-plugin-host-fix.exe` | ✅ fixed |
+| M1.3-fix-v2 | `--features tauri/custom-protocol` | `M1.1.3-plugin-host-fix-v2.exe` | ✅ fixed |
+| M1.4 | Tauri capabilities + WHY | `M1.1.4-platform-plugins-capabilities.exe` | ⏳ 待审 |
+| M1.5 | 前端 deps + 设计系统 | (并入 M1.9) | ⏳ 待审 |
+| M1.6 | Rust deps 版本锁 | (无独立 ship) | ⏳ 待审 |
+| M1.7 | 自启动集成 | `M1.1.7-chrome-with-autostart.exe` | ⏳ 待审 |
+| M1.8 | TDD + Playwright + CI | `M1.1.8-tdd-scaffold.exe` | ⏳ 待审 |
+| M1.9 | 主窗口框架 + 12 路由占位 | (并入 M1.9.1/9.2) | ⏳ 待审 |
+| M1.9.1 | 滚动布局修复 | `M1.9.1-scroll-layout-fix.exe` | ⏳ 待审 |
+| M1.9.2 | 自定义 chrome + Liquid Glass | `M1.9.2-chrome-and-glass.exe` | ⏳ 待审 |
+| smoke-test 升级 | WebView2 child window + title + dist fingerprint | (并入 M1.3-fix-v3) | ✅ |
+| kill-app fix | `-F` not `/F` | (脚本层修复) | ✅ |
+
+## 已知限制（继承自 M1.11 / M1.9.x / M1.9.1 教训）
+- **L1**: Playwright e2e **本机未实际跑过**（需 tauri-driver + 真 exe），CI 配 windows-latest 但 ci.yml 没接 e2e 步骤 → M1.10 补
+- **L2**: dev box `cargo test` 走 lib-test 失败 (`STATUS_ENTRYPOINT_NOT_FOUND 0xc0000139` Windows DLL forwarding)，CI MSYS2 跑通 → 已知环境限制，非代码缺陷
+- **L3**: macOS impls 全是 stub（`unimplemented!()`），Mac dev box 未接入 → M2.5+ Mac 真实 CI
+- **L4**: `--minimized` autostart flag 注册到 launcher args 但**没**读取端 → M2.1 补（autostart 设置页前）
+- **L5**: `src-tauri/src/plugins/mod.rs::init_all` 未把 12 stub 接 PluginHost（仅导出结构体），M2 启动前补 wiring
+- **L6**: HANDOFF.json 不反映 M1.5~1.9.2 进度（已被 git 超越），主 session 应在 M2 启动前做一次全量重写
+- **L7**: Tailwind utility class 未真正接入（tokens.css 直接 CSS var()），M2 评估
+- **L8**: ci.yml 不跑 Vitest / build / e2e → M1.10 必做
+- **L9**: 缺 `docs/ARCHITECTURE.md` / `AGENTS.md` / `README.md`（M1.11 任务未实际产出）→ 主 session 决定补还是带 M2 一起
+- **L10**: tray close 没有任何视觉反馈"已隐藏"（toast / 气泡） → M2.1 polish
+- **L11**: TS strict mode 已开但**未**全量审计 tsconfig.json（仅 M1.9 fix TS strict errors commit 提及）→ M1.10 顺手审计
+- **L12**: placeholder 文案无 SPEC 摘要（CLAUDE.md §2.5 UI/UX 头等大事）→ M2.1 改
+- **L13**: 无 `useErrorBoundary` 全局包裹（WindowControls 抛错会冒泡） → M2.1
+- **L14**: dev box 用户没有一次性 batch approve 全部 M1 exe 的流程建议
+
+## M2 启动建议（详见 `docs/milestones/M2-roadmap-draft.md`）
+- **优先 4 个 plugin**: F1 Provider 列表 → F2 切换 → F5 JSON 编辑 → F6 MCP 管理（按使用频次 + 数据准备成本排序）
+- **M2 启动前必做的 3 件套**:
+  1. **PluginHost wiring**（1 subagent，半天）：把 12 stub 接 `plugins/mod.rs::init_all`，同步 HANDOFF.json
+  2. **M1.10 收尾**（1 subagent，与 #1 并行）：ci.yml 加 npm test / build / test:e2e；beforeBuildCommand 原子化；tsconfig strict 审计
+  3. **M1.11 文档补齐**（1 subagent，与 #1/#2 并行）：README.md + docs/ARCHITECTURE.md + AGENTS.md
+- 4 槽并发 = 上面 3 件 + M2.1 启动（如果数据准备充分）
+- 主 session 必须拍板: (a) 是否启用 react-router（M2.1 deeplink 跳转需要）(b) 是否 batch-approve 全部 M1 exe
+
+---
+
+# === M2+ 阶段预备段（待启动） ===
+
+## M2 业务功能期
+- M2.1: F1 Provider 列表（settings.json 解析 + 表格 UI + Provider 模型）
+- M2.2: F2 Provider 切换（原子 rename + 备份恢复 + 切换历史）
+- M2.3: F3 .sql 导入（SQLite parser → Provider 列表）
+- M2.4: F4 deeplink 导入（ccswitch:// scheme + Provider 列表追加）
+- M2.5: F5 JSON 编辑（Monaco / CodeMirror + schema 校验）
+- M2.6: F6 MCP 管理（.mcp.json 读写 + 启停控制 + 健康检查）
+- M2.7: F7 用量查询（HTTP client + 缓存 + 周期刷新）
+- M2.8: F8 单文件部署（NSIS / MSI + 校验和）
+- M2.9: F9 搜索（全文索引 + Provider / MCP / backup 跨表）
+- M2.10: F10 拖放（drag-and-drop + deeplink 联动）
+- M2.11: F11 快捷键（global hotkey + 命令面板）
+- M2.12: F12 主题（dark/light/auto 已实现；M2.12 加自定义主题）
+
+## M3 公证 + 发布
+- 代码签名（Windows EV cert + macOS Developer ID）
+- 公证（Windows SmartScreen + macOS notarization）
+- 自动更新（updater 启用 + pubkey 替换）
+- macOS DMG + Windows MSI/NSIS 双轨打包
+- 应用商店上架（可选）
+
+## 长期 backlog
+- F13~F24: 备份 / 导出 / 错误反馈 / 资源浏览 / 在线安装 / 优化 / 备份 diff 等
+- i18n（i18next）
+- SQLite 历史 + 备份 diff
+- 多窗口支持
+- telemetry（可选）
