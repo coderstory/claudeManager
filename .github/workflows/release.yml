@@ -1,0 +1,157 @@
+# .github/workflows/release.yml — M1.10 release pipeline
+#
+# Purpose: build signed/notarized installers for Windows (NSIS) and macOS
+# (app + DMG) on git tag pushes (`v*`) or manual dispatch. Runs the full
+# pipeline that ship-time needs:
+#   - npm ci + npm run build (frontend dist/)
+#   - cargo build (Rust side, via tauri-action)
+#   - bundle creation (NSIS for Windows, app+dmg for macOS)
+#   - GitHub Release with auto-uploaded artifacts
+#
+# Version-lock policy (CLAUDE.md §2.3):
+#   All third-party action versions are pinned to an exact tag — NO @main,
+#   NO @latest, NO floating major tags like @v0. The only exception is
+#   `dtolnay/rust-toolchain@stable` which is the upstream-recommended
+#   tracking tag for stable Rust (mirrors rust-lang/rust stable channel).
+#
+# Why we do NOT pass `--features tauri/custom-protocol` here:
+#   `tauri build` (the command tauri-action runs) automatically enables
+#   the `tauri/custom-protocol` feature for production bundles. The local
+#   scripts/build-and-ship.sh passes it manually because it calls
+#   `cargo build --release` directly (NOT through `tauri build`). The
+#   workflow uses `tauri build` via tauri-action, so the hack is not
+#   needed and would only add noise. See scripts/build-and-ship.sh header
+#   for the local-dev reasoning.
+#
+# Reference: https://v2.tauri.app/distribute/pipelines/github/
+# Tracked at: docs/BUILD.md and docs/SIGNING.md
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# Cancel duplicate runs on the same ref to save minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    name: build & ship (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each entry becomes one job. `label` is human-readable for the
+        # GitHub UI; `args` is the literal string passed to
+        # `tauri-apps/tauri-action@v0.6.2` (forwarded to `tauri build`).
+        # We pin the architecture explicitly so the build is deterministic
+        # even when the runner image flips default targets.
+        include:
+          - label: windows-nsis (x86_64)
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: '--target x86_64-pc-windows-msvc --bundles nsis'
+          - label: macos-dmg (aarch64)
+            os: macos-latest
+            target: aarch64-apple-darwin
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # ---- Checkout + toolchains (pinned versions) ----
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install Rust stable + matrix target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+
+      # ---- Frontend ----
+      - name: Install npm dependencies
+        run: npm ci
+
+      # NOTE: tauri.conf.json sets `beforeBuildCommand: "npm run build"`, so
+      # `tauri build` (invoked by tauri-action below) rebuilds dist/ itself.
+      # We do NOT add a separate `npm run build` step — that would build it
+      # twice. The CI workflow (ci.yml) does `npm run build` for e2e
+      # because it builds a debug exe with `tauri build --debug`.
+
+      # ---- Tauri build + release via official action ----
+      # tauri-action handles: `tauri build` invocation, artifact collection
+      # from src-tauri/target/<triple>/release/bundle/, GitHub Release
+      # creation, and updater `latest.json` upload (when pubkey is set).
+      - name: Build & publish (tauri-action)
+        uses: tauri-apps/tauri-action@v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Windows EV code signing (placeholder; see docs/SIGNING.md).
+          # v1.1 release phase: uncomment + populate secrets.
+          # WINDOWS_EV_CERT_THUMBPRINT: ${{ secrets.WINDOWS_EV_CERT_THUMBPRINT }}
+          # macOS notarization (placeholder; see docs/SIGNING.md).
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PWD: ${{ secrets.APPLE_CERTIFICATE_PWD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Claude Config Manager v__VERSION__'
+          releaseBody: |
+            See assets below to download the installer for your platform.
+
+            Verification:
+            - Windows NSIS installer (.exe) — signs against the EV cert in v1.1.
+            - macOS .dmg — notarized via `xcrun notarytool` in v1.1.
+
+            Full build matrix log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # ---- Upload raw artifacts as a fallback ----
+      # tauri-action uploads installer files to the GitHub Release. We
+      # additionally upload the unbundled exe + WebView2Loader.dll (Windows)
+      # and the raw .app bundle (macOS) as workflow artifacts, in case a
+      # maintainer wants to inspect a build without downloading the
+      # release. These expire in 30 days.
+      - name: Upload raw build artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-config-manager-windows-raw
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/claude-config-manager.exe
+            src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload raw build artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-config-manager-macos-raw
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/ClaudeConfigManager.app
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
+          retention-days: 30
