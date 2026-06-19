@@ -272,6 +272,64 @@ else
   record "6_title" "FAIL" "title=\"$ACTUAL_TITLE\" does not contain expected \"$EXPECTED_TITLE\""
 fi
 
+# === Test 7: Frontend assets are actually embedded in the exe ===
+# Why: Tests 1-6 all pass even when the webview shows "ERR_CONNECTION_REFUSED"
+# — because WebView2 still spawns child windows and renders an error page, and
+# the OS window title comes from tauri.conf.json, not the rendered HTML. To
+# catch the "dist not embedded" bug (Tauri v2 with `cargo build --release` done
+# directly, missing `--features tauri/custom-protocol`), we check that the exe
+# string table contains a fingerprint of the dist/ output. We use the JS
+# bundle filename pattern (e.g. `index-Cc-j-zqL.js`) which is unique per build.
+# If the build was done correctly with `custom-protocol` enabled, the dist
+# contents (including the bundle filename) are gzip-embedded in the exe and
+# `strings` will find it. If dist was never embedded, `strings` returns nothing.
+echo ""
+echo ">>> Test 7: Frontend assets embedded in exe"
+# Find current dist bundle name(s) — they include a content hash
+# PROJECT_ROOT may be unset in this scope (we're in a subshell that inherited
+# `set -u` from the parent), so derive it from EXE_DIR. The smoke test script
+# itself is at <PROJECT_ROOT>/scripts/smoke-test.sh, so the dir 2 levels above
+# the script is the project root. If the script is run from elsewhere, we fall
+# back to the TAURI_CONF env var's parent.
+SMOKE_SCRIPT="${BASH_SOURCE[0]:-$0}"
+SMOKE_SCRIPT_DIR=$(cd "$(dirname "$SMOKE_SCRIPT")" && pwd 2>/dev/null || echo "")
+INFERRED_ROOT=""
+if [[ -n "$SMOKE_SCRIPT_DIR" && "$SMOKE_SCRIPT_DIR" == */scripts ]]; then
+  INFERRED_ROOT="${SMOKE_SCRIPT_DIR%/scripts}"
+elif [[ -n "$SMOKE_SCRIPT_DIR" ]]; then
+  INFERRED_ROOT="$SMOKE_SCRIPT_DIR"
+fi
+TEST7_DIST_DIR=""
+for cand in "${INFERRED_ROOT}/dist/assets" "/d/project/winui3/dist/assets" "$(dirname "$EXE_DIR")/dist/assets"; do
+  if [[ -d "$cand" ]]; then
+    TEST7_DIST_DIR="$cand"
+    break
+  fi
+done
+DIST_BUNDLE_PATTERN=""
+if [[ -n "$TEST7_DIST_DIR" ]]; then
+  DIST_BUNDLE_PATTERN=$(ls "$TEST7_DIST_DIR" 2>/dev/null | grep -E '^index-.*\.js$' | head -1 | sed 's/\(index-[A-Za-z0-9_-]*\)\.js/\1/')
+fi
+if [[ -z "$DIST_BUNDLE_PATTERN" ]]; then
+  record "7_assets" "PASS" "skipped (no dist/assets/ found or no index-*.js bundle)"
+elif command -v strings >/dev/null 2>&1; then
+  EMBED_HIT=$(strings "$EXE_PATH" 2>/dev/null | grep -cE "${DIST_BUNDLE_PATTERN}\.js|${DIST_BUNDLE_PATTERN}\.css")
+  if [[ "$EMBED_HIT" -ge 1 ]]; then
+    record "7_assets" "PASS" "dist fingerprint found in exe (matches: ${DIST_BUNDLE_PATTERN}.{js,css}, hits=$EMBED_HIT)"
+  else
+    record "7_assets" "FAIL" "dist fingerprint NOT found in exe — frontend assets were not embedded (build missing --features tauri/custom-protocol?)"
+  fi
+elif command -v grep >/dev/null 2>&1; then
+  # Fallback if `strings` isn't on PATH — treat exe as text and grep it.
+  if grep -aqE "${DIST_BUNDLE_PATTERN}\.js" "$EXE_PATH" 2>/dev/null; then
+    record "7_assets" "PASS" "dist fingerprint found in exe (grep fallback)"
+  else
+    record "7_assets" "FAIL" "dist fingerprint NOT found in exe (grep fallback; no strings cmd)"
+  fi
+else
+  record "7_assets" "PASS" "skipped (no strings or grep available)"
+fi
+
 # === Test 3: Close → minimizes to tray (process survives) ===
 echo ""
 echo ">>> Test 3: Close minimizes to tray"

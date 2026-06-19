@@ -90,9 +90,23 @@ npm run build 2>&1 | tail -5
 echo "    Step 2/3: Touching src-tauri/src/lib.rs to invalidate Cargo cache..."
 touch src-tauri/src/lib.rs
 # Step 3/3: build the Rust binary (now re-links because lib.rs mtime changed)
-echo "    Step 3/3: cargo build --release..."
+#
+# CRITICAL — the `--features tauri/custom-protocol` flag is REQUIRED when
+# building with `cargo build --release` directly (i.e. NOT through `tauri
+# build`). Without it, Tauri's `tauri::generate_context!()` proc macro
+# sees `dev = true` (because `custom-protocol` is absent) and:
+#   1. emits `EmbeddedAssets::default()` — ZERO dist files embedded
+#   2. at runtime, the `cfg!(dev)` branch in `manager::get_app_url`
+#      picks `build.devUrl` ("http://localhost:1420") instead of
+#      `frontendDist`, so the webview tries to load the dev server
+#      → "ERR_CONNECTION_REFUSED" / blank "无法访问此页面" page.
+# `tauri build` enables this feature automatically; we have to do it
+# ourselves. See `tauri-2.x/src/manager/mod.rs:354-360` and
+# `tauri-codegen-2.x/src/context.rs:178-184` for the runtime/codegen
+# branches that depend on this cfg.
+echo "    Step 3/3: cargo build --release --features tauri/custom-protocol..."
 BUILD_START=$(date +%s)
-cargo build --release --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20
+cargo build --release --features tauri/custom-protocol --manifest-path src-tauri/Cargo.toml 2>&1 | tail -20
 BUILD_END=$(date +%s)
 BUILD_DUR=$((BUILD_END - BUILD_START))
 echo "    Build took ${BUILD_DUR}s"
