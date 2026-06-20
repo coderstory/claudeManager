@@ -19,11 +19,16 @@
  * re-invent the matchMedia mock — ThemeProvider already injects one
  * via the App tree.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, test } from 'vitest';
 import { act, render, screen, within } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
-import { HOME_VIEW, STORAGE_KEY, ALL_VIEWS } from '../../hooks/useViewState';
+import {
+  HOME_VIEW,
+  STORAGE_KEY,
+  ALL_VIEWS,
+  type ViewId,
+} from '../../hooks/useViewState';
 
 beforeEach(() => {
   localStorage.clear();
@@ -231,5 +236,131 @@ describe('App — view routing integration', () => {
     expect(
       screen.queryByText('plugin: backup-restore'),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M2.8.1 structural regression for plugin routing wiring.
+//
+// THE BUG CLASS THIS GUARDS AGAINST
+// ---------------------------------
+// M2.6 (F13 备份与恢复) and M2.8 (F8 单文件部署) each shipped a real
+// page + service + commands + a per-page test that called
+// `render(<RealPage />)` directly. Vitest reported 100% green, yet
+// the release exe still rendered `plugin: <view>` (PluginPlaceholder)
+// for those views — because nobody had wired the new component into
+// the App.tsx ternary chain. The per-page tests skipped the App.tsx
+// router entirely, so they could not see the missing branch.
+//
+// The fix is a STRUCTURAL test: for every view that has a real page
+// shipped, render <App /> with that view persisted, and assert the
+// PluginPlaceholder marker `plugin: <view>` does NOT appear. The
+// inverse holds for views still on placeholder. Adding a new real
+// page = move the id from PLACEHOLDER_VIEWS → REAL_PAGE_VIEWS, and
+// this suite enforces the App.tsx wiring at the same commit.
+//
+// This caught the M2.8 F8 bug (single-file-deploy) and the matching
+// M2.2 F3 bug (import-sql) on the very first run.
+// ---------------------------------------------------------------------------
+describe('all plugin views route to their real page (M2.8.1 structural regression)', () => {
+  // Views whose real page has shipped. Body MUST NOT contain the
+  // PluginPlaceholder marker `plugin: <id>` once mounted.
+  const REAL_PAGE_VIEWS: ReadonlyArray<{
+    view: ViewId;
+    realTestId: string;
+  }> = [
+    { view: 'provider-list', realTestId: 'provider-list-page' },
+    { view: 'provider-switch', realTestId: 'provider-switch-page' },
+    { view: 'import-sql', realTestId: 'import-sql-page' },
+    { view: 'deeplink-import', realTestId: 'deeplink-import-page' },
+    { view: 'json-editor', realTestId: 'json-editor-page' },
+    { view: 'mcp-management', realTestId: 'mcp-management-page' },
+    { view: 'usage-query', realTestId: 'usage-query-page' },
+    { view: 'single-file-deploy', realTestId: 'single-file-deploy-page' },
+    { view: 'backup-restore', realTestId: 'backup-restore-page' },
+  ] as const;
+
+  // Views still on PluginPlaceholder (no real page shipped yet).
+  // When a real page lands for any of these, MOVE the id into
+  // REAL_PAGE_VIEWS above (and add its data-testid). Do not just
+  // delete it from this list — the inverse assertion is what proves
+  // the placeholder is no longer reachable for that view.
+  const PLACEHOLDER_VIEWS: ReadonlyArray<ViewId> = [
+    'resource-browser',
+    'marketplace',
+    'optimizer',
+  ] as const;
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  test.each(REAL_PAGE_VIEWS)(
+    'view "$view" routes to its real page (no PluginPlaceholder fallback)',
+    ({ view, realTestId }) => {
+      // Persist the target view so App's initial render lands there
+      // directly (avoids depending on sidebar layout for this guard).
+      localStorage.setItem(STORAGE_KEY, view);
+
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+
+      // Forward assertion: the real page mounts.
+      expect(
+        screen.getByTestId(realTestId),
+        `expected real page testid="${realTestId}" for view "${view}"`,
+      ).toBeInTheDocument();
+
+      // Inverse assertion: the PluginPlaceholder marker for this view
+      // is NOT rendered. This is the exact text the broken release
+      // exes were showing (see M2.6/M2.8 diagnostic screenshots).
+      expect(
+        screen.queryByText(`plugin: ${view}`),
+        `view "${view}" must NOT fall through to PluginPlaceholder`,
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  test.each(PLACEHOLDER_VIEWS)(
+    'view "%s" still uses PluginPlaceholder (real page not shipped yet)',
+    (view) => {
+      localStorage.setItem(STORAGE_KEY, view);
+
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      );
+
+      // Inverse: until a real page ships for this view, App.tsx must
+      // fall through to the PluginPlaceholder. If this assertion
+      // fails, you either shipped a real page (move the id into
+      // REAL_PAGE_VIEWS above) or accidentally lost the fallback.
+      expect(
+        screen.getByText(`plugin: ${view}`),
+        `view "${view}" must still render PluginPlaceholder marker`,
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('every ViewId is covered by exactly one of the two lists (drift guard)', () => {
+    const realIds = new Set<ViewId>(REAL_PAGE_VIEWS.map((r) => r.view));
+    const phIds = new Set<ViewId>(PLACEHOLDER_VIEWS);
+    for (const v of ALL_VIEWS) {
+      if (v === HOME_VIEW) continue;
+      const inReal = realIds.has(v);
+      const inPh = phIds.has(v);
+      expect(
+        inReal || inPh,
+        `view "${v}" missing from both REAL_PAGE_VIEWS and PLACEHOLDER_VIEWS`,
+      ).toBe(true);
+      expect(
+        inReal && inPh,
+        `view "${v}" appears in BOTH REAL_PAGE_VIEWS and PLACEHOLDER_VIEWS`,
+      ).toBe(false);
+    }
   });
 });
