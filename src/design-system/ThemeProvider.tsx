@@ -28,6 +28,14 @@ export type Theme = 'light' | 'dark' | 'auto';
 export interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  /**
+   * Advance to the next theme in the light → dark → auto → light
+   * cycle. M2.10 F12 polish — centralised here (was previously
+   * duplicated in <AppHeader>'s onClick) so any future control
+   * (toolbar dropdown, settings page toggle, etc.) can call it
+   * without re-implementing the order.
+   */
+  cycleTheme: () => void;
 }
 
 const STORAGE_KEY = 'ccm.theme';
@@ -95,9 +103,22 @@ export function ThemeProvider({ children }: { children: ReactNode }): ReactEleme
     setThemeState(next);
   }, []);
 
+  // M2.10 F12 — light → dark → auto → light cycle. Centralised so
+  // <AppHeader> and any future control (settings page dropdown, etc.)
+  // share one definition of the order. The closure depends on
+  // `theme` (NOT just setThemeState) so each call reads the latest
+  // value without needing an explicit functional update.
+  const cycleTheme = useCallback((): void => {
+    setThemeState((prev) => {
+      if (prev === 'light') return 'dark';
+      if (prev === 'dark') return 'auto';
+      return 'light';
+    });
+  }, []);
+
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, setTheme }),
-    [theme, setTheme],
+    () => ({ theme, setTheme, cycleTheme }),
+    [theme, setTheme, cycleTheme],
   );
 
   return (

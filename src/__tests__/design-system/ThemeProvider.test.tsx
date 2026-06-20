@@ -68,7 +68,7 @@ afterEach(() => {
 
 // --- helpers ----------------------------------------------------------------
 function Probe(): ReactElement {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, cycleTheme } = useTheme();
   return (
     <div>
       <span data-testid="theme">{theme}</span>
@@ -80,6 +80,9 @@ function Probe(): ReactElement {
       </button>
       <button data-testid="set-auto" onClick={() => setTheme('auto')}>
         auto
+      </button>
+      <button data-testid="cycle" onClick={() => cycleTheme()}>
+        cycle
       </button>
     </div>
   );
@@ -173,6 +176,85 @@ describe('ThemeProvider', () => {
       /useTheme must be used inside <ThemeProvider>/,
     );
     errSpy.mockRestore();
+  });
+
+  // -------------------------------------------------------------------------
+  // M2.10 F12 — cycleTheme advances light → dark → auto → light.
+  //
+  // Why these cases exist separately from setTheme: the previous
+  // AppHeader onClick inline-implemented the same ternary and was
+  // the only consumer of `auto` ever clicking the theme button. Now
+  // that cycleTheme is centralised in ThemeProvider, it has its
+  // own contract that must be pinned: starting from each of the 3
+  // possible values, the next click should land on the right next
+  // one (and the resolved <html data-theme> should update too).
+  // -------------------------------------------------------------------------
+  it('cycleTheme_light_to_dark', () => {
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    act(() => {
+      screen.getByTestId('cycle').click();
+    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+
+  it('cycleTheme_dark_to_auto', () => {
+    // Start at dark so the next cycle lands on auto.
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    act(() => {
+      screen.getByTestId('set-dark').click();
+    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    act(() => {
+      screen.getByTestId('cycle').click();
+    });
+    // State reports 'auto'; resolved <html data-theme> depends on
+    // matchMedia. jsdom's matchMedia mock returns prefersDark=false
+    // by default, so the resolved value is 'light'.
+    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('cycleTheme_auto_to_light', () => {
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    act(() => {
+      screen.getByTestId('set-auto').click();
+    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
+    act(() => {
+      screen.getByTestId('cycle').click();
+    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('cycleTheme_three_clicks_returns_to_initial_state', () => {
+    // Pin the full cycle: light → dark → auto → light.
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    act(() => screen.getByTestId('cycle').click());
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    act(() => screen.getByTestId('cycle').click());
+    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
+    act(() => screen.getByTestId('cycle').click());
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
   });
 });
 
