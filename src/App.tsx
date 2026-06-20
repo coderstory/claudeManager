@@ -219,7 +219,6 @@ export default function App(): ReactElement {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden"
       style={{
         // App-shell layout: the outer box is a vertical flex
         // container that exactly fills the WebView2 viewport. The
@@ -231,6 +230,7 @@ export default function App(): ReactElement {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
+        width: '100vw',
         overflow: 'hidden',
         background: 'var(--bg-primary)',
         color: 'var(--text-primary)',
@@ -255,12 +255,14 @@ export default function App(): ReactElement {
         handles correctly in both dev and release.
       */}
       <div
-        className="flex flex-1 overflow-hidden"
         data-testid="app-content"
         style={{
           position: 'relative',
+          display: 'flex',
+          flex: '1 1 0%',
           minHeight: 0,
           minWidth: 0,
+          overflow: 'hidden',
         }}
       >
         <AppSidebar currentView={view} onNavigate={handleNavigate} />
