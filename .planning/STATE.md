@@ -404,3 +404,46 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - 不支持 resource=mcp/prompt/skill (F4 范围)
 - 不支持"导入并激活" (F2 范围)
 - AlreadyExists → "rename and retry" 提示,但 v1 不实现覆盖
+
+## M2.5 F6 MCP 管理 — 已 ship (2026-06-20)
+
+**Commits (5)**: `c823a90` (model) / `8d371bf` (service) / `48c8f73` (commands) / `da7d337` (page) / `3e05adb` (e2e)
+**Files created/modified**:
+- `docs/design/M2.5-dataflow.md` (dataflow + 设计原则)
+- `src-tauri/src/domain/mcp_server.rs` (McpServer struct + 16 tests)
+- `src-tauri/src/services/mcp_service.rs` (McpService list/toggle/add/update/remove + 16 tests)
+- `src-tauri/src/commands/mcp.rs` (6 commands: list + list_with_warnings + toggle + add + update + remove + parse_mcp_deeplink)
+- `src-tauri/src/infrastructure/deeplink_parser.rs` (扩展 resource=mcp 协议 + 9 tests)
+- `src-tauri/src/infrastructure/sql_parser.rs` (McpServer → ParsedMcpServer 改名,避免与 domain 冲突)
+- `src-tauri/src/commands/providers.rs` (preview_mcp 类型更新)
+- `src-tauri/src/app_state.rs` (+ mcp_service Arc 字段)
+- `src-tauri/src/lib.rs` (注册 6 个新 command)
+- `src/types/mcp.ts` (F6 McpServer TS mirror)
+- `src/lib/api/mcp.ts` (IPC wrappers)
+- `src/lib/api/providers.ts` (ParsedDeeplink 加 mcp_server 字段)
+- `src/pages/mcp-management/index.tsx` (真实实现, 替换 PluginPlaceholder)
+- `src/App.tsx` (路由 view === 'mcp-management' → McpManagementPage)
+- `src/__tests__/pages/mcp-management.test.tsx` (12 vitest)
+- `src/__tests__/integration/App.test.tsx` (更新 mcp-management 路由测试)
+- `tests/e2e/m2-5-mcp-management.spec.ts` (playwright e2e)
+
+**Ship exe**: `~/Desktop/ClaudeConfigManager-M2/ClaudeConfigManager-M2.2.5-f6-mcp-management.exe` (30.6 MB, 6月 20 13:05)
+**Smoke 7/7**: ✅ (process / window / WebView2 / title / dist / tray / kill)
+**Vitest 134/134**: ✅ (122 existing + 12 new mcp-management)
+**Rust 单元测试**: 16 (mcp_server) + 16 (mcp_service) + 9 (deeplink) = 41 new cases; 本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5), CI MSYS2 跑通
+
+**关键设计决策**:
+- `McpServer` struct 独立于 sql_parser 输出的 `ParsedMcpServer`(避免类型名冲突 + 清晰分层)
+- mcp.json 是单一文件,读写都用 `serde_json::Value` patch 保留未知字段(同 M2.1 settings.json pattern)
+- 乐观 toggle + 失败回滚(响应延迟 < 100ms)
+- clipboard API 一键从 ccswitch://v1/import?resource=mcp&... 解析填表
+- `transport` enum 区分 stdio | http; on-disk 形状 stdio 省略 `type` 字段以匹配 Claude Code 默认
+- mcp.json 不存在 → list 返回 [] + 空状态卡, 不抛错
+- `id` 是 uuid(UI 内部稳定 key),`name` 才是 on-disk map key
+
+**已知限制** (M2.6+ 跟进):
+- 编辑/删除无 undo (CLAUDE.md §7 强调备份,但撤销栈尚未实现)
+- 表格列不可排序
+- import 只填表,不直接保存(需用户二次确认)
+- 无 search/filter (M2.6+)
+- 单实例 + 文件关联未做 (F20)
