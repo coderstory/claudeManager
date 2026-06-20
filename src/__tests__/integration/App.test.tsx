@@ -178,4 +178,58 @@ describe('App — view routing integration', () => {
     // Still 'usage-query' — setView is a no-op when already on target.
     expect(localStorage.getItem(STORAGE_KEY)).toBe('usage-query');
   });
+
+  // ---------------------------------------------------------------------------
+  // M2.6.1 routing-fix regression — F13 备份与恢复 must mount the REAL
+  // BackupRestorePage, not fall through to PluginPlaceholder.
+  //
+  // M2.6 delivered the page, service, commands, and tests, but missed
+  // wiring App.tsx (the view router). On the release exe, clicking the
+  // sidebar "备份与恢复" tile rendered `plugin: backup-restore` instead
+  // of the real timeline UI (see .planning/diagnostics/m2-2-6-verify/
+  // 01-f13-page.png).
+  //
+  // This test asserts the routing fix: navigating to backup-restore must
+  //   (a) mount the BackupRestorePage (data-testid="backup-restore-page")
+  //   (b) NOT render the PluginPlaceholder fallback marker
+  //       ("plugin: backup-restore") for that view.
+  //
+  // The previous test for `optimizer` (line ~84) intentionally asserts the
+  // placeholder marker because that view genuinely is a stub; this new
+  // test asserts the NEGATION for backup-restore because that view is a
+  // shipped real implementation.
+  // ---------------------------------------------------------------------------
+  it('clicking the "备份与恢复" sidebar item navigates to the F13 real page (M2.6.1 routing-fix)', () => {
+    renderApp();
+    act(() => {
+      screen.getByTestId('sidebar-item-backup-restore').click();
+    });
+    // M2.6.1: backup-restore must mount the real page now, not the
+    // PluginPlaceholder. Assert on the page's data-testid.
+    expect(screen.getByTestId('backup-restore-page')).toBeInTheDocument();
+    // Regression guard: the PluginPlaceholder marker MUST NOT render
+    // for this view anymore. This is the exact text the broken release
+    // exe was rendering per the M2.6 diagnostic screenshot.
+    expect(
+      screen.queryByText('plugin: backup-restore'),
+      'backup-restore must NOT fall through to PluginPlaceholder',
+    ).not.toBeInTheDocument();
+  });
+
+  it('persists backup-restore view to localStorage across mounts (M2.6.1)', () => {
+    const first = renderApp();
+    act(() => {
+      screen.getByTestId('sidebar-item-backup-restore').click();
+    });
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('backup-restore');
+    first.unmount();
+
+    // Second mount should restore the last view AND mount the real page
+    // (not the placeholder).
+    renderApp();
+    expect(screen.getByTestId('backup-restore-page')).toBeInTheDocument();
+    expect(
+      screen.queryByText('plugin: backup-restore'),
+    ).not.toBeInTheDocument();
+  });
 });
