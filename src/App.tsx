@@ -58,6 +58,7 @@ import McpManagementPage from './pages/mcp-management';
 import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
 import SingleFileDeployPage from './pages/single-file-deploy';
+import ResourceBrowserPage from './pages/resource-browser';
 import BackupRestorePage from './pages/backup-restore';
 import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -323,10 +324,14 @@ export default function App(): ReactElement {
               <UsageQueryPage />
             ) : view === 'single-file-deploy' ? (
               <SingleFileDeployPage />
+            ) : view === 'resource-browser' ? (
+              <ResourceBrowserPage />
             ) : view === 'optimizer' ? (
               <OptimizerPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
+            ) : view === 'resource-browser' ? (
+              <ResourceBrowserPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

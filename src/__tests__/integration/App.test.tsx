@@ -88,13 +88,13 @@ describe('App — view routing integration', () => {
 
   it('clicking the home tile on the welcome page navigates to that plugin', () => {
     renderApp();
-    // Click from welcome → resource-browser (still a placeholder
-    // page; M2.9 promoted optimizer to a real page so this test now
-    // targets a remaining placeholder view).
+    // Click from welcome → resource-browser (M2.13: real page
+    // shipped, not the placeholder anymore). Assert the page mounts
+    // via its data-testid instead of the old PluginPlaceholder marker.
     act(() => {
       screen.getByTestId('home-tile-resource-browser').click();
     });
-    expect(screen.getByText('plugin: resource-browser')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-browser-page')).toBeInTheDocument();
   });
 
   it('header back button returns from any non-home view to home', () => {
@@ -279,6 +279,7 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'mcp-management', realTestId: 'mcp-management-page' },
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'single-file-deploy', realTestId: 'single-file-deploy-page' },
+    { view: 'resource-browser', realTestId: 'resource-browser-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },
     { view: 'optimizer', realTestId: 'optimizer-page' },
   ] as const;
@@ -289,7 +290,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   // delete it from this list — the inverse assertion is what proves
   // the placeholder is no longer reachable for that view.
   const PLACEHOLDER_VIEWS: ReadonlyArray<ViewId> = [
-    'resource-browser',
     'marketplace',
   ] as const;
 
