@@ -52,6 +52,7 @@ import { ProviderListPage } from './pages/provider-list';
 import { ProviderSwitchPage } from './pages/provider-switch';
 import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
+import McpManagementPage from './pages/mcp-management';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
 /**
@@ -244,6 +245,8 @@ export default function App(): ReactElement {
               <DeeplinkImportPage />
             ) : view === 'json-editor' ? (
               <JsonEditorPage />
+            ) : view === 'mcp-management' ? (
+              <McpManagementPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

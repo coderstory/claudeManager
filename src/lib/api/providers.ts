@@ -18,11 +18,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ImportResult,
-  McpServer,
+  McpServer as F3McpServer,
   Provider,
   ListProvidersResult,
   SqlPreview,
 } from '../../types/provider';
+import type { McpServer } from '../../types/mcp';
 
 /**
  * F1 — list all providers. Returns `[]` if `<app_data>/providers/` is
@@ -87,12 +88,14 @@ export function importProvidersFromSql(content: string): Promise<ImportResult> {
  * Parsed deeplink request shape (mirror of the Rust
  * `ParsedDeeplink` in src-tauri/src/infrastructure/deeplink_parser.rs).
  *
- * In M2.3 `action` is always `{ kind: 'import' }` and `provider` is
- * the (validated) Provider ready to be persisted.
+ * M2.3: `action.kind === 'import'` and `provider` is populated.
+ * M2.5: `action.kind === 'import_mcp'` and `mcp_server` is populated.
+ * The `resource` query param of the URL discriminates the shape.
  */
 export interface ParsedDeeplink {
-  action: { kind: 'import' };
+  action: { kind: 'import' } | { kind: 'import_mcp' };
   provider: Provider | null;
+  mcp_server: McpServer | null;
 }
 
 /**
@@ -116,7 +119,8 @@ export function importSingleProvider(provider: Provider): Promise<void> {
   return invoke<void>('import_single_provider', { provider });
 }
 
-// Re-export the McpServer type for the page so callers don't need a
-// second import. Frontend pages should not need to know where the
-// type lives.
-export type { McpServer };
+// Re-export the F3 McpServer type (parser shape, used in SqlPreview
+// `preview_mcp`) for the page so callers don't need a second import.
+// The F6 write-side `McpServer` lives in `../../types/mcp` and is
+// imported directly by F6 modules.
+export type { F3McpServer as McpServer };

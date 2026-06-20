@@ -61,13 +61,14 @@ describe('App — view routing integration', () => {
     }
   });
 
-  it('clicking the "MCP 管理" sidebar item navigates to the MCP placeholder', () => {
+  it('clicking the "MCP 管理" sidebar item navigates to the F6 page (M2.5: real impl)', () => {
     renderApp();
     act(() => {
       screen.getByTestId('sidebar-item-mcp-management').click();
     });
-    // The placeholder renders a <code> with the literal "plugin: mcp-management".
-    expect(screen.getByText('plugin: mcp-management')).toBeInTheDocument();
+    // M2.5: the mcp-management view now mounts the real page, not
+    // the PluginPlaceholder. Assert on the page's data-testid.
+    expect(screen.getByTestId('mcp-management-page')).toBeInTheDocument();
   });
 
   it('clicking the "Provider 列表" sidebar item shows the F1 page (M2.1: real impl)', () => {
