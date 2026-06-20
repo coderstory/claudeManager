@@ -1,6 +1,15 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Arc;
+
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    Manager,
+};
+
+pub mod app_state;
 pub mod commands;
 pub mod domain;
 pub mod infrastructure;
@@ -8,11 +17,7 @@ pub mod platform;
 pub mod plugins;
 pub mod services;
 
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    Manager,
-};
+use crate::app_state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -45,12 +50,21 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::autostart::get_autostart_status,
             commands::autostart::set_autostart_enabled,
+            commands::providers::list_providers,
+            commands::providers::list_providers_with_warnings,
+            commands::providers::switch_provider,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
             // macOS impls based on target_os). Must run before any
             // service / plugin that reads `IPlatformPaths` / autostart / etc.
             platform::init_for_runtime();
+
+            // Build shared app state (resolved paths + services) and
+            // register it with Tauri's state manager. All commands
+            // pull from this — see commands::providers.
+            let state = AppState::build();
+            app.manage(Arc::new(state));
 
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;

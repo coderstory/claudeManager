@@ -7,10 +7,6 @@
 //! dispatch into) — never directly through `tauri_plugin_*` crates
 //! from the frontend.
 //!
-//! M1.7 ships one command module: [`autostart`]. M2+ will add more
-//! (provider list, MCP management, etc.) under their own F-number
-//! subdirectory in `src-tauri/src/commands/`.
-//!
 //! ## Note on `tauri::generate_handler!` paths
 //!
 //! The macro looks up the `__cmd__<name>` shim at the function's
@@ -20,3 +16,4 @@
 //! `commands::<alias>`.
 
 pub mod autostart;
+pub mod providers;
