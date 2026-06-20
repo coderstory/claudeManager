@@ -368,3 +368,39 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 - F13 备份
 
 **M2.3 启动门**：P0 fix 验证通过 + smoke test 扩展到覆盖业务调用 + 集成 test 套件稳定
+
+---
+
+## M2.3 F4 deeplink 导入 — 已 ship (P0 fix 验证通过后启动)
+
+**Commits** (5 个, 原子):
+- `b514929` design: F4 deeplink dataflow + URL protocol
+- `d01f67c` parser: deeplink_parser for ccswitch://v1/import?resource=provider (17 unit tests)
+- `8337d70` service: provider_service.import_single_provider (4 unit tests)
+- `a136d3a` commands: parse_deeplink_url + import_single_provider + plugin event bridge
+- `7684063` page: DeeplinkImportPage real impl + 7 vitest + 5 playwright e2e
+
+**Ship exe**: `~/Desktop/ClaudeConfigManager-M2/ClaudeConfigManager-M2.2.4-f4-deeplink.exe` (29 MB, 6月 20 12:08)
+**Smoke 7/7**: ✅ (含 Test 7 dist fingerprint + 标题 + WebView2 子窗口)
+**Vitest 99/99**: ✅ (92 existing + 7 new — input + parse + import success + import error + parse error + cancel + 示例)
+**Playwright e2e**: 5 cases (M2.3-deeplink.spec.ts, 需 tauri-driver 运行)
+**Rust 单元测试**: 本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5); CI MSYS2 跑通 17+4=21 个新 case
+
+**URL 协议** (与 cc-switch-main 对齐):
+```
+ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&model=W
+```
+只支持 resource=provider (M2.3 scope),其他 resource type → UnsupportedResource error。
+
+**关键设计决策**:
+- 模态而不是路由 (deeplink 是事件驱动,不是导航)
+- provider.id 缺省时从 name slug-ify (kebab-case + ASCII lowercase)
+- import 硬错误 AlreadyExists (F4 是用户主动,不等同 F3 批量 skip)
+- 单实例 handler + deep-link plugin on_open_url 都 emit 同一事件 'deep-link://new-url',前端只听一个
+- url crate 锁 =2.5.8 (与现有 transitive 同版本,无 dep 膨胀)
+- api_key 在 modal 里 **永不显示** (token leak guard, Vitest 显式 assert)
+
+**已知限制** (M2.5+ 跟进):
+- 不支持 resource=mcp/prompt/skill (F4 范围)
+- 不支持"导入并激活" (F2 范围)
+- AlreadyExists → "rename and retry" 提示,但 v1 不实现覆盖
