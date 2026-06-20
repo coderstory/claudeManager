@@ -245,23 +245,24 @@ export default function BackupRestorePage(): ReactElement {
     <div
       data-testid="backup-restore-page"
       style={{
-        padding: '32px 40px',
+        padding: 'var(--space-6)',
         maxWidth: 1280,
         margin: '0 auto',
       }}
     >
       <h1
         style={{
-          fontSize: 20,
+          fontSize: 'var(--fs-heading)',
           fontWeight: 600,
           color: 'var(--text-primary)',
-          marginBottom: 8,
+          margin: 0,
+          marginBottom: 'var(--space-3)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        <History size={20} />
+        <History size={18} />
         备份与恢复
       </h1>
       <p
