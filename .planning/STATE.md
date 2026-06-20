@@ -320,3 +320,51 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 - 走 D5 选项 C：用户**至少**核定 `M1.1.3-plugin-host-fix-v3.exe`（plugin host 完整链路 + viewport reset）
 - 其他 12 个 exe 按 §1.1 表格 "⏳ 待审"标记，**不强求**逐个核定
 - 核定后用户**明确**"完成"或"未完成：<原因>"，主 session 才能从 4 槽并发正式启动 M2.1 + 3 件套
+
+---
+
+## M2 业务期启动 — 2026-06-20
+
+**D1-D5 拍板**（commit `b8703df`）：B/B/A/F2-前/C
+- D1 (M1.10/11/12 补齐)：B 并行（已合并 master `282aa44` 之上）
+- D2 (M2 P0 4 plugin 顺序)：B F1+F13 → (F2 || F5 || F6)
+- D3 (react-router 重接)：A 保持 useViewState
+- D5 (M1 exe 批量核定)：C 抽查 M1.9.2 + M1.3-v3，其余 trust
+
+### M2.1 F1+F2 — 已 ship 但有 P0 bug（待修）
+
+**Commit**: `b12bab4` (lock file)
+**Ship exe**: `M2.2.1-f1-f2-provider-list-switch.exe` (30 MB)
+**Smoke 7/7**: ✅
+**Vitest 82/82**: ✅
+**Playwright verify**: ❌ **IPC 100% 失败**
+
+**P0 bug**：`src-tauri/src/lib.rs:70` `app.manage(Arc::new(state))` 与 `commands/providers.rs` 4 处 `State<'_, AppState>` TypeId 不匹配
+**影响**：F1 list_providers / F2 switch_provider 在 release exe 上点 → 红框错误
+**修复**（Fix A 推荐）：1 行 lib.rs:70 改 `app.manage(state)`
+**进度**：P0 fix subagent 已派（agent ID `xxx`）
+**原 exe 已移**：`~/Desktop/ClaudeConfigManager-M2/.broken/`
+
+### M2.2 F3 .sql 导入 — 同 P0 bug
+
+**Commit**: `d2852e2`
+**Ship exe**: `M2.2.2-f3-sql-import.exe` (30.1 MB) — **同样坏**
+**Smoke 7/7**: ✅（smoke 结构性盲区：不测具体命令调用）
+**Vitest 92/92**: ✅（mock invoke 不测真集成）
+**P0 fix 后**应一并修复
+
+### 关键教训（必须写入未来 subagent prompt）
+
+1. **smoke test 必须扩展到"切到具体功能页 + 1s 内不出现错误字样"** —— 现 smoke 只验进程/窗口/资源
+2. **vitest mock invoke 不够** —— 必须加 Rust integration test (`#[taudio::test]`) 真启动 runtime + call
+3. **TypeId 不匹配是 Tauri state 常见坑** —— `app.manage(X)` 必须和 `State<'_, X>` **完全一致**（包不包 Arc 也算不一致）
+4. **verify spec 必须 commit** —— 不 commit 会被 gitignore / 工作流吞掉
+
+### M2.3+ 候选（待 P0 fix 后启动）
+
+- F4 deeplink 导入
+- F5 JSON 编辑器
+- F6 MCP 管理
+- F13 备份
+
+**M2.3 启动门**：P0 fix 验证通过 + smoke test 扩展到覆盖业务调用 + 集成 test 套件稳定
