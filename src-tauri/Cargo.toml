@@ -25,6 +25,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
 thiserror = "1"
+# M2.3 — url crate for ccswitch://v1/import?... deeplink parsing.
+# Version locked to the existing transitive (=2.5.8, see Cargo.lock) so
+# we don't pull a second copy into the dep graph. Per CLAUDE.md §2.3.
+url = "=2.5.8"
 # M2.1 — uuid v4 for temp-file suffix in fs_atomic.write_with_backup.
 # Already in transitive lock (uuid 1.23.3); added as direct dep so
 # `infrastructure::fs_atomic` can use `Uuid::new_v4()` without feature-flag
