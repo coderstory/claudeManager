@@ -59,7 +59,7 @@ async function evalExpr(expr) {
 async function probeSplashAt(label) {
   return await evalExpr(`(() => {
     const s = document.getElementById('ccm-splash');
-    if (!s) return { present: false };
+    if (!s) return { present: false, label: ${JSON.stringify(label)} };
     const r = s.getBoundingClientRect();
     const text = s.querySelector('.ccm-splash-text');
     const spinner = s.querySelector('.ccm-splash-spinner');
@@ -67,7 +67,7 @@ async function probeSplashAt(label) {
     const spinnerCs = spinner ? window.getComputedStyle(spinner) : null;
     return {
       present: true,
-      label,
+      label: ${JSON.stringify(label)},
       rect: { x: r.x, y: r.y, w: r.width, h: r.height },
       viewportW: window.innerWidth,
       viewportH: window.innerHeight,
