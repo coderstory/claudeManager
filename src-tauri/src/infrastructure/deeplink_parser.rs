@@ -28,23 +28,27 @@
 use thiserror::Error;
 use url::Url;
 
-use crate::domain::Provider;
+use crate::domain::{McpServer, McpTransport, Provider};
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-/// Parsed deeplink request (M2.3 — F4).
+/// Parsed deeplink request (M2.3 — F4 + M2.5 — F6).
 ///
-/// `action` is currently always `DeeplinkAction::Import` for the
-/// `import` path. We keep the enum shape to make it easy to add
-/// `Switch` / `OpenView` later without changing the IPC contract.
+/// `action` discriminates between provider-import and mcp-import.
+/// Exactly one of `provider` / `mcp_server` is populated, matching
+/// the `resource=` query parameter.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct ParsedDeeplink {
     pub action: DeeplinkAction,
     /// Present iff `action == Import`. The provider fields are
     /// already validated (id slug-ified, models populated).
     pub provider: Option<Provider>,
+    /// Present iff `action == ImportMcp` (M2.5 — F6).
+    /// The McpServer fields are URL-decoded; transport is inferred
+    /// from the presence of `type=http` (default: stdio).
+    pub mcp_server: Option<McpServer>,
 }
 
 /// What the deeplink asks the app to do.
@@ -53,6 +57,8 @@ pub struct ParsedDeeplink {
 pub enum DeeplinkAction {
     /// `ccswitch://v1/import?resource=provider&...`
     Import,
+    /// `ccswitch://v1/import?resource=mcp&...` — M2.5 F6.
+    ImportMcp,
 }
 
 /// All the ways a deeplink URL can be rejected. Each variant
@@ -92,6 +98,12 @@ pub enum DeeplinkParseError {
 
     #[error("apiKey cannot be empty")]
     EmptyApiKey,
+
+    #[error("MCP command cannot be empty")]
+    EmptyMcpCommand,
+
+    #[error("MCP url cannot be empty")]
+    EmptyMcpUrl,
 }
 
 // ---------------------------------------------------------------------------
@@ -131,10 +143,17 @@ pub fn parse_deeplink_url(url_str: &str) -> Result<ParsedDeeplink, DeeplinkParse
         .find(|(k, _)| k == "resource")
         .map(|(_, v)| v.into_owned())
         .ok_or(DeeplinkParseError::MissingParam("resource"))?;
-    if resource != "provider" {
-        return Err(DeeplinkParseError::UnsupportedResource(resource));
-    }
 
+    match resource.as_str() {
+        "provider" => parse_provider_deeplink(&url),
+        "mcp" => parse_mcp_deeplink(&url),
+        other => Err(DeeplinkParseError::UnsupportedResource(other.to_string())),
+    }
+}
+
+/// Parse a `resource=provider` deeplink — original M2.3 logic,
+/// extracted so the public entry point can route on resource type.
+fn parse_provider_deeplink(url: &Url) -> Result<ParsedDeeplink, DeeplinkParseError> {
     // 6. Pull every query param (URL-decoded).
     let mut name: Option<String> = None;
     let mut app: Option<String> = None;
@@ -210,6 +229,104 @@ pub fn parse_deeplink_url(url_str: &str) -> Result<ParsedDeeplink, DeeplinkParse
     Ok(ParsedDeeplink {
         action: DeeplinkAction::Import,
         provider: Some(provider),
+        mcp_server: None,
+    })
+}
+
+/// Parse a `resource=mcp` deeplink — M2.5 F6.
+///
+/// Expected query shape:
+///   `ccswitch://v1/import?resource=mcp&app=claude&name=fs
+///      &command=npx&args=-y,@mcp/filesystem&env.ROOT=/tmp;KEY=v`
+///
+/// `type` query param is optional. If absent, defaults to `stdio`.
+/// For `http`, `url` is required and `command` is ignored.
+fn parse_mcp_deeplink(url: &Url) -> Result<ParsedDeeplink, DeeplinkParseError> {
+    let mut name: Option<String> = None;
+    let mut transport_type: Option<String> = None;
+    let mut command: Option<String> = None;
+    let mut url_val: Option<String> = None;
+    let mut args: Option<String> = None;
+    let mut env: Option<String> = None;
+    let mut _description: Option<String> = None;
+
+    for (k, v) in url.query_pairs() {
+        match k.as_ref() {
+            "name" => name = Some(v.into_owned()),
+            "type" => transport_type = Some(v.into_owned()),
+            "command" => command = Some(v.into_owned()),
+            "url" => url_val = Some(v.into_owned()),
+            "args" => args = Some(v.into_owned()),
+            "env" => env = Some(v.into_owned()),
+            "description" => _description = Some(v.into_owned()),
+            _ => {} // unknown keys ignored
+        }
+    }
+
+    let name = name.ok_or(DeeplinkParseError::MissingParam("name"))?;
+    if name.is_empty() {
+        return Err(DeeplinkParseError::EmptyName);
+    }
+
+    let transport = match transport_type.as_deref() {
+        Some("http") | Some("sse") => McpTransport::Http,
+        Some("stdio") | None => McpTransport::Stdio,
+        Some(other) => {
+            return Err(DeeplinkParseError::InvalidAppType(other.to_string()))
+        }
+    };
+
+    let command = command.filter(|s| !s.is_empty());
+    let url_str = url_val.filter(|s| !s.is_empty());
+
+    match transport {
+        McpTransport::Stdio => {
+            if command.is_none() {
+                return Err(DeeplinkParseError::EmptyMcpCommand);
+            }
+        }
+        McpTransport::Http => {
+            if url_str.is_none() {
+                return Err(DeeplinkParseError::EmptyMcpUrl);
+            }
+        }
+    }
+
+    let args_vec: Vec<String> = args
+        .map(|a| {
+            a.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let env_map: std::collections::HashMap<String, String> = env
+        .map(|raw| {
+            raw.split(';')
+                .filter_map(|pair| {
+                    let mut it = pair.splitn(2, '=');
+                    let k = it.next()?.trim().to_string();
+                    let v = it.next()?.trim().to_string();
+                    if k.is_empty() {
+                        None
+                    } else {
+                        Some((k, v))
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut server = McpServer::new(name, transport, command, url_str);
+    server.args = args_vec;
+    server.env = env_map;
+    // id is auto-generated by McpServer::new; created_at too.
+
+    Ok(ParsedDeeplink {
+        action: DeeplinkAction::ImportMcp,
+        provider: None,
+        mcp_server: Some(server),
     })
 }
 
@@ -372,9 +489,10 @@ mod tests {
 
     #[test]
     fn parse_import_url_unsupported_resource_errors() {
-        let url = "ccswitch://v1/import?resource=mcp&name=x&app=claude&endpoint=e&apiKey=k";
+        // Unknown resource types (not provider / mcp) still error.
+        let url = "ccswitch://v1/import?resource=prompt&name=x&app=claude&endpoint=e&apiKey=k";
         let err = parse_deeplink_url(url).unwrap_err();
-        assert!(matches!(err, DeeplinkParseError::UnsupportedResource(r) if r == "mcp"));
+        assert!(matches!(err, DeeplinkParseError::UnsupportedResource(r) if r == "prompt"));
     }
 
     #[test]
@@ -426,5 +544,89 @@ mod tests {
         assert_eq!(v["provider"]["provider_type"], "claude");
         assert_eq!(v["provider"]["api_base"], "e");
         assert_eq!(v["provider"]["api_key"], "k");
+    }
+
+    // ----- resource=mcp (M2.5 F6) -----
+
+    #[test]
+    fn parse_mcp_stdio_full() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=fs&command=npx&args=-y,@mcp/filesystem&env.ROOT=/tmp;KEY=v";
+        let parsed = parse_deeplink_url(url).unwrap();
+        assert_eq!(parsed.action, DeeplinkAction::ImportMcp);
+        assert!(parsed.provider.is_none());
+        let s = parsed.mcp_server.expect("mcp_server should be present");
+        assert_eq!(s.name, "fs");
+        assert_eq!(s.transport, McpTransport::Stdio);
+        assert_eq!(s.command.as_deref(), Some("npx"));
+        assert_eq!(s.args, vec!["-y".to_string(), "@mcp/filesystem".to_string()]);
+        assert_eq!(s.env.get("ROOT").map(String::as_str), Some("/tmp"));
+        assert_eq!(s.env.get("KEY").map(String::as_str), Some("v"));
+        assert!(!s.id.is_empty(), "uuid generated");
+    }
+
+    #[test]
+    fn parse_mcp_http_with_type() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=remote&type=http&url=https%3A%2F%2Fmcp.example%2Fsse";
+        let parsed = parse_deeplink_url(url).unwrap();
+        assert_eq!(parsed.action, DeeplinkAction::ImportMcp);
+        let s = parsed.mcp_server.unwrap();
+        assert_eq!(s.transport, McpTransport::Http);
+        assert_eq!(s.url.as_deref(), Some("https://mcp.example/sse"));
+        assert!(s.command.is_none());
+    }
+
+    #[test]
+    fn parse_mcp_sse_alias_means_http() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=r&type=sse&url=https%3A%2F%2Fx";
+        let parsed = parse_deeplink_url(url).unwrap();
+        let s = parsed.mcp_server.unwrap();
+        assert_eq!(s.transport, McpTransport::Http);
+    }
+
+    #[test]
+    fn parse_mcp_stdio_default_when_type_omitted() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=fs&command=npx";
+        let parsed = parse_deeplink_url(url).unwrap();
+        let s = parsed.mcp_server.unwrap();
+        assert_eq!(s.transport, McpTransport::Stdio);
+    }
+
+    #[test]
+    fn parse_mcp_stdio_missing_command_errors() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=fs";
+        let err = parse_deeplink_url(url).unwrap_err();
+        assert!(matches!(err, DeeplinkParseError::EmptyMcpCommand));
+    }
+
+    #[test]
+    fn parse_mcp_http_missing_url_errors() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=remote&type=http";
+        let err = parse_deeplink_url(url).unwrap_err();
+        assert!(matches!(err, DeeplinkParseError::EmptyMcpUrl));
+    }
+
+    #[test]
+    fn parse_mcp_empty_name_errors() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=&command=npx";
+        let err = parse_deeplink_url(url).unwrap_err();
+        assert!(matches!(err, DeeplinkParseError::EmptyName));
+    }
+
+    #[test]
+    fn parse_mcp_unknown_type_errors() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=r&type=websocket&url=https%3A%2F%2Fx";
+        let err = parse_deeplink_url(url).unwrap_err();
+        assert!(matches!(err, DeeplinkParseError::InvalidAppType(t) if t == "websocket"));
+    }
+
+    #[test]
+    fn parse_mcp_serializes_with_action_kind_import_mcp() {
+        let url = "ccswitch://v1/import?resource=mcp&app=claude&name=fs&command=npx";
+        let parsed = parse_deeplink_url(url).unwrap();
+        let v = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(v["action"]["kind"], "import_mcp");
+        assert!(v["provider"].is_null());
+        assert_eq!(v["mcp_server"]["name"], "fs");
+        assert_eq!(v["mcp_server"]["transport"]["type"], "stdio");
     }
 }

@@ -17,4 +17,5 @@
 
 pub mod autostart;
 pub mod fs;
+pub mod mcp;
 pub mod providers;

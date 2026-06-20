@@ -66,6 +66,13 @@ pub fn run() {
             commands::providers::import_single_provider,
             commands::fs::read_file,
             commands::fs::write_file_atomic,
+            commands::mcp::list_mcp_servers,
+            commands::mcp::list_mcp_servers_with_warnings,
+            commands::mcp::toggle_mcp_server,
+            commands::mcp::add_mcp_server,
+            commands::mcp::update_mcp_server,
+            commands::mcp::remove_mcp_server,
+            commands::mcp::parse_mcp_deeplink,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
