@@ -1,0 +1,141 @@
+/* === M2.x inline-Tailwind utility classes — shared style block ===
+ *
+ * Why this file exists
+ * --------------------
+ * The project has NO Tailwind pipeline wired up (no
+ * tailwind.config.js / no postcss.config.js / no Vite Tailwind
+ * plugin). dist/assets/index-*.css only ships the design tokens
+ * from tokens.css + 0 utility rules, so any `className="flex ..."`
+ * in JSX is a silent noop on the real Tauri WebView2 release exe
+ * (display falls back to `block`, gap to 0, hover to nothing).
+ *
+ * The M2.15-fix-v2 commit (a216aff) established the "inline structural
+ * rules into `style={{}}`" pattern. For stateful rules (hover, focus,
+ * active, transition, animation) we cannot inline a `:hover` selector
+ * inside a `style` object — JSX style only sets OWN properties. So
+ * the same component opts in via a `data-*` attribute and we provide
+ * the actual :hover / :disabled / :focus / @keyframes rules here in
+ * one shared block.
+ *
+ * The blocks below are SCOPED by data-* attribute so they do NOT
+ * leak to unrelated chrome in the rest of the app.
+ */
+
+/* === Header chrome hover (back / theme / settings / min / max) ===
+ * Equivalent of the (would-be) Tailwind classes
+ *   `hover:bg-black/5 dark:hover:bg-white/5`
+ *   `transition-colors`
+ * with the M2.15-fix-v2 default 120ms ease. */
+[data-app-control-hover] {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+[data-app-control-hover]:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] [data-app-control-hover]:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* === Close-button hover (M1.9.2 + M2.15-fix-v2) ===
+ * Flips the close button to the --danger token on hover (Windows
+ * convention: "this will close the app"). Background tint is needed
+ * because the glass header would otherwise bleed the icon colour
+ * through at low alpha. */
+[data-app-close-hover] {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+[data-app-close-hover]:hover {
+  background-color: var(--danger);
+  color: #fff;
+}
+[data-theme="dark"] [data-app-close-hover]:hover {
+  background-color: var(--danger);
+  color: #fff;
+}
+
+/* === Sidebar item hover (M2.x-inline) ===
+ * Replaces the (would-be) Tailwind
+ *   `hover:bg-black/5 dark:hover:bg-white/5 transition-colors`
+ * for the AppSidebar nav buttons. */
+[data-app-sidebar-hover] {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+[data-app-sidebar-hover]:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] [data-app-sidebar-hover]:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* === Home tile hover (M2.x-inline) ===
+ * Replaces `hover:shadow-md transition-shadow` on the HomeView cards.
+ * Lifts the box-shadow on hover + adds a transition so the change
+ * fades in 120ms instead of snapping. */
+[data-app-home-tile] {
+  transition: box-shadow 120ms ease;
+  cursor: pointer;
+}
+[data-app-home-tile]:hover {
+  box-shadow: var(--shadow-md);
+}
+[data-app-home-tile]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* === Window-toggle button (usage-query 5h/1w/1m) ===
+ * Replaces `transition-colors` on the toggle button.
+ * Active state (data-app-toggle-active) sets --accent + white text;
+ * inactive state (no attribute) keeps text-secondary and flips to
+ * text-primary on hover. */
+[data-app-toggle] {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+[data-app-toggle]:not([data-app-toggle-active="true"]):hover {
+  color: var(--text-primary);
+}
+
+/* === Refresh button hover (usage-query) ===
+ * Replaces `hover:bg-bg-overlay disabled:opacity-60`. The
+ * bg-overlay change is cosmetic; the disabled opacity is the
+ * :disabled attribute selector. */
+[data-app-refresh-btn] {
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+[data-app-refresh-btn]:hover:not(:disabled) {
+  background-color: var(--bg-overlay);
+}
+[data-app-refresh-btn]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* === Installer-commands toggle hover (single-file-deploy) ===
+ * Replaces `hover:bg-bg-overlay` on the toggle button. */
+[data-app-cmd-toggle] {
+  transition: background-color 120ms ease;
+}
+[data-app-cmd-toggle]:hover {
+  background-color: var(--bg-overlay);
+}
+
+/* === spinner / pulse keyframes (replaces animate-spin / animate-pulse) ===
+ * M2.7 / M2.8 used `animate-spin` and `animate-pulse` for the
+ * refresh icon + loading skeleton. Tailwind would ship these
+ * from its `theme.animation` table; we provide the minimal
+ * 2-keyframe implementation here. */
+@keyframes ccm-spin {
+  to { transform: rotate(360deg); }
+}
+[data-app-spin] {
+  animation: ccm-spin 1s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes ccm-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+[data-app-pulse] {
+  animation: ccm-pulse 1.5s ease-in-out infinite;
+}
