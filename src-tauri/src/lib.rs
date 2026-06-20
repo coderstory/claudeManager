@@ -53,6 +53,8 @@ pub fn run() {
             commands::providers::list_providers,
             commands::providers::list_providers_with_warnings,
             commands::providers::switch_provider,
+            commands::providers::parse_sql_preview,
+            commands::providers::import_providers_from_sql,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

@@ -14,3 +14,8 @@
 pub mod provider;
 
 pub use provider::{is_valid_id, Provider, ProviderError};
+
+// McpServer is defined in the infrastructure layer (it's parser output
+// for F3, and write-side is F6 scope). We re-export from here so the
+// rest of the crate can `use crate::domain::McpServer;`.
+pub use crate::infrastructure::sql_parser::McpServer;

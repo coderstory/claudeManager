@@ -23,6 +23,7 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::de::Error as _;
 use serde_json::{json, Value};
 
 use crate::domain::{Provider, ProviderError};
@@ -160,8 +161,154 @@ impl ProviderService {
 
     /// Path to a provider's JSON file (helper).
     fn provider_path(&self, id: &str) -> PathBuf {
-        self.paths.app_data.join("providers").join(format!("{id}.json"))
+        self.providers_dir().join(format!("{id}.json"))
     }
+
+    /// Directory where provider JSON files live.
+    fn providers_dir(&self) -> PathBuf {
+        self.paths.app_data.join("providers")
+    }
+
+    // -----------------------------------------------------------------------
+    // F3 — import_providers_from_sql (M2.2)
+    // -----------------------------------------------------------------------
+
+    /// Bulk-import providers from a cc-switch-style SQLite dump string
+    /// (M2.2, F3). Provider rows that already exist (by `id`) are
+    /// silently skipped — repeat imports are idempotent.
+    ///
+    /// # Algorithm
+    ///
+    /// 1. Parse the dump via [`crate::infrastructure::sql_parser`].
+    /// 2. For each parsed `Provider`:
+    ///    - if `<providers_dir>/<id>.json` already exists, increment
+    ///      `skipped` and continue;
+    ///    - else, atomic-write the provider JSON via
+    ///      [`fs_atomic::write_with_backup`] (CLAUDE.md §7).
+    /// 3. Return `(imported, skipped, errors)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(ProviderError)` ONLY if the very first parse fails
+    /// (i.e. the dump is empty). Per-row errors are recorded in the
+    /// `errors` field of [`ImportResult`], not bubbled — this matches
+    /// the F3 brief ("跳过行数（语法错 / 字段不全）") and CLAUDE.md §7
+    /// ("不允许静默吞错" — we surface them in the result, just not
+    /// as fatal).
+    ///
+    /// # Idempotency
+    ///
+    /// Calling `import_providers_from_sql` twice with the same dump
+    /// MUST write each provider exactly once.
+    pub fn import_providers_from_sql(
+        &self,
+        content: &str,
+    ) -> Result<ImportResult, ProviderError> {
+        let parsed = crate::infrastructure::sql_parser::parse_sql_dump(content)
+            .map_err(|e| {
+                ProviderError::Json(serde_json::Error::custom(format!(
+                    "SQL parse failed: {e}"
+                )))
+            })?;
+
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+        let mut write_errors: Vec<WriteError> = Vec::new();
+
+        for provider in parsed.providers {
+            let target = self.provider_path(&provider.id);
+            if target.exists() {
+                skipped += 1;
+                continue;
+            }
+            let json = match serde_json::to_string_pretty(&provider) {
+                Ok(s) => s,
+                Err(e) => {
+                    write_errors.push(WriteError {
+                        id: provider.id.clone(),
+                        reason: format!("serialise failed: {e}"),
+                    });
+                    continue;
+                }
+            };
+            if let Err(e) = fs_atomic::write_with_backup(&target, &json) {
+                write_errors.push(WriteError {
+                    id: provider.id.clone(),
+                    reason: format!("atomic write failed: {e}"),
+                });
+                continue;
+            }
+            imported += 1;
+        }
+
+        // Merge parser-level skip reasons + write-level errors into one
+        // list the UI can show as a unified "skipped lines" panel.
+        let errors = parsed
+            .skipped_lines
+            .into_iter()
+            .map(|s| ImportSkip {
+                kind: "parse".into(),
+                line: s.line,
+                id: None,
+                reason: s.reason,
+            })
+            .chain(write_errors.into_iter().map(|w| ImportSkip {
+                kind: "write".into(),
+                line: 0,
+                id: Some(w.id),
+                reason: w.reason,
+            }))
+            .collect();
+
+        Ok(ImportResult {
+            imported,
+            skipped,
+            errors,
+            mcp_count: parsed.mcp_servers.len(),
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Import result types (F3 — M2.2)
+// ---------------------------------------------------------------------------
+
+/// Result of [`ProviderService::import_providers_from_sql`].
+#[derive(Debug, Clone)]
+pub struct ImportResult {
+    /// Number of provider files newly written this call.
+    pub imported: usize,
+    /// Number of provider rows skipped because the target file already
+    /// existed (idempotency — re-running with the same dump is safe).
+    pub skipped: usize,
+    /// Parsing or write errors encountered. Each entry is one row that
+    /// couldn't be processed — the UI shows them in a details panel.
+    pub errors: Vec<ImportSkip>,
+    /// Number of MCP server rows parsed (preview only — F6 owns write).
+    pub mcp_count: usize,
+}
+
+/// One row that couldn't be processed during import.
+#[derive(Debug, Clone)]
+pub struct ImportSkip {
+    /// `"parse"` = parser rejected the SQL row, `"write"` = serialise
+    /// or write failed.
+    pub kind: String,
+    /// 1-based line number in the original SQL dump (`0` for write
+    /// errors since they don't correspond to a single source line).
+    pub line: usize,
+    /// Provider id when known (`None` for parser errors that never
+    /// got far enough to extract an id).
+    pub id: Option<String>,
+    /// Human-readable reason for the UI to show.
+    pub reason: String,
+}
+
+/// Internal helper for write-side failures (kept private to the service).
+#[derive(Debug)]
+struct WriteError {
+    id: String,
+    reason: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +395,7 @@ fn now_unix_secs() -> i64 {
 mod tests {
     use super::*;
     use std::fs;
+    use std::time::SystemTime;
     use tempfile::TempDir;
 
     /// Build an AppPaths pointing at the temp dir for both
@@ -447,7 +595,8 @@ mod tests {
         // Backup exists with old content
         let mut found_bak = None;
         for entry in fs::read_dir(tmp.path()).unwrap() {
-            let name = entry.unwrap().file_name().into_string().unwrap();
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().unwrap();
             if name.starts_with("settings.json.bak.") {
                 found_bak = Some(entry.path());
                 break;
@@ -593,5 +742,146 @@ mod tests {
                 .as_str(),
             Some("old-model")
         );
+    }
+
+    // ----- import_providers_from_sql (F3, M2.2) -----
+
+    /// Build a 2-row dump string for testing.
+    fn sample_sql_dump() -> String {
+        r#"
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('glm-46', 'claude', 'GLM-4.6', '{"api_base":"https://api.anthropic.com","api_key":"sk-a","models":["claude-sonnet-4-6"]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('deepseek', 'claude', 'DeepSeek', '{"api_base":"https://api.deepseek.com","api_key":"sk-b","models":[]}');
+INSERT INTO mcp_servers (id, name, server_config) VALUES ('m1', 'M1', '{"command":"npx"}');
+"#
+        .to_string()
+    }
+
+    #[test]
+    fn import_3_providers_writes_3_files() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let sql = r#"
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('a1', 'claude', 'A1', '{"api_base":"https://a","api_key":"k1","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('b2', 'claude', 'B2', '{"api_base":"https://b","api_key":"k2","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('c3', 'claude', 'C3', '{"api_base":"https://c","api_key":"k3","models":[]}');
+"#;
+        let result = svc.import_providers_from_sql(sql).unwrap();
+        assert_eq!(result.imported, 3);
+        assert_eq!(result.skipped, 0);
+        assert!(result.errors.is_empty());
+
+        // All 3 files exist on disk and round-trip.
+        for id in ["a1", "b2", "c3"] {
+            let path = p_dir.join(format!("{id}.json"));
+            assert!(path.exists(), "{path:?} should exist");
+            let raw = fs::read_to_string(&path).unwrap();
+            let p = Provider::from_json_file(&path).unwrap();
+            assert_eq!(p.id, id);
+            assert!(raw.contains("\"id\""));
+        }
+    }
+
+    #[test]
+    fn import_with_duplicates_skips_existing() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // Pre-existing provider with same id as one in the dump.
+        write_provider(&p_dir, &sample_provider("glm-46", "OLD", "https://old.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let result = svc.import_providers_from_sql(&sample_sql_dump()).unwrap();
+        // glm-46 already existed → skipped. deepseek is new → imported.
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 1);
+        // Pre-existing file's content untouched (id matches name="OLD").
+        let raw = fs::read_to_string(p_dir.join("glm-46.json")).unwrap();
+        assert!(raw.contains("OLD"), "existing file should not be overwritten");
+        assert!(!raw.contains("GLM-4.6"), "old content not overwritten");
+        // New file written.
+        assert!(p_dir.join("deepseek.json").exists());
+    }
+
+    #[test]
+    fn import_records_parse_errors_in_result() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // Mix of valid + 2 invalid rows.
+        let sql = r#"
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('ok', 'claude', 'OK', '{"api_base":"https://x","api_key":"k","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', 'Bad', '{"api_base":"https://x","api_key":"k"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', 'claude', 'OK2', '{"api_base":"https://y","api_key":"k2","models":[]}');
+"#;
+        let result = svc.import_providers_from_sql(sql).unwrap();
+        assert_eq!(result.imported, 2, "two valid rows should import");
+        assert_eq!(result.skipped, 0);
+        assert_eq!(result.errors.len(), 1, "Bad.ID should be the only parse error");
+        assert_eq!(result.errors[0].kind, "parse");
+        assert!(result.errors[0].reason.contains("invalid id"));
+
+        // Files exist for the two valid rows.
+        assert!(p_dir.join("ok.json").exists());
+        assert!(p_dir.join("also-ok.json").exists());
+        assert!(!p_dir.join("Bad.ID.json").exists());
+    }
+
+    #[test]
+    fn import_mcp_rows_are_parsed_but_not_written() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let result = svc.import_providers_from_sql(&sample_sql_dump()).unwrap();
+        // mcp_count is reported back to the UI (preview) but no file written.
+        assert_eq!(result.mcp_count, 1);
+        assert_eq!(p_dir.read_dir().unwrap().count(), 2);
+    }
+
+    #[test]
+    fn import_with_empty_dump_returns_error() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let err = svc.import_providers_from_sql("").unwrap_err();
+        // The empty case is mapped to ProviderError::Json by the service.
+        assert!(matches!(err, ProviderError::Json(_)));
+    }
+
+    #[test]
+    fn import_creates_providers_dir_if_missing() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        // No `providers` subdir created.
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('late', 'claude', 'Late', '{\"api_base\":\"https://z\",\"api_key\":\"k\"}');";
+        let result = svc.import_providers_from_sql(sql).unwrap();
+        assert_eq!(result.imported, 1);
+        let p_dir = tmp.path().join("providers");
+        assert!(p_dir.join("late.json").exists());
+    }
+
+    #[test]
+    fn import_is_idempotent_second_call_writes_zero() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let first = svc.import_providers_from_sql(&sample_sql_dump()).unwrap();
+        assert_eq!(first.imported, 2);
+        assert_eq!(first.skipped, 0);
+
+        let second = svc.import_providers_from_sql(&sample_sql_dump()).unwrap();
+        assert_eq!(second.imported, 0, "second import writes nothing");
+        assert_eq!(second.skipped, 2, "second import sees both as duplicates");
+        assert!(second.errors.is_empty());
     }
 }

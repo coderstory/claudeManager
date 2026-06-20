@@ -6,3 +6,4 @@
 //! rollback). They go through the helpers in this module.
 
 pub mod fs_atomic;
+pub mod sql_parser;

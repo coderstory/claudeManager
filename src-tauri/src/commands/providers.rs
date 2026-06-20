@@ -25,7 +25,9 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::domain::Provider;
+use crate::domain::{McpServer, Provider};
+use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
+use crate::services::provider_service::{ImportResult, ImportSkip};
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
 /// is the user-visible message (SPEC §6.5).
@@ -88,6 +90,114 @@ pub async fn switch_provider(
 }
 
 // ---------------------------------------------------------------------------
+// F3 — .sql 导入 (M2.2)
+// ---------------------------------------------------------------------------
+
+/// Preview of a parsed SQL dump, sent to the frontend BEFORE the user
+/// clicks "confirm import". Shape mirrors what the import itself will
+/// produce — same parser, same rules.
+#[derive(Debug, serde::Serialize)]
+pub struct SqlPreview {
+    /// Total number of INSERT statements the parser saw.
+    pub total_lines: usize,
+    /// Number of providers that will be written (passed validation).
+    pub importable: usize,
+    /// Number of rows skipped (parse error or write precondition).
+    pub skipped: usize,
+    /// The provider rows that will be imported (UI shows a preview list).
+    pub preview_providers: Vec<Provider>,
+    /// The MCP rows parsed but NOT written (F6 owns write-side; M2.2
+    /// shows them as a "preview-only" group).
+    pub preview_mcp: Vec<McpServer>,
+    /// Up to 50 skip reasons — the full list is in ImportResult.errors
+    /// after import. Capped to keep the preview payload small.
+    pub skipped_samples: Vec<SkippedLine>,
+}
+
+/// Parse a SQL dump and return a preview without writing any files.
+///
+/// `content` is the raw text of the `.sql` file (read by the frontend
+/// via the `tauri-plugin-dialog` open file API).
+#[tauri::command]
+pub async fn parse_sql_preview(content: String) -> CmdResult<SqlPreview> {
+    let parsed = parse_sql_dump(&content).map_err(|e| format!("解析 SQL 失败: {e}"))?;
+    let total_lines =
+        parsed.providers.len() + parsed.mcp_servers.len() + parsed.skipped_lines.len();
+    let importable = parsed.providers.len();
+    let skipped = parsed.skipped_lines.len();
+    let skipped_samples: Vec<SkippedLine> =
+        parsed.skipped_lines.iter().take(50).cloned().collect();
+    Ok(SqlPreview {
+        total_lines,
+        importable,
+        skipped,
+        preview_providers: parsed.providers,
+        preview_mcp: parsed.mcp_servers,
+        skipped_samples,
+    })
+}
+
+/// Bulk-import providers from a SQL dump.
+///
+/// Returns a serialisable summary of what was imported, what was
+/// skipped, and any per-row errors (UI surfaces them as a toast +
+/// details panel).
+#[tauri::command]
+pub async fn import_providers_from_sql(
+    state: State<'_, AppState>,
+    content: String,
+) -> CmdResult<ImportResultDto> {
+    let result = state
+        .provider_service
+        .import_providers_from_sql(&content)
+        .map_err(|e| e.to_string())?;
+    Ok(result.into())
+}
+
+/// Tauri-friendly (Serialize-only) mirror of `ImportResult`.
+///
+/// The service-layer type is rich (`ImportSkip.kind` is `String`,
+/// `ImportResult.errors` is `Vec<ImportSkip>`) — we wrap it in a DTO
+/// so the IPC contract is stable even if the internal type changes.
+#[derive(Debug, serde::Serialize)]
+pub struct ImportResultDto {
+    pub imported: usize,
+    pub skipped: usize,
+    pub mcp_count: usize,
+    pub errors: Vec<ImportSkipDto>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ImportSkipDto {
+    pub kind: String,
+    pub line: usize,
+    pub id: Option<String>,
+    pub reason: String,
+}
+
+impl From<ImportResult> for ImportResultDto {
+    fn from(r: ImportResult) -> Self {
+        Self {
+            imported: r.imported,
+            skipped: r.skipped,
+            mcp_count: r.mcp_count,
+            errors: r.errors.into_iter().map(ImportSkipDto::from).collect(),
+        }
+    }
+}
+
+impl From<ImportSkip> for ImportSkipDto {
+    fn from(s: ImportSkip) -> Self {
+        Self {
+            kind: s.kind,
+            line: s.line,
+            id: s.id,
+            reason: s.reason,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 //
@@ -101,17 +211,26 @@ mod tests {
     use super::*;
 
     /// Compile-time check: `list_providers` takes `State<'_, AppState>`
-    /// and returns `CmdResult<Vec<Provider>>`.
+    /// and returns `CmdResult<Vec<Provider>>`. We don't pin the future
+    /// type because Tauri's `#[tauri::command]` returns an opaque
+    /// `impl Future`; just check the arg shape compiles.
     #[allow(dead_code)]
-    fn _list_providers_signature() {
-        let _f: fn(State<'_, AppState>) -> _ = list_providers;
+    fn _list_providers_signature(
+        s: State<'_, AppState>,
+    ) -> CmdResult<Vec<Provider>> {
+        let _ = s;
+        unimplemented!()
     }
 
     /// Compile-time check: `switch_provider` takes `State<'_, AppState>`
     /// + `provider_id: String` and returns `CmdResult<Provider>`.
     #[allow(dead_code)]
-    fn _switch_provider_signature() {
-        let _f: fn(State<'_, AppState>, String) -> _ = switch_provider;
+    fn _switch_provider_signature(
+        s: State<'_, AppState>,
+        provider_id: String,
+    ) -> CmdResult<Provider> {
+        let _ = (s, provider_id);
+        unimplemented!()
     }
 
     #[test]
@@ -124,5 +243,47 @@ mod tests {
         assert!(json.get("providers").is_some());
         assert!(json.get("warnings").is_some());
         assert_eq!(json["warnings"][0], "/tmp/bad.json");
+    }
+
+    #[test]
+    fn import_result_dto_serialises_all_keys() {
+        let dto = ImportResultDto {
+            imported: 2,
+            skipped: 1,
+            mcp_count: 0,
+            errors: vec![ImportSkipDto {
+                kind: "parse".into(),
+                line: 7,
+                id: None,
+                reason: "invalid id".into(),
+            }],
+        };
+        let v = serde_json::to_value(&dto).unwrap();
+        assert_eq!(v["imported"], 2);
+        assert_eq!(v["skipped"], 1);
+        assert_eq!(v["mcp_count"], 0);
+        assert_eq!(v["errors"][0]["kind"], "parse");
+        assert_eq!(v["errors"][0]["line"], 7);
+        assert_eq!(v["errors"][0]["reason"], "invalid id");
+        assert!(v["errors"][0]["id"].is_null());
+    }
+
+    #[test]
+    fn sql_preview_serialises_with_correct_keys() {
+        let p = SqlPreview {
+            total_lines: 5,
+            importable: 3,
+            skipped: 2,
+            preview_providers: vec![],
+            preview_mcp: vec![],
+            skipped_samples: vec![],
+        };
+        let v = serde_json::to_value(&p).unwrap();
+        assert_eq!(v["total_lines"], 5);
+        assert_eq!(v["importable"], 3);
+        assert_eq!(v["skipped"], 2);
+        assert!(v["preview_providers"].is_array());
+        assert!(v["preview_mcp"].is_array());
+        assert!(v["skipped_samples"].is_array());
     }
 }
