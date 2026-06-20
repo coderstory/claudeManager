@@ -269,3 +269,54 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 - `13290b3` M1.2: OS abstraction layer (8 traits × Win+Mac impls)
 - `2914342` M1.1-final: release build + small window + robust scripts
 - `fa02b41` M1.1: Tauri v2 scaffold + system tray + minimize-to-tray
+
+---
+
+## 主 session 拍板 — D1~D5 (2026-06-20)
+
+**触发**: M1 收尾完成后，主 session 在拍板 M2 启动路径。采纳 M1-final-report.md §7.3 推荐（与原推荐完全一致）。
+
+### 5 个决策（按 D1→D5 顺序）
+
+| # | 决策 | 选项 | 主 session 拍板 | 推荐来源 |
+|---|---|---|---|---|
+| **D1** | M2 启动前是否先补 3 件套（PluginHost wiring / M1.10 收尾 / M1.11 文档）？ | A 先补齐 2 天再 M2.1 / **B 与 M2.1 并行（4 槽并发）** / C 跳过文档 | **B** ✅ | M1-final-report §7.3 D1 |
+| **D2** | M2 P0 4 plugin 执行顺序？ | A 严格顺序 / **B F1+F13 → (F2 ‖ F5 ‖ F6) 并行** / C F6 + F1 并行 | **B** ✅ | M1-final-report §7.3 D2 |
+| **D3** | 是否启用 react-router？ | **A 保持 useViewState（localStorage）** / B 切到 HashRouter | **A** ✅ | M1-final-report §7.3 D3 |
+| **D4** | Mac 真机验证 F1 吗？ | 必做 / **F2 启动前再决定** / 不做 | **F2 启动前再决定** ✅ | M1-final-report §7.3 D4 |
+| **D5** | M1 exe 批量核定策略？ | A 逐个 / B 一次性 batch / **C 抽查 M1.9.3 + M1.3 v3** | **C** ✅ | M1-final-report §7.3 D5 |
+
+### 派单计划（CLAUDE.md §11.2 最多 4 槽并发，§11.3 流式派单）
+
+按 D1 选项 B，**4 槽全部并发启动**（依赖关系：3 件套无依赖互相独立；M2.1 自包含 F13）：
+
+| 槽 | 任务 | subagent 类型 | 估时 | 阻塞 |
+|---|---|---|---|---|
+| **1** | 3.1 PluginHost wiring（`plugins/mod.rs::init_all` 接 12 stub） | general-purpose | 半天 | 无 |
+| **2** | 3.2 M1.10 收尾（ci.yml + vitest/build/e2e + beforeBuildCommand 原子化 + tsconfig strict） | general-purpose | 1-2 天 | 无 |
+| **3** | 3.3 M1.11 文档（ARCHITECTURE.md + AGENTS.md + README.md） | general-purpose | 1 天 | 无 |
+| **4** | M2.1 F1 Provider 列表 + F13 备份基础设施 | general-purpose | 2-3 天 | 无 |
+
+### 后续派单触发条件（CLAUDE.md §11.3 流式派单）
+
+- **3.1 完成** → 立即派 M2.2 F2 Provider 切换 + M2.4 F5 JSON 编辑（2 槽）
+- **M2.1 F1 + F13 完成** → 立即派 M2.5 F6 MCP 管理（1 槽）
+- **M2.2 F2 启动前** → 重新评估 D4（Mac 真机验证）
+- **3.2 / 3.3 完成** → 关闭 D1 阶段，进入纯 M2.x 推进期
+
+### 决策登记（审计痕迹）
+
+| 决策项 | 选项 | 推荐采纳 | 拍板者 | 时间 |
+|---|---|---|---|---|
+| D1 | B（与 M2.1 并行） | ✅ 与推荐一致 | 主 session | 2026-06-20 |
+| D2 | B（F1+F13 → 并行 F2/F5/F6） | ✅ 与推荐一致 | 主 session | 2026-06-20 |
+| D3 | A（保持 useViewState） | ✅ 与推荐一致 | 主 session | 2026-06-20 |
+| D4 | F2 启动前再决定 | ✅ 与推荐一致 | 主 session | 2026-06-20 |
+| D5 | C（抽查 M1.9.3 + M1.3 v3） | ✅ 与推荐一致 | 主 session | 2026-06-20 |
+
+### 用户必做（CLAUDE.md §9.5 核定纪律）
+
+- 走 D5 选项 C：用户**至少**核定 `M1.9.3-fix-layout.exe`（最完整，framer-motion 移除 + main 绝对定位）
+- 走 D5 选项 C：用户**至少**核定 `M1.1.3-plugin-host-fix-v3.exe`（plugin host 完整链路 + viewport reset）
+- 其他 12 个 exe 按 §1.1 表格 "⏳ 待审"标记，**不强求**逐个核定
+- 核定后用户**明确**"完成"或"未完成：<原因>"，主 session 才能从 4 槽并发正式启动 M2.1 + 3 件套
