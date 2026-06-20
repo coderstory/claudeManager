@@ -283,7 +283,7 @@ export default function McpManagementPage(): ReactElement {
   return (
     <div
       style={{
-        padding: '32px 40px',
+        padding: 'var(--space-6)',
         maxWidth: 1080,
         margin: '0 auto',
       }}
@@ -291,16 +291,17 @@ export default function McpManagementPage(): ReactElement {
     >
       <h1
         style={{
-          fontSize: 20,
+          fontSize: 'var(--fs-heading)',
           fontWeight: 600,
           color: 'var(--text-primary)',
-          marginBottom: 8,
+          margin: 0,
+          marginBottom: 'var(--space-3)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        <Server size={20} />
+        <Server size={18} />
         MCP 管理
       </h1>
       <p
