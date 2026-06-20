@@ -6,11 +6,19 @@
  * plugin slot. In M2+ it'll grow into the real "first-run" entry
  * point with a "create your first provider" CTA + drag-import
  * drop zone (see SPEC §4.1 cold start journey).
+ *
+ * M2.x-inline: previously used `cn(...)` to compose Tailwind utility
+ * classes (`grid gap-3`, `w-full text-left p-4 transition-shadow`,
+ * `hover:shadow-md focus:outline-none focus:ring-2`, etc). The
+ * project has no Tailwind pipeline, so those classes silently
+ * noop'd on the real Tauri WebView2 release exe. All structural
+ * rules are now inlined as `style={{}}` properties and the
+ * hover/focus rules live in src/design-system/utilities.css under
+ * the [data-app-home-tile] selector.
  */
 import type { ReactElement } from 'react';
 import type { ViewId } from '../../hooks/useViewState';
 import { ALL_VIEWS, HOME_VIEW } from '../../hooks/useViewState';
-import { cn } from '../../lib/utils';
 
 export interface HomeViewProps {
   onNavigate: (view: ViewId) => void;
@@ -23,33 +31,42 @@ const PLUGIN_VIEWS: ViewId[] = ALL_VIEWS.filter((v) => v !== HOME_VIEW);
 export function HomeView({ onNavigate, pageTitle }: HomeViewProps): ReactElement {
   return (
     <div
-      className="h-full overflow-auto p-8"
-      style={{ background: 'var(--bg-primary)' }}
+      style={{
+        height: '100%',
+        overflow: 'auto',
+        padding: 32,
+        background: 'var(--bg-primary)',
+      }}
     >
-      <div className="max-w-4xl mx-auto">
+      <div style={{ maxWidth: 896, marginLeft: 'auto', marginRight: 'auto' }}>
         <h1
-          className="font-semibold mb-2"
           style={{
             color: 'var(--text-primary)',
             fontSize: '20px',
+            fontWeight: 600,
+            marginBottom: 8,
           }}
         >
           欢迎使用 Claude 配置管理器
         </h1>
         <p
-          className="mb-6"
           style={{
             color: 'var(--text-secondary)',
             fontSize: 'var(--fs-body)',
+            marginBottom: 24,
           }}
         >
           M1 架构期 — 12 个功能模块已注册为 stub,业务实现将在 M2+ 替换。
           点击下方任意卡片进入对应功能页。
         </p>
         <ul
-          className="grid gap-3"
           style={{
+            display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: 12,
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
           }}
         >
           {PLUGIN_VIEWS.map((view) => (
@@ -58,31 +75,36 @@ export function HomeView({ onNavigate, pageTitle }: HomeViewProps): ReactElement
                 type="button"
                 onClick={() => onNavigate(view)}
                 data-testid={`home-tile-${view}`}
-                className={cn(
-                  'w-full text-left p-4 transition-shadow',
-                  'hover:shadow-md focus:outline-none focus:ring-2',
-                )}
+                // M2.x-inline: hover/focus rules live in
+                // src/design-system/utilities.css under
+                // [data-app-home-tile].
+                data-app-home-tile="true"
                 style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: 16,
                   background: 'var(--bg-elevated)',
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-card)',
                   boxShadow: 'var(--shadow-sm)',
+                  fontFamily: 'inherit',
                 }}
               >
                 <div
-                  className="font-semibold mb-1"
                   style={{
                     color: 'var(--text-primary)',
                     fontSize: 'var(--fs-body)',
+                    fontWeight: 600,
+                    marginBottom: 4,
                   }}
                 >
                   {pageTitle(view)}
                 </div>
                 <code
-                  className="font-mono"
                   style={{
                     color: 'var(--accent)',
                     fontSize: 'var(--fs-caption)',
+                    fontFamily: 'var(--font-mono)',
                   }}
                 >
                   {view}
