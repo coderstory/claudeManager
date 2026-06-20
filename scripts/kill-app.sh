@@ -43,12 +43,13 @@ fi
 echo ">>> Found PIDs: $PIDS"
 
 if [[ "$FORCE" == "true" ]]; then
-  echo ">>> FORCE mode: taskkill -F -IM for ${ALL_NAMES[*]}"
+  echo ">>> FORCE mode: taskkill -F -PID for $PIDS"
   # Use -F (dash) not /F — Git Bash mangles forward-slash flags.
-  # taskkill -IM accepts wildcards (ClaudeConfigManager-M*) so one call covers all
-  # suffix variants; the short name is passed explicitly for the legacy case.
-  for name in "${ALL_NAMES[@]}"; do
-    taskkill -F -IM "${name}.exe" 2>&1 || true
+  # Use the already-discovered PIDs (taskkill -IM wildcards don't expand under Git Bash
+  # on Windows 11, so we MUST target by PID). We have PIDs because step 1 grep'd
+  # the tasklist output ourselves.
+  for pid in $PIDS; do
+    taskkill -F -PID "$pid" 2>&1 || true
   done
 else
   echo ">>> Graceful mode: sending CloseMainWindow via PowerShell..."
@@ -68,7 +69,7 @@ else
   for i in {1..10}; do
     sleep 0.5
     # Get-Process -Name accepts wildcards, so the SUFFIX_WILDCARD covers all
-    # ClaudeConfigManager-M*.exe variants; SHOR­T_NAME covers the legacy case.
+    # ClaudeConfigManager-M*.exe variants; SHORT_NAME covers the legacy case.
     REMAINING=$(powershell.exe -NoProfile -Command "
       @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
     " 2>&1 | tr -d '\r' | head -1)
@@ -79,9 +80,10 @@ else
   done
 
   echo ">>> Graceful exit timeout. Falling back to force kill..."
-  # Use -F (dash) not /F — Git Bash mangles forward-slash flags
-  for name in "${ALL_NAMES[@]}"; do
-    taskkill -F -IM "${name}.exe" 2>&1 || true
+  # Use -F (dash) not /F — Git Bash mangles forward-slash flags.
+  # Same reason as above: target by PID, not by -IM wildcard.
+  for pid in $PIDS; do
+    taskkill -F -PID "$pid" 2>&1 || true
   done
 fi
 
