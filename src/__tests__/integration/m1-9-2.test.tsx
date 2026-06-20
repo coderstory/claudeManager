@@ -22,10 +22,11 @@
  *        "M1 阶段用 CSS backdrop-filter: blur() 模拟 Liquid Glass".
  *
  *   4. Effects bootstrap call
- *      - main.tsx must import + invoke applyWindowEffects() so the
- *        Mica / vibrancy effect is requested at app start. The
- *        actual call is fire-and-forget; we assert the import
- *        path is wired.
+ *      - M2.16-theme-fix: backdrop 应用已迁移到 Rust setup hook
+ *        (window_vibrancy::apply_mica / apply_vibrancy)。main.tsx 不再
+ *        调 JS applyWindowEffects —— Rust apply_mica 是唯一来源，
+ *        早于 WebView2 首帧执行，避免晚到的 JS setEffects 重置 DWM
+ *        合成状态遮住 Mica。测试断言 lib.rs 调用 + main.tsx 不触达 JS。
  *
  * These tests assert SHIPPED behaviour, not implementation details:
  * they should fail BEFORE the M1.9.2 implementation lands and pass
@@ -245,31 +246,54 @@ describe('M1.9.2 — liquid glass tokens', () => {
 });
 
 describe('M1.9.2 — effects bootstrap', () => {
-  it('main.tsx imports applyEffects and calls it on startup', () => {
-    // We assert the import + call are wired into the entry point
-    // by reading main.tsx source. This catches a future refactor
-    // that drops the call (which would silently lose Mica on
-    // Windows + vibrancy on macOS).
+  // M2.16-theme-fix: 原生窗口 backdrop（Win11 Mica / macOS vibrancy）的
+  // 应用已从 JS applyWindowEffects()（走 Tauri setEffects → tao
+  // set_effects）迁移到 Rust setup hook（window_vibrancy::apply_mica /
+  // apply_vibrancy）。JS 入口不再触达 applyEffects —— Rust apply_mica
+  // 在 setup 同步执行（早于 WebView2 首帧），是唯一的 backdrop 来源。
+  // 此前 main.tsx 同时调 JS setEffects，晚到的 JS 调用可能重置 DWM
+  // 合成状态，遮住已设好的 Mica。详见 main.tsx 注释 + lib.rs setup。
+  it('Rust setup hook applies window-vibrancy backdrop (apply_mica / apply_vibrancy)', () => {
+    // 读 lib.rs 源码，断言 setup hook 调用了 window_vibrancy 的
+    // apply_mica（Windows）/ apply_vibrancy（macOS）。这是 backdrop
+    // 应用的唯一入口 —— 如果被删掉，Mica / vibrancy 会静默失效。
+    const libRs = readFileSync(
+      resolve(__dirname, '../../../src-tauri/src/lib.rs'),
+      'utf-8',
+    );
+    expect(libRs).toMatch(/window_vibrancy::apply_mica/);
+    // macOS 侧用 use window_vibrancy::{apply_vibrancy, ...} + apply_vibrancy(...)
+    expect(libRs).toMatch(/apply_vibrancy/);
+    expect(libRs).toMatch(/NSVisualEffectMaterial/);
+  });
+
+  it('main.tsx no longer calls JS applyWindowEffects (Rust is single source)', () => {
+    // M2.16-theme-fix: main.tsx 必须不再 import / 调用 applyWindowEffects。
+    // Rust apply_mica 是唯一的 backdrop 来源；JS setEffects 与之冲突。
+    // applyEffects.ts 模块保留（未使用），此处断言入口不触达它。
+    // 注意：注释里会提到历史函数名，所以只看非注释代码行。
     const mainTsx = readFileSync(
       resolve(__dirname, '../../main.tsx'),
       'utf-8',
     );
-    expect(mainTsx).toMatch(/applyEffects|applyWindowEffects/);
-    expect(mainTsx).toMatch(/from\s+["'].*applyEffects/);
+    // 只保留非注释、非空行（去掉 // 开头的行 + 行内 // 尾注）
+    const codeOnly = mainTsx
+      .split('\n')
+      .map((l) => l.replace(/\r$/, ''))
+      .filter((l) => l.trim().length > 0 && !l.trim().startsWith('//'))
+      .map((l) => l.replace(/\/\/.*$/, ''))
+      .join('\n');
+    // 不应再 import applyEffects 模块
+    expect(codeOnly).not.toMatch(/from\s+["'].*applyEffects/);
+    // 不应再调用 applyWindowEffects（匹配函数调用）
+    expect(codeOnly).not.toMatch(/applyWindowEffects\s*\(/);
   });
 
-  it('applyEffects module exports a function that invokes setEffects', async () => {
-    // Dynamic import so the test still works if the file is
-    // renamed later (it just resolves via the path we wrote).
+  it('applyEffects module still exports applyWindowEffects (kept for reference)', async () => {
+    // applyEffects.ts 保留为未使用模块（m1-9-2 历史架构的记录）。
+    // 断言导出仍存在，避免未来误删导致 import 报错。新架构下入口
+    // 不触达此模块。
     const mod = await import('../../design-system/applyEffects');
     expect(typeof mod.applyWindowEffects).toBe('function');
-    await mod.applyWindowEffects();
-    // The Tauri mock was set up above; setEffects must have been
-    // called with an Effects-shaped payload.
-    expect(setEffectsMock).toHaveBeenCalled();
-    const arg = setEffectsMock.mock.calls[0][0];
-    expect(arg).toBeDefined();
-    expect(Array.isArray(arg.effects)).toBe(true);
-    expect(arg.effects.length).toBeGreaterThan(0);
   });
 });

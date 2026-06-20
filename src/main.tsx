@@ -8,16 +8,23 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "./design-system/ThemeProvider";
-import { applyWindowEffects } from "./design-system/applyEffects";
 
-// M1.9.2 — request the native window backdrop before mount.
-// Fire-and-forget: applyWindowEffects() resolves silently on
-// success and logs+swallows on failure (Linux / Win10 / missing
-// capability). The CSS backdrop-filter fallback in AppHeader /
-// AppSidebar / PluginPlaceholder is the visual floor — the app
-// always shows a Liquid-Glass-like surface even when the OS
-// refuses the effect.
-void applyWindowEffects();
+// M2.16-theme-fix: 原生窗口 backdrop（Win11 Mica / macOS vibrancy）的
+// 应用已完全移至 Rust setup hook（src-tauri/src/lib.rs 调
+// window_vibrancy::apply_mica / apply_vibrancy）。
+//
+// 此前 main.tsx 还会调一遍 JS applyWindowEffects()（走 Tauri
+// getCurrentWindow().setEffects → tao set_effects），这与 Rust 的
+// apply_mica 重复，且 tao 的 set_effects 在 decorations:false 无边框
+// 窗口上会走 window effects API，可能在 React 挂载时（晚于 setup）
+// 重置 DWM 合成状态，导致 WebView2 表面退回不透明，遮住已设置好的
+// Mica backdrop（DWMWA_SYSTEMBACKDROP_TYPE=2 被 CDP+原生查询确认已生效，
+// 但用户真机仍看到白底）。
+//
+// 删掉 JS 调用后，Rust apply_mica 是唯一的 backdrop 来源（在 setup
+// 同步执行，早于 WebView2 首帧），不再有晚到的 JS 调用干扰合成路径。
+// applyEffects.ts 文件保留（未使用），以便 m1-9-2 测试的历史断言
+// 仍有模块可 import；新架构下入口不再触达它。
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
