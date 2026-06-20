@@ -491,7 +491,8 @@ export function QuickSearchModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label="关闭搜索 (Esc)"
+            title="关闭搜索 (Esc)"
             data-testid="quick-search-close"
             style={{
               ...noDragStyle,
@@ -506,6 +507,7 @@ export function QuickSearchModal({
               justifyContent: 'center',
               color: 'var(--text-secondary)',
             }}
+            className="transition-colors hover:bg-[var(--danger)] hover:text-white dark:hover:bg-[var(--danger)] dark:hover:text-white"
           >
             <X size={14} />
           </button>
