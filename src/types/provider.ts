@@ -37,3 +37,74 @@ export interface ListProvidersResult {
   providers: Provider[];
   warnings: string[];
 }
+
+// ---------------------------------------------------------------------------
+// F3 — .sql 导入 (M2.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * One MCP server parsed from a .sql dump (M2.2 preview only — F6 owns
+ * the write-side). Matches the Rust `McpServer` in
+ * `src-tauri/src/infrastructure/sql_parser.rs`.
+ */
+export interface McpServer {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  description: string | null;
+}
+
+/**
+ * One row that was skipped during preview / import.
+ *
+ * `kind` is `"parse"` for parser-level rejections (bad JSON, invalid
+ * id, missing field) or `"write"` for serialise / atomic-write failures.
+ * `line` is 1-based in the original dump (0 for write errors).
+ */
+export interface SkippedLine {
+  line: number;
+  reason: string;
+}
+
+/**
+ * Returned by `parse_sql_preview` (M2.2).
+ *
+ * The page renders 3 cards from this: 原始行数 / 可导入数 / 跳过行数,
+ * plus a preview list of the providers that will be imported.
+ */
+export interface SqlPreview {
+  total_lines: number;
+  importable: number;
+  skipped: number;
+  preview_providers: Provider[];
+  preview_mcp: McpServer[];
+  skipped_samples: SkippedLine[];
+}
+
+/**
+ * Returned by `import_providers_from_sql` (M2.2).
+ *
+ * `imported` is the count of newly-written provider files; `skipped`
+ * is the count of provider rows that were skipped because a file with
+ * that id already existed (idempotency). `errors` is the union of
+ * parse + write failures — surfaced as a details panel in the UI.
+ */
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  mcp_count: number;
+  errors: ImportSkip[];
+}
+
+/**
+ * One entry in `ImportResult.errors`. Same shape as `SkippedLine` but
+ * adds a `kind` discriminator and an optional `id` for write errors.
+ */
+export interface ImportSkip {
+  kind: string;
+  line: number;
+  id: string | null;
+  reason: string;
+}

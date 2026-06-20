@@ -16,7 +16,13 @@
  * anyone reading both files.
  */
 import { invoke } from '@tauri-apps/api/core';
-import type { Provider, ListProvidersResult } from '../../types/provider';
+import type {
+  ImportResult,
+  McpServer,
+  Provider,
+  ListProvidersResult,
+  SqlPreview,
+} from '../../types/provider';
 
 /**
  * F1 — list all providers. Returns `[]` if `<app_data>/providers/` is
@@ -45,3 +51,35 @@ export function listProvidersWithWarnings(): Promise<ListProvidersResult> {
 export function switchProvider(providerId: string): Promise<Provider> {
   return invoke<Provider>('switch_provider', { providerId });
 }
+
+/**
+ * F3 — parse a SQL dump and return a preview without writing files.
+ *
+ * The frontend calls this after the user picks a .sql file (via
+ * tauri-plugin-dialog) and the page reads its content. The returned
+ * preview shows "importable / skipped" counts + the actual list of
+ * providers that will be imported.
+ *
+ * NOTE: the dialog plugin's `open()` returns a `File` object whose
+ * `.text()` method gives the raw content — the frontend does the
+ * file reading, not Rust.
+ */
+export function parseSqlPreview(content: string): Promise<SqlPreview> {
+  return invoke<SqlPreview>('parse_sql_preview', { content });
+}
+
+/**
+ * F3 — bulk-import providers from a SQL dump.
+ *
+ * Returns the full ImportResult including any per-row errors. The
+ * page surfaces the error list in a details panel — they are NOT
+ * silently swallowed.
+ */
+export function importProvidersFromSql(content: string): Promise<ImportResult> {
+  return invoke<ImportResult>('import_providers_from_sql', { content });
+}
+
+// Re-export the McpServer type for the page so callers don't need a
+// second import. Frontend pages should not need to know where the
+// type lives.
+export type { McpServer };
