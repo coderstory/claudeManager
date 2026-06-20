@@ -34,7 +34,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { useViewState } from '../../hooks/useViewState';
 import { listProviders, switchProvider } from '../../lib/api/providers';
 import type { Provider } from '../../types/provider';
 
@@ -52,7 +51,6 @@ type SwitchState =
 export function ProviderListPage(): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [switchState, setSwitchState] = useState<SwitchState>({ kind: 'idle' });
-  const { setView } = useViewState();
 
   const reload = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -103,7 +101,7 @@ export function ProviderListPage(): ReactElement {
         color: 'var(--text-primary)',
       }}
     >
-      <HeaderBar onRefresh={reload} onHome={() => setView('home')} />
+      <HeaderBar onRefresh={reload} />
       <InfoBars switchState={switchState} onDismiss={() => setSwitchState({ kind: 'idle' })} />
       <Body state={state} switchState={switchState} onActivate={handleActivate} />
     </div>
@@ -116,10 +114,9 @@ export function ProviderListPage(): ReactElement {
 
 interface HeaderBarProps {
   onRefresh: () => void;
-  onHome: () => void;
 }
 
-function HeaderBar({ onRefresh, onHome }: HeaderBarProps): ReactElement {
+function HeaderBar({ onRefresh }: HeaderBarProps): ReactElement {
   return (
     <div
       style={{
@@ -129,27 +126,16 @@ function HeaderBar({ onRefresh, onHome }: HeaderBarProps): ReactElement {
         marginBottom: 'var(--space-4)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button
-          type="button"
-          data-testid="provider-list-back"
-          onClick={onHome}
-          style={btnStyle}
-          title="返回主页"
-        >
-          ← 返回
-        </button>
-        <h1
-          style={{
-            fontSize: 'var(--fs-heading)',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            margin: 0,
-          }}
-        >
-          Provider 列表
-        </h1>
-      </div>
+      <h1
+        style={{
+          fontSize: 'var(--fs-heading)',
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          margin: 0,
+        }}
+      >
+        Provider 列表
+      </h1>
       <button
         type="button"
         data-testid="provider-list-refresh"

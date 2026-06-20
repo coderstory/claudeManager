@@ -36,8 +36,10 @@ test.describe('F3 — ImportSqlPage (M2.2)', () => {
     // Reset has no effect in idle state but should still be present.
     await expect(page.locator('[data-testid="import-sql-reset"]')).toBeVisible();
 
-    // Navigate to home, then back.
-    await page.click('[data-testid="import-sql-back"]');
+    // Navigate to home, then back. Use AppHeader's back button (M2.15:
+    // page-header internal back button removed because AppHeader already
+    // exposes a back affordance).
+    await page.click('[data-testid="app-header-back"]');
     await page.click('[data-testid="sidebar-item-home"]');
     await page.click('[data-testid="sidebar-item-import-sql"]');
     await expect(page.locator('[data-testid="import-sql-idle"]')).toBeVisible();

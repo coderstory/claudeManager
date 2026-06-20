@@ -32,7 +32,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
 import { Database, FileWarning, FolderOpen, Upload } from 'lucide-react';
-import { useViewState } from '../../hooks/useViewState';
 import {
   importProvidersFromSql,
   parseSqlPreview,
@@ -69,7 +68,6 @@ type PageState =
 
 export function ImportSqlPage(): ReactElement {
   const [state, setState] = useState<PageState>({ kind: 'idle' });
-  const { setView } = useViewState();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Holds the latest preview payload across the synchronous setState
   // callback so handleConfirm can read it after React's batched update.
@@ -148,7 +146,7 @@ export function ImportSqlPage(): ReactElement {
         color: 'var(--text-primary)',
       }}
     >
-      <HeaderBar onHome={() => setView('home')} onReset={handleReset} />
+      <HeaderBar onReset={handleReset} />
       <input
         ref={fileInputRef}
         type="file"
@@ -195,11 +193,10 @@ export function ImportSqlPage(): ReactElement {
 // ---------------------------------------------------------------------------
 
 interface HeaderBarProps {
-  onHome: () => void;
   onReset: () => void;
 }
 
-function HeaderBar({ onHome, onReset }: HeaderBarProps): ReactElement {
+function HeaderBar({ onReset }: HeaderBarProps): ReactElement {
   return (
     <div
       style={{
@@ -209,27 +206,16 @@ function HeaderBar({ onHome, onReset }: HeaderBarProps): ReactElement {
         marginBottom: 'var(--space-4)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <button
-          type="button"
-          data-testid="import-sql-back"
-          onClick={onHome}
-          style={btnStyle}
-          title="返回主页"
-        >
-          ← 返回
-        </button>
-        <h1
-          style={{
-            fontSize: 'var(--fs-heading)',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            margin: 0,
-          }}
-        >
-          导入 .sql
-        </h1>
-      </div>
+      <h1
+        style={{
+          fontSize: 'var(--fs-heading)',
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          margin: 0,
+        }}
+      >
+        导入 .sql
+      </h1>
       <button
         type="button"
         data-testid="import-sql-reset"
