@@ -12,7 +12,7 @@
  *      three shell commands they can run from the project root:
  *        - bash scripts/build-installer.sh windows
  *        - bash scripts/build-installer.sh macos
- *        - sha256sum -c dist/installers/*.sha256
+ *        - sha256sum -c installers/*.sha256
  *
  * ## M2.8 design principle (per docs/design/M2.8-dataflow.md §2)
  *
@@ -73,16 +73,16 @@ const INSTALLER_COMMANDS: ReadonlyArray<{
   {
     label: 'Windows (NSIS, 单 .exe installer)',
     cmd: 'bash scripts/build-installer.sh windows',
-    hint: '生成 dist/installers/<product>_<version>_x64-setup.exe + .sha256',
+    hint: '生成 installers/<product>_<version>_x64-setup.exe + .sha256',
   },
   {
     label: 'macOS (DMG)',
     cmd: 'bash scripts/build-installer.sh macos',
-    hint: '生成 dist/installers/<product>_<version>_x64.dmg + .sha256（需 macOS 主机）',
+    hint: '生成 installers/<product>_<version>_x64.dmg + .sha256（需 macOS 主机）',
   },
   {
     label: '校验 SHA256',
-    cmd: 'sha256sum -c dist/installers/*.sha256',
+    cmd: 'sha256sum -c installers/*.sha256',
     hint: '从校验和文件验证 installer 完整性',
   },
 ];
@@ -211,7 +211,7 @@ export default function SingleFileDeployPage(): ReactElement {
           <p className="mb-3 text-sm text-text-secondary">
             从项目根目录运行以下命令；产物会写入{' '}
             <code className="rounded bg-bg-overlay px-1 py-0.5 text-xs text-text-primary">
-              dist/installers/
+              installers/
             </code>
             。
           </p>

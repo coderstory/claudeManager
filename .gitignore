@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# F8 (M2.8) production installers — written by scripts/build-installer.sh.
+# Separate from dist/ because tauri build runs `npm run build` which
+# clears dist/ on every dev rebuild.
+installers
 *.local
 
 # Editor directories and files
