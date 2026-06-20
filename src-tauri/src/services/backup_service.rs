@@ -507,10 +507,11 @@ mod tests {
         // (which was live at the time of restore).
         let mut found = false;
         for entry in fs::read_dir(&claude_dir).unwrap() {
-            let name = entry.unwrap().file_name().into_string().unwrap();
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().unwrap();
             if name.contains(".bak.pre-restore.") {
                 found = true;
-                let body = fs::read_to_string(entry.unwrap().path()).unwrap();
+                let body = fs::read_to_string(entry.path()).unwrap();
                 assert!(body.contains("https://new"), "pre-restore body: {body}");
             }
         }
