@@ -8,6 +8,133 @@
   </head>
 
   <body>
+    <!--
+      M2.16 splash — inline loading screen shown between Tauri launch
+      and React's first paint.
+
+      WHY THIS EXISTS
+      ---------------
+      Tauri v2 boot → WebView2 init → fetch + parse + eval the JS
+      bundle → React mount takes ~100-300ms in release mode. During
+      that gap the user sees a blank white webview. We render a
+      porcelain-white splash with a spinner inline in index.html so
+      the very first frame after the webview comes up shows
+      *something* branded, with zero dependency on JS/CSS bundles.
+
+      LIFECYCLE
+      ---------
+      1. WebView2 parses index.html → splash is visible immediately.
+      2. React mounts → App.tsx's top-level useEffect (200ms delay)
+         adds .ccm-splash-hidden (CSS opacity 0, 200ms transition),
+         then 250ms later sets display:none.
+      3. FAILSAFE: if React never mounts (bundle error / eval fail),
+         the inline <script> below hides the splash after 5s so the
+         user is never stuck staring at a loading screen.
+
+      CONSTRAINTS
+      -----------
+      - All CSS is inline; we cannot rely on tokens.css being
+        loaded (it ships inside the JS bundle, which is the whole
+        reason there's a flash to hide).
+      - pointer-events: none so the splash never eats a click that
+        was meant for the React tree beneath.
+      - z-index: 99999 puts it above AppHeader / modals.
+      - alpha 0.92 (near-opaque porcelain) hides the white webview
+        without fully occluding the Mica backdrop.
+    -->
+    <div id="ccm-splash" aria-hidden="true">
+      <div class="ccm-splash-card">
+        <svg
+          class="ccm-splash-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <!-- lucide "Sparkles" path (M2 home tile already uses the same icon) -->
+          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+          <path d="M20 3v4" />
+          <path d="M22 5h-4" />
+          <path d="M4 17v2" />
+          <path d="M5 18H3" />
+        </svg>
+        <div class="ccm-splash-spinner"></div>
+        <div class="ccm-splash-text">Claude 配置管理器加载中…</div>
+      </div>
+    </div>
+    <style>
+      #ccm-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(250, 250, 247, 0.92); /* porcelain base, near-opaque to hide white webview */
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        z-index: 99999;
+        transition: opacity 200ms ease-out;
+        pointer-events: none;
+      }
+      #ccm-splash.ccm-splash-hidden {
+        opacity: 0;
+      }
+      .ccm-splash-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      .ccm-splash-icon {
+        width: 64px;
+        height: 64px;
+        color: #0969DA; /* --accent, inlined (tokens.css not yet loaded) */
+      }
+      .ccm-splash-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(9, 105, 218, 0.15);
+        border-top-color: #0969DA;
+        border-radius: 50%;
+        animation: ccm-splash-spin 0.8s linear infinite;
+      }
+      .ccm-splash-text {
+        font-size: 14px;
+        color: #656D76; /* --text-secondary */
+        font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      }
+      @keyframes ccm-splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ccm-splash-spinner {
+          animation-duration: 3s;
+        }
+      }
+    </style>
+    <script>
+      // FAILSAFE — if React never mounts (JS eval error, bundle 404,
+      // etc.) we cannot leave the user staring at a loading screen
+      // forever. After 5s, hide the splash unconditionally. The
+      // normal path (React mounts + App.tsx useEffect) hides it
+      // ~250ms after mount, so this only fires in the broken case.
+      (function () {
+        setTimeout(function () {
+          var s = document.getElementById("ccm-splash");
+          if (s && !s.classList.contains("ccm-splash-hidden")) {
+            s.classList.add("ccm-splash-hidden");
+            setTimeout(function () {
+              s.style.display = "none";
+            }, 250);
+          }
+        }, 5000);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

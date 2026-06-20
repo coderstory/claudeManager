@@ -43,7 +43,7 @@
  *   wrapper from git history.
  */
 import type { ReactElement } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -145,6 +145,32 @@ export default function App(): ReactElement {
   // Esc closes. Kept in App.tsx (rather than in a store) because
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+
+  // M2.16 splash — fade out the inline loading screen defined in
+  // index.html once React has mounted. The splash exists to hide
+  // the ~100-300ms white-frame gap between Tauri launch and React's
+  // first paint; by the time this useEffect runs, React has already
+  // painted, so it is safe to hand the viewport over.
+  //
+  //   - 200ms delay: gives the first real frame a tick to settle so
+  //     we don't flash a partially-styled App behind the fade.
+  //   - .ccm-splash-hidden triggers the 200ms opacity transition
+  //     declared inline in index.html.
+  //   - 250ms later we drop display:none so the splash stops
+  //     participating in layout entirely.
+  //   - index.html has its own 5s failsafe in case React never
+  //     mounts; this effect is the happy path.
+  useEffect(() => {
+    const splash = document.getElementById('ccm-splash');
+    if (!splash) return;
+    const hideTimer = window.setTimeout(() => {
+      splash.classList.add('ccm-splash-hidden');
+      window.setTimeout(() => {
+        splash.style.display = 'none';
+      }, 250);
+    }, 200);
+    return () => window.clearTimeout(hideTimer);
+  }, []);
 
   // useMemo keeps the pageTitle reference stable across renders so
   // AppHeader / HomeView don't trigger downstream re-renders on every
