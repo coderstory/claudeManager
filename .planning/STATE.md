@@ -447,3 +447,46 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - import 只填表,不直接保存(需用户二次确认)
 - 无 search/filter (M2.6+)
 - 单实例 + 文件关联未做 (F20)
+
+## M2.7 F7 用量查询 — 已 ship (2026-06-20)
+
+**Commits (7)**: `131ffac` (cleanup) / `ce5a3c5` (model) / `4e630a3` (M2.6-fix) / `18cccf1` (service) / `1fc8d44` (commands) / `3ad5922` (page) / `c7a616f` (M2.6.1 routing-fix) / `faaefd8` (e2e)
+**Files created/modified**:
+- `docs/design/M2.7-dataflow.md` (F7 dataflow + 设计原则 + on-disk shape)
+- `src-tauri/src/domain/usage.rs` (UsageSnapshot + UsageWindow + 6 tests)
+- `src-tauri/src/services/usage_service.rs` (5min in-memory cache, `with_ttl` 测试钩子, 7 tests)
+- `src-tauri/src/commands/usage.rs` (`get_current_usage` + `refresh_usage` + provider fingerprint)
+- `src-tauri/src/app_state.rs` (+ `usage_service: Arc<UsageService>`)
+- `src-tauri/src/lib.rs` (注册 2 个新 command)
+- `src-tauri/src/services/backup_service.rs` (M2.6 修复:`entry.unwrap()` 在循环里 move → 修前只 unwrap 一次)
+- `src/types/usage.ts` (F7 UsageSnapshot TS mirror)
+- `src/lib/api/usage.ts` (IPC wrappers)
+- `src/pages/usage-query/index.tsx` (真实实现, 替换 PluginPlaceholder)
+- `src/App.tsx` (路由 view === 'usage-query' → UsageQueryPage; 同时修复 view === 'backup-restore' → BackupRestorePage 即 M2.6.1 routing-fix)
+- `src/__tests__/pages/usage-query.test.tsx` (10 vitest)
+- `tests/e2e/m2-7-usage.spec.ts` (playwright e2e, 5 cases)
+- `tests/e2e/m2-2-6-real-invoke.spec.ts` (M2.2.6 diagnostic spec,回归保留)
+
+**Ship exe**: `~/Desktop/ClaudeConfigManager-M2/ClaudeConfigManager-M2.2.7-f7-usage-query.exe` (30.9 MB, 6月 20 13:58)
+**Smoke 7/7**: ✅ (process / window / WebView2 / title / dist / tray / kill)
+**Vitest 156/156**: ✅ (146 existing + 10 new usage-query)
+**Rust 单元测试**: 6 (domain::usage) + 7 (services::usage_service) = 13 new cases;本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5),CI MSYS2 跑通
+
+**关键设计决策**:
+- **Stub 模式 (M2.7)**: 只读 `~/.claude/usage.json` 本地 Claude Code 写的快照;外部 API (Anthropic / OpenAI / DeepSeek) 留 M2.8+
+- **Provider fingerprint**: 用 `hash(ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN)` 作为 cache key —— 不是真正的 provider.id(不影响功能,UI 标签显示 `active-<hex>`)
+- **5min cache**: `Mutex<HashMap<String, CacheEntry>>`,key = `(fingerprint, window)`;`refresh_usage` 强制清除重读;`with_ttl` 测试钩子(1 秒 TTL 验证过期分支)
+- **容错优于报错**: usage.json 不存在 / `providers.<id>` 缺失 / `<id>.<window>` 缺失 → 返回 `UsageSnapshot::empty`,**不**抛 IPC error(UI 显示"暂无数据")
+- **窗口串行切换**: 不清 cache,不同 window 有独立 cache entry,自然 miss-on-first-query
+- **Sparkline 占位**: M2.7 单点 sparkline(横线 + 当前值文字);历史 24 次趋势留 M2.8+
+- **同步发现并修复 M2.6 bug**: `backup_service.rs` 的 `restore_backup_atomic_write_creates_secondary_backup` 测试有 `entry.unwrap()` 重复 move 编译错(M2.6 ship 时漏过,本机 DLL load 阻止跑测试未发现)—— 本次修
+- **同步发现并修复 M2.6.1 routing-fix**: `backup-restore` view 在 App.tsx 里没接路由,导致 M2.6 diagnostic subagent 加的 2 个 App.test 失败 —— 本次补 import + 三元分支
+- **不变字段顺序**: F1+F2+F3+F4+F5+F6 路由顺序保持;`usage-query` 插在 `mcp-management` 之后,`backup-restore` 紧随其后
+
+**已知限制** (M2.8+ 跟进):
+- 只读本地 stub —— 不发外部 HTTP 请求
+- provider_id 是 fingerprint 不是真正的 provider.id(UI 标签显示 `active-<hex>`)
+- 无历史趋势 —— "最近 24 次" 留 M2.8+(需要持久化 history)
+- 无 sparkline 数据源 —— 占位横线
+- 无 balance 预警 (< $5 通知留 M2.8+)
+- Mac impls 仍是 stub (M2.x 全局限制)
