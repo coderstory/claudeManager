@@ -54,7 +54,7 @@ export function PluginPlaceholder({
         alignItems: 'center',
         justifyContent: 'center',
         height: '100%',
-        padding: 32,
+        padding: 'var(--space-6)',
         textAlign: 'center',
         // M1.9.2 liquid glass: the placeholder card uses the
         // stronger glass tier so it reads as a distinct surface
