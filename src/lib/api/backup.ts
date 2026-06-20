@@ -34,7 +34,15 @@ export function restoreBackup(backupPath: string): Promise<void> {
   return invoke<void>('restore_backup', { backupPath });
 }
 
-/** F13 — manually trigger a new backup of the current live file. */
-export function backupNow(target: string): Promise<ManualBackupResult> {
-  return invoke<ManualBackupResult>('backup_now', { target });
+/**
+ * F13 — manually trigger a new backup of the current live file.
+ *
+ * `target` 可选：省略时后端用 `AppPaths.settings_json`（由
+ * `IPlatformPaths` 按 OS 解析）作为默认备份对象。前端 webview
+ * 里 `process` 未定义，不能在前端猜 OS 路径（CLAUDE.md §3.2）。
+ */
+export function backupNow(target?: string): Promise<ManualBackupResult> {
+  // 省略 target 时不传该字段，让后端走默认值。
+  const args = target === undefined ? {} : { target };
+  return invoke<ManualBackupResult>('backup_now', args);
 }

@@ -214,15 +214,11 @@ export default function BackupRestorePage(): ReactElement {
   // ---- manual backup ----
 
   const handleBackupNow = useCallback(async (): Promise<void> => {
-    // Default to settings.json — the most common F13 trigger.
-    // We pass a Windows-style path guess; the backend will
-    // canonicalize and validate.
-    const guess =
-      process.platform === 'win32'
-        ? `${process.env.USERPROFILE ?? 'C:\\Users\\default'}\\.claude\\settings.json`
-        : `${process.env.HOME ?? '/tmp'}/.claude/settings.json`;
+    // 默认备份 settings.json —— 由后端 AppPaths.settings_json 解析
+    // （IPlatformPaths 按 OS 给路径）。前端 webview 里 `process` 未定义，
+    // 不能在这里判断 OS 拼路径（CLAUDE.md §3.2 + 反 ReferenceError）。
     try {
-      const result: ManualBackupResult = await backupNow(guess);
+      const result: ManualBackupResult = await backupNow();
       setState((prev) => ({
         ...prev,
         message: { kind: 'success', text: `已备份到 ${result.path}` },

@@ -62,14 +62,26 @@ pub async fn restore_backup(
 }
 
 /// F13 — manually trigger a new backup of the current live file.
+///
+/// `target` 为可选参数：
+/// - `Some(path)` → 备份指定文件（路径须落在 Claude 目录允许范围内）。
+/// - `None` → 备份后端通过 `IPlatformPaths` 解析出的默认 `settings.json`。
+///
+/// 前端 webview 里 `process` 未定义，不能在前端猜 OS 路径
+/// （CLAUDE.md §3.2：所有 OS 差异必须由后端 platform 层处理）。
 #[tauri::command]
 pub async fn backup_now(
     state: State<'_, AppState>,
-    target: String,
+    target: Option<String>,
 ) -> CmdResult<ManualBackupResult> {
+    // 默认备份目标由后端 AppPaths 提供——前端不在 webview 里判断 OS。
+    let target_path = match target {
+        Some(t) => std::path::PathBuf::from(t),
+        None => state.paths.settings_json.clone(),
+    };
     let entry = state
         .backup_service
-        .backup_now(std::path::Path::new(&target))
+        .backup_now(&target_path)
         .map_err(|e| e.to_string())?;
     Ok(ManualBackupResult {
         path: entry.path,
