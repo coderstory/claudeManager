@@ -10,4 +10,5 @@ pub mod deeplink_parser;
 pub mod fs_atomic;
 pub mod json_diff;
 pub mod optimizer_rules;
+pub mod resource_scanner;
 pub mod sql_parser;

@@ -11,4 +11,5 @@ pub mod backup_service;
 pub mod mcp_service;
 pub mod optimizer_service;
 pub mod provider_service;
+pub mod resource_service;
 pub mod usage_service;
