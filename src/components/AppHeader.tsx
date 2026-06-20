@@ -23,7 +23,7 @@
 import type { ReactElement } from 'react';
 import { ArrowLeft, Moon, Monitor, Settings, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useTheme, type Theme } from '../design-system/ThemeProvider';
+import { useTheme } from '../design-system/ThemeProvider';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
 import { WindowControls } from './WindowControls';
@@ -63,7 +63,11 @@ export function AppHeader({
   onNavigate,
   pageTitle,
 }: AppHeaderProps): ReactElement {
-  const { theme, setTheme } = useTheme();
+  // M2.10 F12 polish — use cycleTheme() from the provider instead
+  // of recomputing the light→dark→auto ternary inline (which used
+  // to live here). Centralising it means future controls (settings
+  // page dropdown, etc.) share one definition of the order.
+  const { theme, cycleTheme } = useTheme();
   const isHome = currentView === HOME_VIEW;
 
   return (
@@ -142,15 +146,12 @@ export function AppHeader({
         <button
           type="button"
           onClick={() => {
-            // M1.11 fix (BP-3.01): cycle light → dark → auto → light
-            // so the 'auto' mode survives a click. The previous
-            // binary toggle silently destroyed 'auto' on the first
-            // click, defeating ThemeProvider's 3-state contract.
-            const next: Theme =
-              theme === 'light' ? 'dark' :
-              theme === 'dark' ? 'auto' :
-              'light';
-            setTheme(next);
+            // M2.10 F12 polish — delegate to ThemeProvider's
+            // cycleTheme so the order lives in one place. The
+            // aria-label + title still surface the current state
+            // so screen-reader users hear "切换到 X" instead of
+            // an opaque "toggle theme".
+            cycleTheme();
           }}
           data-testid="app-header-theme-toggle"
           aria-label={
