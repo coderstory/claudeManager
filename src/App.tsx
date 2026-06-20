@@ -43,10 +43,11 @@
  *   wrapper from git history.
  */
 import type { ReactElement } from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
+import { QuickSearchModal } from './components/QuickSearchModal';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ProviderSwitchPage } from './pages/provider-switch';
@@ -58,7 +59,8 @@ import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
 import SingleFileDeployPage from './pages/single-file-deploy';
 import BackupRestorePage from './pages/backup-restore';
-import { useViewState, type ViewId } from './hooks/useViewState';
+import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 /**
  * pageTitle + pageDescription — the single source of truth for
@@ -138,6 +140,10 @@ function pageDescription(view: ViewId): string {
 
 export default function App(): ReactElement {
   const { view, setView } = useViewState();
+  // M2.10 F11 — quick-search modal visibility state. Ctrl+/ opens,
+  // Esc closes. Kept in App.tsx (rather than in a store) because
+  // it's a single global overlay with no other consumers yet.
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
 
   // useMemo keeps the pageTitle reference stable across renders so
   // AppHeader / HomeView don't trigger downstream re-renders on every
@@ -150,6 +156,53 @@ export default function App(): ReactElement {
     },
     [setView],
   );
+
+  // M2.10 F11 — global in-app keyboard shortcuts.
+  //
+  //   Ctrl+/          → open QuickSearchModal
+  //   Ctrl+1..Ctrl+9  → jump to the sidebar tile at index 1..9.
+  //                     Index 0 is 'home' (intentionally skipped —
+  //                     Ctrl+0 would be the natural "go home" key
+  //                     but we're out of single-key slots). The
+  //                     home view is reachable via the Esc binding
+  //                     below + the existing back button in AppHeader.
+  //   Esc             → close the modal if open; otherwise go home.
+  //
+  // The hook skips keydowns that originate inside text inputs /
+  // textareas / contentEditable elements, so typing in the search
+  // input won't accidentally re-trigger Ctrl+/.
+  useKeyboardShortcuts([
+    {
+      key: '/',
+      ctrlOrMeta: true,
+      preventDefault: true,
+      handler: () => setQuickSearchOpen(true),
+    },
+    ...(['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const).map(
+      (n, i) => ({
+        key: n,
+        ctrlOrMeta: true,
+        preventDefault: true,
+        handler: () => {
+          // ALL_VIEWS[0] is 'home' (skipped above by starting the
+          // map at index 1). The remaining 12 entries map to the
+          // 12 sidebar plugin tiles in declaration order.
+          const target = ALL_VIEWS[i + 1];
+          if (target) setView(target);
+        },
+      }),
+    ),
+    {
+      key: 'Escape',
+      handler: () => {
+        if (quickSearchOpen) {
+          setQuickSearchOpen(false);
+          return;
+        }
+        if (view !== 'home') setView('home');
+      },
+    },
+  ]);
 
   return (
     <div
@@ -272,6 +325,14 @@ export default function App(): ReactElement {
           </div>
         </main>
       </div>
+      {/* M2.10 F11 — quick-search overlay. Rendered outside the
+          flex container so it can use position:fixed without
+          competing with the sidebar / main inset chain. */}
+      <QuickSearchModal
+        isOpen={quickSearchOpen}
+        onClose={() => setQuickSearchOpen(false)}
+        onNavigate={handleNavigate}
+      />
     </div>
   );
 }
