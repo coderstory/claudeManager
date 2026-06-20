@@ -12,12 +12,19 @@
  * Design tokens (CLAUDE.md §4.2 + §4.4):
  *   - Background, text colour, radius all come from CSS variables
  *     defined in src/design-system/tokens.css.
- *   - The `cn` util from src/lib/utils collapses any Tailwind
- *     conflicts so callers can override padding etc. cleanly.
+ *
+ * M2.x-inline: previously used `cn(...)` to compose Tailwind utility
+ * classes (`flex flex-col items-center justify-center h-full p-8
+ * text-center`). The project has no Tailwind pipeline (no
+ * tailwind.config.js / no PostCSS plugin), so those classes were
+ * silently noop'd by the real Tauri WebView2 release exe. All
+ * structural rules are now inlined as `style={{}}` properties and
+ * the `cn()` import is gone. Callers that need to override the
+ * layout can still pass a `style` prop instead of a `className`
+ * (see PluginPlaceholderProps below).
  */
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { Construction } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 export interface PluginPlaceholderProps {
   /** The kebab-case plugin id, e.g. "mcp-management". */
@@ -26,8 +33,8 @@ export interface PluginPlaceholderProps {
   title: string;
   /** Optional one-liner describing what the page will do in M2+. */
   description?: string;
-  /** Optional className merged via `cn` for layout overrides. */
-  className?: string;
+  /** Optional inline style override for callers that need a tweak. */
+  style?: CSSProperties;
 }
 
 const DEFAULT_DESCRIPTION = '该功能将在 M2+ 阶段开发。';
@@ -36,16 +43,19 @@ export function PluginPlaceholder({
   pluginId,
   title,
   description = DEFAULT_DESCRIPTION,
-  className,
+  style,
 }: PluginPlaceholderProps): ReactElement {
   return (
     <div
-      className={cn(
-        'flex flex-col items-center justify-center h-full p-8 text-center',
-        className,
-      )}
       data-plugin-id={pluginId}
       style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: 32,
+        textAlign: 'center',
         // M1.9.2 liquid glass: the placeholder card uses the
         // stronger glass tier so it reads as a distinct surface
         // against the (now also-glass) header + sidebar rail.
@@ -58,34 +68,34 @@ export function PluginPlaceholder({
         boxShadow: 'var(--glass-shadow)',
         borderRadius: 'var(--radius-card)',
         margin: '24px',
+        ...style,
       }}
     >
       <Construction
         size={48}
         aria-hidden="true"
-        className="mb-4"
-        style={{ color: 'var(--text-muted)' }}
+        style={{ color: 'var(--text-muted)', marginBottom: 16 }}
       />
       <h1
-        className="font-semibold mb-2"
         style={{
           color: 'var(--text-primary)',
           fontSize: 'var(--fs-heading)',
+          fontWeight: 600,
+          marginBottom: 8,
         }}
       >
         {title}
       </h1>
       <p
-        className="mb-1"
         style={{
           color: 'var(--text-secondary)',
           fontSize: 'var(--fs-body)',
+          marginBottom: 4,
         }}
       >
         {description}
       </p>
       <code
-        className="font-mono mt-2"
         style={{
           color: 'var(--text-muted)',
           fontSize: 'var(--fs-caption)',
@@ -93,6 +103,8 @@ export function PluginPlaceholder({
           padding: '2px 8px',
           borderRadius: 'var(--radius-button)',
           border: '1px solid var(--border)',
+          fontFamily: 'var(--font-mono)',
+          marginTop: 8,
         }}
       >
         plugin: {pluginId}
