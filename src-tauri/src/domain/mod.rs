@@ -13,9 +13,11 @@
 
 pub mod mcp_server;
 pub mod provider;
+pub mod usage;
 
 pub use mcp_server::{McpError, McpServer, McpTransport};
 pub use provider::{is_valid_id, Provider, ProviderError};
+pub use usage::{UsageSnapshot, UsageWindow};
 
 // F3 SQL-import shape: `infrastructure::sql_parser::ParsedMcpServer`.
 // Re-exported here so the rest of the crate can `use crate::domain::ParsedMcpServer;`
