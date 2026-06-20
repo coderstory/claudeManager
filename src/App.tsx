@@ -168,6 +168,18 @@ export default function App(): ReactElement {
   //                     below + the existing back button in AppHeader.
   //   Esc             → close the modal if open; otherwise go home.
   //
+  // M2.11 F9 — Ctrl+N / Ctrl+P / Ctrl+↓ / Ctrl+↑ / ↓ / ↑ are NOT
+  //   registered here on purpose. They are handled inside
+  //   QuickSearchModal's own window keydown listener, which only
+  //   activates when focus is inside the modal's search input
+  //   (the modal manages focus on open). Putting them here would
+  //   mean they ALSO fire when the user is typing in, say, the
+  //   provider-list search box — `useKeyboardShortcuts` exempts
+  //   text-entry targets, but only for the App-level listener.
+  //   A modal-scoped listener is the right scope for palette
+  //   navigation, and the QuickSearchModal tests (26 cases)
+  //   cover Ctrl+N / Ctrl+P / ArrowUp / ArrowDown / Enter / Esc.
+  //
   // The hook skips keydowns that originate inside text inputs /
   // textareas / contentEditable elements, so typing in the search
   // input won't accidentally re-trigger Ctrl+/.
