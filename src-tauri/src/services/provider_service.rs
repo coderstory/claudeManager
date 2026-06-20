@@ -170,6 +170,47 @@ impl ProviderService {
     }
 
     // -----------------------------------------------------------------------
+    // F4 — import_single_provider (M2.3)
+    // -----------------------------------------------------------------------
+
+    /// Persist a single provider JSON file (F4, M2.3 deeplink import).
+    ///
+    /// # Algorithm
+    ///
+    /// 1. If `<providers_dir>/<id>.json` already exists, return
+    ///    [`ProviderError::AlreadyExists`] (M2.3 ships a "deny"
+    ///    policy; v1.1 will offer an overwrite path).
+    /// 2. Atomic-write the provider JSON via
+    ///    [`fs_atomic::write_with_backup`] (CLAUDE.md §7: "任何写盘
+    ///    操作必须先备份"). The first write to a non-existent file
+    ///    produces no backup (matching
+    ///    `fs_atomic::write_with_backup_succeeds_when_file_does_not_exist`).
+    ///
+    /// # Why this is separate from `import_providers_from_sql`
+    ///
+    /// The F3 SQL-import path (M2.2) parses a *batch* of rows and
+    /// silently skips duplicates. The F4 deeplink path is a *user-
+    /// initiated single* import — silently skipping a duplicate
+    /// would hide a UX problem ("I clicked import, why didn't
+    /// anything happen?"). Returning a hard error lets the frontend
+    /// show "provider X already exists, please rename".
+    ///
+    /// # Errors
+    ///
+    /// - [`ProviderError::AlreadyExists`] — file already present
+    /// - [`ProviderError::Json`] — `serde_json` failed
+    /// - [`ProviderError::Io`] — disk-level error (mkdir, write, rename)
+    pub fn import_single_provider(&self, provider: Provider) -> Result<(), ProviderError> {
+        let target = self.provider_path(&provider.id);
+        if target.exists() {
+            return Err(ProviderError::AlreadyExists(provider.id.clone()));
+        }
+        let json = serde_json::to_string_pretty(&provider)?;
+        fs_atomic::write_with_backup(&target, &json).map_err(map_fs_atomic_to_provider)?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
     // F3 — import_providers_from_sql (M2.2)
     // -----------------------------------------------------------------------
 
@@ -883,5 +924,80 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         assert_eq!(second.imported, 0, "second import writes nothing");
         assert_eq!(second.skipped, 2, "second import sees both as duplicates");
         assert!(second.errors.is_empty());
+    }
+
+    // ----- import_single_provider (F4, M2.3) -----
+
+    #[test]
+    fn import_single_new_writes_file() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let p = sample_provider("new-via-deeplink", "Deeplink", "https://dl.example");
+        svc.import_single_provider(p.clone()).unwrap();
+
+        let path = p_dir.join("new-via-deeplink.json");
+        assert!(path.exists(), "provider file should exist on disk");
+        let reloaded = Provider::from_json_file(&path).unwrap();
+        assert_eq!(reloaded.id, "new-via-deeplink");
+        assert_eq!(reloaded.api_base, "https://dl.example");
+        assert_eq!(reloaded.api_key, "key-for-new-via-deeplink");
+    }
+
+    #[test]
+    fn import_single_existing_errors() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // Pre-existing provider with the same id.
+        write_provider(
+            &p_dir,
+            &sample_provider("dup", "ORIGINAL", "https://orig.example"),
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let p = sample_provider("dup", "OVERWRITE_ATTEMPT", "https://other.example");
+        let err = svc.import_single_provider(p).unwrap_err();
+        assert!(matches!(err, ProviderError::AlreadyExists(id) if id == "dup"));
+
+        // Original file content untouched
+        let raw = fs::read_to_string(p_dir.join("dup.json")).unwrap();
+        assert!(raw.contains("ORIGINAL"), "existing file must not be overwritten");
+        assert!(!raw.contains("OVERWRITE_ATTEMPT"));
+    }
+
+    #[test]
+    fn import_single_creates_providers_dir_if_missing() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        // No `providers` subdir created yet.
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let p = sample_provider("late-deeplink", "Late", "https://late.example");
+        svc.import_single_provider(p).unwrap();
+
+        let p_dir = tmp.path().join("providers");
+        assert!(p_dir.join("late-deeplink.json").exists());
+    }
+
+    #[test]
+    fn import_single_does_not_create_settings_backup() {
+        // The first write to a non-existent file should NOT take a
+        // backup (there's nothing to back up). Settings.json is
+        // untouched for F4 import (deferred to F2 switch).
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let p = sample_provider("only", "Only", "https://x.example");
+        svc.import_single_provider(p).unwrap();
+
+        for entry in fs::read_dir(tmp.path()).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            assert!(!name.contains(".bak."), "unexpected backup: {name}");
+        }
+        assert!(!settings.exists(), "settings.json should be untouched by F4");
     }
 }

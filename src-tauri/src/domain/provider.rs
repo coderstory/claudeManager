@@ -73,6 +73,12 @@ pub enum ProviderError {
     /// The id fails SPEC §2.1 validation (`[a-z0-9-_]`).
     #[error("invalid provider id '{0}': must match [a-z0-9-_]+")]
     InvalidId(String),
+
+    /// `import_single_provider` refused because a file with the
+    /// requested id already exists. M2.3 ships a "deny" policy;
+    /// M2.5+ will offer an overwrite path.
+    #[error("provider '{0}' already exists")]
+    AlreadyExists(String),
 }
 
 impl Provider {
