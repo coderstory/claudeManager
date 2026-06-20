@@ -163,12 +163,13 @@ export default function UsageQueryPage(): ReactElement {
       }}
       data-testid="usage-query-page"
     >
-      <header style={{ marginBottom: 16 }}>
+      <header style={{ marginBottom: 'var(--space-4)' }}>
         <h1
           style={{
             color: 'var(--text-primary)',
-            fontSize: 24,
+            fontSize: 'var(--fs-heading)',
             fontWeight: 600,
+            margin: 0,
           }}
         >
           用量查询
