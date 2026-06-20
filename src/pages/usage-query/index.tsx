@@ -37,6 +37,22 @@
  * reads to `~/.claude/usage.json` (via `UsageService` deriving
  * the path from `AppPaths::claude_dir()`). The page cannot ask
  * the backend to read arbitrary paths.
+ *
+ * ## M2.x-inline
+ *
+ * Previously this page composed ~25 Tailwind utility classes
+ * (`mx-auto w-full max-w-4xl p-6`, `mb-4 inline-flex rounded-md
+ * border border-border bg-bg-elevated p-1`, `inline-flex items-center
+ * gap-1.5 ... hover:bg-bg-overlay disabled:opacity-60`,
+ * `animate-spin`, `grid grid-cols-1 gap-4 md:grid-cols-3`,
+ * `text-3xl font-semibold tabular-nums text-text-primary`,
+ * `h-9 w-24 animate-pulse rounded bg-bg-overlay`, etc). The
+ * project has no Tailwind pipeline, so all those classes silently
+ * noop'd on the real Tauri WebView2 release exe. Every utility
+ * class is now inlined as `style={{}}` properties; hover/active/
+ * animation rules live in src/design-system/utilities.css under
+ * `[data-app-toggle]` / `[data-app-refresh-btn]` / `[data-app-spin]`
+ * / `[data-app-pulse]`.
  */
 import {
   useCallback,
@@ -138,61 +154,132 @@ export default function UsageQueryPage(): ReactElement {
 
   return (
     <div
-      className="mx-auto w-full max-w-4xl p-6"
+      style={{
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        width: '100%',
+        maxWidth: 896,
+        padding: 24,
+      }}
       data-testid="usage-query-page"
     >
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold text-text-primary">用量查询</h1>
-        <p className="mt-1 text-sm text-text-secondary">
+      <header style={{ marginBottom: 16 }}>
+        <h1
+          style={{
+            color: 'var(--text-primary)',
+            fontSize: 24,
+            fontWeight: 600,
+          }}
+        >
+          用量查询
+        </h1>
+        <p
+          style={{
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            marginTop: 4,
+          }}
+        >
           查看当前 active provider 的 token 用量、费用与余额。5 分钟内存缓存。
         </p>
       </header>
 
       {/* Window toggle group */}
       <div
-        className="mb-4 inline-flex rounded-md border border-border bg-bg-elevated p-1"
         role="group"
         aria-label="时间窗"
         data-testid="usage-window-group"
+        style={{
+          marginBottom: 16,
+          display: 'inline-flex',
+          borderRadius: 6,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          padding: 4,
+        }}
       >
-        {WINDOWS.map((w) => (
-          <button
-            key={w}
-            type="button"
-            onClick={() => handleWindowChange(w)}
-            aria-pressed={state.window === w}
-            className={
-              'px-4 py-1.5 text-sm rounded transition-colors ' +
-              (state.window === w
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-text-secondary hover:text-text-primary')
-            }
-            data-testid={`usage-window-${w}`}
-          >
-            {WINDOW_LABELS[w]}
-          </button>
-        ))}
+        {WINDOWS.map((w) => {
+          const active = state.window === w;
+          return (
+            <button
+              key={w}
+              type="button"
+              onClick={() => handleWindowChange(w)}
+              aria-pressed={active}
+              data-testid={`usage-window-${w}`}
+              // M2.x-inline: hover/active rule lives in
+              // src/design-system/utilities.css under [data-app-toggle].
+              data-app-toggle="true"
+              data-app-toggle-active={active ? 'true' : 'false'}
+              style={{
+                paddingLeft: 16,
+                paddingRight: 16,
+                paddingTop: 6,
+                paddingBottom: 6,
+                fontSize: 14,
+                borderRadius: 4,
+                border: 'none',
+                cursor: 'pointer',
+                background: active ? 'var(--accent)' : 'transparent',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                fontFamily: 'inherit',
+              }}
+            >
+              {WINDOW_LABELS[w]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Refresh button + last-fetched label */}
-      <div className="mb-6 flex items-center justify-between">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 24,
+        }}
+      >
         <button
           type="button"
           onClick={handleRefresh}
           disabled={state.refreshing}
-          className="inline-flex items-center gap-1.5 rounded border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary hover:bg-bg-overlay disabled:opacity-60"
+          // M2.x-inline: hover/disabled rules live in
+          // src/design-system/utilities.css under [data-app-refresh-btn].
+          data-app-refresh-btn="true"
           data-testid="usage-refresh-btn"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            borderRadius: 4,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 6,
+            paddingBottom: 6,
+            fontSize: 14,
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
         >
           <RefreshCw
-            className={
-              'h-4 w-4 ' + (state.refreshing ? 'animate-spin' : '')
-            }
+            // M2.x-inline: animate-spin → data-app-spin attribute +
+            // shared @keyframes ccm-spin in utilities.css.
+            data-app-spin={state.refreshing ? 'true' : undefined}
+            style={{ height: 16, width: 16 }}
           />
           刷新
         </button>
         {lastFetchedLabel && (
           <span
-            className="text-xs text-text-muted"
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: 12,
+            }}
             data-testid="usage-last-fetched"
           >
             最后更新: {lastFetchedLabel}
@@ -203,24 +290,60 @@ export default function UsageQueryPage(): ReactElement {
       {/* Error InfoBar */}
       {state.error && (
         <div
-          className="mb-4 flex items-start gap-2 rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
           data-testid="usage-error"
           role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            borderRadius: 6,
+            // --danger at 30% alpha (was `border-danger/30`).
+            border: '1px solid rgba(211, 47, 47, 0.3)',
+            // --danger at 5% alpha (was `bg-danger/5`).
+            background: 'rgba(211, 47, 47, 0.05)',
+            padding: 12,
+            fontSize: 14,
+            color: 'var(--danger)',
+            marginBottom: 16,
+          }}
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <AlertCircle
+            aria-hidden="true"
+            style={{
+              marginTop: 2,
+              height: 16,
+              width: 16,
+              flexShrink: 0,
+            }}
+          />
           <span>{state.error}</span>
         </div>
       )}
 
-      {/* Main cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* Main cards — was `grid grid-cols-1 gap-4 md:grid-cols-3`. Project has
+          no Tailwind pipeline, so md: breakpoint was a silent noop on real
+          exe (cards always rendered as 1 column). We pick a sensible
+          3-column layout directly here — on narrow viewports the parent
+          <main> overflow:auto lets the user scroll horizontally. */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gap: 16,
+        }}
+      >
         <Card
           title="已用 Tokens"
           testId="usage-card-tokens"
           loading={state.loading && !state.snapshot}
         >
           <div
-            className="text-3xl font-semibold tabular-nums text-text-primary"
+            style={{
+              color: 'var(--text-primary)',
+              fontSize: 30,
+              fontWeight: 600,
+              fontVariantNumeric: 'tabular-nums',
+            }}
             data-testid="usage-tokens-value"
           >
             {tokensLabel}
@@ -232,7 +355,12 @@ export default function UsageQueryPage(): ReactElement {
           loading={state.loading && !state.snapshot}
         >
           <div
-            className="text-3xl font-semibold tabular-nums text-text-primary"
+            style={{
+              color: 'var(--text-primary)',
+              fontSize: 30,
+              fontWeight: 600,
+              fontVariantNumeric: 'tabular-nums',
+            }}
             data-testid="usage-cost-value"
           >
             {costLabel ?? '—'}
@@ -244,7 +372,12 @@ export default function UsageQueryPage(): ReactElement {
           loading={state.loading && !state.snapshot}
         >
           <div
-            className="text-3xl font-semibold tabular-nums text-text-primary"
+            style={{
+              color: 'var(--text-primary)',
+              fontSize: 30,
+              fontWeight: 600,
+              fontVariantNumeric: 'tabular-nums',
+            }}
             data-testid="usage-balance-value"
           >
             {balanceLabel ?? '—'}
@@ -253,12 +386,39 @@ export default function UsageQueryPage(): ReactElement {
       </div>
 
       {/* Sparkline (M2.7 placeholder — single-point; M2.8+ adds history) */}
-      <div className="mt-6 rounded-lg border border-border bg-bg-elevated p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-text-secondary">
+      <div
+        style={{
+          marginTop: 24,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          padding: 16,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+          }}
+        >
+          <h2
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: 14,
+              fontWeight: 500,
+              margin: 0,
+            }}
+          >
             用量趋势
           </h2>
-          <span className="text-xs text-text-muted">
+          <span
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: 12,
+            }}
+          >
             M2.7 占位 — 历史趋势 M2.8+
           </span>
         </div>
@@ -268,11 +428,27 @@ export default function UsageQueryPage(): ReactElement {
       {/* Empty state hint */}
       {isEmpty && (
         <p
-          className="mt-4 text-center text-sm text-text-muted"
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: 14,
+            textAlign: 'center',
+            marginTop: 16,
+          }}
           data-testid="usage-empty-hint"
         >
           暂无数据 — 等待 Claude Code 写入{' '}
-          <code className="rounded bg-bg-overlay px-1 py-0.5 text-xs">
+          <code
+            style={{
+              borderRadius: 4,
+              background: 'var(--bg-overlay)',
+              paddingLeft: 4,
+              paddingRight: 4,
+              paddingTop: 2,
+              paddingBottom: 2,
+              fontSize: 12,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             ~/.claude/usage.json
           </code>
         </p>
@@ -295,14 +471,37 @@ interface CardProps {
 function Card({ title, testId, loading, children }: CardProps): ReactElement {
   return (
     <div
-      className="rounded-lg border border-border bg-bg-elevated p-5"
+      style={{
+        borderRadius: 8,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-elevated)',
+        padding: 20,
+      }}
       data-testid={testId}
     >
-      <div className="mb-2 text-xs uppercase tracking-wide text-text-muted">
+      <div
+        style={{
+          color: 'var(--text-muted)',
+          fontSize: 12,
+          textTransform: 'uppercase',
+          letterSpacing: '0.025em',
+          marginBottom: 8,
+        }}
+      >
         {title}
       </div>
       {loading ? (
-        <div className="h-9 w-24 animate-pulse rounded bg-bg-overlay" />
+        // M2.x-inline: animate-pulse → data-app-pulse attribute +
+        // shared @keyframes ccm-pulse in utilities.css.
+        <div
+          data-app-pulse="true"
+          style={{
+            height: 36,
+            width: 96,
+            borderRadius: 4,
+            background: 'var(--bg-overlay)',
+          }}
+        />
       ) : (
         children
       )}
@@ -324,7 +523,7 @@ function Sparkline({ value }: { value: number }): ReactElement {
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="h-16 w-full"
+      style={{ height: 64, width: '100%', display: 'block' }}
       data-testid="usage-sparkline"
       preserveAspectRatio="none"
     >
@@ -334,14 +533,14 @@ function Sparkline({ value }: { value: number }): ReactElement {
         x2={x2}
         y2={y}
         stroke="currentColor"
-        className="text-accent"
+        style={{ color: 'var(--accent)' }}
         strokeWidth={2}
       />
       <text
         x={W / 2}
         y={y - 6}
         textAnchor="middle"
-        className="fill-text-muted"
+        style={{ fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
         fontSize={11}
       >
         当前值: {value.toLocaleString()}
