@@ -1,16 +1,28 @@
 /**
  * ThemeProvider — runtime layer of the design system.
  *
- * Mirrors cc-switch's theme-provider interface (CLAUDE.md §4.1 +
- * D:\project\cc-switch-main\src\components\theme-provider.tsx) but
- * writes to `documentElement.dataset.theme` (the mechanism our
- * `tokens.css` dark-mode block already keys off) rather than
- * `classList`, and uses the project-scoped storage key `ccm.theme`.
+ * M2.16 glass refactor: the theme palette was collapsed from
+ * light/dark/auto to a 3-way light → glass-clear → glass-tinted cycle.
+ *   - 'light'        : solid cream-white (#FAFAF7). Native Mica is
+ *                      intentionally covered (this is the "opaque"
+ *                      mode — the app looks like a flat light UI).
+ *   - 'glass-clear'  : app-root / main transparent. The Win11 Mica /
+ *                      macOS vibrancy backdrop shows through directly,
+ *                      producing the macOS-Tahoe-like fully clear look.
+ *   - 'glass-tinted' : app-root / main rgba(250,250,247,0.7). Mica
+ *                      bleeds through but the cream tone is preserved,
+ *                      so it reads as "porcelain glass" rather than a
+ *                      fully clear pane.
  *
- *  - default theme = 'light'
- *  - persistence via localStorage under STORAGE_KEY
- *  - 'auto' resolves to OS preference and re-resolves on change
- *  - setTheme reference is stable (memoised via useCallback)
+ * 'dark' and 'auto' were removed per user decision — the product no
+ * longer ships a dark variant, and there is no OS-follow mode. Old
+ * localStorage values ('dark' / 'auto') from previous installs are
+ * silently coerced back to 'light' on read (isTheme rejects them).
+ *
+ * Implementation note: the glass effect is achieved purely through
+ * CSS tokens (tokens.css sets --bg-primary per data-theme). The
+ * React layer only persists the theme + writes data-theme to <html>;
+ * it never touches Mica / vibrancy directly (that's applyEffects.ts).
  */
 import {
   createContext,
@@ -23,17 +35,17 @@ import {
   type ReactNode,
 } from 'react';
 
-export type Theme = 'light' | 'dark' | 'auto';
+export type Theme = 'light' | 'glass-clear' | 'glass-tinted';
 
 export interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   /**
-   * Advance to the next theme in the light → dark → auto → light
-   * cycle. M2.10 F12 polish — centralised here (was previously
-   * duplicated in <AppHeader>'s onClick) so any future control
-   * (toolbar dropdown, settings page toggle, etc.) can call it
-   * without re-implementing the order.
+   * Advance to the next theme in the
+   * light → glass-clear → glass-tinted → light cycle. Centralised
+   * here so <AppHeader>'s onClick and any future control (toolbar
+   * dropdown, settings page toggle, etc.) share one definition of
+   * the order.
    */
   cycleTheme: () => void;
 }
@@ -42,33 +54,29 @@ const STORAGE_KEY = 'ccm.theme';
 
 const ThemeProviderContext = createContext<ThemeContextValue | null>(null);
 
+/**
+ * isTheme — narrows an arbitrary string (typically from localStorage)
+ * to the Theme union. Crucially, this REJECTS the legacy values
+ * 'dark' and 'auto' — anyone upgrading from a pre-M2.16 install
+ * gets coerced back to the default ('light') instead of crashing
+ * the applyTheme switch.
+ */
 function isTheme(value: string | null): value is Theme {
-  return value === 'light' || value === 'dark' || value === 'auto';
-}
-
-function readSystemTheme(): 'light' | 'dark' {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'light';
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return value === 'light' || value === 'glass-clear' || value === 'glass-tinted';
 }
 
 function applyTheme(theme: Theme): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.dataset.theme = theme === 'auto' ? readSystemTheme() : theme;
+  root.dataset.theme = theme;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }): ReactElement {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'light';
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    // M1.11 fix (F-1.04 / BP-3.01): if the persisted value is 'auto',
-    // resolve to the system theme NOW so the first render paints with
-    // the correct data-theme. Previously the initial state was the
-    // literal string 'auto', leaving documentElement.dataset.theme
-    // unset until the useEffect ran on the next render.
-    if (stored === 'auto') return 'auto';
+    // isTheme rejects legacy 'dark' / 'auto' values, so users who
+    // previously stored those fall back to 'light' on first load.
     return isTheme(stored) ? stored : 'light';
   });
 
@@ -78,40 +86,24 @@ export function ThemeProvider({ children }: { children: ReactNode }): ReactEleme
     window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  // Apply the resolved theme to <html data-theme>.
+  // Apply the theme to <html data-theme>.
   useEffect(() => {
     applyTheme(theme);
-  }, [theme]);
-
-  // In 'auto' mode, follow OS-level changes.
-  useEffect(() => {
-    if (theme !== 'auto') return;
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return;
-    }
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (): void => {
-      applyTheme('auto');
-    };
-    mq.addEventListener('change', handler);
-    return () => {
-      mq.removeEventListener('change', handler);
-    };
   }, [theme]);
 
   const setTheme = useCallback((next: Theme): void => {
     setThemeState(next);
   }, []);
 
-  // M2.10 F12 — light → dark → auto → light cycle. Centralised so
+  // light → glass-clear → glass-tinted → light cycle. Centralised so
   // <AppHeader> and any future control (settings page dropdown, etc.)
   // share one definition of the order. The closure depends on
   // `theme` (NOT just setThemeState) so each call reads the latest
   // value without needing an explicit functional update.
   const cycleTheme = useCallback((): void => {
     setThemeState((prev) => {
-      if (prev === 'light') return 'dark';
-      if (prev === 'dark') return 'auto';
+      if (prev === 'light') return 'glass-clear';
+      if (prev === 'glass-clear') return 'glass-tinted';
       return 'light';
     });
   }, []);

@@ -21,7 +21,7 @@
  *   — they don't render in the webview at all.
  */
 import type { ReactElement } from 'react';
-import { ArrowLeft, Moon, Monitor, Settings, Sun } from 'lucide-react';
+import { ArrowLeft, Droplets, Moon, Settings, Sparkles } from 'lucide-react';
 import { useTheme } from '../design-system/ThemeProvider';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
@@ -202,14 +202,14 @@ export function AppHeader({
           data-testid="app-header-theme-toggle"
           data-app-control-hover="true"
           aria-label={
-            theme === 'light' ? '切换到深色主题' :
-            theme === 'dark' ? '切换到自动模式' :
-            '切换到浅色主题'
+            theme === 'light' ? '切换到全透玻璃主题' :
+            theme === 'glass-clear' ? '切换到半透玻璃主题' :
+            '切换到瓷白主题'
           }
           title={
-            theme === 'light' ? '切换到深色' :
-            theme === 'dark' ? '切换到自动' :
-            '切换到浅色'
+            theme === 'light' ? '切换到全透玻璃' :
+            theme === 'glass-clear' ? '切换到半透玻璃' :
+            '切换到瓷白'
           }
           style={{
             width: 32,
@@ -225,12 +225,12 @@ export function AppHeader({
             transition: 'background-color 120ms ease',
           }}
         >
-          {theme === 'dark' ? (
-            <Sun size={16} style={{ color: 'var(--text-primary)' }} />
-          ) : theme === 'auto' ? (
-            <Monitor size={16} style={{ color: 'var(--text-primary)' }} />
-          ) : (
+          {theme === 'light' ? (
             <Moon size={16} style={{ color: 'var(--text-primary)' }} />
+          ) : theme === 'glass-clear' ? (
+            <Sparkles size={16} style={{ color: 'var(--text-primary)' }} />
+          ) : (
+            <Droplets size={16} style={{ color: 'var(--text-primary)' }} />
           )}
         </button>
         <button
@@ -281,14 +281,7 @@ export function AppHeader({
         [data-app-control-hover]:hover {
           background-color: rgba(0, 0, 0, 0.05);
         }
-        [data-theme="dark"] [data-app-control-hover]:hover {
-          background-color: rgba(255, 255, 255, 0.05);
-        }
         [data-app-close-hover]:hover {
-          background-color: var(--danger);
-          color: #fff;
-        }
-        [data-theme="dark"] [data-app-close-hover]:hover {
           background-color: var(--danger);
           color: #fff;
         }

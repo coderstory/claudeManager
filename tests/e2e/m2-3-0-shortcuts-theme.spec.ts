@@ -53,7 +53,7 @@ test.describe('M2.3.0 F11 快捷键 + F12 主题 真业务验证', () => {
     expect(state.modalPresent).toBe(false)
   })
 
-  test('主题切换按钮：3 态 cycle（light → dark → auto → light）', async ({ page }) => {
+  test('主题切换按钮：3 态 cycle（light → glass-clear → glass-tinted → light）', async ({ page }) => {
     await page.goto('http://localhost:1420/')
     await page.waitForSelector('[data-testid="app-header"]', { timeout: 15000 })
 
@@ -67,18 +67,20 @@ test.describe('M2.3.0 F11 快捷键 + F12 主题 真业务验证', () => {
     // user click because it doesn't depend on event coordinates.
     //
     // We read the resolved theme via the button's aria-label rather
-    // than documentElement.dataset.theme, because in 'auto' mode the
-    // data-theme attribute is rewritten to 'light' or 'dark' by
-    // applyTheme() (line 59 in ThemeProvider.tsx) and would mask
-    // the cycle from the DOM observation. The aria-label preserves
-    // the React state name: light→"切换到深色主题", dark→"切换到自动模式",
-    // auto→"切换到浅色主题".
+    // than documentElement.dataset.theme so the test pins the React
+    // state name directly. M2.16 glass refactor renamed the palette
+    // from light/dark/auto to light/glass-clear/glass-tinted:
+    //   light        → aria-label "切换到全透玻璃主题"
+    //   glass-clear  → aria-label "切换到半透玻璃主题"
+    //   glass-tinted → aria-label "切换到瓷白主题"
+    // (data-theme now always equals the React state — no more 'auto'
+    // resolution hop.)
     const readThemeState = () => page.evaluate(() => {
       const btn = document.querySelector<HTMLButtonElement>('[data-testid="app-header-theme-toggle"]')
       const label = btn?.getAttribute('aria-label') ?? ''
-      if (label.includes('深色')) return 'light'   // "切换到深色主题" → currently light
-      if (label.includes('自动')) return 'dark'    // "切换到自动模式" → currently dark
-      if (label.includes('浅色')) return 'auto'    // "切换到浅色主题" → currently auto
+      if (label.includes('全透玻璃')) return 'light'         // "切换到全透玻璃主题" → currently light
+      if (label.includes('半透玻璃')) return 'glass-clear'   // "切换到半透玻璃主题" → currently glass-clear
+      if (label.includes('瓷白')) return 'glass-tinted'      // "切换到瓷白主题" → currently glass-tinted
       return 'unknown'
     })
     const clickTheme = async () => {
@@ -100,21 +102,21 @@ test.describe('M2.3.0 F11 快捷键 + F12 主题 真业务验证', () => {
     const theme3 = await readThemeState()
     console.log('THEME after 2 clicks:', theme3)
 
-    // 在 auto 状态下截图 — 此时 data-theme 可能仍是 light/dark，
-    // 但 React 状态 = auto，按钮 aria-label = "切换到浅色主题"。
-    const dataThemeAuto = await page.evaluate(() => document.documentElement.dataset.theme)
-    console.log('THEME data-theme attribute in auto:', dataThemeAuto)
-    await page.screenshot({ path: '.planning/diagnostics/m2-3-0-verify/04-theme-auto.png' })
+    // 在 glass-tinted 状态下截图 — data-theme 直接 = 'glass-tinted'，
+    // app-root 背景为 rgba(250,250,247,0.7)，Mica 隐约透出。
+    const dataThemeTinted = await page.evaluate(() => document.documentElement.dataset.theme)
+    console.log('THEME data-theme attribute in glass-tinted:', dataThemeTinted)
+    await page.screenshot({ path: '.planning/diagnostics/m2-3-0-verify/04-theme-glass-tinted.png' })
 
     await clickTheme()
     await page.waitForTimeout(500)
     const theme4 = await readThemeState()
     console.log('THEME after 3 clicks:', theme4)
 
-    // 期望：light → dark → auto → light 完整 3 步 cycle
+    // 期望：light → glass-clear → glass-tinted → light 完整 3 步 cycle
     expect(theme1).toBe('light')
-    expect(theme2).toBe('dark')
-    expect(theme3).toBe('auto')
+    expect(theme2).toBe('glass-clear')
+    expect(theme3).toBe('glass-tinted')
     expect(theme4).toBe('light')
   })
 

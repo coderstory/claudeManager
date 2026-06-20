@@ -32,9 +32,6 @@
 [data-app-control-hover]:hover {
   background-color: rgba(0, 0, 0, 0.05);
 }
-[data-theme="dark"] [data-app-control-hover]:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
 
 /* === Close-button hover (M1.9.2 + M2.15-fix-v2) ===
  * Flips the close button to the --danger token on hover (Windows
@@ -48,10 +45,6 @@
   background-color: var(--danger);
   color: #fff;
 }
-[data-theme="dark"] [data-app-close-hover]:hover {
-  background-color: var(--danger);
-  color: #fff;
-}
 
 /* === Sidebar item hover (M2.x-inline) ===
  * Replaces the (would-be) Tailwind
@@ -62,9 +55,6 @@
 }
 [data-app-sidebar-hover]:hover {
   background-color: rgba(0, 0, 0, 0.05);
-}
-[data-theme="dark"] [data-app-sidebar-hover]:hover {
-  background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* === Home tile hover (M2.x-inline) ===

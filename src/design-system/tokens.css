@@ -123,37 +123,49 @@ body,
   animation: fadeIn var(--view-transition-duration) ease-out;
 }
 
-/* --- Dark 主题 stub (§4.1 — 留接口，M2 接入) --- */
-[data-theme="dark"] {
-  --bg-primary:     #1F2328;
-  --bg-elevated:    #2D333B;
-  --bg-overlay:     rgba(45, 51, 59, 0.7);
-  --text-primary:   #E6EDF3;
-  --text-secondary: #8B949E;
-  --text-muted:     #6E7681;
-  --border:         #373E47;
-  --accent:         #2F81F7;
+/* --- Glass 主题变体 (§4.1 — M2.16 glass refactor) ---
+ * The old 'dark' stub has been removed. The palette is now a
+ * 3-way light → glass-clear → glass-tinted cycle.
+ *
+ * The key insight: the React shell (App.tsx app-root + app-main)
+ * paints its background from --bg-primary. In 'light' that's the
+ * opaque #FAFAF7 cream, which intentionally covers the native
+ * Mica / vibrancy backdrop. In the two glass modes we drop the
+ * alpha so the OS-level material shows through:
+ *
+ *   - glass-clear:   --bg-primary = transparent.
+ *                    Mica (Win11) / vibrancy (macOS) shows through
+ *                    directly — the app looks like a fully clear
+ *                    pane floating over the desktop.
+ *   - glass-tinted:  --bg-primary = rgba(250, 250, 247, 0.7).
+ *                    Mica bleeds through but the cream tone is
+ *                    preserved — reads as "porcelain glass".
+ *
+ * All other tokens (text, accent, border, glass-bg, status colours)
+ * stay at their light values. The glass modes are conceptually
+ * "light, but with a translucent body" — text contrast, accent hue,
+ * and the header/sidebar glass surfaces are identical to light, so
+ * the WCAG-AA contrast that tokens.css already guarantees for light
+ * is preserved. The only thing that changes is how much of the OS
+ * backdrop shows through the body.
+ */
+[data-theme="glass-clear"] {
+  /* Body becomes fully transparent so the native Mica / vibrancy
+   * material (applied by applyEffects.ts at startup) is the only
+   * background. Header / sidebar / cards keep their glass-bg /
+   * glass-bg-strong alphas so they still read as floating panes. */
+  --bg-primary:  transparent;
+  --bg-elevated: rgba(255, 255, 255, 0.75);
+  --bg-overlay:  rgba(255, 255, 255, 0.5);
+}
 
-  /* M2.10 F12 polish — dark-mode status palette. The M1.5 stub
-   * only covered backgrounds / text / accent; status colours
-   * (`--success` / `--warning` / `--danger`) and the disabled
-   * foreground inherited the light-theme values, which produced
-   * dark-on-light contrast inversions on the F6 MCP toggle and
-   * F18 optimizer banner. We pick slightly lighter Material-style
-   * hues so they stay readable on the dark backdrop without
-   * competing with the accent. */
-  --success:        #4CAF50;
-  --warning:        #FFB74D;
-  --danger:         #EF5350;
-  --disabled:       rgba(255, 255, 255, 0.4);
-
-  /* Dark-mode glass — lower alpha so the Mica / vibrancy
-   * backdrop can still bleed through. Pure dark surfaces
-   * would defeat the entire point of the M1.9.2 effect. */
-  --glass-bg:        rgba(31, 35, 40, 0.55);
-  --glass-bg-strong: rgba(31, 35, 40, 0.75);
-  --glass-border:    rgba(255, 255, 255, 0.08);
-  --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.32);
+[data-theme="glass-tinted"] {
+  /* Body keeps the cream tone at 0.7 alpha — Mica bleeds through
+   * but the porcelain look is preserved. Elevated cards go to 0.85
+   * so they stay legible against the tinted body. */
+  --bg-primary:  rgba(250, 250, 247, 0.7);
+  --bg-elevated: rgba(255, 255, 255, 0.85);
+  --bg-overlay:  rgba(255, 255, 255, 0.6);
 }
 
 /* --- 全局基线：让 body / 等宽走 token --- */

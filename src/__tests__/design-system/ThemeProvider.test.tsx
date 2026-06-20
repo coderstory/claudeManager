@@ -1,65 +1,30 @@
 /**
  * ThemeProvider — TDD coverage.
  *
- * Verifies the runtime layer of the design system (CLAUDE.md §4.1):
+ * Verifies the runtime layer of the design system (CLAUDE.md §4.1).
+ *
+ * M2.16 glass refactor: the palette is now a 3-way
+ *   light → glass-clear → glass-tinted → light cycle.
+ * 'dark' / 'auto' were removed; legacy localStorage values must
+ * fall back to 'light'.
+ *
+ * Coverage:
  *   - default theme = 'light'
  *   - applyTheme writes document.documentElement.dataset.theme
- *   - 'auto' resolves to OS preference via matchMedia
  *   - localStorage persistence under STORAGE_KEY = 'ccm.theme'
  *   - setTheme reference is stable across re-renders
  *   - useTheme throws when used outside the provider
+ *   - cycleTheme advances through all 3 themes
+ *   - legacy 'dark' / 'auto' stored values fall back to 'light'
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { ThemeProvider, useTheme, type Theme } from '../../design-system/ThemeProvider';
 
-// --- matchMedia mock (jsdom doesn't ship it) -------------------------------
-type Listener = (ev: { matches: boolean }) => void;
-const listeners = new Set<Listener>();
-let prefersDark = false;
-const matchMediaMock = vi.fn((query: string): MediaQueryList => {
-  if (!query.includes('prefers-color-scheme')) {
-    return {
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => true,
-    } as unknown as MediaQueryList;
-  }
-  return {
-    get matches() {
-      return prefersDark;
-    },
-    media: query,
-    onchange: null,
-    addEventListener: (_: string, cb: Listener) => {
-      listeners.add(cb);
-    },
-    removeEventListener: (_: string, cb: Listener) => {
-      listeners.delete(cb);
-    },
-    dispatchEvent: () => true,
-    addListener: () => {},
-    removeListener: () => {},
-  } as unknown as MediaQueryList;
-});
-
 beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
-  prefersDark = false;
-  listeners.clear();
-  // Replace the global matchMedia for the duration of the test.
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    configurable: true,
-    value: matchMediaMock,
-  });
 });
 
 afterEach(() => {
@@ -75,11 +40,11 @@ function Probe(): ReactElement {
       <button data-testid="set-light" onClick={() => setTheme('light')}>
         light
       </button>
-      <button data-testid="set-dark" onClick={() => setTheme('dark')}>
-        dark
+      <button data-testid="set-glass-clear" onClick={() => setTheme('glass-clear')}>
+        glass-clear
       </button>
-      <button data-testid="set-auto" onClick={() => setTheme('auto')}>
-        auto
+      <button data-testid="set-glass-tinted" onClick={() => setTheme('glass-tinted')}>
+        glass-tinted
       </button>
       <button data-testid="cycle" onClick={() => cycleTheme()}>
         cycle
@@ -100,63 +65,64 @@ describe('ThemeProvider', () => {
   });
 
   it('reads persisted theme from localStorage on mount', () => {
+    localStorage.setItem('ccm.theme', 'glass-tinted');
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
+    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
+  });
+
+  it('falls back to "light" when stored value is legacy "dark"', () => {
     localStorage.setItem('ccm.theme', 'dark');
     render(
       <ThemeProvider>
         <Probe />
       </ThemeProvider>,
     );
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
-  });
-
-  it('setTheme("dark") updates state, <html data-theme>, and localStorage', () => {
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-dark').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('ccm.theme')).toBe('dark');
-  });
-
-  it('setTheme("auto") resolves to OS preference via matchMedia', () => {
-    prefersDark = true;
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-auto').click();
-    });
-    // OS says dark → dataset.theme should be 'dark'.
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
-  });
-
-  it('reacts to OS theme change while in "auto" mode', () => {
-    prefersDark = false;
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-auto').click();
-    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
     expect(document.documentElement.dataset.theme).toBe('light');
+  });
 
-    // Simulate the OS flipping to dark.
-    prefersDark = true;
+  it('falls back to "light" when stored value is legacy "auto"', () => {
+    localStorage.setItem('ccm.theme', 'auto');
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('setTheme("glass-clear") updates state, <html data-theme>, and localStorage', () => {
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
     act(() => {
-      for (const cb of listeners) cb({ matches: true });
+      screen.getByTestId('set-glass-clear').click();
     });
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
+    expect(document.documentElement.dataset.theme).toBe('glass-clear');
+    expect(localStorage.getItem('ccm.theme')).toBe('glass-clear');
+  });
+
+  it('setTheme("glass-tinted") updates state, <html data-theme>, and localStorage', () => {
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    act(() => {
+      screen.getByTestId('set-glass-tinted').click();
+    });
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
+    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
+    expect(localStorage.getItem('ccm.theme')).toBe('glass-tinted');
   });
 
   it('keeps the same setTheme reference across re-renders (referential stability)', () => {
@@ -179,17 +145,16 @@ describe('ThemeProvider', () => {
   });
 
   // -------------------------------------------------------------------------
-  // M2.10 F12 — cycleTheme advances light → dark → auto → light.
+  // M2.16 glass refactor — cycleTheme advances
+  //   light → glass-clear → glass-tinted → light.
   //
-  // Why these cases exist separately from setTheme: the previous
-  // AppHeader onClick inline-implemented the same ternary and was
-  // the only consumer of `auto` ever clicking the theme button. Now
-  // that cycleTheme is centralised in ThemeProvider, it has its
-  // own contract that must be pinned: starting from each of the 3
-  // possible values, the next click should land on the right next
-  // one (and the resolved <html data-theme> should update too).
+  // The cycle is centralised in ThemeProvider so <AppHeader> and any
+  // future control (settings dropdown, etc.) share one definition of
+  // the order. Each test starts from a known theme and verifies the
+  // next click lands on the right value (and that the resolved
+  // <html data-theme> updates too).
   // -------------------------------------------------------------------------
-  it('cycleTheme_light_to_dark', () => {
+  it('cycleTheme_light_to_glass_clear', () => {
     render(
       <ThemeProvider>
         <Probe />
@@ -199,41 +164,37 @@ describe('ThemeProvider', () => {
     act(() => {
       screen.getByTestId('cycle').click();
     });
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
+    expect(document.documentElement.dataset.theme).toBe('glass-clear');
   });
 
-  it('cycleTheme_dark_to_auto', () => {
-    // Start at dark so the next cycle lands on auto.
+  it('cycleTheme_glass_clear_to_glass_tinted', () => {
     render(
       <ThemeProvider>
         <Probe />
       </ThemeProvider>,
     );
     act(() => {
-      screen.getByTestId('set-dark').click();
+      screen.getByTestId('set-glass-clear').click();
     });
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
     act(() => {
       screen.getByTestId('cycle').click();
     });
-    // State reports 'auto'; resolved <html data-theme> depends on
-    // matchMedia. jsdom's matchMedia mock returns prefersDark=false
-    // by default, so the resolved value is 'light'.
-    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
+    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
   });
 
-  it('cycleTheme_auto_to_light', () => {
+  it('cycleTheme_glass_tinted_to_light', () => {
     render(
       <ThemeProvider>
         <Probe />
       </ThemeProvider>,
     );
     act(() => {
-      screen.getByTestId('set-auto').click();
+      screen.getByTestId('set-glass-tinted').click();
     });
-    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
     act(() => {
       screen.getByTestId('cycle').click();
     });
@@ -242,7 +203,7 @@ describe('ThemeProvider', () => {
   });
 
   it('cycleTheme_three_clicks_returns_to_initial_state', () => {
-    // Pin the full cycle: light → dark → auto → light.
+    // Pin the full cycle: light → glass-clear → glass-tinted → light.
     render(
       <ThemeProvider>
         <Probe />
@@ -250,9 +211,9 @@ describe('ThemeProvider', () => {
     );
     expect(screen.getByTestId('theme')).toHaveTextContent('light');
     act(() => screen.getByTestId('cycle').click());
-    expect(screen.getByTestId('theme')).toHaveTextContent('dark');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
     act(() => screen.getByTestId('cycle').click());
-    expect(screen.getByTestId('theme')).toHaveTextContent('auto');
+    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
     act(() => screen.getByTestId('cycle').click());
     expect(screen.getByTestId('theme')).toHaveTextContent('light');
   });

@@ -329,24 +329,30 @@ describe('M1.9.3 — view transition (P1 fix: framer-motion removed)', () => {
   });
 });
 
-describe('M1.9.3 — regression: dark theme still works after P0/P1 changes', () => {
-  it('swapping the theme keeps <main> positioned absolute (fix did not regress dark mode)', () => {
-    // Render once, flip to dark via the storage key, re-render.
-    // The pane must STILL be position:absolute (the fix is
-    // independent of the theme system) and the data-theme
+describe('M1.9.3 — regression: glass theme still works after P0/P1 changes', () => {
+  it('swapping the theme keeps <main> positioned absolute (fix did not regress glass mode)', () => {
+    // Render once, flip to glass-tinted via the storage key,
+    // re-render. The pane must STILL be position:absolute (the fix
+    // is independent of the theme system) and the data-theme
     // attribute on <html> must reflect the switch.
+    //
+    // M2.16: the palette collapsed from light/dark/auto to a 3-way
+    // light → glass-clear → glass-tinted cycle. This test now uses
+    // 'glass-tinted' (a valid new value) instead of the removed
+    // 'dark' to exercise the same "theme swap doesn't break the
+    // absolute-positioned main pane" contract.
     //
     // The storage key is `ccm.theme` (per ThemeProvider.tsx
     // STORAGE_KEY) — not the platform-default key. The provider
     // reads from this key on initial mount; clearing it would
     // default to 'light'.
-    localStorage.setItem('ccm.theme', 'dark');
+    localStorage.setItem('ccm.theme', 'glass-tinted');
     renderApp();
     const main = screen.getByTestId('app-main');
     const cs = getComputedStyle(main);
     expect(cs.position).toBe('absolute');
     // Theme is applied at the documentElement level; the [data-theme]
     // attribute is the same selector tokens.css uses to swap tokens.
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('glass-tinted');
   });
 });
