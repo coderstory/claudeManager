@@ -51,6 +51,7 @@ import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ProviderSwitchPage } from './pages/provider-switch';
 import DeeplinkImportPage from './pages/deeplink-import';
+import JsonEditorPage from './pages/json-editor';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
 /**
@@ -241,6 +242,8 @@ export default function App(): ReactElement {
               <ProviderSwitchPage />
             ) : view === 'deeplink-import' ? (
               <DeeplinkImportPage />
+            ) : view === 'json-editor' ? (
+              <JsonEditorPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

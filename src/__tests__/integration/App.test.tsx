@@ -122,8 +122,8 @@ describe('App — view routing integration', () => {
     // Second mount should restore the last view.
     renderApp();
     // On the second mount, we should immediately see the JSON editor
-    // placeholder (not the home tile grid).
-    expect(screen.getByText('plugin: json-editor')).toBeInTheDocument();
+    // page (M2.4: real implementation, not the placeholder anymore).
+    expect(screen.getByTestId('json-editor-page')).toBeInTheDocument();
     expect(
       screen.queryByText('欢迎使用 Claude 配置管理器'),
     ).not.toBeInTheDocument();

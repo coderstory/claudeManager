@@ -1,0 +1,290 @@
+/**
+ * Vitest coverage for the F5 JsonEditorPage (M2.4).
+ *
+ * What this covers (TDD, CLAUDE.md §5.2):
+ *   - Page renders the toolbar + empty editor.
+ *   - Loading a file via `readFile` populates the textarea.
+ *   - Token masking default ON: api_key values are NOT visible.
+ *   - Toggle mask → raw values visible.
+ *   - Format button → pretty-prints the content.
+ *   - Save button → calls `writeFileAtomic` with the current content.
+ *   - Save on invalid JSON → confirm dialog → user cancels → no save.
+ *
+ * Mocks: `invoke` (Tauri IPC) is mocked at the module level so the
+ * page calls resolve to the mocked values rather than hitting the
+ * real Rust backend.
+ */
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import JsonEditorPage from '../../pages/json-editor';
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+const mockInvoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+const SAMPLE_JSON = JSON.stringify({
+  name: 'p1',
+  api_key: 'sk-leaked-value',
+  api_base: 'https://api.example.com',
+}, null, 2);
+
+beforeEach(() => {
+  mockInvoke.mockReset();
+  // Default: readFile returns the sample, writeFileAtomic succeeds.
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    if (cmd === 'read_file') return SAMPLE_JSON;
+    if (cmd === 'write_file_atomic') return null;
+    return null;
+  });
+});
+
+afterEach(() => {
+  // Clean up any leftover dialog confirm mock
+  vi.restoreAllMocks();
+});
+
+describe('JsonEditorPage — F5 (M2.4)', () => {
+  it('renders toolbar with 选择文件 / 保存 / 格式化 / 撤销 / 重做 / 遮罩', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('json-editor-pick-btn')).toBeTruthy();
+      expect(screen.getByTestId('json-editor-save-btn')).toBeTruthy();
+      expect(screen.getByTestId('json-editor-format-btn')).toBeTruthy();
+      expect(screen.getByTestId('json-editor-undo-btn')).toBeTruthy();
+      expect(screen.getByTestId('json-editor-redo-btn')).toBeTruthy();
+      expect(screen.getByTestId('json-editor-mask-toggle')).toBeTruthy();
+    });
+  });
+
+  it('starts with masked ON and empty editor', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => {
+      const toggle = screen.getByTestId('json-editor-mask-toggle');
+      expect(toggle.textContent).toContain('遮罩开');
+    });
+  });
+
+  it('clicking 选择文件 triggers file input click', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-pick-btn'));
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+    fireEvent.click(screen.getByTestId('json-editor-pick-btn'));
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('loads file content via readFile and shows masked view', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([SAMPLE_JSON], 'settings.json', {
+      type: 'application/json',
+    });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    // jsdom doesn't fire onChange via DataTransfer when we use Object.defineProperty,
+    // so we drive the underlying handler directly.
+    await act(async () => {
+      Object.defineProperty(input, 'files', {
+        value: [file],
+        configurable: true,
+      });
+      fireEvent.change(input);
+    });
+
+    await waitFor(() => {
+      const ta = screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement;
+      // Default mask ON → raw api_key value must NOT appear
+      expect(ta.value).not.toContain('sk-leaked-value');
+      expect(ta.value).toContain('***MASKED***');
+      // path shown
+      expect(screen.getByTestId('json-editor-path').textContent).toContain('settings.json');
+    });
+  });
+
+  it('toggle mask off shows raw api_key', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([SAMPLE_JSON], 'settings.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', {
+        value: [file],
+        configurable: true,
+      });
+      fireEvent.change(input);
+    });
+    await waitFor(() =>
+      expect((screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement).value)
+        .toContain('***MASKED***'),
+    );
+
+    // Toggle off
+    fireEvent.click(screen.getByTestId('json-editor-mask-toggle'));
+    await waitFor(() => {
+      const ta = screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement;
+      expect(ta.value).toContain('sk-leaked-value');
+      expect(ta.value).not.toContain('***MASKED***');
+    });
+  });
+
+  it('format button pretty-prints content', async () => {
+    const compact = '{"a":1,"b":2}';
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') return compact;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([compact], 'compact.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() =>
+      expect((screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement).value)
+        .toContain('"a"'),
+    );
+
+    fireEvent.click(screen.getByTestId('json-editor-format-btn'));
+    await waitFor(() => {
+      const ta = screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement;
+      expect(ta.value).toContain('\n  "a": 1,\n  "b": 2\n');
+    });
+  });
+
+  it('save button calls write_file_atomic with the current content', async () => {
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([SAMPLE_JSON], 'settings.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith('read_file', expect.objectContaining({ path: 'settings.json' })),
+    );
+
+    fireEvent.click(screen.getByTestId('json-editor-save-btn'));
+    await waitFor(() => {
+      const writeCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'write_file_atomic');
+      expect(writeCalls.length).toBeGreaterThanOrEqual(1);
+      const lastWrite = writeCalls[writeCalls.length - 1];
+      expect(lastWrite[1]).toMatchObject({ path: 'settings.json' });
+      expect((lastWrite[1] as { content: string }).content).toContain('name');
+    });
+  });
+
+  it('save on invalid JSON triggers confirm dialog; user cancel skips save', async () => {
+    const valid = '{"k":1}';
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') return valid;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+    // Stub window.confirm → false (user cancels)
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([valid], 'v.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() => screen.getByTestId('json-editor-textarea'));
+
+    // Type invalid JSON into textarea
+    const ta = screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(ta, { target: { value: '{ broken json' } });
+    });
+    // Wait for debounced validation
+    await waitFor(() => {
+      expect(screen.getByTestId('json-editor-error')).toBeTruthy();
+    }, { timeout: 1000 });
+
+    fireEvent.click(screen.getByTestId('json-editor-save-btn'));
+    // confirm() was called with a warning message
+    expect(confirmSpy).toHaveBeenCalled();
+    // User cancelled → no write
+    const writeCalls = mockInvoke.mock.calls.filter((c) => c[0] === 'write_file_atomic');
+    expect(writeCalls).toHaveLength(0);
+  });
+
+  it('undo/redo buttons navigate history', async () => {
+    const original = '{"v":1}';
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') return original;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([original], 'u.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() => screen.getByTestId('json-editor-textarea'));
+
+    // Toggle mask OFF so the textarea shows raw state.raw (otherwise
+    // maskTokens() re-stringifies via JSON.stringify(..., null, 2)
+    // which would make the assertions confusing).
+    fireEvent.click(screen.getByTestId('json-editor-mask-toggle'));
+
+    const ta = screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(ta, { target: { value: '{"v":2}' } });
+    });
+    await waitFor(() => {
+      expect((screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement).value).toContain('"v":2');
+    });
+
+    // Undo
+    fireEvent.click(screen.getByTestId('json-editor-undo-btn'));
+    await waitFor(() => {
+      expect((screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement).value).toContain('"v":1');
+    });
+
+    // Redo
+    fireEvent.click(screen.getByTestId('json-editor-redo-btn'));
+    await waitFor(() => {
+      expect((screen.getByTestId('json-editor-textarea') as HTMLTextAreaElement).value).toContain('"v":2');
+    });
+  });
+
+  it('readFile error surfaces in InfoBar', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') throw new Error('路径超出允许范围: /etc/passwd');
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File(['x'], 'bad.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+
+    await waitFor(() => {
+      const msg = screen.getByTestId('json-editor-message');
+      expect(msg).toBeTruthy();
+      expect(msg.getAttribute('data-message-kind')).toBe('error');
+      expect(msg.textContent).toContain('路径超出允许范围');
+    });
+  });
+});
