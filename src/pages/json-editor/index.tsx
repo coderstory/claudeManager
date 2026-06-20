@@ -309,7 +309,7 @@ export default function JsonEditorPage(): ReactElement {
   return (
     <div
       style={{
-        padding: '32px 40px',
+        padding: 'var(--space-6)',
         maxWidth: 960,
         margin: '0 auto',
         height: '100%',
@@ -320,16 +320,17 @@ export default function JsonEditorPage(): ReactElement {
     >
       <h1
         style={{
-          fontSize: 20,
+          fontSize: 'var(--fs-heading)',
           fontWeight: 600,
           color: 'var(--text-primary)',
-          marginBottom: 8,
+          margin: 0,
+          marginBottom: 'var(--space-3)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        <FileJson size={20} />
+        <FileJson size={18} />
         JSON 编辑器
       </h1>
       <p
