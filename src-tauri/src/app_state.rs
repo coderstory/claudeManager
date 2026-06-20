@@ -40,6 +40,10 @@ pub struct AppState {
     /// scans settings.json + providers/ + mcp.json, applies fixes
     /// via fs_atomic with auto-backup.
     pub optimizer_service: Arc<crate::services::optimizer_service::OptimizerService>,
+    /// M2.13 — F16 资源浏览 service. Scans 5 resource kinds
+    /// (plugins/skills/commands/lsp/mcp) under `<claude_dir>/` and
+    /// delegates file-manager reveals to `IPlatformReveal`.
+    pub resource_service: Arc<crate::services::resource_service::ResourceService>,
 }
 
 impl AppState {
@@ -70,6 +74,20 @@ impl AppState {
         let optimizer_service = Arc::new(
             crate::services::optimizer_service::OptimizerService::new(paths.clone()),
         );
+        // M2.13 — F16 资源浏览. Resolves `<claude_dir>/` from the
+        // cached `AppPaths`, then takes a `Box<dyn IPlatformReveal>`
+        // from `platform::runtime::reveal()` (WindowsReveal on Win,
+        // MacReveal stub on macOS).
+        let claude_dir = paths
+            .claude_dir()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| paths.home.join(".claude"));
+        let resource_service = Arc::new(
+            crate::services::resource_service::ResourceService::new(
+                claude_dir,
+                runtime::reveal(),
+            ),
+        );
         Self {
             paths,
             provider_service,
@@ -77,6 +95,7 @@ impl AppState {
             backup_service,
             usage_service,
             optimizer_service,
+            resource_service,
         }
     }
 }

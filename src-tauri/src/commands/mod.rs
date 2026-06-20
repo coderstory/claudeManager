@@ -22,4 +22,5 @@ pub mod fs;
 pub mod mcp;
 pub mod optimizer;
 pub mod providers;
+pub mod resource;
 pub mod usage;

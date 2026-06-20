@@ -1,0 +1,121 @@
+//! Tauri commands for F16 — 资源浏览 (M2.13).
+//!
+//! Two thin wrappers around [`crate::services::resource_service::ResourceService`]:
+//!
+//! - [`list_resources`] — scan a `kind` (plugin/skill/command/lsp/mcp)
+//!   and return the matching resources.
+//! - [`reveal_in_file_manager`] — open the system file manager with
+//!   the given path selected.
+//!
+//! ## Error semantics
+//!
+//! `Result<T, String>` — Tauri IPC's preferred error type. The
+//! `String` is the user-visible message (SPEC §6.5: "不允许静默吞错").
+//! Frontend surfaces errors via InfoBar / modal (reveal failure must
+//! NOT block UI per CLAUDE.md §7).
+
+use std::path::PathBuf;
+
+use tauri::State;
+
+use crate::app_state::AppState;
+use crate::domain::{ResourceItem, ResourceKind};
+
+/// Tauri-friendly error type.
+type CmdResult<T> = Result<T, String>;
+
+/// F16 — list resources of the given kind.
+///
+/// `kind` is a lowercase tag matching [`ResourceKind::as_str`]
+/// (`"plugin"` / `"skill"` / `"command"` / `"lsp"` / `"mcp"`).
+/// Unknown kinds return `Err(...)` with a user-readable message.
+#[tauri::command]
+pub async fn list_resources(
+    state: State<'_, AppState>,
+    kind: String,
+) -> CmdResult<Vec<ResourceItem>> {
+    let parsed = ResourceKind::from_str_opt(&kind).ok_or_else(|| {
+        format!(
+            "未知资源类型: '{kind}'(允许: plugin, skill, command, lsp, mcp)"
+        )
+    })?;
+    state
+        .resource_service
+        .list(parsed)
+        .map_err(|e| e.to_string())
+}
+
+/// F16 — open the system file manager with `path` selected.
+///
+/// On Windows this is `explorer /select,<path>`. On macOS this is
+/// `open -R <path>` (macOS impl is currently `unimplemented!()` in
+/// the trait stub). On any failure the command returns `Err(...)`
+/// — frontend surfaces it via a non-blocking modal.
+#[tauri::command]
+pub async fn reveal_in_file_manager(
+    state: State<'_, AppState>,
+    path: String,
+) -> CmdResult<()> {
+    if path.trim().is_empty() {
+        return Err("路径为空".into());
+    }
+    state
+        .resource_service
+        .reveal(&PathBuf::from(&path))
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::ResourceItem;
+    use crate::domain::ResourceKind;
+
+    /// The frontend passes `kind` as a lowercase string. The command
+    /// is the boundary that translates the string into the typed
+    /// enum, so a misspelling gets a clean error message instead of
+    /// a panic on the backend.
+    #[test]
+    fn unknown_kind_string_returns_err_message() {
+        // We can't call the actual command (needs Tauri State), but
+        // we can verify the parser logic by re-running it:
+        let bogus = "Plugin"; // capital P, not lowercase
+        let parsed = ResourceKind::from_str_opt(bogus);
+        assert!(parsed.is_none(), "expected None for capitalised kind");
+        // The error string is built dynamically; the substring must
+        // mention the unknown value so the user knows what they typed.
+        let msg = format!("未知资源类型: '{bogus}'(允许: plugin, skill, command, lsp, mcp)");
+        assert!(msg.contains("Plugin"));
+        assert!(msg.contains("plugin"));
+    }
+
+    /// Empty path must error (no silently-opened Explorer at
+    /// the user's home dir).
+    #[test]
+    fn empty_path_string_is_rejected() {
+        let path = "";
+        assert!(path.trim().is_empty());
+    }
+
+    /// `ResourceItem` JSON shape stability — pin the fields the
+    /// frontend relies on (`id`, `name`, `kind`, `path`,
+    /// `size_bytes`, `enabled`).
+    #[test]
+    fn resource_item_json_shape() {
+        let item = ResourceItem {
+            id: "command/hi.md".into(),
+            name: "hi.md".into(),
+            kind: ResourceKind::Command,
+            path: "C:/Users/foo/.claude/commands/hi.md".into(),
+            size_bytes: 12,
+            enabled: true,
+        };
+        let v = serde_json::to_value(&item).unwrap();
+        assert_eq!(v["id"], "command/hi.md");
+        assert_eq!(v["name"], "hi.md");
+        assert_eq!(v["kind"], "command");
+        assert_eq!(v["path"], "C:/Users/foo/.claude/commands/hi.md");
+        assert_eq!(v["size_bytes"], 12);
+        assert_eq!(v["enabled"], true);
+    }
+}

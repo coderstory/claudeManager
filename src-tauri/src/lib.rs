@@ -83,6 +83,9 @@ pub fn run() {
             commands::app::get_app_metadata,
             commands::optimizer::scan_optimizations,
             commands::optimizer::apply_optimizations,
+            // M2.13 — F16 资源浏览
+            commands::resource::list_resources,
+            commands::resource::reveal_in_file_manager,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
