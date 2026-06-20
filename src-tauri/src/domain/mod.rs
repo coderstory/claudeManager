@@ -12,10 +12,12 @@
 //!   call it after `from_*` and before `to_*`.
 
 pub mod mcp_server;
+pub mod optimization;
 pub mod provider;
 pub mod usage;
 
 pub use mcp_server::{McpError, McpServer, McpTransport};
+pub use optimization::{ApplyResult, OptimizationFinding, Severity};
 pub use provider::{is_valid_id, Provider, ProviderError};
 pub use usage::{UsageSnapshot, UsageWindow};
 
