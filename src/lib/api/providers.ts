@@ -79,6 +79,43 @@ export function importProvidersFromSql(content: string): Promise<ImportResult> {
   return invoke<ImportResult>('import_providers_from_sql', { content });
 }
 
+// ---------------------------------------------------------------------------
+// F4 — deeplink 导入 (M2.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parsed deeplink request shape (mirror of the Rust
+ * `ParsedDeeplink` in src-tauri/src/infrastructure/deeplink_parser.rs).
+ *
+ * In M2.3 `action` is always `{ kind: 'import' }` and `provider` is
+ * the (validated) Provider ready to be persisted.
+ */
+export interface ParsedDeeplink {
+  action: { kind: 'import' };
+  provider: Provider | null;
+}
+
+/**
+ * Parse a `ccswitch://v1/import?...` URL into a `ParsedDeeplink`.
+ *
+ * Pure function on the Rust side; the only IPC overhead is the
+ * string round-trip. Throws on parse failure (bad URL, missing
+ * required params, unsupported resource type, …).
+ */
+export function parseDeeplinkUrl(url: string): Promise<ParsedDeeplink> {
+  return invoke<ParsedDeeplink>('parse_deeplink_url', { url });
+}
+
+/**
+ * Persist a single provider JSON file. Called AFTER the user
+ * confirms the import in the modal. Throws `"provider '<id>'
+ * already exists"` if the id is on disk; the page renders that
+ * as a "rename and retry" hint.
+ */
+export function importSingleProvider(provider: Provider): Promise<void> {
+  return invoke<void>('import_single_provider', { provider });
+}
+
 // Re-export the McpServer type for the page so callers don't need a
 // second import. Frontend pages should not need to know where the
 // type lives.

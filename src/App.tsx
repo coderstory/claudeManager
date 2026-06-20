@@ -50,6 +50,7 @@ import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ProviderSwitchPage } from './pages/provider-switch';
+import DeeplinkImportPage from './pages/deeplink-import';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
 /**
@@ -238,6 +239,8 @@ export default function App(): ReactElement {
               <ProviderListPage />
             ) : view === 'provider-switch' ? (
               <ProviderSwitchPage />
+            ) : view === 'deeplink-import' ? (
+              <DeeplinkImportPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}
