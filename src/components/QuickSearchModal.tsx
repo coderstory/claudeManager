@@ -494,6 +494,14 @@ export function QuickSearchModal({
             aria-label="关闭搜索 (Esc)"
             title="关闭搜索 (Esc)"
             data-testid="quick-search-close"
+            // M2.x-inline: previously used Tailwind utility classes
+            // (`transition-colors hover:bg-[var(--danger)]
+            // hover:text-white dark:hover:bg-[var(--danger)]
+            // dark:hover:text-white`). Project has no Tailwind pipeline,
+            // so the hover rules were never generated. The danger-hover
+            // cue is now handled by data-app-close-hover + the shared
+            // block in src/design-system/utilities.css.
+            data-app-close-hover="true"
             style={{
               ...noDragStyle,
               width: 28,
@@ -507,7 +515,6 @@ export function QuickSearchModal({
               justifyContent: 'center',
               color: 'var(--text-secondary)',
             }}
-            className="transition-colors hover:bg-[var(--danger)] hover:text-white dark:hover:bg-[var(--danger)] dark:hover:text-white"
           >
             <X size={14} />
           </button>
