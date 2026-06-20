@@ -15,6 +15,7 @@
 //! (`commands::autostart::get_autostart_status`), never via
 //! `commands::<alias>`.
 
+pub mod app;
 pub mod autostart;
 pub mod backup;
 pub mod fs;
