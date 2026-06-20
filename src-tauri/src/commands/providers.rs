@@ -26,6 +26,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::domain::{McpServer, Provider};
+use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
 use crate::services::provider_service::{ImportResult, ImportSkip};
 
@@ -195,6 +196,41 @@ impl From<ImportSkip> for ImportSkipDto {
             reason: s.reason,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// F4 — deeplink 导入 (M2.3)
+// ---------------------------------------------------------------------------
+
+/// Parse a `ccswitch://v1/import?...` URL into a serialisable
+/// `ParsedDeeplink`. The frontend calls this BEFORE showing the
+/// import-confirmation modal so the user can see the parsed
+/// provider fields.
+///
+/// Pure function on the Rust side; the only IPC overhead is the
+/// `Vec<String>` round-trip. See
+/// `crate::infrastructure::deeplink_parser` for the URL protocol
+/// details.
+#[tauri::command]
+pub async fn parse_deeplink_url(url: String) -> CmdResult<ParsedDeeplink> {
+    parse_dl(&url).map_err(|e| e.to_string())
+}
+
+/// Persist a single provider JSON file (F4 deeplink import).
+///
+/// Called by the frontend AFTER the user has seen the parsed
+/// `Provider` in the modal and clicked [确认导入]. The write goes
+/// through `fs_atomic::write_with_backup` (CLAUDE.md §7) and
+/// returns `Err(AlreadyExists(id))` if the id is already on disk.
+#[tauri::command]
+pub async fn import_single_provider(
+    state: State<'_, AppState>,
+    provider: Provider,
+) -> CmdResult<()> {
+    state
+        .provider_service
+        .import_single_provider(provider)
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
