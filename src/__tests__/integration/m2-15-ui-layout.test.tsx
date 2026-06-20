@@ -157,12 +157,23 @@ describe('M2.15 — AppHeader layout contract (chrome + back button visible)', (
     expect(appHeaderSrc).toMatch(/flexShrink\s*:\s*0/);
   });
 
-  it('AppHeader right zone uses a tight gap so theme+settings+chrome form one cluster', () => {
+  it('AppHeader right zone has tight gap so theme+settings+chrome form one cluster', () => {
     // Bug #1 polish: cluster feels more cohesive at 4px gaps.
     // The right zone previously used gap-2 (8px) which added 24px
     // of dead space across 3 buttons; with the chrome buttons
     // needing every pixel, we tightened it.
-    expect(appHeaderSrc).toMatch(/flex items-center gap-1/);
+    //
+    // M2.15-fix-v2: this assertion switched from the old Tailwind
+    // string match (`/flex items-center gap-1/`) to a structural
+    // check on the inlined inline style. The project has no
+    // Tailwind pipeline wired up, so the utility classes were
+    // inert in the release exe (buttons stacked vertically and
+    // the cluster overflowed the 48px header). The fix inlined
+    // `display: 'flex', alignItems: 'center', gap: 4` onto the
+    // right-zone div. We assert the new contract here so future
+    // refactors can't accidentally regress back to broken Tailwind.
+    expect(appHeaderSrc).toMatch(/display:\s*['"]flex['"]/);
+    expect(appHeaderSrc).toMatch(/gap:\s*4/);
   });
 });
 

@@ -31,7 +31,6 @@
  */
 import type { ReactElement } from 'react';
 import { Maximize2, Minus, X } from 'lucide-react';
-import { cn } from '../lib/utils';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 /**
@@ -79,11 +78,9 @@ function MinimizeButton(): ReactElement {
     <button
       type="button"
       data-testid="app-header-minimize"
+      data-app-control-hover="true"
       aria-label="最小化窗口"
       title="最小化"
-      className={cn(
-        'transition-colors hover:bg-black/5 dark:hover:bg-white/5',
-      )}
       style={baseButtonStyle}
       onClick={() => {
         void safeCall(() => getCurrentWindow().minimize());
@@ -99,11 +96,9 @@ function MaximizeButton(): ReactElement {
     <button
       type="button"
       data-testid="app-header-maximize"
+      data-app-control-hover="true"
       aria-label="最大化窗口"
       title="最大化 / 还原"
-      className={cn(
-        'transition-colors hover:bg-black/5 dark:hover:bg-white/5',
-      )}
       style={baseButtonStyle}
       onClick={() => {
         void safeCall(() => getCurrentWindow().toggleMaximize());
@@ -126,12 +121,14 @@ function CloseButton(): ReactElement {
       // Background is also tinted so the cue is visible even on
       // the glass header (which would otherwise bleed the icon
       // color through at low alpha).
-      className={cn(
-        'transition-colors',
-        'hover:bg-[var(--danger)] hover:text-white',
-        'dark:hover:bg-[var(--danger)] dark:hover:text-white',
-      )}
+      // M2.15-fix-v2: removed Tailwind hover classes
+      // (`hover:bg-[var(--danger)] hover:text-white`) — Tailwind
+      // isn't configured in this project (no tailwind.config.js),
+      // so the rules were never generated. Hover cue is now
+      // handled by a single shared <style> tag in WindowControls
+      // below (data-app-close-hover / data-app-control-hover).
       style={baseButtonStyle}
+      data-app-close-hover="true"
       onClick={() => {
         // M1.11 fix (BP-4.01 / P-7): close button MUST NOT silently
         // swallow errors. If the IPC call rejects, the user clicks
@@ -156,6 +153,14 @@ function CloseButton(): ReactElement {
 }
 
 export function WindowControls(): ReactElement {
+  // M2.15-fix-v2: project has no Tailwind pipeline (see AppHeader
+  // note), so the cluster wrapper's `flex items-center gap-1` class
+  // was inert — buttons stacked vertically and the cluster extended
+  // to 96px tall (way past the 48px header). Inlined the same flex
+  // + gap on the cluster so it sits as a tight horizontal row at
+  // 32px tall. The hover/transition rules are co-located in
+  // AppHeader's <style> tag (data-app-control-hover /
+  // data-app-close-hover) so all chrome buttons share one rule set.
   return (
     <div
       data-testid="app-header-window-controls"
@@ -163,8 +168,12 @@ export function WindowControls(): ReactElement {
       // <header>. Keeping them grouped in one flex row also lets
       // us add a "always-on-top" or "minimize-to-tray" button in
       // M2+ without re-architecting AppHeader.
-      className="flex items-center gap-1"
-      style={noDragStyle}
+      style={{
+        ...noDragStyle,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+      }}
     >
       <MinimizeButton />
       <MaximizeButton />
