@@ -330,8 +330,6 @@ export default function App(): ReactElement {
               <OptimizerPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
-            ) : view === 'resource-browser' ? (
-              <ResourceBrowserPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

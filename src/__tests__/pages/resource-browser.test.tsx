@@ -125,7 +125,7 @@ describe('ResourceBrowserPage — F16 (M2.13)', () => {
   });
 
   it('clicking a row reveal button calls reveal_in_file_manager with the row path', async () => {
-    mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_resources') {
         return [item('plugin/code-review', 'plugin')];
       }
