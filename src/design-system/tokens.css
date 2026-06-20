@@ -134,6 +134,19 @@ body,
   --border:         #373E47;
   --accent:         #2F81F7;
 
+  /* M2.10 F12 polish — dark-mode status palette. The M1.5 stub
+   * only covered backgrounds / text / accent; status colours
+   * (`--success` / `--warning` / `--danger`) and the disabled
+   * foreground inherited the light-theme values, which produced
+   * dark-on-light contrast inversions on the F6 MCP toggle and
+   * F18 optimizer banner. We pick slightly lighter Material-style
+   * hues so they stay readable on the dark backdrop without
+   * competing with the accent. */
+  --success:        #4CAF50;
+  --warning:        #FFB74D;
+  --danger:         #EF5350;
+  --disabled:       rgba(255, 255, 255, 0.4);
+
   /* Dark-mode glass — lower alpha so the Mica / vibrancy
    * backdrop can still bleed through. Pure dark surfaces
    * would defeat the entire point of the M1.9.2 effect. */
@@ -149,6 +162,13 @@ body {
   font-size: var(--fs-body);
   color: var(--text-primary);
   background: var(--bg-primary);
+  /* M2.10 F12 polish — 200ms ease transition on bg + text so a
+   * light→dark toggle (or vice versa) fades smoothly instead of
+   * snapping. We deliberately do NOT transition border / shadow
+   * because that would cascade through every card / modal and
+   * produce a visible ripple; bg + text are the only properties
+   * the user actually perceives changing during a theme toggle. */
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 code,
