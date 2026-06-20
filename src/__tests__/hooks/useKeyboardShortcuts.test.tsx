@@ -36,7 +36,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useKeyboardShortcuts, type ShortcutBinding } from '../../hooks/useKeyboardShortcuts';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 /**
  * Dispatch a synthetic KeyboardEvent on window so the hook's listener
