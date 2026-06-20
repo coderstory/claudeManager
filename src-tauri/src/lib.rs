@@ -2,8 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 pub mod commands;
+pub mod domain;
+pub mod infrastructure;
 pub mod platform;
 pub mod plugins;
+pub mod services;
 
 use tauri::{
     menu::{Menu, MenuItem},
