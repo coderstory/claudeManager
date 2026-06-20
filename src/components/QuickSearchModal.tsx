@@ -1,5 +1,5 @@
 /**
- * QuickSearchModal — M2.10 F11 "快速搜索" modal.
+ * QuickSearchModal — M2.10 F11 "快速搜索" modal, M2.11 F9 fuzzy upgrade.
  *
  * Opens with Ctrl+/ (the standard "command palette" shortcut).
  * Filters in real time across:
@@ -10,8 +10,29 @@
  * Selecting a result either:
  *   - navigates to a ViewId (plugin entry), or
  *   - jumps to the relevant page (provider/mcp results land on the
- *     corresponding management view). M2.10 keeps it simple: every
- *     non-plugin result also navigates to its management page.
+ *     corresponding management view).
+ *
+ * ## M2.11 upgrades (fuzzy + highlight + history + Ctrl+N/P):
+ *
+ *   - The substring filter from M2.10 was replaced by a fuzzy
+ *     subsequence matcher (`src/lib/fuzzy.ts`). This lets users
+ *     type `mp` to find "MCP 管理" (M-p with a gap) instead of
+ *     having to type "MCP" verbatim. Results are sorted by score
+ *     desc — contiguous matches and start-of-word hits rank
+ *     above loose subsequence matches.
+ *
+ *   - Matched characters in the rendered label are wrapped in
+ *     `<mark>` so the user can see WHY a result ranked top.
+ *
+ *   - Keyboard navigation now includes Ctrl+N / Ctrl+P in
+ *     addition to ArrowDown / ArrowUp. Both move the highlight
+ *     and clamp at the ends.
+ *
+ *   - Successful selections save the typed query into
+ *     `localStorage["ccm.searchHistory"]` (max 10, deduped,
+ *     most-recent-first). The strip renders below the input
+ *     only when the input is empty AND history is non-empty —
+ *     clicking a chip populates the input without navigating.
  *
  * ## Why this is a pure component (no router):
  *
@@ -19,16 +40,8 @@
  *     App.tsx, so it's testable in isolation (render with a fake
  *     `onNavigate` and assert the right callback fires).
  *   - The filter is a small pure function exported alongside the
- *     component (`filterResults`) — tests don't need to drive the
- *     input box to verify the matching algorithm.
- *
- * ## Why we re-fetch on open instead of subscribing globally:
- *
- *   - The data sets (providers, MCP servers) change during normal
- *     use (switching providers, toggling MCP). We want the modal
- *     to reflect the LATEST state when the user opens it.
- *   - Cost is bounded (a few KB JSON over the Tauri IPC). No need
- *     for a global store.
+ *     component — tests don't need to drive the input box to
+ *     verify the matching algorithm.
  */
 import {
   useCallback,
@@ -42,17 +55,18 @@ import { X } from 'lucide-react';
 import { ALL_VIEWS, type ViewId } from '../hooks/useViewState';
 import { listProviders } from '../lib/api/providers';
 import { listMcpServers } from '../lib/api/mcp';
+import { fuzzyMatch, fuzzySearch } from '../lib/fuzzy';
 import type { Provider } from '../types/provider';
 import type { McpServer } from '../types/mcp';
+
+/** localStorage slot for the "recent searches" history. */
+export const HISTORY_KEY = 'ccm.searchHistory';
+/** Hard cap on the recent-searches list — see CLAUDE.md "memory/状态纪律". */
+const HISTORY_LIMIT = 10;
 
 /**
  * The 12 plugin Chinese subtitles — mirrored from AppSidebar's
  * VIEW_META so the search can match against user-facing labels.
- * Kept here as a copy because:
- *   - AppSidebar's VIEW_META holds ReactElement icons that aren't
- *     portable to a pure filter function.
- *   - Search should match "Provider 列表", "用量查询", etc. — the
- *     short Chinese strings, not the kebab-case ids.
  */
 export const PLUGIN_LABELS: Record<ViewId, string> = {
   home: '欢迎页',
@@ -83,7 +97,56 @@ export interface SearchResult {
 }
 
 /**
- * Pure filter — exposed so unit tests don't need to drive the input.
+ * Score result from fuzzy ranking — extends SearchResult with the
+ * positions of matched characters in `label` so the renderer
+ * can wrap them in `<mark>`.
+ */
+export interface RankedSearchResult extends SearchResult {
+  /** Score assigned by fuzzyMatch (higher = more relevant). */
+  score: number;
+  /** Indices in `label` where each character of the query matched. */
+  matches: number[];
+}
+
+/**
+ * Read the recent-search history. Returns [] when storage is empty
+ * or contains a malformed value (we don't want a JSON parse error
+ * to crash the modal — §6 of CLAUDE.md says errors must surface
+ * to the user, not silently swallow; the empty-default is the
+ * user-facing equivalent of "no history yet").
+ */
+export function readSearchHistory(): string[] {
+  if (typeof window === 'undefined') return [];
+  const raw = window.localStorage.getItem(HISTORY_KEY);
+  if (raw === null) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string').slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Append `query` to the front of the history, deduping and
+ * clamping at HISTORY_LIMIT entries. Empty / whitespace-only
+ * queries are ignored.
+ */
+export function pushSearchHistory(query: string): void {
+  if (typeof window === 'undefined') return;
+  const trimmed = query.trim();
+  if (trimmed === '') return;
+  const prev = readSearchHistory().filter((q) => q !== trimmed);
+  const next = [trimmed, ...prev].slice(0, HISTORY_LIMIT);
+  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+}
+
+/**
+ * Pure filter — kept exported for backward-compat with the M2.10
+ * test suite. M2.11 internally uses `rankResults` (fuzzy + sort)
+ * but `filterResults` still works for callers that want the old
+ * substring-only behavior.
  *
  * Algorithm: case-insensitive substring match on `label` and
  * `hint`. Returns at most `limit` results, preserving input order.
@@ -105,6 +168,52 @@ export function filterResults(
       )
     : results.slice();
   return filtered.slice(0, limit);
+}
+
+/**
+ * M2.11 fuzzy ranker — replaces the substring filter inside the
+ * modal. Returns a scored, sorted array.
+ *
+ * Empty query → returns [] (the caller shows the default list).
+ * No match → returns [].
+ */
+export function rankResults(
+  results: readonly SearchResult[],
+  query: string,
+): RankedSearchResult[] {
+  const q = query.trim();
+  if (q === '') return [];
+  // Build a parallel labels array so fuzzySearch returns indices
+  // that map 1:1 back to `results`.
+  const labels = results.map((r) => r.label);
+  const ranked = fuzzySearch(q, labels);
+  return ranked
+    .map((r): RankedSearchResult => {
+      const source = results[r.index]!;
+      return {
+        ...source,
+        score: r.score,
+        matches: r.matches,
+      };
+    });
+}
+
+/**
+ * Compute the default visible list when the input is empty:
+ * the 12 plugin entries (in declaration order) followed by
+ * any loaded providers / MCP servers, capped at 50.
+ */
+export function defaultResults(
+  providers: readonly Provider[],
+  mcps: readonly McpServer[],
+  limit = 50,
+): SearchResult[] {
+  const plugins = buildPluginResults();
+  return [
+    ...plugins,
+    ...providers.map(providerToResult),
+    ...mcps.map(mcpToResult),
+  ].slice(0, limit);
 }
 
 export interface QuickSearchModalProps {
@@ -147,6 +256,39 @@ function mcpToResult(m: McpServer): SearchResult {
   };
 }
 
+/**
+ * Render `label` with the matched characters wrapped in <mark>.
+ * `matches` is a sorted list of indices in `label`. Unmatched
+ * chars pass through verbatim.
+ */
+function HighlightedLabel({
+  label,
+  matches,
+}: {
+  label: string;
+  matches: readonly number[];
+}): ReactElement {
+  if (matches.length === 0) return <>{label}</>;
+  const set = new Set(matches);
+  const out: ReactElement[] = [];
+  let buf = '';
+  let i = 0;
+  for (const ch of label) {
+    if (set.has(i)) {
+      if (buf) {
+        out.push(<span key={`t-${i}`}>{buf}</span>);
+        buf = '';
+      }
+      out.push(<mark key={`m-${i}`}>{ch}</mark>);
+    } else {
+      buf += ch;
+    }
+    i++;
+  }
+  if (buf) out.push(<span key={`t-${i}`}>{buf}</span>);
+  return <>{out}</>;
+}
+
 export function QuickSearchModal({
   isOpen,
   onClose,
@@ -156,6 +298,7 @@ export function QuickSearchModal({
   const [providers, setProviders] = useState<Provider[]>([]);
   const [mcps, setMcps] = useState<McpServer[]>([]);
   const [highlight, setHighlight] = useState(0);
+  const [history, setHistory] = useState<string[]>(() => readSearchHistory());
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Refresh live data when the modal opens.
@@ -188,17 +331,28 @@ export function QuickSearchModal({
     return [...plugins, ...providers.map(providerToResult), ...mcps.map(mcpToResult)];
   }, [providers, mcps]);
 
-  const visible = useMemo(
-    () => filterResults(allResults, query),
-    [allResults, query],
-  );
+  // M2.11: empty query → show the default list (12 plugins +
+  // live data, capped). Non-empty query → fuzzy rank.
+  const visible = useMemo<RankedSearchResult[]>(() => {
+    const q = query.trim();
+    if (q === '') {
+      // Map SearchResult → RankedSearchResult with score 0 and
+      // no matches so the renderer can use the same shape.
+      return defaultResults(providers, mcps).map((r) => ({
+        ...r,
+        score: 0,
+        matches: [],
+      }));
+    }
+    return rankResults(allResults, q);
+  }, [allResults, providers, mcps, query]);
 
   // Reset highlight when the visible list shrinks / changes.
   useEffect(() => {
     setHighlight(0);
   }, [query, isOpen]);
 
-  // Focus the input on open + bind Esc / arrow keys.
+  // Focus the input on open + bind Esc / arrow / Ctrl+N / Ctrl+P / Enter.
   useEffect(() => {
     if (!isOpen) return;
     // Defer focus until after the modal paints — otherwise jsdom
@@ -206,33 +360,43 @@ export function QuickSearchModal({
     const id = window.setTimeout(() => inputRef.current?.focus(), 0);
 
     const onKey = (e: KeyboardEvent): void => {
-      // Skip if user is in our own input — the input handlers
-      // below cover ArrowUp/Down/Enter/Esc. We DO let plain typing
-      // through to the input naturally because we're listening on
-      // window with `isTextEntryTarget` exemption in the hook.
       if (
-        e.target instanceof HTMLElement &&
-        (e.target.tagName === 'INPUT' ||
+        !(e.target instanceof HTMLElement) ||
+        !(
+          e.target.tagName === 'INPUT' ||
           e.target.tagName === 'TEXTAREA' ||
-          e.target.isContentEditable)
+          e.target.isContentEditable
+        )
       ) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setHighlight((h) => Math.min(h + 1, Math.max(visible.length - 1, 0)));
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setHighlight((h) => Math.max(h - 1, 0));
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          const r = visible[highlight];
-          if (r) {
-            onNavigate(r.view);
-            onClose();
-          }
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
+        return;
+      }
+      // Clamp helpers — keep highlight inside [0, visible.length-1].
+      const clamp = (n: number): number =>
+        Math.max(0, Math.min(n, Math.max(visible.length - 1, 0)));
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlight((h) => clamp(h + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlight((h) => clamp(h - 1));
+      } else if (e.key === 'n' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setHighlight((h) => clamp(h + 1));
+      } else if (e.key === 'p' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setHighlight((h) => clamp(h - 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const r = visible[highlight];
+        if (r) {
+          pushSearchHistory(query);
+          setHistory(readSearchHistory());
+          onNavigate(r.view);
           onClose();
         }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -240,7 +404,7 @@ export function QuickSearchModal({
       window.clearTimeout(id);
       window.removeEventListener('keydown', onKey);
     };
-  }, [isOpen, visible, highlight, onNavigate, onClose]);
+  }, [isOpen, visible, highlight, onNavigate, onClose, query]);
 
   // Reset query when the modal closes — keeps the next open clean.
   useEffect(() => {
@@ -249,13 +413,17 @@ export function QuickSearchModal({
 
   const handleSelect = useCallback(
     (r: SearchResult) => {
+      pushSearchHistory(query);
+      setHistory(readSearchHistory());
       onNavigate(r.view);
       onClose();
     },
-    [onNavigate, onClose],
+    [onNavigate, onClose, query],
   );
 
   if (!isOpen) return null;
+
+  const showHistoryStrip = query.trim() === '' && history.length > 0;
 
   return (
     <div
@@ -343,6 +511,53 @@ export function QuickSearchModal({
           </button>
         </div>
 
+        {/* Recent-history strip — only when input is empty and
+            history has at least 1 entry. Clicking a chip seeds
+            the input (does NOT navigate). */}
+        {showHistoryStrip ? (
+          <div
+            data-testid="quick-search-history"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 16px',
+              borderBottom: '1px solid var(--border)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: 'var(--fs-caption)',
+                marginRight: 4,
+              }}
+            >
+              最近:
+            </span>
+            {history.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => setQuery(q)}
+                style={{
+                  ...noDragStyle,
+                  border: '1px solid var(--border)',
+                  borderRadius: 999,
+                  padding: '2px 10px',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-secondary)',
+                  fontSize: 'var(--fs-caption)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {/* Result list */}
         <ul
           data-testid="quick-search-results"
@@ -394,7 +609,9 @@ export function QuickSearchModal({
                     fontSize: 'var(--fs-body)',
                   }}
                 >
-                  <span style={{ flex: '1 1 auto', minWidth: 0 }}>{r.label}</span>
+                  <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <HighlightedLabel label={r.label} matches={r.matches} />
+                  </span>
                   <span
                     style={{
                       color: 'var(--text-muted)',
@@ -422,7 +639,7 @@ export function QuickSearchModal({
             justifyContent: 'space-between',
           }}
         >
-          <span>↑↓ 选择 · Enter 打开 · Esc 关闭</span>
+          <span>↑↓/Ctrl+N/P 选择 · Enter 打开 · Esc 关闭</span>
           <span>{visible.length} 个结果</span>
         </div>
       </div>
