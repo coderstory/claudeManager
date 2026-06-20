@@ -36,6 +36,10 @@ pub struct AppState {
     /// snapshot cache for `(provider_id, window)` and reads
     /// `~/.claude/usage.json` on miss.
     pub usage_service: Arc<crate::services::usage_service::UsageService>,
+    /// M2.9 — F18 配置优化 service. Composes 13 OptimizerRules,
+    /// scans settings.json + providers/ + mcp.json, applies fixes
+    /// via fs_atomic with auto-backup.
+    pub optimizer_service: Arc<crate::services::optimizer_service::OptimizerService>,
 }
 
 impl AppState {
@@ -63,12 +67,16 @@ impl AppState {
         let usage_service = Arc::new(
             crate::services::usage_service::UsageService::new(paths.clone()),
         );
+        let optimizer_service = Arc::new(
+            crate::services::optimizer_service::OptimizerService::new(paths.clone()),
+        );
         Self {
             paths,
             provider_service,
             mcp_service,
             backup_service,
             usage_service,
+            optimizer_service,
         }
     }
 }
