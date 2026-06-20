@@ -140,7 +140,7 @@ export default function DeeplinkImportPage(): ReactElement {
   return (
     <div
       style={{
-        padding: '32px 40px',
+        padding: 'var(--space-6)',
         maxWidth: 720,
         margin: '0 auto',
       }}
@@ -148,16 +148,17 @@ export default function DeeplinkImportPage(): ReactElement {
     >
       <h1
         style={{
-          fontSize: 20,
+          fontSize: 'var(--fs-heading)',
           fontWeight: 600,
           color: 'var(--text-primary)',
-          marginBottom: 8,
+          margin: 0,
+          marginBottom: 'var(--space-3)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}
       >
-        <Link2 size={20} />
+        <Link2 size={18} />
         Deeplink 导入
       </h1>
       <p
