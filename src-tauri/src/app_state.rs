@@ -21,8 +21,11 @@ pub struct AppState {
     pub paths: AppPaths,
     /// Shared service instances. `Arc` so the same instance is used by
     /// any future commands that need cross-command caching (e.g. F19
-    /// backup cache). M2.1 only uses `provider_service`.
+    /// backup cache). M2.1 uses `provider_service`; M2.5 adds
+    /// `mcp_service` for F6.
     pub provider_service: Arc<crate::services::provider_service::ProviderService>,
+    /// M2.5 — F6 MCP 管理 service. Owns `~/.claude/mcp.json` read/write.
+    pub mcp_service: Arc<crate::services::mcp_service::McpService>,
 }
 
 impl AppState {
@@ -41,9 +44,13 @@ impl AppState {
         let provider_service = Arc::new(
             crate::services::provider_service::ProviderService::new(paths.clone()),
         );
+        let mcp_service = Arc::new(
+            crate::services::mcp_service::McpService::new(paths.clone()),
+        );
         Self {
             paths,
             provider_service,
+            mcp_service,
         }
     }
 }
