@@ -143,12 +143,13 @@ export default function SingleFileDeployPage(): ReactElement {
       }}
       data-testid="single-file-deploy-page"
     >
-      <header style={{ marginBottom: 24 }}>
+      <header style={{ marginBottom: 'var(--space-4)' }}>
         <h1
           style={{
             color: 'var(--text-primary)',
-            fontSize: 24,
+            fontSize: 'var(--fs-heading)',
             fontWeight: 600,
+            margin: 0,
           }}
         >
           单文件部署
