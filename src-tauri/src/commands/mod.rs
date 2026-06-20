@@ -16,4 +16,5 @@
 //! `commands::<alias>`.
 
 pub mod autostart;
+pub mod fs;
 pub mod providers;

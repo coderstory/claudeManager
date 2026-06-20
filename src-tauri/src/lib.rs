@@ -64,6 +64,8 @@ pub fn run() {
             commands::providers::import_providers_from_sql,
             commands::providers::parse_deeplink_url,
             commands::providers::import_single_provider,
+            commands::fs::read_file,
+            commands::fs::write_file_atomic,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
