@@ -196,3 +196,76 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - SQLite 历史 + 备份 diff
 - 多窗口支持
 - telemetry（可选）
+
+---
+
+## M1 收尾 — 2026-06-20
+
+**状态**: M1 架构期完成，12/12 任务全部 ship（合并 commits 含 M1.10 / M1.11 / M1.12 = 61 总 commit / 63 M1 主题 commit）。
+**最终 ship exe**: `ClaudeConfigManager-M1.9.3-fix-layout.exe` (28.5 MB, 2026-06-20 03:12)
+**测试**: 73/73 vitest 全绿（9 文件，Duration 9.46s）
+**bundle**: 252K `dist/`（移除 framer-motion 后）
+**关键文档**: `docs/milestones/M1-final-report.md`（新建，本 session 产出）
+
+### M1 已 ship 的 exe（桌面，`~/Desktop/ClaudeConfigManager-M1/`）
+1. `ClaudeConfigManager-M1.1-scaffold-release.exe` (M1.1 + fix, ✅ 核定 2026-06-19 00:26:16)
+2. `ClaudeConfigManager-M1.1.2-platform-abstractions.exe` (M1.2, ⏳)
+3. `ClaudeConfigManager-M1.1.3-plugin-host.exe` (M1.3, ⏳)
+4. `ClaudeConfigManager-M1.1.3-plugin-host-fix.exe` (M1.3-fix-1 stale dist, ✅)
+5. `ClaudeConfigManager-M1.1.3-plugin-host-fix-v2.exe` (M1.3-fix-2 custom-protocol, ✅)
+6. `ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe` (M1.3-fix-3 viewport reset, ⏳)
+7. `ClaudeConfigManager-M1.1.3-plugin-host-pipeline-fix.exe` (M1.3 pipeline fix)
+8. `ClaudeConfigManager-M1.1.4-platform-plugins-capabilities.exe` (M1.4, ⏳)
+9. `ClaudeConfigManager-M1.1.7-chrome-with-autostart.exe` (M1.7, ⏳)
+10. `ClaudeConfigManager-M1.1.8-tdd-scaffold.exe` (M1.8, ⏳)
+11. `ClaudeConfigManager-M1.2-platform-abstractions.exe` (M1.2 alt naming, ⏳)
+12. `ClaudeConfigManager-M1.9.1-scroll-layout-fix.exe` (M1.9.1, ⏳)
+13. `ClaudeConfigManager-M1.9.2-chrome-and-glass.exe` (M1.9.2, ⏳)
+14. **`ClaudeConfigManager-M1.9.3-fix-layout.exe`** ← **当前推荐用户核定**（M1.9.3 main 绝对定位 + framer-motion 移除）
+
+### 已知限制 / 风险（M2 启动前必看，完整列表见 `docs/milestones/M1-final-report.md` §5）
+- F-1.09 / §5.1: M1.5 dark stub 不完整（`--success` / `--warning` / `--danger` / `--shadow-*` 缺口）
+- F-1.17 / §5.2: Tailwind 未接 PostCSS 管线（className 是 dead code，全部 inline style）
+- F-1.12 / §5.3: macOS impls 在 Win dev box 编译验证过，runtime 验证推迟到 Mac dev box
+- §5.4: cargo test 在本机有 DLL load 限制（dev box 已知问题，CI 跑通）
+- §5.5: Playwright e2e 实跑过 0 次（M1.8 配了但没跑）
+- §5.6: `.planning/HANDOFF.json` 已 stale（仍把 M1.5~1.12 标 not_started；按 CLAUDE.md §10 = 一次性 artifact 不重写，保留作为历史记录）
+- §5.7: backend plugin stub 还没接到 `plugins/mod.rs::init_all`（M2 启动第一件事 = PluginHost wiring）
+- F-1.25 / §5.8: release exe 没 stderr（`eprintln!` silent fail）
+
+### M2 候选启动（详见 `docs/milestones/M2-roadmap-draft.md`）
+P0 = F1 Provider 列表 + F2 Provider 切换 + F5 JSON 编辑 + F6 MCP 管理 + F13 备份基础设施（F2 强依赖）
+
+M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单）：
+1. **3.1 PluginHost wiring**：把 12 stub 接到 `plugins/mod.rs::init_all`（半天，1 subagent）
+2. **3.2 M1.10 收尾**：ci.yml 加 npm test / build / e2e；beforeBuildCommand 原子化；tsconfig strict 审计（1-2 天）
+3. **3.3 M1.11 文档**：把 worktree 里的 `ARCHITECTURE.md` / `AGENTS.md` / 4 阶段评审 / final-audit 合并入 master（1 天）
+
+主 session 必拍板的 5 个决策（详见 M1-final-report.md §7.3）：
+- D1: M2 启动前是否先补 3 件套？→ **推荐选项 B（与 M2.1 并行）**
+- D2: M2 P0 4 plugin 执行顺序？→ **推荐选项 B（F1+F13 → F2 ‖ F5 ‖ F6 并行）**
+- D3: 是否启用 react-router？→ **推荐选项 A（保持 useViewState）**
+- D4: Mac 真机验证 F1 吗？→ **F2 启动前再决定**
+- D5: M1 exe 批量核定策略？→ **推荐选项 C（抽查 M1.9.3 + M1.3 v3）**
+
+### 关键 commit（master HEAD = 9776ee9）
+- `9776ee9` M1.12: merge final audit + archive
+- `d79575d` M1.11: merge docs + 4-stage review
+- `d35b81a` M1.10: merge CI matrix + docs
+- `fd4c125` M1.9.3-fixP1: remove framer-motion, replace AnimatePresence with CSS keyframe
+- `398488c` M1.9.3-fixP0: main position absolute (replaces flex:1 miscalculated by WebView2 release)
+- `6cc33bb` M1.9.3-test: main height + view transition regression tests
+- `87c7365` M1.10-ci: GitHub Actions matrix for windows-latest + macos-latest
+- `04395dd` M1.9.2-test-refine: align scroll-layout + glass asserts with shipped reality
+- `8a1f48a` M1.7-commands: Tauri commands get_autostart_status / set_autostart_enabled
+- `0397b43` M1.6-deps: add 10 tauri-plugin-* deps with =version lock
+- `be955c3` M1.5-wire: ThemeProvider wraps App in main.tsx, all tests green
+- `038aa4f` M1.3-fix: viewport meta + CSS reset to remove browser scrollbars
+- `50abbe6` M1.3-pipeline-fix-v2: add --features tauri/custom-protocol to cargo build
+- `dd4456b` kill-app: use -F not /F (Git Bash msys path mangling)
+- `6814a7a` M1.8: TDD scaffold + Playwright e2e specs + CI workflow
+- `cc47b7d` M1.4: Tauri capabilities with WHY annotations
+- `77e070a` M1.3: plugin host + 12 plugin stubs
+- `13290b3` M1.2: OS abstraction layer (8 traits × Win+Mac impls)
+- `2914342` M1.1-final: release build + small window + robust scripts
+- `fa02b41` M1.1: Tauri v2 scaffold + system tray + minimize-to-tray
