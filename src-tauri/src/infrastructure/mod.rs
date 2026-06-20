@@ -9,4 +9,5 @@ pub mod backup_scanner;
 pub mod deeplink_parser;
 pub mod fs_atomic;
 pub mod json_diff;
+pub mod optimizer_rules;
 pub mod sql_parser;
