@@ -55,7 +55,7 @@ import { X } from 'lucide-react';
 import { ALL_VIEWS, type ViewId } from '../hooks/useViewState';
 import { listProviders } from '../lib/api/providers';
 import { listMcpServers } from '../lib/api/mcp';
-import { fuzzyMatch, fuzzySearch } from '../lib/fuzzy';
+import { fuzzySearch } from '../lib/fuzzy';
 import type { Provider } from '../types/provider';
 import type { McpServer } from '../types/mcp';
 
