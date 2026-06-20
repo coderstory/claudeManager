@@ -30,6 +30,20 @@
  * - IPC error → InfoBar with the user-readable message.
  * - `build_timestamp === 0` (build.rs couldn't read the clock) →
  *   render "未知" rather than the meaningless 1970 epoch date.
+ *
+ * ## M2.x-inline
+ *
+ * Previously this page composed ~25 Tailwind utility classes
+ * (`mx-auto w-full max-w-4xl p-6`, `mb-6 flex items-center
+ * justify-between`, `rounded-lg border border-border bg-bg-elevated
+ * p-4 shadow-sm`, `inline-flex items-center gap-1.5 rounded
+ * border border-border bg-bg-elevated px-3 py-1.5 text-sm
+ * text-text-primary hover:bg-bg-overlay`, etc). The project has
+ * no Tailwind pipeline, so all those classes silently noop'd
+ * on the real Tauri WebView2 release exe. Every utility class
+ * is now inlined as `style={{}}` properties; the one hover rule
+ * (`hover:bg-bg-overlay` on the toggle button) lives in
+ * src/design-system/utilities.css under [data-app-cmd-toggle].
  */
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -120,12 +134,32 @@ export default function SingleFileDeployPage(): ReactElement {
 
   return (
     <div
-      className="mx-auto w-full max-w-4xl p-6"
+      style={{
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        width: '100%',
+        maxWidth: 896,
+        padding: 24,
+      }}
       data-testid="single-file-deploy-page"
     >
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-text-primary">单文件部署</h1>
-        <p className="mt-1 text-sm text-text-secondary">
+      <header style={{ marginBottom: 24 }}>
+        <h1
+          style={{
+            color: 'var(--text-primary)',
+            fontSize: 24,
+            fontWeight: 600,
+          }}
+        >
+          单文件部署
+        </h1>
+        <p
+          style={{
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            marginTop: 4,
+          }}
+        >
           应用 = 一个可执行文件，无外部 .NET / Node / Python runtime 依赖。
           下方展示当前运行版本与构建信息；installer 由本地脚本生成。
         </p>
@@ -134,25 +168,68 @@ export default function SingleFileDeployPage(): ReactElement {
       {/* IPC error */}
       {state.error && (
         <div
-          className="mb-4 flex items-start gap-2 rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
           data-testid="app-metadata-error"
           role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            borderRadius: 6,
+            // --danger at 30% alpha (was `border-danger/30`).
+            border: '1px solid rgba(211, 47, 47, 0.3)',
+            // --danger at 5% alpha (was `bg-danger/5`).
+            background: 'rgba(211, 47, 47, 0.05)',
+            padding: 12,
+            fontSize: 14,
+            color: 'var(--danger)',
+            marginBottom: 16,
+          }}
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <AlertCircle
+            aria-hidden="true"
+            style={{
+              marginTop: 2,
+              height: 16,
+              width: 16,
+              flexShrink: 0,
+            }}
+          />
           <span>{state.error}</span>
         </div>
       )}
 
       {/* Metadata card */}
       <section
-        className="mb-6 rounded-lg border border-border bg-bg-elevated p-4 shadow-sm"
+        style={{
+          marginBottom: 24,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          padding: 16,
+          boxShadow: 'var(--shadow-sm)',
+        }}
         data-testid="app-metadata-card"
         aria-label="当前应用元数据"
       >
-        <h2 className="mb-3 text-sm font-medium text-text-secondary">
+        <h2
+          style={{
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            fontWeight: 500,
+            marginBottom: 12,
+          }}
+        >
           当前应用
         </h2>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+        <dl
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            columnGap: 24,
+            rowGap: 8,
+            margin: 0,
+          }}
+        >
           <MetaRow
             testId="meta-product-name"
             label="名称"
@@ -195,38 +272,124 @@ export default function SingleFileDeployPage(): ReactElement {
         type="button"
         onClick={() => setShowCommands((v) => !v)}
         aria-expanded={showCommands}
-        className="inline-flex items-center gap-1.5 rounded border border-border bg-bg-elevated px-3 py-1.5 text-sm text-text-primary hover:bg-bg-overlay"
         data-testid="toggle-commands-btn"
+        // M2.x-inline: hover rule lives in src/design-system/utilities.css
+        // under [data-app-cmd-toggle] (was Tailwind `hover:bg-bg-overlay`).
+        data-app-cmd-toggle="true"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          borderRadius: 4,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          paddingLeft: 12,
+          paddingRight: 12,
+          paddingTop: 6,
+          paddingBottom: 6,
+          fontSize: 14,
+          color: 'var(--text-primary)',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
       >
-        <Terminal className="h-4 w-4" />
+        <Terminal
+          aria-hidden="true"
+          style={{ height: 16, width: 16 }}
+        />
         {showCommands ? '隐藏' : '查看'} installer 生成命令
       </button>
 
       {showCommands && (
         <section
-          className="mt-3 rounded-lg border border-border bg-bg-elevated p-4 shadow-sm"
+          style={{
+            marginTop: 12,
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            padding: 16,
+            boxShadow: 'var(--shadow-sm)',
+          }}
           data-testid="installer-commands-panel"
           aria-label="installer 生成命令"
         >
-          <p className="mb-3 text-sm text-text-secondary">
+          <p
+            style={{
+              color: 'var(--text-secondary)',
+              fontSize: 14,
+              marginBottom: 12,
+            }}
+          >
             从项目根目录运行以下命令；产物会写入{' '}
-            <code className="rounded bg-bg-overlay px-1 py-0.5 text-xs text-text-primary">
+            <code
+              style={{
+                borderRadius: 4,
+                background: 'var(--bg-overlay)',
+                paddingLeft: 4,
+                paddingRight: 4,
+                paddingTop: 2,
+                paddingBottom: 2,
+                fontSize: 12,
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
               installers/
             </code>
             。
           </p>
-          <ol className="space-y-3">
+          <ol
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: 0,
+            }}
+          >
             {INSTALLER_COMMANDS.map((c) => (
-              <li key={c.cmd}>
-                <div className="text-xs text-text-muted">{c.label}</div>
-                <pre className="mt-1 overflow-x-auto rounded border border-border bg-[#1F2328] p-2 font-mono text-xs text-[#FAFAF7]">
+              <li key={c.cmd} style={{ marginBottom: 12 }}>
+                <div
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: 12,
+                  }}
+                >
+                  {c.label}
+                </div>
+                <pre
+                  style={{
+                    marginTop: 4,
+                    overflowX: 'auto',
+                    borderRadius: 4,
+                    border: '1px solid var(--border)',
+                    background: '#1F2328',
+                    padding: 8,
+                    fontSize: 12,
+                    color: '#FAFAF7',
+                    fontFamily: 'var(--font-mono)',
+                    margin: '4px 0 0 0',
+                  }}
+                >
                   <code>{c.cmd}</code>
                 </pre>
-                <div className="mt-1 text-xs text-text-muted">{c.hint}</div>
+                <div
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  {c.hint}
+                </div>
               </li>
             ))}
           </ol>
-          <p className="mt-3 text-xs text-text-muted">
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: 12,
+              marginTop: 12,
+            }}
+          >
             说明：M2.8 阶段 UI 仅展示与引导，实际编译由本地 shell 触发，避免在
             Tauri 主进程内长时间阻塞。M3+ 引入 sidecar 后会接入按钮一键构建。
           </p>
@@ -249,13 +412,31 @@ interface MetaRowProps {
 
 function MetaRow({ testId, label, value, mono }: MetaRowProps): ReactElement {
   return (
-    <div className="flex items-baseline gap-3">
-      <dt className="w-20 flex-shrink-0 text-xs text-text-muted">{label}</dt>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 12,
+      }}
+    >
+      <dt
+        style={{
+          width: 80,
+          flexShrink: 0,
+          color: 'var(--text-muted)',
+          fontSize: 12,
+        }}
+      >
+        {label}
+      </dt>
       <dd
-        className={
-          'text-sm text-text-primary ' +
-          (mono ? 'font-mono tabular-nums' : '')
-        }
+        style={{
+          color: 'var(--text-primary)',
+          fontSize: 14,
+          fontFamily: mono ? 'var(--font-mono)' : 'inherit',
+          fontVariantNumeric: mono ? 'tabular-nums' : 'normal',
+          margin: 0,
+        }}
         data-testid={testId}
       >
         {value}
