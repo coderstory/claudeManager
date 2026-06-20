@@ -52,7 +52,6 @@ import { render, screen } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
 import { QuickSearchModal } from '../../components/QuickSearchModal';
-import { AppHeader } from '../../components/AppHeader';
 
 // Mock the Tauri window API so WindowControls can render without
 // crashing inside jsdom. We don't assert on the call here — that
@@ -114,7 +113,7 @@ beforeEach(() => {
 });
 
 function renderAppWithView(view: string): void {
-  localStorage.setItem('ccm.viewState.currentView', view);
+  localStorage.setItem('ccm.lastView', view);
   render(
     <ThemeProvider>
       <App />
@@ -195,15 +194,19 @@ describe('M2.15 — QuickSearchModal X button + padding contract', () => {
   it('QuickSearchModal header strip padding is ≤16px on the top edge', () => {
     // Bug #4 fix: the input sat far below the modal's top because
     // the header strip used `padding: '24px 24px 16px'`. Trimmed
-    // to `12px 16px 16px` (≤16 top padding).
+    // to `12px 16px` (≤16 top padding).
     //
     // We assert on the source because jsdom does not run layout,
     // so `getComputedStyle` won't return a usable padding value.
-    const headerStripMatch = quickSearchSrc.match(
-      /padding:\s*['"](\d+)px\s+(\d+)px\s+(\d+)px['"]/,
-    );
-    expect(headerStripMatch, 'QuickSearchModal header strip padding triple not found').not.toBeNull();
-    const topPadding = parseInt(headerStripMatch![1]!, 10);
-    expect(topPadding).toBeLessThanOrEqual(16);
+    // Accept either 2-value "T R" or 3-value "T R B" forms.
+    const twoVal = quickSearchSrc.match(/padding:\s*['"](\d+)px\s+(\d+)px['"]/);
+    const threeVal = quickSearchSrc.match(/padding:\s*['"](\d+)px\s+(\d+)px\s+(\d+)px['"]/);
+    const topPadding = threeVal
+      ? parseInt(threeVal[1]!, 10)
+      : twoVal
+        ? parseInt(twoVal[1]!, 10)
+        : null;
+    expect(topPadding, 'QuickSearchModal header strip padding not found').not.toBeNull();
+    expect(topPadding!).toBeLessThanOrEqual(16);
   });
 });
