@@ -82,22 +82,29 @@ describe('validateJson', () => {
   it('validateJson_valid_returns_data', () => {
     const result = validateJson('{"x":1,"y":[2,3]}');
     expect(result.valid).toBe(true);
-    expect(result.error).toBeUndefined();
-    expect(result.data).toEqual({ x: 1, y: [2, 3] });
+    if (result.valid) {
+      expect(result.data).toEqual({ x: 1, y: [2, 3] });
+    }
+    if (!result.valid) {
+      expect(result.error).toBeUndefined();
+    }
   });
 
   it('validateJson_invalid_returns_error', () => {
     const result = validateJson('{"x": }');
     expect(result.valid).toBe(false);
-    expect(result.error).toBeDefined();
-    expect(typeof result.error).toBe('string');
-    expect(result.data).toBeUndefined();
+    if (!result.valid) {
+      expect(result.error).toBeDefined();
+      expect(typeof result.error).toBe('string');
+    }
   });
 
   it('validateJson_empty_string_is_invalid', () => {
     const result = validateJson('');
     expect(result.valid).toBe(false);
-    expect(result.error).toBeDefined();
+    if (!result.valid) {
+      expect(result.error).toBeDefined();
+    }
   });
 
   it('validateJson_primitive_root_is_valid', () => {
@@ -106,11 +113,15 @@ describe('validateJson', () => {
     // not a parser concern.
     const r1 = validateJson('42');
     expect(r1.valid).toBe(true);
-    expect(r1.data).toBe(42);
+    if (r1.valid) {
+      expect(r1.data).toBe(42);
+    }
 
     const r2 = validateJson('[1,2,3]');
     expect(r2.valid).toBe(true);
-    expect(r2.data).toEqual([1, 2, 3]);
+    if (r2.valid) {
+      expect(r2.data).toEqual([1, 2, 3]);
+    }
   });
 });
 

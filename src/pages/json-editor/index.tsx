@@ -165,9 +165,10 @@ export default function JsonEditorPage(): ReactElement {
           raw: content,
           history: [content],
           historyIndex: 0,
-          error: validateJson(content).valid
-            ? null
-            : validateJson(content).error ?? '解析错误',
+          error: (() => {
+            const r = validateJson(content);
+            return r.valid ? null : r.error;
+          })(),
         };
         setState(initial);
       } catch (err) {
