@@ -73,6 +73,11 @@ pub fn run() {
             commands::mcp::update_mcp_server,
             commands::mcp::remove_mcp_server,
             commands::mcp::parse_mcp_deeplink,
+            commands::backup::list_backups,
+            commands::backup::read_backup_content,
+            commands::backup::diff_backups,
+            commands::backup::restore_backup,
+            commands::backup::backup_now,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

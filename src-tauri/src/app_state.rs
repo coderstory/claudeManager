@@ -26,6 +26,12 @@ pub struct AppState {
     pub provider_service: Arc<crate::services::provider_service::ProviderService>,
     /// M2.5 — F6 MCP 管理 service. Owns `~/.claude/mcp.json` read/write.
     pub mcp_service: Arc<crate::services::mcp_service::McpService>,
+    /// M2.6 — F13 备份与恢复 service. Scans `*.bak.<ts>` files
+    /// across the app-data backups dir and the live Claude dir,
+    /// exposes restore (with double-backup safety) and field-level
+    /// diff. Owned here so commands can dispatch into it from the
+    /// shared Tauri state.
+    pub backup_service: Arc<crate::services::backup_service::BackupService>,
 }
 
 impl AppState {
@@ -47,10 +53,14 @@ impl AppState {
         let mcp_service = Arc::new(
             crate::services::mcp_service::McpService::new(paths.clone()),
         );
+        let backup_service = Arc::new(
+            crate::services::backup_service::BackupService::new(paths.clone()),
+        );
         Self {
             paths,
             provider_service,
             mcp_service,
+            backup_service,
         }
     }
 }

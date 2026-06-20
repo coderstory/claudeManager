@@ -5,6 +5,8 @@
 //! operation has a "user-data" semantics (atomic write, backup,
 //! rollback). They go through the helpers in this module.
 
+pub mod backup_scanner;
 pub mod deeplink_parser;
 pub mod fs_atomic;
+pub mod json_diff;
 pub mod sql_parser;

@@ -7,5 +7,6 @@
 //! directly; they receive an `IPlatformPaths` and call
 //! `crate::infrastructure::*` for any I/O.
 
+pub mod backup_service;
 pub mod mcp_service;
 pub mod provider_service;
