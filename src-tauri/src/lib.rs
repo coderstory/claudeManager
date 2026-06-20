@@ -1,8 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Arc;
-
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -65,8 +63,17 @@ pub fn run() {
             // Build shared app state (resolved paths + services) and
             // register it with Tauri's state manager. All commands
             // pull from this — see commands::providers.
+            //
+            // M2.2.3 fix: do NOT wrap `state` in `Arc::new(...)` —
+            // the 4 F1/F2/F3 commands extract `State<'_, AppState>`,
+            // and Tauri indexes managed state by `std::any::TypeId`.
+            // Wrapping in `Arc<AppState>` would store TypeId
+            // `Arc<AppState>` but the commands look up TypeId
+            // `AppState`, so every IPC call would fail with
+            // "state not managed for field '0' on command ...".
+            // The bug shipped in M2.1 + M2.2; this commit fixes it.
             let state = AppState::build();
-            app.manage(Arc::new(state));
+            app.manage(state);
 
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
