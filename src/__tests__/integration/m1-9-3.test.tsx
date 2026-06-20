@@ -126,16 +126,18 @@ describe('M1.9.3 — main pane absolute positioning (P0 fix)', () => {
   it('<main> insets match the header / sidebar token dimensions', () => {
     renderApp();
     const main = screen.getByTestId('app-main');
-    // jsdom does NOT resolve CSS var() in computed style, so
-    // getComputedStyle().top returns the literal "var(...)" string.
-    // The reliable assertion is therefore on the inline style,
-    // which is what the Tauri webview ships verbatim. CSS var()
-    // resolution happens in the production engine (Chromium /
-    // WebView2 / WKWebView) and is what actually puts the pane
-    // at the right pixel offset.
+    // M2.x-fix: the previous assertion `top === 'var(--header-height)'`
+    // was a structural artifact that double-counted the offset — main
+    // is positioned inside [data-testid="app-content"] which is the
+    // flex sibling of <AppHeader> (so it already starts at y=48). A
+    // `top: 48px` inside it pushed <main> down to y=96, producing a
+    // phantom 48px gap between header bottom and content on every view.
+    // The corrected contract: <main> fills [data-testid="app-content"]
+    // (already post-header), so top=0 + left=var(--sidebar-width)
+    // (sidebar is its flex sibling already occupying x=0..220).
     const inlineTop = (main as HTMLElement).style.top;
     const inlineLeft = (main as HTMLElement).style.left;
-    expect(inlineTop).toBe('var(--header-height)');
+    expect(inlineTop).toBe('0px');
     expect(inlineLeft).toBe('var(--sidebar-width)');
     // right + bottom pin to 0 (the standard inset trick) —
     // these ARE resolved in computed style because they're bare

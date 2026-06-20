@@ -274,8 +274,20 @@ export default function App(): ReactElement {
             // height:0 in Tauri WebView2 release mode. Absolute
             // positioning is not subject to that bug because each
             // edge is a definite measurement.
+            //
+            // M2.x-fix: `top` was `var(--header-height)` which
+            // double-counted the offset — `app-content` is the
+            // flex sibling of <AppHeader>, so it already starts
+            // at y=48 (below the 48px header). Adding another
+            // `top: 48px` inside `app-content` pushed <main>
+            // down to y=96, creating a phantom 48px gap between
+            // header and content. CDP probe confirmed: header
+            // bottom=48, main top=96 on every view (home +
+            // all 6 plugin pages). The fix is `top: 0` since
+            // <main>'s containing block (app-content) is the
+            // post-header row.
             position: 'absolute',
-            top: 'var(--header-height)',
+            top: 0,
             left: 'var(--sidebar-width)',
             right: 0,
             bottom: 0,
