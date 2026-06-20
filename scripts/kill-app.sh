@@ -15,11 +15,25 @@ if [[ "${1:-}" == "--force" ]]; then
 fi
 
 EXE_NAME="claude-config-manager.exe"
+# M2.6+ ships the release exe with a suffix (e.g. ClaudeConfigManager-M2.3.1-f9-fuzzy-search.exe).
+# The PE image name is still carved at compile time, but Windows Start-Process shows the
+# on-disk filename as the process name in tasklist — so we must match BOTH the short
+# (legacy dev-box / target/release/) name AND the suffix (desktop ship) name everywhere.
+# taskkill -IM accepts a wildcard like "ClaudeConfigManager-M*" so one call covers all
+# suffix variants; the short name stays explicit to avoid the wildcard also matching
+# hypothetical unrelated "ClaudeConfigManager*" exes we don't own.
+SHORT_NAME="${EXE_NAME%.exe}"          # claude-config-manager
+SUFFIX_WILDCARD="ClaudeConfigManager-M*" # matches ClaudeConfigManager-M2.3.1-foo.exe etc.
+ALL_NAMES=("${SHORT_NAME}" "${SUFFIX_WILDCARD}")
 
-echo ">>> kill-app.sh: searching for $EXE_NAME processes..."
+# Build a regex that matches any of the names (for tasklist | grep -E).
+NAME_REGEX=$(printf '%s|' "${ALL_NAMES[@]}")
+NAME_REGEX="${NAME_REGEX%|}"
+
+echo ">>> kill-app.sh: searching for ${ALL_NAMES[*]} processes..."
 
 # 1) Find all matching PIDs (case-insensitive on Windows)
-PIDS=$(tasklist 2>/dev/null | grep -i "${EXE_NAME%.exe}" | awk '{print $2}' || true)
+PIDS=$(tasklist 2>/dev/null | grep -iE "${NAME_REGEX}" | awk '{print $2}' || true)
 
 if [[ -z "$PIDS" ]]; then
   echo ">>> No process found. Already clean."
@@ -29,9 +43,13 @@ fi
 echo ">>> Found PIDs: $PIDS"
 
 if [[ "$FORCE" == "true" ]]; then
-  echo ">>> FORCE mode: taskkill -F -IM $EXE_NAME"
-  # Use -F (dash) not /F — Git Bash mangles forward-slash flags
-  taskkill -F -IM "$EXE_NAME" 2>&1 || true
+  echo ">>> FORCE mode: taskkill -F -IM for ${ALL_NAMES[*]}"
+  # Use -F (dash) not /F — Git Bash mangles forward-slash flags.
+  # taskkill -IM accepts wildcards (ClaudeConfigManager-M*) so one call covers all
+  # suffix variants; the short name is passed explicitly for the legacy case.
+  for name in "${ALL_NAMES[@]}"; do
+    taskkill -F -IM "${name}.exe" 2>&1 || true
+  done
 else
   echo ">>> Graceful mode: sending CloseMainWindow via PowerShell..."
   for pid in $PIDS; do
@@ -49,8 +67,10 @@ else
   echo ">>> Waiting up to 5s for graceful exit..."
   for i in {1..10}; do
     sleep 0.5
+    # Get-Process -Name accepts wildcards, so the SUFFIX_WILDCARD covers all
+    # ClaudeConfigManager-M*.exe variants; SHOR­T_NAME covers the legacy case.
     REMAINING=$(powershell.exe -NoProfile -Command "
-      @(Get-Process -Name '${EXE_NAME%.exe}' -ErrorAction SilentlyContinue).Count
+      @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
     " 2>&1 | tr -d '\r' | head -1)
     if [[ "$REMAINING" == "0" ]]; then
       echo ">>> Graceful exit successful."
@@ -60,12 +80,14 @@ else
 
   echo ">>> Graceful exit timeout. Falling back to force kill..."
   # Use -F (dash) not /F — Git Bash mangles forward-slash flags
-  taskkill -F -IM "$EXE_NAME" 2>&1 || true
+  for name in "${ALL_NAMES[@]}"; do
+    taskkill -F -IM "${name}.exe" 2>&1 || true
+  done
 fi
 
 sleep 1
 REMAINING=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name '${EXE_NAME%.exe}' -ErrorAction SilentlyContinue).Count
+  @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
 " 2>&1 | tr -d '\r' | head -1)
 if [[ "$REMAINING" == "0" ]]; then
   echo ">>> All processes cleaned."
