@@ -25,6 +25,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
 thiserror = "1"
+# M2.1 — uuid v4 for temp-file suffix in fs_atomic.write_with_backup.
+# Already in transitive lock (uuid 1.23.3); added as direct dep so
+# `infrastructure::fs_atomic` can use `Uuid::new_v4()` without feature-flag
+# gymnastics. Version locked per CLAUDE.md §2.3.
+uuid = { version = "=1.23.3", features = ["v4"] }
 
 # M1.6 — 10 个 Tauri 官方 plugin（version 锁，按 SPEC.md F1-F24 需求白名单）
 # 所有版本必须为 =X.Y.Z 精确锁定（CLAUDE.md §2.3），不写 ^/~。
