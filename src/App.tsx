@@ -53,6 +53,8 @@ import { ProviderSwitchPage } from './pages/provider-switch';
 import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
 import McpManagementPage from './pages/mcp-management';
+import UsageQueryPage from './pages/usage-query';
+import BackupRestorePage from './pages/backup-restore';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
 /**
@@ -247,6 +249,10 @@ export default function App(): ReactElement {
               <JsonEditorPage />
             ) : view === 'mcp-management' ? (
               <McpManagementPage />
+            ) : view === 'usage-query' ? (
+              <UsageQueryPage />
+            ) : view === 'backup-restore' ? (
+              <BackupRestorePage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}
