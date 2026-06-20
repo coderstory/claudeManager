@@ -145,8 +145,13 @@ export function AppHeader({
 
       {/* Right zone — theme + settings + window controls.
           All three groups sit in the no-drag zone so the OS
-          doesn't intercept their clicks as drag gestures. */}
-      <div className="flex items-center gap-2" style={noDragStyle}>
+          doesn't intercept their clicks as drag gestures.
+          flexShrink: 0 keeps the chrome pinned to the right
+          edge even when the left zone title is very long. */}
+      <div
+        className="flex items-center gap-1"
+        style={{ ...noDragStyle, flexShrink: 0 }}
+      >
         <button
           type="button"
           onClick={() => {
