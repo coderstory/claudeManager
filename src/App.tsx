@@ -50,10 +50,12 @@ import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ProviderSwitchPage } from './pages/provider-switch';
+import { ImportSqlPage } from './pages/import-sql';
 import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
 import McpManagementPage from './pages/mcp-management';
 import UsageQueryPage from './pages/usage-query';
+import SingleFileDeployPage from './pages/single-file-deploy';
 import BackupRestorePage from './pages/backup-restore';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
@@ -243,6 +245,8 @@ export default function App(): ReactElement {
               <ProviderListPage />
             ) : view === 'provider-switch' ? (
               <ProviderSwitchPage />
+            ) : view === 'import-sql' ? (
+              <ImportSqlPage />
             ) : view === 'deeplink-import' ? (
               <DeeplinkImportPage />
             ) : view === 'json-editor' ? (
@@ -251,6 +255,8 @@ export default function App(): ReactElement {
               <McpManagementPage />
             ) : view === 'usage-query' ? (
               <UsageQueryPage />
+            ) : view === 'single-file-deploy' ? (
+              <SingleFileDeployPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
             ) : (
