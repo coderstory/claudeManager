@@ -41,7 +41,6 @@ import {
   Store,
   Wand2,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
 import {
   ALL_VIEWS,
   type ViewId,
@@ -156,10 +155,7 @@ export function AppSidebar({
                 onClick={() => onNavigate(view)}
                 data-testid={`sidebar-item-${view}`}
                 aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'w-full flex items-center gap-2 transition-colors',
-                  'hover:bg-black/5 dark:hover:bg-white/5',
-                )}
+                data-app-sidebar-hover="true"
                 style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -179,6 +175,9 @@ export function AppSidebar({
                     cursor: 'pointer',
                     fontSize: 'var(--fs-body)',
                     textAlign: 'left',
+                    // hover transition lives in src/design-system/utilities.css
+                    // under [data-app-sidebar-hover] — see M2.x-inline.
+                    flexShrink: 0,
                   }}
               >
                 <span
