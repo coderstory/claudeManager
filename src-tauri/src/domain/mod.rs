@@ -14,11 +14,13 @@
 pub mod mcp_server;
 pub mod optimization;
 pub mod provider;
+pub mod resource;
 pub mod usage;
 
 pub use mcp_server::{McpError, McpServer, McpTransport};
 pub use optimization::{ApplyResult, OptimizationFinding, Severity};
 pub use provider::{is_valid_id, Provider, ProviderError};
+pub use resource::{ResourceItem, ResourceKind};
 pub use usage::{UsageSnapshot, UsageWindow};
 
 // F3 SQL-import shape: `infrastructure::sql_parser::ParsedMcpServer`.
