@@ -81,6 +81,8 @@ pub fn run() {
             commands::usage::get_current_usage,
             commands::usage::refresh_usage,
             commands::app::get_app_metadata,
+            commands::optimizer::scan_optimizations,
+            commands::optimizer::apply_optimizations,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

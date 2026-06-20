@@ -20,5 +20,6 @@ pub mod autostart;
 pub mod backup;
 pub mod fs;
 pub mod mcp;
+pub mod optimizer;
 pub mod providers;
 pub mod usage;
