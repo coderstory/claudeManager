@@ -54,6 +54,7 @@ import { ImportSqlPage } from './pages/import-sql';
 import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
 import McpManagementPage from './pages/mcp-management';
+import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
 import SingleFileDeployPage from './pages/single-file-deploy';
 import BackupRestorePage from './pages/backup-restore';
@@ -257,6 +258,8 @@ export default function App(): ReactElement {
               <UsageQueryPage />
             ) : view === 'single-file-deploy' ? (
               <SingleFileDeployPage />
+            ) : view === 'optimizer' ? (
+              <OptimizerPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
             ) : (

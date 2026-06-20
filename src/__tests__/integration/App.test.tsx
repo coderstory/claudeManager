@@ -88,11 +88,13 @@ describe('App — view routing integration', () => {
 
   it('clicking the home tile on the welcome page navigates to that plugin', () => {
     renderApp();
-    // Click from welcome → optimizer
+    // Click from welcome → resource-browser (still a placeholder
+    // page; M2.9 promoted optimizer to a real page so this test now
+    // targets a remaining placeholder view).
     act(() => {
-      screen.getByTestId('home-tile-optimizer').click();
+      screen.getByTestId('home-tile-resource-browser').click();
     });
-    expect(screen.getByText('plugin: optimizer')).toBeInTheDocument();
+    expect(screen.getByText('plugin: resource-browser')).toBeInTheDocument();
   });
 
   it('header back button returns from any non-home view to home', () => {
@@ -278,6 +280,7 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'single-file-deploy', realTestId: 'single-file-deploy-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },
+    { view: 'optimizer', realTestId: 'optimizer-page' },
   ] as const;
 
   // Views still on PluginPlaceholder (no real page shipped yet).
@@ -288,7 +291,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   const PLACEHOLDER_VIEWS: ReadonlyArray<ViewId> = [
     'resource-browser',
     'marketplace',
-    'optimizer',
   ] as const;
 
   beforeEach(() => {
