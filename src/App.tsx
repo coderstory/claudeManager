@@ -48,6 +48,8 @@ import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { HomeView } from './pages/home';
+import { ProviderListPage } from './pages/provider-list';
+import { ProviderSwitchPage } from './pages/provider-switch';
 import { useViewState, type ViewId } from './hooks/useViewState';
 
 /**
@@ -232,6 +234,10 @@ export default function App(): ReactElement {
                 onNavigate={handleNavigate}
                 pageTitle={pageTitleFn}
               />
+            ) : view === 'provider-list' ? (
+              <ProviderListPage />
+            ) : view === 'provider-switch' ? (
+              <ProviderSwitchPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

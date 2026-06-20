@@ -70,12 +70,14 @@ describe('App — view routing integration', () => {
     expect(screen.getByText('plugin: mcp-management')).toBeInTheDocument();
   });
 
-  it('clicking the "Provider 列表" sidebar item shows its placeholder', () => {
+  it('clicking the "Provider 列表" sidebar item shows the F1 page (M2.1: real impl)', () => {
     renderApp();
     act(() => {
       screen.getByTestId('sidebar-item-provider-list').click();
     });
-    expect(screen.getByText('plugin: provider-list')).toBeInTheDocument();
+    // M2.1: the provider-list view now mounts the real page, not the
+    // PluginPlaceholder. We assert on the page's data-testid.
+    expect(screen.getByTestId('provider-list-page')).toBeInTheDocument();
   });
 
   it('clicking the home tile on the welcome page navigates to that plugin', () => {

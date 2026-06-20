@@ -1,17 +1,33 @@
 /**
- * F2 — Provider 切换 (M1.9 placeholder).
- * Action-only in real life (no standalone page), but M1.9 gives it a
- * nav tile so the registry test "12 plugin ids are reachable" holds.
+ * F2 — Provider 切换 (M2.1 routing shim).
+ *
+ * F2 is implemented as an action (the [激活] button on each F1 row)
+ * — see `src/pages/provider-list/index.tsx`. This page exists only so
+ * the F2 sidebar tile / home tile resolves to a real component rather
+ * than a placeholder; on mount it forwards to the F1 view which is
+ * where the actual switching happens.
  */
+import { useEffect } from 'react';
 import type { ReactElement } from 'react';
-import { PluginPlaceholder } from '../../components/PluginPlaceholder';
+import { useViewState } from '../../hooks/useViewState';
 
-export default function ProviderSwitchPage(): ReactElement {
+export function ProviderSwitchPage(): ReactElement {
+  const { setView } = useViewState();
+  useEffect(() => {
+    setView('provider-list');
+  }, [setView]);
   return (
-    <PluginPlaceholder
-      pluginId="provider-switch"
-      title="Provider 切换"
-      description="选择 provider → 备份原 settings.json → 原子写入新值。F2 动作而非独立页。"
-    />
+    <div
+      data-testid="provider-switch-page"
+      style={{
+        padding: 'var(--space-6)',
+        color: 'var(--text-secondary)',
+        fontSize: 'var(--fs-body)',
+      }}
+    >
+      F2 是 F1 列表上的 [激活] 动作。正在跳转到 Provider 列表…
+    </div>
   );
 }
+
+export default ProviderSwitchPage;
