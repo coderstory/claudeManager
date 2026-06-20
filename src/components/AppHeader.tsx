@@ -99,10 +99,14 @@ export function AppHeader({
         flexShrink: 0,
       }}
     >
-      {/* Left zone — back button + title */}
+      {/* Left zone — back button + title.
+          maxWidth caps the greedy flex so the title text can never
+          push the chrome (right zone) off the right edge. The 280px
+          reservation covers 5 buttons × 32 + 4 gaps × 4 + 32 padding
+          × 2 ≈ 280 (theme + settings + 3 chrome + left/right pad). */}
       <div
         className="flex items-center gap-2"
-        style={{ minWidth: 0, flex: '1 1 auto' }}
+        style={{ minWidth: 0, flex: '1 1 auto', maxWidth: 'calc(100% - 280px)' }}
       >
         {!isHome && (
           <button
