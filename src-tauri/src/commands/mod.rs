@@ -20,3 +20,4 @@ pub mod backup;
 pub mod fs;
 pub mod mcp;
 pub mod providers;
+pub mod usage;

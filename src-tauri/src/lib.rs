@@ -78,6 +78,8 @@ pub fn run() {
             commands::backup::diff_backups,
             commands::backup::restore_backup,
             commands::backup::backup_now,
+            commands::usage::get_current_usage,
+            commands::usage::refresh_usage,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

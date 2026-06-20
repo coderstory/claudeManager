@@ -32,6 +32,10 @@ pub struct AppState {
     /// diff. Owned here so commands can dispatch into it from the
     /// shared Tauri state.
     pub backup_service: Arc<crate::services::backup_service::BackupService>,
+    /// M2.7 — F7 用量查询 service. Owns the 5-minute in-memory
+    /// snapshot cache for `(provider_id, window)` and reads
+    /// `~/.claude/usage.json` on miss.
+    pub usage_service: Arc<crate::services::usage_service::UsageService>,
 }
 
 impl AppState {
@@ -56,11 +60,15 @@ impl AppState {
         let backup_service = Arc::new(
             crate::services::backup_service::BackupService::new(paths.clone()),
         );
+        let usage_service = Arc::new(
+            crate::services::usage_service::UsageService::new(paths.clone()),
+        );
         Self {
             paths,
             provider_service,
             mcp_service,
             backup_service,
+            usage_service,
         }
     }
 }
