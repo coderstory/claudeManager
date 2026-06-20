@@ -56,14 +56,18 @@ use crate::domain::{is_valid_id, Provider};
 // Public types
 // ---------------------------------------------------------------------------
 
-/// One McpServer entry (M2.2 parser output — write-side is F6 scope).
+/// One MCP server entry as it appears in a cc-switch SQLite dump
+/// (M2.2 parser output — write-side is F6 scope and lives in
+/// `domain::mcp_server::McpServer`).
 ///
-/// Shape mirrors SPEC §2.1 `McpServer` and the `server_config` JSON
-/// cc-switch serialises into the dump. We do NOT include the per-app
-/// `enabled_claude` / `enabled_codex` flags here because they're a
-/// presentation concern, not part of the server spec.
+/// We keep this type distinct from `domain::mcp_server::McpServer`
+/// because the *parser* shape is a flat string-only projection of
+/// the dump's `server_config` JSON, while the *F6* shape is the
+/// editable struct with `transport` / `enabled` / `created_at`. The
+/// F3 preview uses this struct; F6 builds a fresh domain::McpServer
+/// from it on user-confirmed import.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct McpServer {
+pub struct ParsedMcpServer {
     pub id: String,
     pub name: String,
     pub command: String,
@@ -88,7 +92,7 @@ pub struct SkippedLine {
 #[derive(Debug, Clone, Default)]
 pub struct ParsedSql {
     pub providers: Vec<Provider>,
-    pub mcp_servers: Vec<McpServer>,
+    pub mcp_servers: Vec<ParsedMcpServer>,
     pub skipped_lines: Vec<SkippedLine>,
 }
 
@@ -647,7 +651,7 @@ fn parse_provider_row(
     })
 }
 
-fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<McpServer, String> {
+fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<ParsedMcpServer, String> {
     let get = |col: &str| -> Option<String> {
         row.iter()
             .find(|(c, _)| c.eq_ignore_ascii_case(col))
@@ -684,7 +688,7 @@ fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<McpServer, St
     };
 
     let _ = line;
-    Ok(McpServer {
+    Ok(ParsedMcpServer {
         id,
         name,
         command: server_obj.command.unwrap_or_default(),

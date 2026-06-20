@@ -25,7 +25,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::domain::{McpServer, Provider};
+use crate::domain::{ParsedMcpServer, Provider};
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
 use crate::services::provider_service::{ImportResult, ImportSkip};
@@ -109,7 +109,7 @@ pub struct SqlPreview {
     pub preview_providers: Vec<Provider>,
     /// The MCP rows parsed but NOT written (F6 owns write-side; M2.2
     /// shows them as a "preview-only" group).
-    pub preview_mcp: Vec<McpServer>,
+    pub preview_mcp: Vec<ParsedMcpServer>,
     /// Up to 50 skip reasons — the full list is in ImportResult.errors
     /// after import. Capped to keep the preview payload small.
     pub skipped_samples: Vec<SkippedLine>,

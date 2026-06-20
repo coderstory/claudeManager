@@ -11,11 +11,14 @@
 //! - Validation lives on the struct itself (`Provider::validate`); services
 //!   call it after `from_*` and before `to_*`.
 
+pub mod mcp_server;
 pub mod provider;
 
+pub use mcp_server::{McpError, McpServer, McpTransport};
 pub use provider::{is_valid_id, Provider, ProviderError};
 
-// McpServer is defined in the infrastructure layer (it's parser output
-// for F3, and write-side is F6 scope). We re-export from here so the
-// rest of the crate can `use crate::domain::McpServer;`.
-pub use crate::infrastructure::sql_parser::McpServer;
+// F3 SQL-import shape: `infrastructure::sql_parser::ParsedMcpServer`.
+// Re-exported here so the rest of the crate can `use crate::domain::ParsedMcpServer;`
+// (parser output for the F3 preview; F6 owns the write-side
+// `McpServer` declared in `mcp_server`).
+pub use crate::infrastructure::sql_parser::ParsedMcpServer;
