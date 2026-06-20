@@ -18,7 +18,13 @@ crate-type = ["staticlib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# M2.16 — tauri features:
+#   tray-icon           (M1.1 托盘)
+#   macos-private-api   (M2.16 macOS vibrancy + transparent:true 必需, 文档:
+#       https://v2.tauri.app/reference/config/ → "transparent ... on macOS
+#       this requires the macos-private-api feature flag, enabled under
+#       tauri > macOSPrivateApi")
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-opener = "2"
 tauri-plugin-positioner = "2"
 serde = { version = "1", features = ["derive"] }
@@ -50,6 +56,14 @@ tauri-plugin-log         = "=2.8.0"   # 结构化 app 日志
 tauri-plugin-updater     = "=2.10.1"  # v1.1 release 自动更新（M3 阶段启用）
 tauri-plugin-autostart   = "=2.5.1"   # M1.7 开机自启（IPlatformAutostart trait 实现）
 tauri-plugin-process     = "=2.3.1"   # 进程管理（kill 重启 / exit 用）
+
+# M2.16 — 原生窗口 backdrop（Win11 Mica / macOS vibrancy）。
+# Tauri JS setEffects(Effect.Mica) 在 decorations:false 无边框窗口上不稳定
+# (tao#72: DWM 合成路径与无边框冲突)。window-vibrancy 是 Tauri 团队官方维护的
+# 底层 backdrop 库，直接对 HWND 调 DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE)，
+# 绕过 tao 装饰状态判断。0.6.0 已在 Cargo.lock 传递依赖中，直接声明不引入新下载。
+# 文档: https://github.com/tauri-apps/window-vibrancy#readme
+window-vibrancy = "=0.6.0"
 
 [dev-dependencies]
 tempfile = "3"

@@ -175,6 +175,44 @@ pub fn run() {
                         let _ = window_clone.hide();
                     }
                 });
+
+                // M2.16 — 原生窗口 backdrop（Win11 Mica / macOS vibrancy）。
+                //
+                // Tauri JS setEffects(Effect.Mica)（src/design-system/applyEffects.ts）
+                // 在 decorations:false 无边框窗口上不稳定：tao#72 记录了 DWM 合成
+                // 路径与无边框窗口的冲突，setEffects 走 tao 的 window effects API，
+                // 对无边框 HWND 不应用 Mica backdrop。用户报告三套主题真机全白底。
+                //
+                // window-vibrancy::apply_mica 直接对 HWND 调
+                // DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE = Mica)，绕过 tao
+                // 装饰状态判断，对无边框窗口也生效。这是 Tauri 团队官方维护的底层
+                // backdrop 库（https://github.com/tauri-apps/window-vibrancy）。
+                //
+                // 失败不阻断启动（Win10 / 旧 build 22000- 不支持 Mica → 返回 Err，
+                // 此时退回 CSS backdrop-filter fallback）。
+                //
+                // macOS 侧 apply_vibrancy + NSVisualEffectMaterial::Sidebar 对应
+                // 原 applyEffects.ts 的 Effect.Sidebar。macOSPrivateApi:true +
+                // tauri macos-private-api feature 已在 tauri.conf.json / Cargo.toml
+                // 启用（macOS vibrancy + transparent:true 必需）。
+                #[cfg(target_os = "windows")]
+                {
+                    if let Err(e) = window_vibrancy::apply_mica(&window, None) {
+                        eprintln!("[M2.16] apply_mica failed (Mica will not show): {e}");
+                    }
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                    if let Err(e) = apply_vibrancy(
+                        &window,
+                        NSVisualEffectMaterial::Sidebar,
+                        Some(NSVisualEffectState::Active),
+                        None,
+                    ) {
+                        eprintln!("[M2.16] apply_vibrancy failed (vibrancy will not show): {e}");
+                    }
+                }
             }
 
             Ok(())
