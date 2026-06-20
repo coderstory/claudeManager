@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# M1.9.2 layout diagnostic artifacts (one-time debug screenshots)
+.planning/diagnostics/
+
+# Playwright test artifacts
+test-results/
+
+# local claude memory symlinks (project-irrelevant)
+.claude/
