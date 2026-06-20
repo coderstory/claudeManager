@@ -146,20 +146,17 @@ export default function App(): ReactElement {
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
 
-  // M2.16 splash — fade out the inline loading screen defined in
-  // index.html once React has mounted. The splash exists to hide
-  // the ~100-300ms white-frame gap between Tauri launch and React's
-  // first paint; by the time this useEffect runs, React has already
-  // painted, so it is safe to hand the viewport over.
+  // M2.16+ splash — 淡出 index.html 里的内联加载屏。
+  // 用户明确要求 splash 至少展示 2s，并配好看的动画效果。
   //
-  //   - 200ms delay: gives the first real frame a tick to settle so
-  //     we don't flash a partially-styled App behind the fade.
-  //   - .ccm-splash-hidden triggers the 200ms opacity transition
-  //     declared inline in index.html.
-  //   - 250ms later we drop display:none so the splash stops
-  //     participating in layout entirely.
-  //   - index.html has its own 5s failsafe in case React never
-  //     mounts; this effect is the happy path.
+  // 时序设计：
+  //   - 2200ms 延迟：splash 至少存在 2s（用户要求）+ 200ms 余量
+  //     让进度条 2s 动画跑完再开始淡出。
+  //   - .ccm-splash-hidden 触发 index.html 内联 CSS 的 300ms opacity
+  //     transition（原 200ms，改 300ms 更柔和）。
+  //   - 300ms 后 display:none，让 splash 完全退出布局。
+  //   - index.html 有独立 6s failsafe，防 React 永不挂载（本 effect
+  //     是正常路径）。6s > 2200+300，不会误触发。
   useEffect(() => {
     const splash = document.getElementById('ccm-splash');
     if (!splash) return;
@@ -167,8 +164,8 @@ export default function App(): ReactElement {
       splash.classList.add('ccm-splash-hidden');
       window.setTimeout(() => {
         splash.style.display = 'none';
-      }, 250);
-    }, 200);
+      }, 300);
+    }, 2200);
     return () => window.clearTimeout(hideTimer);
   }, []);
 

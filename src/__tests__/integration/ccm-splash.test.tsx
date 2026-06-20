@@ -6,8 +6,8 @@
  *   1. The splash DOM node (#ccm-splash) exists in the document so
  *      App.tsx's useEffect has something to hide.
  *   2. After App mounts, the splash gets the .ccm-splash-hidden
- *      class within the 200ms+tick window declared in App.tsx.
- *   3. After the secondary 250ms timeout, splash.style.display === 'none'.
+ *      class within the 2200ms+tick window declared in App.tsx.
+ *   3. After the secondary 300ms timeout, splash.style.display === 'none'.
  *
  * ## Why jsdom + a synthetic splash
  *
@@ -20,11 +20,12 @@
  *
  * ## Timing slack
  *
- *   The App.tsx useEffect fires at 200ms + 250ms = 450ms total.
- *   We wait 600ms before the final assertion to absorb jsdom timer
- *   jitter without flaking. vitest's fake timers are deliberately
- *   NOT used — we want to exercise the real setTimeout → classList
- *   path end-to-end.
+ *   The App.tsx useEffect fires at 2200ms + 300ms = 2500ms total
+ *   (用户要求 splash 至少展示 2s + 进度条动画). We wait 2500ms before
+ *   the class assertion and another 400ms before the display assertion
+ *   to absorb jsdom timer jitter without flaking. vitest's fake timers
+ *   are deliberately NOT used — we want to exercise the real setTimeout
+ *   → classList path end-to-end.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
@@ -54,13 +55,14 @@ describe('M2.16 ccm-splash', () => {
     expect(beforeSplash).not.toBeNull();
     expect(beforeSplash?.classList.contains('ccm-splash-hidden')).toBe(false);
 
-    // App.tsx fires the hide class at 200ms; wait past it.
-    await new Promise((r) => setTimeout(r, 300));
+    // App.tsx 在 2200ms 后加 hidden class（用户要求 splash 至少 2s）。
+    // 等 2500ms 确保超过 2200ms + 吸收 jsdom 定时器抖动。
+    await new Promise((r) => setTimeout(r, 2500));
     const midSplash = document.getElementById('ccm-splash');
     expect(midSplash?.classList.contains('ccm-splash-hidden')).toBe(true);
 
-    // The display:none drop fires 250ms after the class add.
-    await new Promise((r) => setTimeout(r, 300));
+    // display:none 在 hidden class 之后 300ms 触发。再等 400ms 确保触发。
+    await new Promise((r) => setTimeout(r, 400));
     const afterSplash = document.getElementById('ccm-splash');
     expect(afterSplash?.style.display).toBe('none');
   });

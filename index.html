@@ -24,12 +24,14 @@
       LIFECYCLE
       ---------
       1. WebView2 parses index.html → splash is visible immediately.
-      2. React mounts → App.tsx's top-level useEffect (200ms delay)
-         adds .ccm-splash-hidden (CSS opacity 0, 200ms transition),
-         then 250ms later sets display:none.
+      2. React mounts → App.tsx's top-level useEffect (2200ms delay,
+         用户明确要求 splash 至少展示 2s) adds .ccm-splash-hidden
+         (CSS opacity 0, 300ms transition), then 300ms later sets
+         display:none. 进度条 2s 0→100% 动画在 2200ms 时刚好跑完。
       3. FAILSAFE: if React never mounts (bundle error / eval fail),
-         the inline <script> below hides the splash after 5s so the
-         user is never stuck staring at a loading screen.
+         the inline <script> below hides the splash after 6s so the
+         user is never stuck staring at a loading screen. 6s > 2200+300,
+         确保failsafe不会在正常流程前触发。
 
       CONSTRAINTS
       -----------
@@ -63,6 +65,8 @@
         </svg>
         <div class="ccm-splash-spinner"></div>
         <div class="ccm-splash-text">Claude 配置管理器加载中…</div>
+        <!-- 进度条：2s 0→100%，让用户直观感受加载进度 -->
+        <div class="ccm-splash-progress"><div class="ccm-splash-progress-bar"></div></div>
       </div>
     </div>
     <style>
@@ -76,7 +80,7 @@
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
         z-index: 99999;
-        transition: opacity 200ms ease-out;
+        transition: opacity 300ms ease-out; /* 300ms 柔和淡出（原 200ms） */
         pointer-events: none;
       }
       #ccm-splash.ccm-splash-hidden {
@@ -92,6 +96,8 @@
         width: 64px;
         height: 64px;
         color: #0969DA; /* --accent, inlined (tokens.css not yet loaded) */
+        /* logo 呼吸脉冲：2s 一次 scale 1→1.1→1 + opacity 0.8→1→0.8 */
+        animation: ccm-breathe 2s ease-in-out infinite;
       }
       .ccm-splash-spinner {
         width: 32px;
@@ -105,24 +111,84 @@
         font-size: 14px;
         color: #656D76; /* --text-secondary */
         font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+        /* 文字淡入：400ms ease-out，只播一次 */
+        animation: ccm-fade-in 400ms ease-out;
+      }
+      /* 进度条容器：细长条，底部 */
+      .ccm-splash-progress {
+        width: 180px;
+        height: 3px;
+        background: rgba(9, 105, 218, 0.12);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      /* 进度条填充：2s 0→100%，与 splash 展示时长对齐 */
+      .ccm-splash-progress-bar {
+        width: 0%;
+        height: 100%;
+        background: #0969DA;
+        border-radius: 2px;
+        animation: ccm-progress 2s ease-out forwards;
       }
       @keyframes ccm-splash-spin {
         to {
           transform: rotate(360deg);
         }
       }
+      /* logo 呼吸脉冲 keyframes */
+      @keyframes ccm-breathe {
+        0%, 100% {
+          transform: scale(1);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 1;
+        }
+      }
+      /* 文字淡入 keyframes */
+      @keyframes ccm-fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      /* 进度条 keyframes */
+      @keyframes ccm-progress {
+        from {
+          width: 0%;
+        }
+        to {
+          width: 100%;
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         .ccm-splash-spinner {
           animation-duration: 3s;
+        }
+        .ccm-splash-icon {
+          animation: none;
+        }
+        .ccm-splash-text {
+          animation: none;
+        }
+        .ccm-splash-progress-bar {
+          animation-duration: 4s;
         }
       }
     </style>
     <script>
       // FAILSAFE — if React never mounts (JS eval error, bundle 404,
       // etc.) we cannot leave the user staring at a loading screen
-      // forever. After 5s, hide the splash unconditionally. The
-      // normal path (React mounts + App.tsx useEffect) hides it
-      // ~250ms after mount, so this only fires in the broken case.
+      // forever. After 6s, hide the splash unconditionally. The
+      // normal path (React mounts + App.tsx useEffect) hides it at
+      // 2200ms + 300ms transition = 2500ms, so 6s failsafe 只在
+      // React 挂载失败的异常路径触发。
       (function () {
         setTimeout(function () {
           var s = document.getElementById("ccm-splash");
@@ -130,9 +196,9 @@
             s.classList.add("ccm-splash-hidden");
             setTimeout(function () {
               s.style.display = "none";
-            }, 250);
+            }, 300);
           }
-        }, 5000);
+        }, 6000);
       })();
     </script>
     <div id="root"></div>
