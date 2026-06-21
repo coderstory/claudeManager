@@ -127,59 +127,11 @@ body,
   animation: fadeIn var(--view-transition-duration) ease-out;
 }
 
-/* --- Glass 主题变体 (§4.1 — M2.16 glass refactor) ---
- * The old 'dark' stub has been removed. The palette is now a
- * 3-way light → glass-clear → glass-tinted cycle.
- *
- * M2.16 决定性验证结论(纯红壁纸 + CDP + CopyFromScreen 像素采样):
- *   Tauri v2 tao + WebView2 + transparent:true + decorations:false 在
- *   Win11 上 OS Mica/Acrylic backdrop **无视觉效果**(详见 lib.rs 注释)。
- *   壁纸透不出窗口,原 glass-clear 的 --bg-primary: transparent 会让
- *   窗口显示成纯白(host HWND 白底)。为避免"假透明"误导用户,glass
- *   主题改为"瓷白磨砂玻璃":近不透明瓷白 + backdrop-filter 模拟磨砂。
- *   透不出壁纸,但有"瓷白玻璃"质感,WCAG-AA 对比保留。
- *
- *   - glass-clear:   --bg-primary = rgba(250,250,247,0.92) + blur(40px)。
- *                    近不透明瓷白(92% alpha)+ 强磨砂,读起来像"瓷板玻璃"。
- *                    不是真透明(透不出壁纸),是诚实 CSS 模拟。
- *   - glass-tinted:  --bg-primary = rgba(250,250,247,0.7)。
- *                    原设计保留(略透瓷白),macOS vibrancy 真机有效时
- *                    透出系统壁纸色调;Win11 CSS 模拟下读为"淡瓷白"。
- *
- * All other tokens (text, accent, border, glass-bg, status colours)
- * stay at their light values. The glass modes are conceptually
- * "light, but with a translucent body" — text contrast, accent hue,
- * and the header/sidebar glass surfaces are identical to light, so
- * the WCAG-AA contrast that tokens.css already guarantees for light
- * is preserved. The only thing that changes is how much of the OS
- * backdrop shows through the body.
- */
-[data-theme="glass-clear"] {
-  /* M2.16 — Win11 Mica 不生效(见 lib.rs 决定性验证),transparent 会让
-   * 窗口显示成纯白。改用近不透明瓷白(0.92)+ backdrop-filter 模拟磨砂
-   * 玻璃质感。透不出壁纸但视觉上是"瓷白玻璃窗",不是"破掉的透明"。
-   * macOS vibrancy 真机有效时此层会被系统材质叠加,视觉更丰富。 */
-  --bg-primary:  rgba(250, 250, 247, 0.92);
-  --bg-elevated: rgba(255, 255, 255, 0.85);
-  --bg-overlay:  rgba(255, 255, 255, 0.6);
-  /* backdrop-filter 模拟磨砂:模糊 webview 后面的内容(host 白底)。
-   * 在 Win11 host 白底下效果有限(模糊白色还是白色),但保留语义 +
-   * 在 macOS vibrancy 真机上有真实模糊效果。saturate 提升色彩饱和
-   * 让瓷白更有"玻璃"质感。 */
-  --glass-blur: 40px;
-  --glass-saturate: 180%;
-}
-
-[data-theme="glass-tinted"] {
-  /* Body keeps the cream tone at 0.7 alpha — Mica bleeds through
-   * but the porcelain look is preserved. Elevated cards go to 0.85
-   * so they stay legible against the tinted body. */
-  --bg-primary:  rgba(250, 250, 247, 0.7);
-  --bg-elevated: rgba(255, 255, 255, 0.85);
-  --bg-overlay:  rgba(255, 255, 255, 0.6);
-  --glass-blur: 30px;
-  --glass-saturate: 160%;
-}
+/* --- 主题 (§4.1 — M2.16 theme-trim) ---
+ * 砍到单档 light (瓷白 #FAFAF7)。原 glass-clear / glass-tinted 两档
+ * 因 Win11 Mica 不生效(3 档视觉无区别)已移除,后期再加新主题时
+ * 在这里加 [data-theme="xxx"] 块即可。:root 即 light,无需额外
+ * [data-theme="light"] 选择器。 */
 
 /* --- 全局基线：让 body / 等宽走 token --- */
 body {
@@ -187,19 +139,15 @@ body {
   font-size: var(--fs-body);
   color: var(--text-primary);
   background: var(--bg-primary);
-  /* M2.16 — glass 主题 backdrop-filter 模拟磨砂玻璃。
-   * --glass-blur / --glass-saturate 只在 glass-* 主题定义;
-   * light 主题未定义 → var() fallback 为 0 / 100%,无 blur,
-   * 性能无影响。Win11 host 白底下 blur 效果有限(模糊白色还是
-   * 白色),但保留语义 + macOS vibrancy 真机有真实模糊。 */
-  backdrop-filter: blur(var(--glass-blur, 0px)) saturate(var(--glass-saturate, 100%));
-  -webkit-backdrop-filter: blur(var(--glass-blur, 0px)) saturate(var(--glass-saturate, 100%));
+  /* M2.16 theme-trim — 砍到单档 light 后不再需要 backdrop-filter
+   * 模拟磨砂(原 --glass-blur / --glass-saturate 已删)。light 档是
+   * 纯实色瓷白,无磨砂效果。 */
   /* M2.10 F12 polish — 200ms ease transition on bg + text so a
-   * light→dark toggle (or vice versa) fades smoothly instead of
-   * snapping. We deliberately do NOT transition border / shadow
-   * because that would cascade through every card / modal and
-   * produce a visible ripple; bg + text are the only properties
-   * the user actually perceives changing during a theme toggle. */
+   * theme toggle (or vice versa) fades smoothly instead of snapping.
+   * We deliberately do NOT transition border / shadow because that
+   * would cascade through every card / modal and produce a visible
+   * ripple; bg + text are the only properties the user actually
+   * perceives changing during a theme toggle. */
   transition: background-color 200ms ease, color 200ms ease;
 }
 

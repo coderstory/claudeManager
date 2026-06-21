@@ -56,8 +56,8 @@ const baseButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
   borderRadius: 'var(--radius-button)',
   color: 'var(--text-primary)',
-  // Match the theme-toggle / settings buttons in AppHeader so
-  // the chrome row has consistent rhythm.
+  // Match the settings button in AppHeader so the chrome row has
+  // consistent rhythm. (M2.16 theme-trim: theme-toggle 已删。)
   transition: 'background-color 120ms ease, color 120ms ease',
 };
 

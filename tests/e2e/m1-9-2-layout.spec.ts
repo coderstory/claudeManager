@@ -52,7 +52,9 @@ test.describe('M1.9.2 layout diagnostic', () => {
       const maxBtn = document.querySelector('[data-testid="app-header-maximize"]') as HTMLElement;
       const closeBtn = document.querySelector('[data-testid="app-header-close"]') as HTMLElement;
       const windowControls = document.querySelector('[data-testid="app-header-window-controls"]') as HTMLElement;
-      const themeToggle = document.querySelector('[data-testid="app-header-theme-toggle"]') as HTMLElement;
+      // M2.16 theme-trim: 主题切换按钮已删(单档 light),此处保留
+      // null 采集以维持诊断快照 schema 兼容。
+      const themeToggle = null;
       const settings = document.querySelector('[data-testid="app-header-settings"]') as HTMLElement;
 
       const captureBox = (el: HTMLElement | null) => {

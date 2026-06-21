@@ -3,10 +3,9 @@
  *
  * Verifies the runtime layer of the design system (CLAUDE.md §4.1).
  *
- * M2.16 glass refactor: the palette is now a 3-way
- *   light → glass-clear → glass-tinted → light cycle.
- * 'dark' / 'auto' were removed; legacy localStorage values must
- * fall back to 'light'.
+ * M2.16 theme-trim: 主题从 3 档 (light / glass-clear / glass-tinted)
+ * 砍到单档 light (瓷白)。原 glass-clear / glass-tinted / 'dark' /
+ * 'auto' 旧值在 localStorage 读取时统一 fallback 到 'light'。
  *
  * Coverage:
  *   - default theme = 'light'
@@ -14,8 +13,8 @@
  *   - localStorage persistence under STORAGE_KEY = 'ccm.theme'
  *   - setTheme reference is stable across re-renders
  *   - useTheme throws when used outside the provider
- *   - cycleTheme advances through all 3 themes
- *   - legacy 'dark' / 'auto' stored values fall back to 'light'
+ *   - legacy 'glass-clear' / 'glass-tinted' / 'dark' / 'auto' stored
+ *     values fall back to 'light'
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
@@ -33,21 +32,12 @@ afterEach(() => {
 
 // --- helpers ----------------------------------------------------------------
 function Probe(): ReactElement {
-  const { theme, setTheme, cycleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   return (
     <div>
       <span data-testid="theme">{theme}</span>
       <button data-testid="set-light" onClick={() => setTheme('light')}>
         light
-      </button>
-      <button data-testid="set-glass-clear" onClick={() => setTheme('glass-clear')}>
-        glass-clear
-      </button>
-      <button data-testid="set-glass-tinted" onClick={() => setTheme('glass-tinted')}>
-        glass-tinted
-      </button>
-      <button data-testid="cycle" onClick={() => cycleTheme()}>
-        cycle
       </button>
     </div>
   );
@@ -64,15 +54,37 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('reads persisted theme from localStorage on mount', () => {
+  it('reads persisted "light" from localStorage on mount', () => {
+    localStorage.setItem('ccm.theme', 'light');
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('falls back to "light" when stored value is legacy "glass-clear"', () => {
+    localStorage.setItem('ccm.theme', 'glass-clear');
+    render(
+      <ThemeProvider>
+        <Probe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('falls back to "light" when stored value is legacy "glass-tinted"', () => {
     localStorage.setItem('ccm.theme', 'glass-tinted');
     render(
       <ThemeProvider>
         <Probe />
       </ThemeProvider>,
     );
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
-    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('falls back to "light" when stored value is legacy "dark"', () => {
@@ -97,32 +109,18 @@ describe('ThemeProvider', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('setTheme("glass-clear") updates state, <html data-theme>, and localStorage', () => {
+  it('setTheme("light") updates state, <html data-theme>, and localStorage', () => {
     render(
       <ThemeProvider>
         <Probe />
       </ThemeProvider>,
     );
     act(() => {
-      screen.getByTestId('set-glass-clear').click();
+      screen.getByTestId('set-light').click();
     });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
-    expect(document.documentElement.dataset.theme).toBe('glass-clear');
-    expect(localStorage.getItem('ccm.theme')).toBe('glass-clear');
-  });
-
-  it('setTheme("glass-tinted") updates state, <html data-theme>, and localStorage', () => {
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-glass-tinted').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
-    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
-    expect(localStorage.getItem('ccm.theme')).toBe('glass-tinted');
+    expect(screen.getByTestId('theme')).toHaveTextContent('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('ccm.theme')).toBe('light');
   });
 
   it('keeps the same setTheme reference across re-renders (referential stability)', () => {
@@ -142,80 +140,6 @@ describe('ThemeProvider', () => {
       /useTheme must be used inside <ThemeProvider>/,
     );
     errSpy.mockRestore();
-  });
-
-  // -------------------------------------------------------------------------
-  // M2.16 glass refactor — cycleTheme advances
-  //   light → glass-clear → glass-tinted → light.
-  //
-  // The cycle is centralised in ThemeProvider so <AppHeader> and any
-  // future control (settings dropdown, etc.) share one definition of
-  // the order. Each test starts from a known theme and verifies the
-  // next click lands on the right value (and that the resolved
-  // <html data-theme> updates too).
-  // -------------------------------------------------------------------------
-  it('cycleTheme_light_to_glass_clear', () => {
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    expect(screen.getByTestId('theme')).toHaveTextContent('light');
-    act(() => {
-      screen.getByTestId('cycle').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
-    expect(document.documentElement.dataset.theme).toBe('glass-clear');
-  });
-
-  it('cycleTheme_glass_clear_to_glass_tinted', () => {
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-glass-clear').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
-    act(() => {
-      screen.getByTestId('cycle').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
-    expect(document.documentElement.dataset.theme).toBe('glass-tinted');
-  });
-
-  it('cycleTheme_glass_tinted_to_light', () => {
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    act(() => {
-      screen.getByTestId('set-glass-tinted').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
-    act(() => {
-      screen.getByTestId('cycle').click();
-    });
-    expect(screen.getByTestId('theme')).toHaveTextContent('light');
-    expect(document.documentElement.dataset.theme).toBe('light');
-  });
-
-  it('cycleTheme_three_clicks_returns_to_initial_state', () => {
-    // Pin the full cycle: light → glass-clear → glass-tinted → light.
-    render(
-      <ThemeProvider>
-        <Probe />
-      </ThemeProvider>,
-    );
-    expect(screen.getByTestId('theme')).toHaveTextContent('light');
-    act(() => screen.getByTestId('cycle').click());
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-clear');
-    act(() => screen.getByTestId('cycle').click());
-    expect(screen.getByTestId('theme')).toHaveTextContent('glass-tinted');
-    act(() => screen.getByTestId('cycle').click());
-    expect(screen.getByTestId('theme')).toHaveTextContent('light');
   });
 });
 

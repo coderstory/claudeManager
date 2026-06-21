@@ -21,8 +21,7 @@
  *   — they don't render in the webview at all.
  */
 import type { ReactElement } from 'react';
-import { ArrowLeft, Droplets, Moon, Settings, Sparkles } from 'lucide-react';
-import { useTheme } from '../design-system/ThemeProvider';
+import { ArrowLeft, Settings } from 'lucide-react';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
 import { WindowControls } from './WindowControls';
@@ -62,11 +61,6 @@ export function AppHeader({
   onNavigate,
   pageTitle,
 }: AppHeaderProps): ReactElement {
-  // M2.10 F12 polish — use cycleTheme() from the provider instead
-  // of recomputing the light→dark→auto ternary inline (which used
-  // to live here). Centralising it means future controls (settings
-  // page dropdown, etc.) share one definition of the order.
-  const { theme, cycleTheme } = useTheme();
   const isHome = currentView === HOME_VIEW;
 
   return (
@@ -169,12 +163,13 @@ export function AppHeader({
         </h1>
       </div>
 
-      {/* Right zone — theme + settings + window controls.
-          All three groups sit in the no-drag zone so the OS
-          doesn't intercept their clicks as drag gestures.
-          flexShrink: 0 keeps the chrome pinned to the right
-          edge even when the left zone title is very long.
+      {/* Right zone — settings + window controls.
+          All groups sit in the no-drag zone so the OS doesn't
+          intercept their clicks as drag gestures.
+          flexShrink: 0 keeps the chrome pinned to the right edge
+          even when the left zone title is very long.
 
+          M2.16 theme-trim: 主题切换按钮已删(单档 light 无需切换)。
           M2.15-fix-v2: `gap-1` Tailwind class was inert (no
           Tailwind pipeline) — buttons stacked vertically and the
           cluster extended past the 48px header height. Inlined
@@ -189,50 +184,6 @@ export function AppHeader({
           gap: 4,
         }}
       >
-        <button
-          type="button"
-          onClick={() => {
-            // M2.10 F12 polish — delegate to ThemeProvider's
-            // cycleTheme so the order lives in one place. The
-            // aria-label + title still surface the current state
-            // so screen-reader users hear "切换到 X" instead of
-            // an opaque "toggle theme".
-            cycleTheme();
-          }}
-          data-testid="app-header-theme-toggle"
-          data-app-control-hover="true"
-          aria-label={
-            theme === 'light' ? '切换到全透玻璃主题' :
-            theme === 'glass-clear' ? '切换到半透玻璃主题' :
-            '切换到瓷白主题'
-          }
-          title={
-            theme === 'light' ? '切换到全透玻璃' :
-            theme === 'glass-clear' ? '切换到半透玻璃' :
-            '切换到瓷白'
-          }
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 'var(--radius-button)',
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-primary)',
-            transition: 'background-color 120ms ease',
-          }}
-        >
-          {theme === 'light' ? (
-            <Moon size={16} style={{ color: 'var(--text-primary)' }} />
-          ) : theme === 'glass-clear' ? (
-            <Sparkles size={16} style={{ color: 'var(--text-primary)' }} />
-          ) : (
-            <Droplets size={16} style={{ color: 'var(--text-primary)' }} />
-          )}
-        </button>
         <button
           type="button"
           data-testid="app-header-settings"
@@ -264,7 +215,7 @@ export function AppHeader({
         <WindowControls />
       </div>
       {/* Shared hover rules for the header's chrome buttons
-          (back / theme / settings / min / max / close).
+          (back / settings / min / max / close).
           Tailwind would normally supply these via
           `hover:bg-black/5 dark:hover:bg-white/5` utility classes,
           but the project has no Tailwind pipeline (no

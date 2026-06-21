@@ -159,17 +159,14 @@ describe('App — view routing integration', () => {
     ).not.toBeNull();
   });
 
-  it('theme toggle button is rendered and clickable', () => {
+  it('theme toggle button is NOT rendered (M2.16 theme-trim — single light theme)', () => {
+    // M2.16 theme-trim: 主题砍到单档 light,切换按钮已删。此用例
+    // 是回归 guard — 防止后期误把按钮加回(单档无意义切换)。
+    // 如后期重新加多档主题,先在此处恢复 cycleTheme + 按钮,再更新
+    // 本断言。
     renderApp();
-    const toggle = screen.getByTestId('app-header-theme-toggle');
-    expect(toggle).toBeInTheDocument();
-    // Clicking should not throw — actual theme mutation is covered
-    // by ThemeProvider.test.tsx; we just confirm the wiring.
-    act(() => {
-      toggle.click();
-    });
-    // The icon flips between Sun / Moon — the button still exists.
-    expect(toggle).toBeInTheDocument();
+    const toggle = screen.queryByTestId('app-header-theme-toggle');
+    expect(toggle).toBeNull();
   });
 
   it('clicking the same sidebar item twice does not push duplicates to localStorage', () => {

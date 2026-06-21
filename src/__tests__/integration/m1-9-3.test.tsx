@@ -329,30 +329,29 @@ describe('M1.9.3 — view transition (P1 fix: framer-motion removed)', () => {
   });
 });
 
-describe('M1.9.3 — regression: glass theme still works after P0/P1 changes', () => {
-  it('swapping the theme keeps <main> positioned absolute (fix did not regress glass mode)', () => {
-    // Render once, flip to glass-tinted via the storage key,
-    // re-render. The pane must STILL be position:absolute (the fix
-    // is independent of the theme system) and the data-theme
-    // attribute on <html> must reflect the switch.
+describe('M1.9.3 — regression: theme still works after P0/P1 changes', () => {
+  it('persisting the theme keeps <main> positioned absolute (fix did not regress theme mode)', () => {
+    // Render once with a persisted 'light' theme, re-render. The pane
+    // must STILL be position:absolute (the fix is independent of the
+    // theme system) and the data-theme attribute on <html> must
+    // reflect the persisted value.
     //
-    // M2.16: the palette collapsed from light/dark/auto to a 3-way
-    // light → glass-clear → glass-tinted cycle. This test now uses
-    // 'glass-tinted' (a valid new value) instead of the removed
-    // 'dark' to exercise the same "theme swap doesn't break the
-    // absolute-positioned main pane" contract.
+    // M2.16 theme-trim: 主题从 3 档 (light / glass-clear / glass-tinted)
+    // 砍到单档 light。原 glass-tinted 回归用例改用 'light' 继续验证
+    // "持久化 theme 不破坏 main absolute 定位"的核心契约。如后期
+    // 加多档主题,此处可换回非默认值测试 swap 路径。
     //
     // The storage key is `ccm.theme` (per ThemeProvider.tsx
     // STORAGE_KEY) — not the platform-default key. The provider
     // reads from this key on initial mount; clearing it would
     // default to 'light'.
-    localStorage.setItem('ccm.theme', 'glass-tinted');
+    localStorage.setItem('ccm.theme', 'light');
     renderApp();
     const main = screen.getByTestId('app-main');
     const cs = getComputedStyle(main);
     expect(cs.position).toBe('absolute');
     // Theme is applied at the documentElement level; the [data-theme]
     // attribute is the same selector tokens.css uses to swap tokens.
-    expect(document.documentElement.getAttribute('data-theme')).toBe('glass-tinted');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 });
