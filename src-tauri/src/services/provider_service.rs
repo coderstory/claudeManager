@@ -788,10 +788,11 @@ mod tests {
     // ----- import_providers_from_sql (F3, M2.2) -----
 
     /// Build a 2-row dump string for testing.
+    /// 使用真实 cc-switch schema（claude 系 settings_config.env.ANTHROPIC_*）。
     fn sample_sql_dump() -> String {
         r#"
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('glm-46', 'claude', 'GLM-4.6', '{"api_base":"https://api.anthropic.com","api_key":"sk-a","models":["claude-sonnet-4-6"]}');
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('deepseek', 'claude', 'DeepSeek', '{"api_base":"https://api.deepseek.com","api_key":"sk-b","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('glm-46', 'claude', 'GLM-4.6', '{"env":{"ANTHROPIC_BASE_URL":"https://api.anthropic.com","ANTHROPIC_AUTH_TOKEN":"sk-a","ANTHROPIC_MODEL":"claude-sonnet-4-6"},"model":"claude-sonnet-4-6"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('deepseek', 'claude', 'DeepSeek', '{"env":{"ANTHROPIC_BASE_URL":"https://api.deepseek.com","ANTHROPIC_AUTH_TOKEN":"sk-b","ANTHROPIC_MODEL":"deepseek-chat"},"model":"deepseek-chat"}');
 INSERT INTO mcp_servers (id, name, server_config) VALUES ('m1', 'M1', '{"command":"npx"}');
 "#
         .to_string()
@@ -805,9 +806,9 @@ INSERT INTO mcp_servers (id, name, server_config) VALUES ('m1', 'M1', '{"command
         let svc = ProviderService::new(test_paths(tmp.path(), &settings));
 
         let sql = r#"
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('a1', 'claude', 'A1', '{"api_base":"https://a","api_key":"k1","models":[]}');
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('b2', 'claude', 'B2', '{"api_base":"https://b","api_key":"k2","models":[]}');
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('c3', 'claude', 'C3', '{"api_base":"https://c","api_key":"k3","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('a1', 'claude', 'A1', '{"env":{"ANTHROPIC_BASE_URL":"https://a","ANTHROPIC_AUTH_TOKEN":"k1","ANTHROPIC_MODEL":"m1"},"model":"m1"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('b2', 'claude', 'B2', '{"env":{"ANTHROPIC_BASE_URL":"https://b","ANTHROPIC_AUTH_TOKEN":"k2","ANTHROPIC_MODEL":"m2"},"model":"m2"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('c3', 'claude', 'C3', '{"env":{"ANTHROPIC_BASE_URL":"https://c","ANTHROPIC_AUTH_TOKEN":"k3","ANTHROPIC_MODEL":"m3"},"model":"m3"}');
 "#;
         let result = svc.import_providers_from_sql(sql).unwrap();
         assert_eq!(result.imported, 3);
@@ -855,9 +856,9 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('c3', 'claud
 
         // Mix of valid + 2 invalid rows.
         let sql = r#"
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('ok', 'claude', 'OK', '{"api_base":"https://x","api_key":"k","models":[]}');
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', 'Bad', '{"api_base":"https://x","api_key":"k"}');
-INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', 'claude', 'OK2', '{"api_base":"https://y","api_key":"k2","models":[]}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('ok', 'claude', 'OK', '{"env":{"ANTHROPIC_BASE_URL":"https://x","ANTHROPIC_AUTH_TOKEN":"k","ANTHROPIC_MODEL":"m"},"model":"m"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', 'Bad', '{"env":{"ANTHROPIC_BASE_URL":"https://x","ANTHROPIC_AUTH_TOKEN":"k","ANTHROPIC_MODEL":"m"},"model":"m"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', 'claude', 'OK2', '{"env":{"ANTHROPIC_BASE_URL":"https://y","ANTHROPIC_AUTH_TOKEN":"k2","ANTHROPIC_MODEL":"m2"},"model":"m2"}');
 "#;
         let result = svc.import_providers_from_sql(sql).unwrap();
         assert_eq!(result.imported, 2, "two valid rows should import");
@@ -903,7 +904,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         // No `providers` subdir created.
         let svc = ProviderService::new(test_paths(tmp.path(), &settings));
 
-        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('late', 'claude', 'Late', '{\"api_base\":\"https://z\",\"api_key\":\"k\"}');";
+        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('late', 'claude', 'Late', '{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://z\",\"ANTHROPIC_AUTH_TOKEN\":\"k\",\"ANTHROPIC_MODEL\":\"m\"},\"model\":\"m\"}');";
         let result = svc.import_providers_from_sql(sql).unwrap();
         assert_eq!(result.imported, 1);
         let p_dir = tmp.path().join("providers");
