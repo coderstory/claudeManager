@@ -207,4 +207,166 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       ).toContain('boom');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // F23 — 导出 markdown 报告 (M2.16)
+  // -------------------------------------------------------------------------
+
+  it('renders the export button after scan completes', async () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<OptimizerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('optimizer-export-btn')).toBeInTheDocument();
+    });
+  });
+
+  it('export button calls export_optimization_report with findings', async () => {
+    const sample = finding('id-A', 'DEPRECATED_FIELD', 'info', true);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') return [sample];
+      if (cmd === 'export_optimization_report') return '/tmp/report.md';
+      return null;
+    });
+    render(<OptimizerPage />);
+    const exportBtn = await screen.findByTestId('optimizer-export-btn');
+    await act(async () => {
+      fireEvent.click(exportBtn);
+    });
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'export_optimization_report',
+      );
+      expect(calls.length).toBe(1);
+      const args = calls[0][1] as {
+        findings: OptimizationFinding[];
+        applyResults: unknown;
+        generatedAt: string;
+      };
+      expect(args.findings).toHaveLength(1);
+      expect(args.findings[0].id).toBe('id-A');
+      expect(args.applyResults).toBeNull();
+      expect(typeof args.generatedAt).toBe('string');
+    });
+  });
+
+  it('shows success banner with path when export returns a path', async () => {
+    const sample = finding('id-A', 'DEPRECATED_FIELD', 'info', true);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') return [sample];
+      if (cmd === 'export_optimization_report')
+        return 'C:\\Users\\test\\report.md';
+      return null;
+    });
+    render(<OptimizerPage />);
+    const exportBtn = await screen.findByTestId('optimizer-export-btn');
+    await act(async () => {
+      fireEvent.click(exportBtn);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('optimizer-export-success')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('optimizer-export-success').textContent,
+      ).toContain('C:\\Users\\test\\report.md');
+    });
+  });
+
+  it('shows error banner when export rejects', async () => {
+    const sample = finding('id-A', 'DEPRECATED_FIELD', 'info', true);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') return [sample];
+      if (cmd === 'export_optimization_report')
+        throw new Error('disk full');
+      return null;
+    });
+    render(<OptimizerPage />);
+    const exportBtn = await screen.findByTestId('optimizer-export-btn');
+    await act(async () => {
+      fireEvent.click(exportBtn);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('optimizer-export-error')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('optimizer-export-error').textContent,
+      ).toContain('disk full');
+    });
+  });
+
+  it('stays silent when user cancels save dialog (export returns null)', async () => {
+    const sample = finding('id-A', 'DEPRECATED_FIELD', 'info', true);
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') return [sample];
+      if (cmd === 'export_optimization_report') return null;
+      return null;
+    });
+    render(<OptimizerPage />);
+    const exportBtn = await screen.findByTestId('optimizer-export-btn');
+    await act(async () => {
+      fireEvent.click(exportBtn);
+    });
+    // 取消保存框 → 既不显示成功也不显示错误。
+    await waitFor(() => {
+      expect(mockInvoke.mock.calls).toContainEqual([
+        'export_optimization_report',
+        expect.anything(),
+      ]);
+    });
+    expect(screen.queryByTestId('optimizer-export-success')).toBeNull();
+    expect(screen.queryByTestId('optimizer-export-error')).toBeNull();
+  });
+
+  it('passes applyResults to export when present', async () => {
+    const sample = finding('id-A', 'DEPRECATED_FIELD', 'info', true);
+    mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
+      if (cmd === 'scan_optimizations') return [sample];
+      if (cmd === 'apply_optimizations') {
+        const a = args as { findingIds: string[] };
+        return a.findingIds.map((id) => ({
+          finding_id: id,
+          applied: true,
+          backup_path: '/tmp/bak',
+          error: null,
+        })) as ApplyResult[];
+      }
+      if (cmd === 'export_optimization_report') return '/tmp/report.md';
+      return null;
+    });
+    render(<OptimizerPage />);
+    // 先 apply,让 applyResults 进 state。
+    const applyBtn = await screen.findByTestId('optimizer-apply-btn');
+    await act(async () => {
+      fireEvent.click(applyBtn);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('optimizer-apply-results')).toBeInTheDocument();
+    });
+    // 再导出——applyResults 应被传入。
+    const exportBtn = screen.getByTestId('optimizer-export-btn');
+    await act(async () => {
+      fireEvent.click(exportBtn);
+    });
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'export_optimization_report',
+      );
+      expect(calls.length).toBe(1);
+      const args = calls[0][1] as { applyResults: ApplyResult[] };
+      expect(Array.isArray(args.applyResults)).toBe(true);
+      expect(args.applyResults).toHaveLength(1);
+      expect(args.applyResults[0].applied).toBe(true);
+    });
+  });
+
+  it('export button disabled while loading', async () => {
+    // scan 永不 resolve,保持 loading=true。
+    mockInvoke.mockImplementation(
+      () => new Promise(() => {}),
+    );
+    render(<OptimizerPage />);
+    await waitFor(() => {
+      const btn = screen.getByTestId(
+        'optimizer-export-btn',
+      ) as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+    });
+  });
 });

@@ -85,6 +85,8 @@ pub fn run() {
             commands::app::get_app_metadata,
             commands::optimizer::scan_optimizations,
             commands::optimizer::apply_optimizations,
+            // M2.16 — F23 优化建议导出 markdown（Rust 侧生成 + 弹保存框 + 原子写盘）
+            commands::optimizer::export_optimization_report,
             // M2.13 — F16 资源浏览
             commands::resource::list_resources,
             commands::resource::reveal_in_file_manager,

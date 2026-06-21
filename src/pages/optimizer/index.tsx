@@ -29,13 +29,18 @@ import type { ReactElement } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  Download,
   Info,
   RefreshCw,
   ShieldAlert,
   Wand2,
 } from 'lucide-react';
 
-import { applyOptimizations, scanOptimizations } from '../../lib/api/optimizer';
+import {
+  applyOptimizations,
+  exportOptimizationReport,
+  scanOptimizations,
+} from '../../lib/api/optimizer';
 import type {
   ApplyResult,
   OptimizationFinding,
@@ -59,6 +64,12 @@ interface PageState {
   applyError: string | null;
   applyResults: ApplyResult[] | null;
   lastScanAt: number | null;
+  /** F23 导出报告时置 true,禁用导出按钮。 */
+  exporting: boolean;
+  /** F23 导出失败的错误信息(null = 无错误)。 */
+  exportError: string | null;
+  /** F23 导出成功的路径提示(null = 未导出 / 已清除)。 */
+  exportSuccessPath: string | null;
 }
 
 const INITIAL_STATE: PageState = {
@@ -70,6 +81,9 @@ const INITIAL_STATE: PageState = {
   applyError: null,
   applyResults: null,
   lastScanAt: null,
+  exporting: false,
+  exportError: null,
+  exportSuccessPath: null,
 };
 
 const SEVERITY_ORDER: Severity[] = ['error', 'warning', 'info'];
@@ -154,6 +168,48 @@ export default function OptimizerPage(): ReactElement {
     }
   }, [state.selectedIds]);
 
+  // F23 — 导出 markdown 报告。后端生成内容 + 弹保存框 + 写盘,
+  // 前端只传当前 findings + applyResults（如有),拿回路径展示成功提示。
+  // 用户在保存框取消 → 后端返回 null → 静默,不显示任何错误。
+  const handleExport = useCallback(async () => {
+    setState((prev) => ({
+      ...prev,
+      exporting: true,
+      exportError: null,
+      exportSuccessPath: null,
+    }));
+    try {
+      const path = await exportOptimizationReport(
+        state.findings,
+        state.applyResults,
+        new Date().toISOString(),
+      );
+      if (path === null) {
+        // 用户取消保存框——静默,清 exporting 但不置错误/成功。
+        setState((prev) => ({
+          ...prev,
+          exporting: false,
+          exportError: null,
+          exportSuccessPath: null,
+        }));
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        exporting: false,
+        exportError: null,
+        exportSuccessPath: path,
+      }));
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        exporting: false,
+        exportError: err instanceof Error ? err.message : String(err),
+        exportSuccessPath: null,
+      }));
+    }
+  }, [state.findings, state.applyResults]);
+
   const grouped = useMemo(() => {
     const m: Record<Severity, OptimizationFinding[]> = {
       error: [],
@@ -220,30 +276,66 @@ export default function OptimizerPage(): ReactElement {
             )}
           </p>
         </div>
-        <button
-          type="button"
-          data-testid="optimizer-rescan-btn"
-          onClick={() => {
-            void runScan();
-          }}
-          disabled={state.loading}
+        <div
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '6px 14px',
-            borderRadius: 4,
-            border: '1px solid var(--border)',
-            background: 'var(--bg-elevated)',
-            color: 'var(--text-primary)',
-            fontSize: 13,
-            cursor: state.loading ? 'not-allowed' : 'pointer',
-            opacity: state.loading ? 0.6 : 1,
+            gap: 8,
+            flexWrap: 'wrap',
           }}
         >
-          <RefreshCw size={14} />
-          {state.loading ? '扫描中...' : '重新扫描'}
-        </button>
+          <button
+            type="button"
+            data-testid="optimizer-rescan-btn"
+            onClick={() => {
+              void runScan();
+            }}
+            disabled={state.loading}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              cursor: state.loading ? 'not-allowed' : 'pointer',
+              opacity: state.loading ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw size={14} />
+            {state.loading ? '扫描中...' : '重新扫描'}
+          </button>
+          {/* F23 — 导出 markdown 报告。扫描完成（findings 有值,无论 0 还是 N）
+              即可导出;扫描中 / 导出中禁用。用户取消保存框静默处理。 */}
+          <button
+            type="button"
+            data-testid="optimizer-export-btn"
+            onClick={() => {
+              void handleExport();
+            }}
+            disabled={state.loading || state.exporting}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 14px',
+              borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              cursor:
+                state.loading || state.exporting ? 'not-allowed' : 'pointer',
+              opacity: state.loading || state.exporting ? 0.6 : 1,
+            }}
+          >
+            <Download size={14} />
+            {state.exporting ? '导出中...' : '导出报告'}
+          </button>
+        </div>
       </div>
 
       {/* Scan error banner */}
@@ -260,6 +352,88 @@ export default function OptimizerPage(): ReactElement {
           }}
         >
           扫描失败: {state.scanError}
+        </div>
+      )}
+
+      {/* F23 — 导出成功提示（绿色,含路径,可手动清除） */}
+      {state.exportSuccessPath && (
+        <div
+          data-testid="optimizer-export-success"
+          style={{
+            padding: '10px 14px',
+            borderRadius: 4,
+            background: 'rgba(56, 142, 60, 0.08)',
+            border: '1px solid var(--success)',
+            color: 'var(--success)',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, wordBreak: 'break-all' }}>
+            报告已导出: {state.exportSuccessPath}
+          </span>
+          <button
+            type="button"
+            data-testid="optimizer-export-success-dismiss"
+            onClick={() => {
+              setState((prev) => ({ ...prev, exportSuccessPath: null }));
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--success)',
+              cursor: 'pointer',
+              fontSize: 13,
+              padding: 0,
+            }}
+            aria-label="关闭导出成功提示"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* F23 — 导出失败提示（红色,含错误信息,可手动清除） */}
+      {state.exportError && (
+        <div
+          data-testid="optimizer-export-error"
+          style={{
+            padding: '10px 14px',
+            borderRadius: 4,
+            background: 'rgba(211, 47, 47, 0.08)',
+            border: '1px solid var(--danger)',
+            color: 'var(--danger)',
+            fontSize: 13,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1, wordBreak: 'break-word' }}>
+            导出失败: {state.exportError}
+          </span>
+          <button
+            type="button"
+            data-testid="optimizer-export-error-dismiss"
+            onClick={() => {
+              setState((prev) => ({ ...prev, exportError: null }));
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--danger)',
+              cursor: 'pointer',
+              fontSize: 13,
+              padding: 0,
+            }}
+            aria-label="关闭导出错误提示"
+          >
+            ✕
+          </button>
         </div>
       )}
 
