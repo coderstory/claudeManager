@@ -69,6 +69,18 @@ pub struct InstallResult {
     pub message: String,
 }
 
+/// M2.16 — H3: install 选项(force overwrite 等)。
+///
+/// 设计成 bitflags-ready 的 struct,后续可加 `skip_backup` / `dry_run`
+/// 等。当前只暴露 `force`。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InstallOptions {
+    /// 目标已存在时强制覆盖。默认 false(保护用户数据)。
+    /// 覆盖前会做一次 backup(目标目录 rename 到 .bak.<ts>)再写新值。
+    #[serde(default)]
+    pub force: bool,
+}
+
 // ---------------------------------------------------------------------------
 // 内置推荐仓库(硬编码占位,用户后期可改)
 // ---------------------------------------------------------------------------
@@ -204,12 +216,15 @@ impl MarketplaceService {
     /// 把 `repo_path` 下 `resource_id` 对应的资源 copy 到 `~/.claude/`。
     ///
     /// 重新扫描 repo 找源路径(不信任前端传 path,防穿越)。dest 已存在
-    /// → 报错,不覆盖用户数据。
+    /// → 默认报错(`InstallOptions::force = false`);force=true 时备份
+    /// 现有目标到 `.bak.<ts>` 后覆盖。
     pub fn install_resource(
         &self,
         repo_path: &str,
         resource_id: &str,
+        options: Option<InstallOptions>,
     ) -> Result<InstallResult, MarketplaceError> {
+        let options = options.unwrap_or_default();
         // 解析 resource_id → "<kind_tag>/<name>"。
         let (kind_tag, name) = resource_id
             .split_once('/')
@@ -254,7 +269,14 @@ impl MarketplaceService {
         std::fs::create_dir_all(&dest_dir)?;
         let dest = dest_dir.join(&name);
         if dest.exists() {
-            return Err(MarketplaceError::DestExists(dest));
+            if options.force {
+                // M2.16 — H3: 强制覆盖前先备份当前目标到 .bak.<ts>。
+                // 备份失败 → 拒绝覆盖(不静默吞错,SPEC §6.5)。
+                let backup_path = backup_path_with_ts(&dest);
+                std::fs::rename(&dest, &backup_path)?;
+            } else {
+                return Err(MarketplaceError::DestExists(dest));
+            }
         }
 
         // 源可能是目录(plugin / skill-dir)或文件(skill / command / lsp)。
@@ -352,6 +374,25 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
         }
     }
     Ok(())
+}
+
+/// M2.16 — H3: 在 `dest` 同目录下生成 `<stem>.bak.<unix_ts>` 备份路径。
+///
+/// 时间戳用 unix seconds(单调递增),不读本地时钟避免重入。冲突概率
+/// 在用户手动连点 1s 内可见 —— 同一个目标 `.bak.<ts>` 重新覆盖前
+/// 旧备份已被 rename 走,新备份路径唯一。
+fn backup_path_with_ts(dest: &Path) -> PathBuf {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let parent = dest.parent().unwrap_or_else(|| Path::new("."));
+    let stem = dest
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("resource");
+    parent.join(format!("{stem}.bak.{ts}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -592,7 +633,7 @@ mod tests {
             .clone_and_scan("https://github.com/foo/bar.git")
             .unwrap();
         let result = svc
-            .install_resource(&scan.repo_path, "plugin/code-review")
+            .install_resource(&scan.repo_path, "plugin/code-review", None)
             .expect("install");
 
         assert!(result.installed);
@@ -617,7 +658,7 @@ mod tests {
 
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         let result = svc
-            .install_resource(&scan.repo_path, "command/deploy.md")
+            .install_resource(&scan.repo_path, "command/deploy.md", None)
             .unwrap();
 
         assert!(result.installed);
@@ -644,7 +685,7 @@ mod tests {
 
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         let result = svc
-            .install_resource(&scan.repo_path, "mcp/fs")
+            .install_resource(&scan.repo_path, "mcp/fs", None)
             .unwrap();
 
         assert!(!result.installed);
@@ -666,7 +707,7 @@ mod tests {
 
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         let err = svc
-            .install_resource(&scan.repo_path, "plugin/code-review")
+            .install_resource(&scan.repo_path, "plugin/code-review", None)
             .unwrap_err();
         assert!(matches!(err, MarketplaceError::DestExists(_)), "got {err:?}");
     }
@@ -683,7 +724,7 @@ mod tests {
 
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         let err = svc
-            .install_resource(&scan.repo_path, "plugin/nonexistent")
+            .install_resource(&scan.repo_path, "plugin/nonexistent", None)
             .unwrap_err();
         assert!(matches!(err, MarketplaceError::InvalidResourceId(_)), "got {err:?}");
     }
@@ -701,7 +742,7 @@ mod tests {
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         // 没有 `/` 分隔。
         let err = svc
-            .install_resource(&scan.repo_path, "bogus")
+            .install_resource(&scan.repo_path, "bogus", None)
             .unwrap_err();
         assert!(matches!(err, MarketplaceError::InvalidResourceId(_)));
     }
@@ -718,7 +759,7 @@ mod tests {
 
         let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
         let err = svc
-            .install_resource(&scan.repo_path, "robots/foo")
+            .install_resource(&scan.repo_path, "robots/foo", None)
             .unwrap_err();
         assert!(matches!(err, MarketplaceError::InvalidResourceId(_)));
     }
@@ -737,5 +778,92 @@ mod tests {
         // "https://github.com/foo/.." → slug ".." → slug_from_url 拦截。
         let err = svc.clone_and_scan("https://github.com/foo/..").unwrap_err();
         assert!(matches!(err, MarketplaceError::PathUnsafe(_)), "got {err:?}");
+    }
+
+    // ---- M2.16 — H3: force overwrite ----
+
+    /// H3: force=true 时目标已存在不报错,旧目标被备份到 .bak.<ts>。
+    #[test]
+    fn install_force_overwrites_existing_with_backup() {
+        let fake_repo = make_fake_repo();
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let existing_dir = claude_dir.join("plugins").join("code-review");
+        fs::create_dir_all(&existing_dir).unwrap();
+        // 旧内容:区别于 fake_repo 的 "# code-review plugin"。
+        fs::write(existing_dir.join("index.md"), b"# old local copy").unwrap();
+        // 旧目录里加一个独有文件,验证备份是完整目录(不是只备份 index.md)。
+        fs::write(existing_dir.join("local-only.txt"), b"local only").unwrap();
+
+        let svc = make_service(
+            tmp.path().join("mk"),
+            claude_dir.clone(),
+            fake_repo.path().to_path_buf(),
+        );
+
+        let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
+        let result = svc
+            .install_resource(
+                &scan.repo_path,
+                "plugin/code-review",
+                Some(InstallOptions { force: true }),
+            )
+            .expect("force install should succeed");
+
+        assert!(result.installed);
+        assert!(result.message.contains("覆盖") || result.message.contains("成功"));
+
+        // 1) 新内容落地
+        let dest_file = claude_dir.join("plugins").join("code-review").join("index.md");
+        assert_eq!(
+            fs::read_to_string(&dest_file).unwrap(),
+            "# code-review plugin",
+            "新内容应覆盖旧内容"
+        );
+
+        // 2) 旧内容已备份到 .bak.<ts>
+        let backups: Vec<_> = fs::read_dir(claude_dir.join("plugins"))
+            .unwrap()
+            .flatten()
+            .filter_map(|e| {
+                let n = e.file_name().to_str()?.to_string();
+                if n.starts_with("code-review.bak.") {
+                    Some(e.path())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(backups.len(), 1, "应恰好有 1 个备份目录");
+        let backup = &backups[0];
+        assert_eq!(
+            fs::read_to_string(backup.join("index.md")).unwrap(),
+            "# old local copy",
+            "备份保留旧内容"
+        );
+        assert!(
+            backup.join("local-only.txt").exists(),
+            "备份保留原目录的独有文件"
+        );
+    }
+
+    /// H3: force=false(默认)= 老行为:目标已存在报错 DestExists。
+    #[test]
+    fn install_without_force_still_rejects_existing() {
+        let fake_repo = make_fake_repo();
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        fs::create_dir_all(claude_dir.join("plugins").join("code-review")).unwrap();
+
+        let svc = make_service(
+            tmp.path().join("mk"),
+            claude_dir,
+            fake_repo.path().to_path_buf(),
+        );
+        let scan = svc.clone_and_scan("https://github.com/foo/bar.git").unwrap();
+        let err = svc
+            .install_resource(&scan.repo_path, "plugin/code-review", None)
+            .unwrap_err();
+        assert!(matches!(err, MarketplaceError::DestExists(_)));
     }
 }

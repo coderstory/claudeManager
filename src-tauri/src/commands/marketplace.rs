@@ -16,7 +16,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::services::marketplace_service::{
-    InstallResult, MarketplaceRepo, ScanResult,
+    InstallOptions, InstallResult, MarketplaceRepo, ScanResult,
 };
 
 /// Tauri-friendly error type。
@@ -50,17 +50,18 @@ pub async fn clone_and_scan(
 ///
 /// `repoPath` 是 [`clone_and_scan`] 返回的 `repo_path`(前端原样回传)。
 /// `resourceId` 格式 `<kind>/<name>`(如 `plugin/code-review`)。
-/// 目标已存在 → `Err`(不覆盖用户数据);MCP → `installed: false` +
-/// 提示。
+/// 目标已存在 → 默认 `Err`(不覆盖用户数据);force=true 时备份现有
+/// 目标到 `.bak.<ts>` 后覆盖。MCP → `installed: false` + 提示。
 #[tauri::command]
 pub async fn install_from_marketplace(
     state: State<'_, AppState>,
     repo_path: String,
     resource_id: String,
+    options: Option<InstallOptions>,
 ) -> CmdResult<InstallResult> {
     state
         .marketplace_service
-        .install_resource(&repo_path, &resource_id)
+        .install_resource(&repo_path, &resource_id, options)
         .map_err(|e| e.to_string())
 }
 

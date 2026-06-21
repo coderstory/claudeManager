@@ -33,6 +33,11 @@ export interface InstallResult {
   message: string;
 }
 
+/** M2.16 — H3: install 选项。force = true 时目标已存在会备份并覆盖。 */
+export interface InstallOptions {
+  force?: boolean;
+}
+
 /** F17 — 内置推荐仓库列表(无 I/O,纯常量)。 */
 export function listMarketplaceRepos(): Promise<MarketplaceRepo[]> {
   return invoke<MarketplaceRepo[]>('list_marketplace_repos');
@@ -50,14 +55,17 @@ export function cloneAndScan(url: string): Promise<ScanResult> {
 /** F17 — 把 clone 下来的资源 install 到 `~/.claude/`。
  *
  *  `repoPath` 来自 `cloneAndScan` 返回的 `repo_path`(原样回传)。
- *  `resourceId` 格式 `<kind>/<name>`。目标已存在 → reject;
+ *  `resourceId` 格式 `<kind>/<name>`。目标已存在 → 默认 reject;
+ *  `options.force = true` 时备份现有目标到 `.bak.<ts>` 后覆盖。
  *  MCP → `installed: false` + message。 */
 export function installFromMarketplace(
   repoPath: string,
   resourceId: string,
+  options?: InstallOptions,
 ): Promise<InstallResult> {
   return invoke<InstallResult>('install_from_marketplace', {
     repoPath,
     resourceId,
+    options: options ?? null,
   });
 }
