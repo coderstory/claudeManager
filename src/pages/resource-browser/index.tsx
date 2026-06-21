@@ -2,6 +2,8 @@
  * F16 — 资源浏览 (M2.13 real implementation).
  * F21 — 资源搜索 (M2.16, commit f927895).
  * F22 — 资源详情预览 (M2.16, manifest + 文件列表 M2.16-f22-manifest).
+ * M3.4 — 清单 17: scanner 层已过滤 cache / node_modules / .git 等污染目录,
+ *         前端无需 UI 改动 (后端 `scan_resources` 已屏蔽)。
  *
  * User flow (per docs/design/M2.13-dataflow.md):
  *   1. Page mounts → fetches the default kind ('plugin') via

@@ -1,10 +1,13 @@
-//! Tauri commands for F17 — 在线安装 (M2.16).
+//! Tauri commands for F17 — 在线安装 (M2.16 + M3.4).
 //!
-//! 三个薄封装,围绕 [`MarketplaceService`]:
+//! 围绕 [`MarketplaceService`] 的薄封装:
 //!
-//! - [`list_marketplace_repos`] —— 内置推荐仓库列表(硬编码常量)。
-//! - [`clone_and_scan`] —— clone + 扫描,返回资源清单。
+//! - [`list_marketplace_repos`] —— 内置推荐仓库列表(M3.4 含 install_mode / target)。
+//! - [`clone_and_scan`] —— clone + 扫描,返回资源清单(保留作预览)。
 //! - [`install_from_marketplace`] —— 把资源 copy 到 `~/.claude/`。
+//! - [`install_builtin_plugin`] —— M3.4 内置列表 install (清单 13: superpowers)。
+//! - [`install_third_party_repo`] —— M3.4 第三方仓库单步装 (清单 11/12)。
+//! - [`install_npx_package`] —— M3.4 npx 装 (清单 14: GSD)。
 //!
 //! ## Error 语义
 //!
@@ -23,6 +26,8 @@ use crate::services::marketplace_service::{
 type CmdResult<T> = Result<T, String>;
 
 /// F17 —— 内置推荐仓库列表。无 I/O,纯常量。
+///
+/// M3.4: 返回值新增 `install_mode` / `install_target` 字段(serde default 兼容老调用方)。
 #[tauri::command]
 pub async fn list_marketplace_repos(
     state: State<'_, AppState>,
@@ -35,6 +40,9 @@ pub async fn list_marketplace_repos(
 /// `url` 必须是合法 git URL(https / scp / file://)。clone 落地到
 /// `<app_data>/marketplaces/<slug>/`,已存在则删除重建(缓存性质)。
 /// 网络失败 / git 不存在 → `Err(...)` 带原始 stderr。
+///
+/// M3.4: 保留作"预览" —— 用户先看仓库里有什么,再勾选 install。
+/// 生产路径用 [`install_third_party_repo`] 单步完成。
 #[tauri::command]
 pub async fn clone_and_scan(
     state: State<'_, AppState>,
@@ -65,15 +73,64 @@ pub async fn install_from_marketplace(
         .map_err(|e| e.to_string())
 }
 
+/// M3.4 — 内置列表 install (清单 13: superpowers)。
+///
+/// `pluginId` 必须是 [`list_marketplace_repos`] 返回的 id,且对应条目
+/// `install_mode = "builtin"`。后端调 `claude plugin install <target>`
+/// CLI 一步到位,不 git clone。
+#[tauri::command]
+pub async fn install_builtin_plugin(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> CmdResult<InstallResult> {
+    state
+        .marketplace_service
+        .install_builtin(&plugin_id)
+        .map_err(|e| e.to_string())
+}
+
+/// M3.4 — 第三方仓库单步装 (清单 11/12)。
+///
+/// 单步完成 clone + scan + 循环 install(对 `selections` 里每个资源)。
+/// `selections` 是 `resource_id` 列表(如 `["plugin/code-review", "command/deploy.md"]`)。
+/// 不需要前端先 clone_and_scan 再 install_resource 两步。
+#[tauri::command]
+pub async fn install_third_party_repo(
+    state: State<'_, AppState>,
+    url: String,
+    selections: Vec<String>,
+    options: Option<InstallOptions>,
+) -> CmdResult<Vec<InstallResult>> {
+    state
+        .marketplace_service
+        .install_third_party(&url, selections, options)
+        .map_err(|e| e.to_string())
+}
+
+/// M3.4 — npx 装 (清单 14: GSD)。
+///
+/// `package` 形如 `@opengsd/gsd-core@latest`。后端调
+/// `npx <package> --global --silent`,落地到 `~/.claude/plugins/<basename>/`。
+#[tauri::command]
+pub async fn install_npx_package(
+    state: State<'_, AppState>,
+    package: String,
+) -> CmdResult<InstallResult> {
+    state
+        .marketplace_service
+        .install_npx(&package)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     /// 命令层是薄封装,业务逻辑测试在 service 层。这里只钉符号存在:
-    /// 三个命令的函数名必须跟 lib.rs `invoke_handler!` 注册名一致,
+    /// 六个命令的函数名必须跟 lib.rs `invoke_handler!` 注册名一致,
     /// 重命名时编译能过但运行时会 404,所以用引用强制符号解析。
 
     use super::*;
 
-    /// 钉三个命令的符号存在 + 名字跟 lib.rs `invoke_handler!` 注册
+    /// 钉六个命令的符号存在 + 名字跟 lib.rs `invoke_handler!` 注册
     /// 一致。重命名时编译能过但运行时 404,这里取函数引用强制符号
     /// 解析(拼错会编译失败)。`#[allow(unused)]` 因为引用只用于
     /// 编译期检查,运行时不解引用。
@@ -83,5 +140,8 @@ mod tests {
         let _ = &list_marketplace_repos;
         let _ = &clone_and_scan;
         let _ = &install_from_marketplace;
+        let _ = &install_builtin_plugin;
+        let _ = &install_third_party_repo;
+        let _ = &install_npx_package;
     }
 }

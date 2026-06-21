@@ -94,6 +94,28 @@ pub fn scan_resources(
 // Generic helpers
 // ---------------------------------------------------------------------------
 
+/// M3.4 — 屏蔽常见污染目录(清单 17)。
+///
+/// 这些目录出现在 `plugins/<name>/` 或 `skills/<name>/` 下会让资源
+/// 浏览列表显示"假资源" —— 比如装 `code-review` 时 npm 留了
+/// `node_modules/`,或者 git 在子目录里留了 `.git/`。
+///
+/// **不**改动 domain model,只在 scanner 这一层过滤;ResourceItem
+/// 不返回这些条目,前端自然不显示。
+///
+/// 注意:**不**过滤 .DS_Store(单文件,在 scan_dir_children 里按 dotfile
+/// 已过滤);保留 `cache` / `.cache` 两种大小写兼容(Mac / Linux 习惯)。
+const EXCLUDED_DIR_NAMES: &[&str] = &[
+    "cache", ".cache", "Cache",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv", "venv",
+    "target", // Rust build artifacts
+    "dist", "build", // common build outputs
+    ".next", ".nuxt", // JS framework outputs
+];
+
 /// Walk `claude_dir/<sub>/` and emit a ResourceItem per child entry
 /// that passes `accept`. Children that fail stat are skipped (not
 /// fatal — one unreadable entry doesn't take down the list).
@@ -125,6 +147,15 @@ fn scan_dir_children(
             .unwrap_or(false)
         {
             continue;
+        }
+        // M3.4 — Skip excluded pollution directories (清单 17).
+        // 只过滤目录(不是文件),command / lsp / mcp 不受影响。
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if EXCLUDED_DIR_NAMES.contains(&name) {
+                    continue;
+                }
+            }
         }
         if !accept(&entry) {
             continue;
@@ -634,5 +665,91 @@ mod tests {
         assert_eq!(infer_resource_group(ResourceKind::Command, "build.md"), None);
         assert_eq!(infer_resource_group(ResourceKind::Lsp, "rust.json"), None);
         assert_eq!(infer_resource_group(ResourceKind::Mcp, "fs"), None);
+    }
+
+    // ----- M3.4 — 清单 17: 过滤 cache / node_modules / .git 等污染目录 -----
+
+    /// M3.4 (清单 17): plugin 目录下放 `cache` / `node_modules` / `.git`
+    /// 等污染目录, scanner 必须过滤掉,不返回假 ResourceItem。
+    #[test]
+    fn scan_plugins_dir_excludes_pollution_dirs() {
+        let tmp = make_claude_dir();
+        // 真 plugin
+        fs::create_dir(tmp.path().join("plugins").join("code-review")).unwrap();
+        fs::write(
+            tmp.path().join("plugins").join("code-review").join("index.md"),
+            b"x",
+        )
+        .unwrap();
+        // 污染目录(应被过滤)
+        for pollution in ["cache", "node_modules", ".git", "target", "dist", "build"] {
+            fs::create_dir(tmp.path().join("plugins").join(pollution)).unwrap();
+            fs::write(
+                tmp.path().join("plugins").join(pollution).join("junk.txt"),
+                b"junk",
+            )
+            .unwrap();
+        }
+
+        let items = scan_resources(tmp.path(), ResourceKind::Plugin).unwrap();
+        let names: Vec<_> = items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(items.len(), 1, "只应返回真 plugin, 实际: {names:?}");
+        assert!(names.contains(&"code-review"));
+        // 污染目录全部过滤
+        for pollution in ["cache", "node_modules", ".git", "target", "dist", "build"] {
+            assert!(
+                !names.contains(&pollution),
+                "{pollution} 应被过滤, 但出现在结果中: {names:?}"
+            );
+        }
+    }
+
+    /// M3.4 (清单 17): skill 目录也走同样过滤规则。
+    #[test]
+    fn scan_skills_dir_excludes_pollution_dirs() {
+        let tmp = make_claude_dir();
+        // 真 skill
+        fs::create_dir(tmp.path().join("skills").join("advanced")).unwrap();
+        fs::write(
+            tmp.path().join("skills").join("advanced").join("SKILL.md"),
+            b"# adv",
+        )
+        .unwrap();
+        // 污染目录
+        fs::create_dir(tmp.path().join("skills").join("node_modules")).unwrap();
+        fs::write(
+            tmp.path().join("skills").join("node_modules").join("x.txt"),
+            b"x",
+        )
+        .unwrap();
+
+        let items = scan_resources(tmp.path(), ResourceKind::Skill).unwrap();
+        let names: Vec<_> = items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(items.len(), 1, "只应返回真 skill, 实际: {names:?}");
+        assert!(names.contains(&"advanced"));
+        assert!(!names.contains(&"node_modules"));
+    }
+
+    /// M3.4 (清单 17): filter 不影响 command / lsp(md / json 文件, 不是
+    /// 目录)。 已有的 dotfile 过滤保留(`.foo.md` 仍被过滤)。
+    #[test]
+    fn scan_commands_lsp_unaffected_by_excluded_dir_filter() {
+        let tmp = make_claude_dir();
+        fs::write(
+            tmp.path().join("commands").join("build.md"),
+            b"# build",
+        )
+        .unwrap();
+        fs::write(
+            tmp.path().join("lsp").join("rust.json"),
+            b"{}",
+        )
+        .unwrap();
+        let cmds = scan_resources(tmp.path(), ResourceKind::Command).unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].name, "build.md");
+        let lsps = scan_resources(tmp.path(), ResourceKind::Lsp).unwrap();
+        assert_eq!(lsps.len(), 1);
+        assert_eq!(lsps[0].name, "rust.json");
     }
 }

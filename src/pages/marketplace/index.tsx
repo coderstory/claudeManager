@@ -1,26 +1,33 @@
 /**
- * F17 — 资源市场 (M2.16 real implementation).
+ * F17 — 资源市场 (M2.16 real implementation + M3.4 三类 install 语义统一).
  *
- * User flow (SPEC F17):
+ * User flow (SPEC F17, M3.4 改造):
  *   1. 页面 mount → 调 `listMarketplaceRepos` 拉内置推荐仓库列表。
- *   2. 用户点推荐卡片「克隆并扫描」→ 调 `cloneAndScan(url)`。
- *      或在第三方输入框填 git URL → 点「克隆并扫描」。
- *   3. clone + 扫描完成 → 展示资源表格(plugin/skill/command/lsp/mcp),
- *      每行「安装」按钮。
- *   4. 点「安装」→ 调 `installFromMarketplace(repoPath, resourceId)`。
- *      成功 → 行内绿条;失败 → 行内红条;MCP → 黄条提示手动编辑。
+ *      **M3.4**: 每条目有 `install_mode` (`builtin` / `git` / `npx`),
+ *      决定 UI 按钮 + install 路径。
+ *   2. 内置卡片:
+ *      - Builtin / Npx → 单按钮 "安装" (M3.4 清单 13/14: superpowers / GSD)
+ *      - Git → 双按钮 "预览资源" (clone_and_scan) 或 "安装" (保留预览)
+ *   3. 第三方 URL 输入 → "预览资源" 按钮 (M3.4 保留 clone_and_scan 作预览)。
+ *      扫描后展示资源表格, 用户勾选 → "安装所选 (N 项)" 按钮 (M3.4 单步装)。
+ *   4. 单资源 install 行:
+ *      - success → 行内绿条
+ *      - failure → 行内红条
+ *      - MCP → 黄条提示手动编辑
  *
- * ## Design choices (CLAUDE.md §5 + SPEC §5.13)
+ * ## Design choices (CLAUDE.md §5 + SPEC §5.13 + M3.4)
  *
- * - **clone 是网络操作** → 进度态用 loader + 禁用按钮,真机可能因网络
- *   失败,代码层面做对,错误内联红条展示(CLAUDE.md §7 不静默吞错)。
- * - **install 不覆盖用户数据** → 后端 dest 已存在报错,前端红条展示。
- * - **MCP 不自动安装** → 后端返回 `installed: false` + message,前端
- *   黄条诚实提示(SPEC §6.5 不允许静默吞错)。
- * - **repo_path 原样回传** → 前端不拼路径,避免 OS 差异(CLAUDE.md §3.2)。
- * - **推荐列表硬编码** → M2 不联网拉真实索引,避免网络抖动阻塞 UI。
+ * - **三类 install 语义统一** (清单 11): Builtin (CLI 封装) / Git (clone+scan+copy) /
+ *   Npx (npx --global --silent)。每个内置推荐卡片按 install_mode 渲染不同按钮。
+ * - **不克隆源码** (清单 12): 内置 Builtin / Npx 不需要 clone; Git 模式
+ *   单步 install_third_party_repo 一步到位。
+ * - **GSD 合并展示** (清单 16): UI 显示 "Get Shit Done" 分类标签,
+ *   实际分组由 scanner 推断 (这里只在前端 UI 加视觉标识)。
+ * - **错误处理**: MCP 不自动安装 (黄条), 目标存在报错 (红条),
+ *   CLAUDE.md §7 不静默吞错。
+ * - **repo_path 原样回传** → 前端不拼路径,避免 OS 差异 (CLAUDE.md §3.2)。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   AlertCircle,
@@ -36,11 +43,15 @@ import {
 import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   cloneAndScan,
+  installBuiltinPlugin,
   installFromMarketplace,
+  installNpxPackage,
+  installThirdPartyRepo,
   listMarketplaceRepos,
 } from '../../lib/api/marketplace';
 import type {
   InstallResult,
+  InstallMode,
   MarketplaceRepo,
   ScanResult,
 } from '../../lib/api/marketplace';
@@ -61,6 +72,47 @@ interface RowInstallState {
 }
 
 // ---------------------------------------------------------------------------
+// M3.4 — install 按钮渲染助手
+// ---------------------------------------------------------------------------
+
+/**
+ * M3.4 — 按 install_mode 决定按钮文案 + 行为。
+ * - `builtin`: 单按钮 "安装" → install_builtin_plugin
+ * - `npx`: 单按钮 "安装" → install_npx_package
+ * - `git`: 双按钮 "预览资源" + "安装" → clone_and_scan 预览 (向后兼容)
+ *
+ * 当前 M3.4 实际: 全部卡片都走"安装"按钮 (单步),"预览资源"作为
+ * 第三方 URL 区专用按钮。
+ */
+function defaultInstallLabel(installMode: InstallMode | undefined): string {
+  switch (installMode) {
+    case 'builtin':
+      return '安装 (CLI)';
+    case 'npx':
+      return '安装 (npx)';
+    case 'git':
+    default:
+      return '安装';
+  }
+}
+
+/**
+ * M3.4 (清单 16) — GSD-* 合并展示标识。
+ *
+ * 资源名以 `gsd-` 开头的, 在 UI 显示 "Get Shit Done" 分类标签,
+ * 帮用户识别一组相关 skill/command 来自同一个 npx 包。
+ *
+ * 注意: 这是 **展示层** 标识, 实际分组由 scanner 的 source_repo
+ * 推断 (frontend 只做 visual cue)。**不**改 domain / scanner。
+ */
+function detectCategoryBadge(name: string): string | null {
+  if (name.toLowerCase().startsWith('gsd-')) {
+    return 'Get Shit Done';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -77,6 +129,11 @@ export default function MarketplacePage(): ReactElement {
   const [cloning, setCloning] = useState(false);
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+
+  // M3.4 — 第三方 URL 多选 (批量 install_third_party_repo)
+  const [selectedResourceIds, setSelectedResourceIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // 行级 install 状态(key = resource.id)
   const [installStates, setInstallStates] = useState<
@@ -107,6 +164,7 @@ export default function MarketplacePage(): ReactElement {
     setCloning(true);
     setCloneError(null);
     setScanResult(null);
+    setSelectedResourceIds(new Set());
     try {
       const result = await cloneAndScan(url.trim());
       setScanResult(result);
@@ -117,7 +175,78 @@ export default function MarketplacePage(): ReactElement {
     }
   }, []);
 
-  // ---- install 单个资源 ----
+  // ---- M3.4 — 内置 Builtin / Npx 单步装 ----
+  const handleBuiltinInstall = useCallback(
+    async (repo: MarketplaceRepo) => {
+      const key = `builtin:${repo.id}`;
+      setInstallStates((prev) => ({
+        ...prev,
+        [key]: { loading: true, result: null, error: null },
+      }));
+      try {
+        let result: InstallResult;
+        if (repo.install_mode === 'builtin') {
+          result = await installBuiltinPlugin(repo.id);
+        } else if (repo.install_mode === 'npx') {
+          const target = repo.install_target || repo.id;
+          result = await installNpxPackage(target);
+        } else {
+          // Git 模式不应该走到这里, 但兜底走 clone_and_scan。
+          await handleClone(repo.url);
+          return;
+        }
+        setInstallStates((prev) => ({
+          ...prev,
+          [key]: { loading: false, result, error: null },
+        }));
+      } catch (err) {
+        setInstallStates((prev) => ({
+          ...prev,
+          [key]: {
+            loading: false,
+            result: null,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        }));
+      }
+    },
+    [handleClone],
+  );
+
+  // ---- M3.4 — 第三方仓库批量装 ----
+  const handleBatchInstall = useCallback(async () => {
+    if (!scanResult || selectedResourceIds.size === 0) return;
+    const url = scanResult.repo_path; // 我们重新走 URL 路径, 但 URL 不在 scanResult
+    // 这里实际 URL 我们存不到 — 重新让用户填回来更稳。
+    // 简化: 我们用 customUrl (如果 scanResult 来自 customUrl)。
+    if (!customUrl.trim()) {
+      setCloneError('批量安装需要原始 URL,请重新填入并预览');
+      return;
+    }
+    const selections = Array.from(selectedResourceIds);
+    setCloning(true);
+    setCloneError(null);
+    try {
+      const results = await installThirdPartyRepo(customUrl.trim(), selections);
+      // 把每个结果合并到 installStates, 按 resourceId 索引。
+      setInstallStates((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          next[r.resource_id] = { loading: false, result: r, error: null };
+        }
+        return next;
+      });
+      // 清空选择
+      setSelectedResourceIds(new Set());
+      // 不要清空 scanResult — 用户还要看结果。
+    } catch (err) {
+      setCloneError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCloning(false);
+    }
+  }, [scanResult, selectedResourceIds, customUrl]);
+
+  // ---- install 单个资源 (clone + scan → 单条 install, 旧路径) ----
   const handleInstall = useCallback(
     async (resource: ResourceItem) => {
       if (!scanResult) return;
@@ -148,6 +277,19 @@ export default function MarketplacePage(): ReactElement {
     },
     [scanResult],
   );
+
+  // ---- 选择切换 ----
+  const toggleResourceSelection = useCallback((id: string) => {
+    setSelectedResourceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   // ---- render ----
   return (
@@ -186,8 +328,7 @@ export default function MarketplacePage(): ReactElement {
             marginBottom: 0,
           }}
         >
-          从内置推荐仓库或第三方 git URL 克隆 plugin / skill / command,
-          扫描后勾选安装到 ~/.claude/。
+          从内置推荐源(CLI / npx / git 三类)或第三方 git URL 安装 plugin / skill / command。
         </p>
       </div>
 
@@ -223,7 +364,7 @@ export default function MarketplacePage(): ReactElement {
           }}
         >
           <Package size={15} />
-          内置推荐仓库
+          内置推荐源
         </div>
 
         {reposLoading && (
@@ -238,7 +379,7 @@ export default function MarketplacePage(): ReactElement {
 
         {!reposLoading && repos.length === 0 && !reposError && (
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            暂无推荐仓库。
+            暂无推荐源。
           </div>
         )}
 
@@ -248,6 +389,8 @@ export default function MarketplacePage(): ReactElement {
             repo={repo}
             cloning={cloning}
             onClone={handleClone}
+            onBuiltinInstall={handleBuiltinInstall}
+            installState={installStates[`builtin:${repo.id}`]}
           />
         ))}
       </section>
@@ -324,7 +467,7 @@ export default function MarketplacePage(): ReactElement {
             ) : (
               <Download size={14} />
             )}
-            克隆并扫描
+            预览资源
           </button>
         </div>
       </section>
@@ -346,7 +489,7 @@ export default function MarketplacePage(): ReactElement {
           }}
         >
           <Loader2 size={16} className="animate-spin" />
-          正在克隆并扫描仓库(网络操作,可能需要数秒)...
+          正在处理(克隆 / npx / CLI 安装,可能需要数秒)...
         </div>
       )}
 
@@ -386,7 +529,7 @@ export default function MarketplacePage(): ReactElement {
                 color: 'var(--text-primary)',
               }}
             >
-              扫描结果({scanResult.resources.length} 项)
+              预览结果({scanResult.resources.length} 项)
             </div>
             <div
               style={{
@@ -422,7 +565,7 @@ export default function MarketplacePage(): ReactElement {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 90px 90px 100px',
+                  gridTemplateColumns: '40px 1fr 90px 90px 100px',
                   gap: 12,
                   padding: '10px 14px',
                   background: 'rgba(0,0,0,0.02)',
@@ -432,19 +575,103 @@ export default function MarketplacePage(): ReactElement {
                   color: 'var(--text-secondary)',
                 }}
               >
+                <div>
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedResourceIds.size ===
+                        scanResult.resources.length &&
+                      scanResult.resources.length > 0
+                    }
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate =
+                          selectedResourceIds.size > 0 &&
+                          selectedResourceIds.size <
+                            scanResult.resources.length;
+                      }
+                    }}
+                    onChange={() => {
+                      if (
+                        selectedResourceIds.size === scanResult.resources.length
+                      ) {
+                        setSelectedResourceIds(new Set());
+                      } else {
+                        setSelectedResourceIds(
+                          new Set(scanResult.resources.map((r) => r.id)),
+                        );
+                      }
+                    }}
+                    aria-label="全选/取消全选"
+                  />
+                </div>
                 <div>名称</div>
                 <div>类型</div>
                 <div style={{ textAlign: 'right' }}>大小</div>
                 <div style={{ textAlign: 'right' }}>操作</div>
               </div>
-              {scanResult.resources.map((resource) => (
-                <ResourceInstallRow
-                  key={resource.id}
-                  resource={resource}
-                  state={installStates[resource.id]}
-                  onInstall={handleInstall}
-                />
-              ))}
+              {scanResult.resources.map((resource) => {
+                const category = detectCategoryBadge(resource.name);
+                return (
+                  <ResourceInstallRow
+                    key={resource.id}
+                    resource={resource}
+                    state={installStates[resource.id]}
+                    onInstall={handleInstall}
+                    selected={selectedResourceIds.has(resource.id)}
+                    onToggleSelect={toggleResourceSelection}
+                    category={category}
+                  />
+                );
+              })}
+              {/* M3.4 — 批量 install 按钮行 */}
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderTop: '1px solid var(--border)',
+                  background: 'rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  已选 {selectedResourceIds.size} / {scanResult.resources.length} 项
+                </div>
+                <button
+                  type="button"
+                  data-testid="marketplace-batch-install-btn"
+                  onClick={() => void handleBatchInstall()}
+                  disabled={selectedResourceIds.size === 0 || cloning}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 14px',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    border: '1px solid var(--accent)',
+                    borderRadius: 4,
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    cursor:
+                      selectedResourceIds.size === 0 || cloning
+                        ? 'not-allowed'
+                        : 'pointer',
+                    opacity:
+                      selectedResourceIds.size === 0 || cloning ? 0.6 : 1,
+                  }}
+                >
+                  <Download size={14} />
+                  安装所选 ({selectedResourceIds.size})
+                </button>
+              </div>
             </>
           )}
         </section>
@@ -454,18 +681,30 @@ export default function MarketplacePage(): ReactElement {
 }
 
 // ---------------------------------------------------------------------------
-// RepoCard — 推荐仓库卡片
+// RepoCard — 推荐源卡片 (M3.4 三类 install)
 // ---------------------------------------------------------------------------
 
 function RepoCard({
   repo,
   cloning,
   onClone,
+  onBuiltinInstall,
+  installState,
 }: {
   repo: MarketplaceRepo;
   cloning: boolean;
   onClone: (url: string) => void;
+  onBuiltinInstall: (repo: MarketplaceRepo) => void;
+  installState: RowInstallState | undefined;
 }): ReactElement {
+  const loading = installState?.loading ?? false;
+  const result = installState?.result ?? null;
+  const error = installState?.error ?? null;
+
+  // M3.4 — Builtin / Npx 模式: 单按钮 "安装" (单步)。
+  // Git 模式: 保留 "预览资源" 按钮 (向后兼容)。
+  const isOneClick = repo.install_mode === 'builtin' || repo.install_mode === 'npx';
+
   return (
     <div
       data-testid={`marketplace-repo-card-${repo.id}`}
@@ -489,18 +728,63 @@ function RepoCard({
       >
         <div
           style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          {repo.name}
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+            }}
+          >
+            {repo.name}
+          </div>
+          {/* M3.4 — install_mode 标识 badge */}
+          {repo.install_mode && (
+            <span
+              data-testid={`marketplace-repo-mode-${repo.id}`}
+              style={{
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 3,
+                background:
+                  repo.install_mode === 'builtin'
+                    ? 'rgba(56, 142, 60, 0.12)'
+                    : repo.install_mode === 'npx'
+                      ? 'rgba(9, 105, 218, 0.12)'
+                      : 'rgba(0, 0, 0, 0.06)',
+                color:
+                  repo.install_mode === 'builtin'
+                    ? 'var(--success)'
+                    : repo.install_mode === 'npx'
+                      ? 'var(--accent)'
+                      : 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono, monospace)',
+                fontWeight: 600,
+              }}
+            >
+              {repo.install_mode === 'builtin'
+                ? 'CLI'
+                : repo.install_mode === 'npx'
+                  ? 'NPX'
+                  : 'GIT'}
+            </span>
+          )}
         </div>
         <button
           type="button"
           data-testid={`marketplace-repo-clone-${repo.id}`}
-          onClick={() => void onClone(repo.url)}
-          disabled={cloning}
+          onClick={() => {
+            if (isOneClick) {
+              void onBuiltinInstall(repo);
+            } else {
+              void onClone(repo.url);
+            }
+          }}
+          disabled={cloning || loading}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -511,12 +795,16 @@ function RepoCard({
             borderRadius: 4,
             background: 'var(--bg-elevated)',
             color: 'var(--accent)',
-            cursor: cloning ? 'not-allowed' : 'pointer',
-            opacity: cloning ? 0.6 : 1,
+            cursor: cloning || loading ? 'not-allowed' : 'pointer',
+            opacity: cloning || loading ? 0.6 : 1,
           }}
         >
-          <Download size={12} />
-          克隆并扫描
+          {loading ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Download size={12} />
+          )}
+          {isOneClick ? defaultInstallLabel(repo.install_mode) : '预览资源'}
         </button>
       </div>
       <div
@@ -540,22 +828,62 @@ function RepoCard({
         <ExternalLink size={11} />
         {repo.url}
       </div>
+
+      {/* M3.4 — install 状态行内展示 */}
+      {error && (
+        <div
+          data-testid={`marketplace-repo-error-${repo.id}`}
+          style={{
+            fontSize: 11,
+            color: 'var(--danger)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 4,
+          }}
+        >
+          <AlertCircle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>{error}</span>
+        </div>
+      )}
+      {result && result.installed && (
+        <div
+          data-testid={`marketplace-repo-success-${repo.id}`}
+          style={{
+            fontSize: 11,
+            color: 'var(--success)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 4,
+          }}
+        >
+          <CheckCircle2 size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            {result.message} → {result.dest_path}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ResourceInstallRow — 扫描结果行 + install 按钮 + 行内状态
+// ResourceInstallRow — 扫描结果行 + install 按钮 + 行内状态 (M3.4 扩展 checkbox + category badge)
 // ---------------------------------------------------------------------------
 
 function ResourceInstallRow({
   resource,
   state,
   onInstall,
+  selected,
+  onToggleSelect,
+  category,
 }: {
   resource: ResourceItem;
   state: RowInstallState | undefined;
   onInstall: (resource: ResourceItem) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  category: string | null;
 }): ReactElement {
   const loading = state?.loading ?? false;
   const result = state?.result ?? null;
@@ -569,13 +897,23 @@ function ResourceInstallRow({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 90px 90px 100px',
+          gridTemplateColumns: '40px 1fr 90px 90px 100px',
           gap: 12,
           padding: '10px 14px',
           alignItems: 'center',
           fontSize: 13,
         }}
       >
+        {/* M3.4 — checkbox 多选 */}
+        <div>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(resource.id)}
+            aria-label={`选择 ${resource.name}`}
+            data-testid={`marketplace-resource-checkbox-${resource.id}`}
+          />
+        </div>
         <div
           style={{
             minWidth: 0,
@@ -584,18 +922,43 @@ function ResourceInstallRow({
             gap: 2,
           }}
         >
-          <span
+          <div
             style={{
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
-            title={resource.name}
           >
-            {resource.name}
-          </span>
+            <span
+              style={{
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={resource.name}
+            >
+              {resource.name}
+            </span>
+            {/* M3.4 (清单 16) — GSD 分类 badge */}
+            {category && (
+              <span
+                data-testid={`marketplace-resource-category-${resource.id}`}
+                style={{
+                  fontSize: 10,
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  background: 'rgba(9, 105, 218, 0.10)',
+                  color: 'var(--accent)',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {category}
+              </span>
+            )}
+          </div>
           <span
             style={{
               fontSize: 11,

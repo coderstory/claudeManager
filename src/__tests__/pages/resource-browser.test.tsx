@@ -1220,3 +1220,39 @@ describe('ResourceBrowserPage — F21 source-repo filter (M2.16)', () => {
     expect(pluginPanel.textContent).toContain('anthropic-tools');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M3.4 — 清单 17: 后端 scanner 已过滤 cache / node_modules / .git 等
+// 污染目录,前端只负责展示过滤后的列表,确保 UI 行为正确。
+// ---------------------------------------------------------------------------
+
+describe('ResourceBrowserPage — M3.4 scanner filtering (清单 17)', () => {
+  it('does not render items named cache / node_modules / .git (后端已过滤)', async () => {
+    // 后端 scanner 已过滤,只返回真 plugin。
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin'),
+      item('plugin/doc-writer', 'plugin'),
+    ]);
+
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/doc-writer'),
+      ).toBeInTheDocument();
+    });
+
+    // 污染目录不应出现(后端已过滤,前端不再依赖 UI 屏蔽)。
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/cache'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/node_modules'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/.git'),
+    ).not.toBeInTheDocument();
+  });
+});

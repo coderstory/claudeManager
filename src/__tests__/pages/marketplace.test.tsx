@@ -477,3 +477,353 @@ describe('MarketplacePage — F17 (M2.16)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// M3.4 — 三类 install 语义 + GSD 合并 + 批量 install
+// ---------------------------------------------------------------------------
+
+import type { MarketplaceRepo as MMarketplaceRepo } from '../../lib/api/marketplace';
+
+function builtinRepo(
+  id: string,
+  installMode: 'builtin' | 'npx' | 'git',
+  installTarget: string,
+  overrides: Partial<MMarketplaceRepo> = {},
+): MMarketplaceRepo {
+  return {
+    id,
+    name: id,
+    url: `https://github.com/test/${id}.git`,
+    description: `${id} desc`,
+    install_mode: installMode,
+    install_target: installTarget,
+    ...overrides,
+  };
+}
+
+describe('MarketplacePage — M3.4 三类 install', () => {
+  it('renders install_mode badge (CLI / NPX / GIT) on each builtin card', async () => {
+    mockInvoke.mockResolvedValue([
+      builtinRepo('superpowers', 'builtin', 'superpowers@claude-plugins-official', {
+        name: 'Superpowers',
+      }),
+      builtinRepo('gsd-core', 'npx', '@opengsd/gsd-core@latest', {
+        name: 'GSD',
+      }),
+      builtinRepo('claude-cookbooks', 'git', '', { name: 'Cookbooks' }),
+    ]);
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-mode-superpowers'),
+      ).toHaveTextContent('CLI');
+      expect(screen.getByTestId('marketplace-repo-mode-gsd-core')).toHaveTextContent(
+        'NPX',
+      );
+      expect(
+        screen.getByTestId('marketplace-repo-mode-claude-cookbooks'),
+      ).toHaveTextContent('GIT');
+    });
+  });
+
+  it('clicking a Builtin repo card triggers install_builtin_plugin', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [builtinRepo('superpowers', 'builtin', 'superpowers@x')];
+      }
+      if (cmd === 'install_builtin_plugin') {
+        const a = args as { pluginId: string };
+        expect(a.pluginId).toBe('superpowers');
+        return {
+          resource_id: 'plugin/superpowers',
+          installed: true,
+          dest_path: 'C:/Users/foo/.claude/plugins/superpowers',
+          message: '内置插件安装成功',
+        } satisfies InstallResult;
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-superpowers')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-repo-clone-superpowers'));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-success-superpowers'),
+      ).toBeInTheDocument();
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'install_builtin_plugin',
+      );
+      expect(calls.length).toBe(1);
+    });
+  });
+
+  it('clicking an Npx repo card triggers install_npx_package', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [builtinRepo('gsd-core', 'npx', '@opengsd/gsd-core@latest')];
+      }
+      if (cmd === 'install_npx_package') {
+        const a = args as { package: string };
+        expect(a.package).toBe('@opengsd/gsd-core@latest');
+        return {
+          resource_id: 'plugin/gsd-core',
+          installed: true,
+          dest_path: 'C:/Users/foo/.claude/plugins/gsd-core',
+          message: 'npx 安装成功',
+        } satisfies InstallResult;
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-gsd-core')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-repo-clone-gsd-core'));
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'install_npx_package',
+      );
+      expect(calls.length).toBe(1);
+      expect(
+        screen.getByTestId('marketplace-repo-success-gsd-core'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('clicking a Git repo card triggers clone_and_scan (preview, not single-step install)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [builtinRepo('claude-cookbooks', 'git', '')];
+      }
+      if (cmd === 'clone_and_scan') {
+        return { repo_path: 'C:/mk/cookbooks', resources: [] } satisfies ScanResult;
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-card-claude-cookbooks'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('marketplace-repo-clone-claude-cookbooks'),
+      );
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'clone_and_scan',
+      );
+      expect(calls.length).toBe(1);
+    });
+  });
+
+  it('install_builtin_plugin failure shows red error banner on card', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [builtinRepo('superpowers', 'builtin', 'superpowers@x')];
+      }
+      if (cmd === 'install_builtin_plugin') {
+        throw new Error('claude plugin install 失败: command not found');
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-superpowers')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-repo-clone-superpowers'));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-error-superpowers'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('GSD-* resources get the "Get Shit Done" category badge (清单 16)', async () => {
+    const scan: ScanResult = {
+      repo_path: 'C:/mk/gsd',
+      resources: [
+        resource('plugin/gsd-discuss', 'plugin'),
+        resource('command/gsd-plan.md', 'command'),
+        resource('plugin/code-review', 'plugin'), // 不应被识别
+      ],
+    };
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') return [];
+      if (cmd === 'clone_and_scan') return scan;
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-custom-url-input')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('marketplace-custom-url-input'), {
+        target: { value: 'https://github.com/test/gsd.git' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-custom-clone-btn'));
+    });
+
+    await waitFor(() => {
+      // gsd-* 资源有 category badge
+      expect(
+        screen.getByTestId('marketplace-resource-category-plugin/gsd-discuss'),
+      ).toHaveTextContent('Get Shit Done');
+      expect(
+        screen.getByTestId('marketplace-resource-category-command/gsd-plan.md'),
+      ).toHaveTextContent('Get Shit Done');
+      // 非 gsd-* 没有 badge
+      expect(
+        screen.queryByTestId(
+          'marketplace-resource-category-plugin/code-review',
+        ),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('batch install (M3.4): selecting resources + clicking "安装所选" triggers install_third_party_repo', async () => {
+    const scan: ScanResult = {
+      repo_path: 'C:/mk/foo',
+      resources: [
+        resource('plugin/code-review', 'plugin'),
+        resource('command/deploy.md', 'command'),
+      ],
+    };
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_marketplace_repos') return [];
+      if (cmd === 'clone_and_scan') return scan;
+      if (cmd === 'install_third_party_repo') {
+        const a = args as {
+          url: string;
+          selections: string[];
+        };
+        expect(a.url).toBe('https://github.com/test/foo.git');
+        expect(a.selections).toEqual([
+          'plugin/code-review',
+          'command/deploy.md',
+        ]);
+        return [
+          {
+            resource_id: 'plugin/code-review',
+            installed: true,
+            dest_path: 'C:/dest/plugins/code-review',
+            message: '安装成功',
+          },
+          {
+            resource_id: 'command/deploy.md',
+            installed: true,
+            dest_path: 'C:/dest/commands/deploy.md',
+            message: '安装成功',
+          },
+        ] satisfies InstallResult[];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-custom-url-input')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('marketplace-custom-url-input'), {
+        target: { value: 'https://github.com/test/foo.git' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-custom-clone-btn'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-resource-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 勾选 2 个资源
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId(
+          'marketplace-resource-checkbox-plugin/code-review',
+        ),
+      );
+      fireEvent.click(
+        screen.getByTestId('marketplace-resource-checkbox-command/deploy.md'),
+      );
+    });
+
+    // 点批量 install
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-batch-install-btn'));
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'install_third_party_repo',
+      );
+      expect(calls.length).toBe(1);
+      // 每行有 success banner (从批量结果合并)
+      expect(
+        screen.getByTestId(
+          'marketplace-install-success-plugin/code-review',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId(
+          'marketplace-install-success-command/deploy.md',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('batch install button is disabled when no resources are selected', async () => {
+    const scan: ScanResult = {
+      repo_path: 'C:/mk/foo',
+      resources: [resource('plugin/code-review', 'plugin')],
+    };
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') return [];
+      if (cmd === 'clone_and_scan') return scan;
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-custom-url-input')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('marketplace-custom-url-input'), {
+        target: { value: 'https://github.com/test/foo.git' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('marketplace-custom-clone-btn'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-batch-install-btn'),
+      ).toBeInTheDocument();
+    });
+    // 未勾选任何资源 → 按钮 disabled
+    const btn = screen.getByTestId('marketplace-batch-install-btn');
+    expect(btn).toBeDisabled();
+  });
+});

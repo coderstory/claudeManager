@@ -150,6 +150,16 @@ pub fn run() {
             commands::marketplace::list_marketplace_repos,
             commands::marketplace::clone_and_scan,
             commands::marketplace::install_from_marketplace,
+            // M3.4 — 三类 install 语义统一（清单 11/12/13/14）
+            commands::marketplace::install_builtin_plugin,
+            commands::marketplace::install_third_party_repo,
+            commands::marketplace::install_npx_package,
+            // M3.10 (清单 23) — 双模式 (用户/项目) 项目管理 commands
+            commands::project::list_projects,
+            commands::project::add_project,
+            commands::project::remove_project,
+            commands::project::switch_project,
+            commands::project::current_project,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

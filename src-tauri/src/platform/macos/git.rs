@@ -9,6 +9,15 @@
 //! 如果将来需要 macOS 专属行为（例如集成 keychain 凭证助手、处理
 //! `osxkeychain` credential helper 的交互式提示），在本文件里扩展即可，
 //! 不影响 Windows 侧。
+//!
+//! ## M3.4 — D6 暂缓说明
+//!
+//! M3.4 marketplace 重构新增 3 类 install (Builtin CLI / Npx / Git)。
+//! macOS 侧的 `MacGitHost` **不需要改** —— `git clone` 跨平台行为一致,
+//! `install_third_party_repo` 直接复用本 trait。
+//!
+//! Mac 真机验证按 D6 决策暂缓 (M3 启动门跟 D14 一起问),本文件**不**
+//! 在 D-槽 2 范围动实现,只在本注释固化此说明,等 D6 启动时验证。
 
 use std::path::Path;
 use std::process::Command;
