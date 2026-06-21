@@ -261,34 +261,67 @@ pub fn run() {
 
                 // M2.16 — 原生窗口 backdrop（Win11 Mica / macOS vibrancy）。
                 //
-                // Tauri JS setEffects(Effect.Mica)（src/design-system/applyEffects.ts）
-                // 在 decorations:false 无边框窗口上不稳定：tao#72 记录了 DWM 合成
-                // 路径与无边框窗口的冲突，setEffects 走 tao 的 window effects API，
-                // 对无边框 HWND 不应用 Mica backdrop。用户报告三套主题真机全白底。
+                // 真根因（M2.16 深度诊断实测确认）：
+                //   Tauri v2 `transparent: true` 只让 tao 窗口层透明，**不自动**
+                //   设 WebView2 的 DefaultBackgroundColor 为透明。WebView2 默认
+                //   不透明白底（#FFFFFF），盖住窗口层 Mica backdrop → 三套主题
+                //   真机全白底。
+                //
+                //   原生 DWM 查询证据（dwm-mica-query.ps1）：
+                //     - DWMWA_SYSTEMBACKDROP_TYPE = 2 (Mica) ← Mica 属性确实设上了
+                //     - DwmIsCompositionEnabled = True
+                //     - 子窗口链: WRY_WEBVIEW → Chrome_WidgetWin_1(noredirbitmap=True)
+                //       → Intermediate D3D Window(layered+True) ← WebView2 D3D surface
+                //   像素采样证据（dwm-pixel-sample.ps1）：窗口内容区大面积 #FFFFFF，
+                //     而窗口外桌面壁纸 #F7F8F8 —— 窗口内纯白，没透出壁纸。
+                //
+                // 修复（Tauri v2 官方 API，文档 docs.rs/tauri/2.11.3）：
+                //   WebviewWindow::set_background_color(Some(Color { a: 0 }))。
+                //   Windows 平台特定："if the alpha channel is not 0, it will be
+                //   ignored" —— alpha=0 是唯一让 webview 透明的方式。
+                //   webview 透明后，窗口层 Mica backdrop 才能透过 webview 显示。
                 //
                 // window-vibrancy::apply_mica 直接对 HWND 调
                 // DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE = Mica)，绕过 tao
-                // 装饰状态判断，对无边框窗口也生效。这是 Tauri 团队官方维护的底层
-                // backdrop 库（https://github.com/tauri-apps/window-vibrancy）。
+                // 装饰状态判断，对无边框窗口也生效（已验证属性设上 = 2）。
+                // 失败 fallback 到 apply_acrylic（Acrylic 在无边框窗口兼容性更好）。
                 //
-                // 失败不阻断启动（Win10 / 旧 build 22000- 不支持 Mica → 返回 Err，
-                // 此时退回 CSS backdrop-filter fallback）。
+                // 日志：用 log::error! 而非 eprintln!。release exe 用
+                // windows_subsystem="windows" 无 stderr，eprintln 静默失败；
+                // tauri-plugin-log 捕获 log facade，写入日志文件可查。
                 //
                 // macOS 侧 apply_vibrancy + NSVisualEffectMaterial::Sidebar 对应
                 // 原 applyEffects.ts 的 Effect.Sidebar。macOSPrivateApi:true +
                 // tauri macos-private-api feature 已在 tauri.conf.json / Cargo.toml
                 // 启用（macOS vibrancy + transparent:true 必需）。
-                // M2.16 — H5: 同步调用可能因为 NSWindow/HWND 未完全 realized 而失败
+                // H5: 同步调用可能因为 NSWindow/HWND 未完全 realized 而失败
                 // (macOS 真机未验证,Win11 已验证)。改为 spawn 出去 +
                 // 加 200ms 缓冲,让 webview 完全初始化后再 apply。失败
                 // 不阻断启动,跟同步路径行为一致。
                 let window_for_effect = window.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(200));
+
+                    // 第一步：设 WebView2 背景透明（让 Mica 透出来）。
+                    // 这一步是关键修复 —— 不调它，webview 白底盖住一切。
+                    // Color(r, g, b, a) 是 tuple struct；a=0 在 Windows 8+ 是唯一
+                    // 透明方式（alpha!=0 被强制 255，见 Tauri 文档）。
+                    use tauri::webview::Color;
+                    if let Err(e) = window_for_effect.set_background_color(Some(Color(0, 0, 0, 0))) {
+                        log::error!("[M2.16] set_background_color(a=0) failed (webview will stay opaque, Mica won't show through): {e}");
+                    }
+
+                    // 第二步：窗口层 backdrop。
                     #[cfg(target_os = "windows")]
                     {
+                        // 先试 Mica（Win11 22000+）。失败 fallback Acrylic（Win10/11 通用）。
                         if let Err(e) = window_vibrancy::apply_mica(&window_for_effect, None) {
-                            eprintln!("[M2.16] apply_mica failed (Mica will not show): {e}");
+                            log::warn!("[M2.16] apply_mica failed (Mica backdrop not applied): {e}");
+                            if let Err(e2) = window_vibrancy::apply_acrylic(&window_for_effect, None) {
+                                log::warn!("[M2.16] apply_acrylic fallback also failed: {e2}");
+                            } else {
+                                log::info!("[M2.16] apply_acrylic fallback applied (Mica unsupported, using Acrylic)");
+                            }
                         }
                     }
                     #[cfg(target_os = "macos")]
@@ -300,7 +333,7 @@ pub fn run() {
                             Some(NSVisualEffectState::Active),
                             None,
                         ) {
-                            eprintln!("[M2.16] apply_vibrancy failed (vibrancy will not show): {e}");
+                            log::error!("[M2.16] apply_vibrancy failed (vibrancy will not show): {e}");
                         }
                     }
                 });

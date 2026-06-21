@@ -606,6 +606,7 @@ name = "claude-config-manager"
 version = "0.1.0"
 dependencies = [
  "dirs 5.0.1",
+ "log",
  "mockall",
  "serde",
  "serde_json",

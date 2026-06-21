@@ -65,6 +65,11 @@ tauri-plugin-process     = "=2.3.1"   # 进程管理（kill 重启 / exit 用）
 # 文档: https://github.com/tauri-apps/window-vibrancy#readme
 window-vibrancy = "=0.6.0"
 
+# M2.16 — log facade。tauri-plugin-log 默认捕获 log crate 的宏
+# (error!/warn!/info!)，release exe (windows_subsystem="windows" 无 stderr)
+# 也能写入日志文件。log 0.4.32 已在 Cargo.lock 传递依赖中，直接声明不引入新下载。
+log = "0.4"
+
 [dev-dependencies]
 tempfile = "3"
 mockall = "0.13"
