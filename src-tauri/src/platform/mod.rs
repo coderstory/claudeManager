@@ -97,14 +97,20 @@ pub mod runtime {
     }
 
     /// System notifications for the host OS.
-    pub fn notifier() -> Box<dyn IPlatformNotifier> {
+    ///
+    /// Requires a live [`AppHandle`] because the macOS impl uses
+    /// `tauri-plugin-notification`'s `NotificationExt` (registered as Tauri
+    /// state in `lib.rs`, M1.6). Windows impl still needs no handle but is
+    /// passed one for API symmetry with the other runtime factories.
+    pub fn notifier(app: &AppHandle) -> Box<dyn IPlatformNotifier> {
         #[cfg(windows)]
         {
+            let _ = app;
             Box::new(windows::WindowsNotifier)
         }
         #[cfg(target_os = "macos")]
         {
-            Box::new(macos::MacNotifier)
+            Box::new(macos::MacNotifier::new(app))
         }
     }
 
