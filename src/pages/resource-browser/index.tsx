@@ -1,5 +1,7 @@
 /**
  * F16 — 资源浏览 (M2.13 real implementation).
+ * F21 — 资源搜索 (M2.16, commit f927895).
+ * F22 — 资源详情预览 (M2.16).
  *
  * User flow (per docs/design/M2.13-dataflow.md):
  *   1. Page mounts → fetches the default kind ('plugin') via
@@ -10,6 +12,9 @@
  *      - Success → clear any prior reveal error.
  *      - Failure → non-blocking modal (CLAUDE.md §7).
  *   5. (F21) Type in the search box → rows filter by fuzzy name match.
+ *   6. (F22) Click a row body → inline accordion detail panel shows
+ *      name / kind / source / path / size / shape / enabled state.
+ *      Re-click collapses. Multiple rows may be expanded at once.
  *
  * ## Design choices (CLAUDE.md §5 + SPEC §5.5)
  *
@@ -24,11 +29,17 @@
  * - **Reveal failure** is a non-blocking alert (top-of-page), never
  *   a `throw` or `alert()` — per CLAUDE.md §7 ("不允许静默吞错"
  *   means show the error, not block the UI).
+ * - **F22 detail panel** is pure-frontend (no backend command). It
+ *   shows everything ResourceItem already carries and honestly marks
+ *   "描述" and "文件列表" as gaps needing backend manifest/list_dir
+ *   support — anti-事故: don't change F16's shipped domain model.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import {
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Eye,
   Folder,
@@ -75,6 +86,61 @@ const INITIAL_STATE: PageState = {
 };
 
 // ---------------------------------------------------------------------------
+// F22 — 详情面板 helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * 资源形态 — ResourceItem.path 在磁盘上的实际形状。
+ *
+ * ResourceItem 模型本身没有标明 path 是文件还是目录（F16 领域层故意省略，
+ * 避免前端依赖 is_dir 判断）。这里基于 kind 推断：
+ *   - plugin → 总是目录（scanner 只接 directory）
+ *   - skill → 文件或目录皆可（scanner 两者都收），无法静态判定
+ *   - command → 总是 .md 文件
+ *   - lsp → 总是 .json 文件
+ *   - mcp → path 指向 mcp.json（聚合文件，每个 mcp 条目共享同一 path）
+ */
+type ResourceShape = 'directory' | 'file' | 'aggregate';
+
+function inferResourceShape(kind: ResourceKind): ResourceShape {
+  switch (kind) {
+    case 'plugin':
+      return 'directory';
+    case 'command':
+    case 'lsp':
+      return 'file';
+    case 'mcp':
+      return 'aggregate';
+    case 'skill':
+      // skill 既可能是单文件也可能是目录,scanner 对两者都收。
+      // 不依赖 fs 判断(避免引入 plugin-fs 依赖),统一标 'file'——
+      // 详情面板会显示 path,用户自己能看出是不是目录。
+      return 'file';
+  }
+}
+
+/**
+ * 每个 kind 在详情面板里"来源"字段的语义说明。
+ *
+ * SPEC F22 要求展示"来源",但 ResourceItem 没有专门的来源字段。
+ * 这里把 path 字段的语义解释给用户看(它就是该资源的磁盘来源)。
+ */
+function describeSourceField(kind: ResourceKind): string {
+  switch (kind) {
+    case 'plugin':
+      return '插件目录(来源: ~/.claude/plugins/)';
+    case 'skill':
+      return '技能文件/目录(来源: ~/.claude/skills/)';
+    case 'command':
+      return '命令文件(来源: ~/.claude/commands/)';
+    case 'lsp':
+      return 'LSP 配置文件(来源: ~/.claude/lsp/)';
+    case 'mcp':
+      return 'MCP 服务器配置(来源: ~/.claude/mcp.json)';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -85,11 +151,20 @@ export default function ResourceBrowserPage(): ReactElement {
   // (runList) clears the query so the new kind starts unfiltered.
   const [searchQuery, setSearchQuery] = useState('');
 
+  // F22 — 详情面板展开状态。
+  //
+  // 用 Set<ResourceItem.id> 而不是单个 selectedId,允许同时展开多行
+  // (accordion 风格但非互斥)。切 tab 时 runList 会清空它,避免跨 kind
+  // 残留展开态。
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
   const runList = useCallback(async (kind: ResourceKind) => {
     // F21 — reset the query whenever we re-scan / switch kind, so
     // the new list starts unfiltered. (If we kept the old query it
     // would hide everything in a kind that doesn't share the name.)
     setSearchQuery('');
+    // F22 — 切 tab / 重新扫描时清空展开态,避免跨 kind 残留详情面板。
+    setExpandedIds(new Set());
     setState((prev) => ({
       ...prev,
       kind,
@@ -182,6 +257,22 @@ export default function ResourceBrowserPage(): ReactElement {
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
+  }, []);
+
+  // F22 — 切换某行详情面板展开/收起。
+  //
+  // 点击行体(非操作按钮区)展开;再点收起。允许多行同时展开。
+  // 用 Set 不可变更新避免直接 mutate。
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }, []);
 
   // ---- render ----
@@ -558,6 +649,8 @@ export default function ResourceBrowserPage(): ReactElement {
               key={item.id}
               item={item}
               onReveal={handleReveal}
+              expanded={expandedIds.has(item.id)}
+              onToggleExpand={handleToggleExpand}
             />
           ))}
         </div>
@@ -573,106 +666,295 @@ export default function ResourceBrowserPage(): ReactElement {
 function ResourceRow({
   item,
   onReveal,
+  expanded,
+  onToggleExpand,
 }: {
   item: TauriResourceItem;
   onReveal: (item: TauriResourceItem) => void;
+  expanded: boolean;
+  onToggleExpand: (id: string) => void;
 }): ReactElement {
   return (
     <div
       data-testid={`resource-browser-row-${item.id}`}
       style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 100px 80px 80px',
-        gap: 12,
-        padding: '10px 14px',
         borderTop: '1px solid var(--border)',
         fontSize: 13,
-        alignItems: 'center',
-        opacity: item.enabled ? 1 : 0.5,
       }}
     >
       <div
+        data-testid={`resource-browser-row-body-${item.id}`}
+        onClick={(e) => {
+          // 避免点"显示"按钮误触发行展开。
+          if ((e.target as HTMLElement).closest('button')) return;
+          onToggleExpand(item.id);
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        aria-label={expanded ? `收起 ${item.name} 详情` : `展开 ${item.name} 详情`}
         style={{
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
+          display: 'grid',
+          gridTemplateColumns: '1fr 100px 80px 80px',
+          gap: 12,
+          padding: '10px 14px',
+          alignItems: 'center',
+          opacity: item.enabled ? 1 : 0.5,
+          cursor: 'pointer',
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleExpand(item.id);
+          }
         }}
       >
-        <span
+        <div
           style={{
-            fontWeight: 500,
-            color: 'var(--text-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
           }}
-          title={item.name}
         >
-          {item.name}
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono, monospace)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={item.path}
-        >
-          {item.path}
-        </span>
-      </div>
-      <div
-        style={{
-          textAlign: 'right',
-          color: 'var(--text-secondary)',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {formatSize(item.size_bytes)}
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        {item.enabled ? (
-          <span
-            data-testid={`resource-browser-status-${item.id}`}
+          {/* F22 — 展开指示符 chevron */}
+          {expanded ? (
+            <ChevronDown
+              size={14}
+              style={{ flexShrink: 0, color: 'var(--text-muted)' }}
+            />
+          ) : (
+            <ChevronRight
+              size={14}
+              style={{ flexShrink: 0, color: 'var(--text-muted)' }}
+            />
+          )}
+          <div
             style={{
-              fontSize: 11,
-              padding: '2px 6px',
-              borderRadius: 3,
-              background: 'rgba(56, 142, 60, 0.12)',
-              color: 'var(--success)',
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
             }}
           >
-            启用
-          </span>
-        ) : (
-          <span
-            data-testid={`resource-browser-status-${item.id}`}
+            <span
+              style={{
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={item.name}
+            >
+              {item.name}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-mono, monospace)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={item.path}
+            >
+              {item.path}
+            </span>
+          </div>
+        </div>
+        <div
+          style={{
+            textAlign: 'right',
+            color: 'var(--text-secondary)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {formatSize(item.size_bytes)}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          {item.enabled ? (
+            <span
+              data-testid={`resource-browser-status-${item.id}`}
+              style={{
+                fontSize: 11,
+                padding: '2px 6px',
+                borderRadius: 3,
+                background: 'rgba(56, 142, 60, 0.12)',
+                color: 'var(--success)',
+              }}
+            >
+              启用
+            </span>
+          ) : (
+            <span
+              data-testid={`resource-browser-status-${item.id}`}
+              style={{
+                fontSize: 11,
+                padding: '2px 6px',
+                borderRadius: 3,
+                background: 'rgba(0,0,0,0.05)',
+                color: 'var(--text-muted)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <PowerOff size={10} />
+              禁用
+            </span>
+          )}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <button
+            type="button"
+            data-testid={`resource-browser-reveal-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReveal(item);
+            }}
+            aria-label={`在文件管理器中显示 ${item.name}`}
             style={{
-              fontSize: 11,
-              padding: '2px 6px',
-              borderRadius: 3,
-              background: 'rgba(0,0,0,0.05)',
-              color: 'var(--text-muted)',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
+              padding: '4px 10px',
+              fontSize: 12,
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
             }}
           >
-            <PowerOff size={10} />
-            禁用
-          </span>
-        )}
+            <ExternalLink size={12} />
+            显示
+          </button>
+        </div>
       </div>
-      <div style={{ textAlign: 'right' }}>
+      {/* F22 — 详情面板(inline accordion) */}
+      {expanded && (
+        <ResourceDetailPanel item={item} onReveal={onReveal} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ResourceDetailPanel — F22 详情预览
+// ---------------------------------------------------------------------------
+
+/**
+ * 一行资源的详情面板。
+ *
+ * 展示内容(SPEC F22 "来源 / 描述 / 文件列表 / 启用状态"):
+ *   - 名称 / 类型 / 来源(path) / 大小 / 启用状态 ✓(全部从 ResourceItem 直接取)
+ *   - 描述 ✗(ResourceItem 无描述字段;面板诚实标注"暂无描述")
+ *   - 文件列表 ✗(需要后端 list_dir command;面板诚实标注"需后端支持,留后续")
+ *
+ * 不调后端、不改 domain——纯前端派生,符合反事故"最小方案优先"。
+ */
+function ResourceDetailPanel({
+  item,
+  onReveal,
+}: {
+  item: TauriResourceItem;
+  onReveal: (item: TauriResourceItem) => void;
+}): ReactElement {
+  const shape = inferResourceShape(item.kind);
+  const sourceLabel = describeSourceField(item.kind);
+
+  return (
+    <div
+      data-testid={`resource-browser-detail-${item.id}`}
+      style={{
+        padding: '12px 14px 14px 34px',
+        background: 'rgba(9, 105, 218, 0.03)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      {/* 标题行 */}
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <Eye size={13} />
+        资源详情
+      </div>
+
+      {/* 字段网格 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '80px 1fr',
+          gap: '6px 12px',
+          fontSize: 12,
+          lineHeight: 1.5,
+        }}
+      >
+        <DetailField label="名称" value={item.name} mono />
+        <DetailField
+          label="类型"
+          value={`${resourceKindLabel(item.kind)} (${item.kind})`}
+        />
+        <DetailField label="来源" value={sourceLabel} />
+        <DetailField label="路径" value={item.path} mono />
+        <DetailField
+          label="大小"
+          value={`${formatSize(item.size_bytes)} (${item.size_bytes.toLocaleString()} 字节)`}
+        />
+        <DetailField
+          label="形态"
+          value={
+            shape === 'directory'
+              ? '目录'
+              : shape === 'file'
+                ? '文件'
+                : '聚合条目(mcp.json)'
+          }
+        />
+        <DetailField
+          label="启用状态"
+          value={item.enabled ? '启用' : '禁用'}
+          valueColor={item.enabled ? 'var(--success)' : 'var(--text-muted)'}
+        />
+        {/* 描述 — ResourceItem 无此字段,诚实标注 gap */}
+        <DetailField label="描述" value="暂无(需后端 manifest 解析,留后续)" muted />
+      </div>
+
+      {/* 文件列表 — 需后端 list_dir,诚实标注 gap */}
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          fontStyle: 'italic',
+          borderTop: '1px dashed var(--border)',
+          paddingTop: 8,
+        }}
+      >
+        文件列表: 需后端 list_dir command 支持,当前版本暂未提供。
+      </div>
+
+      {/* 快捷操作 */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
         <button
           type="button"
-          data-testid={`resource-browser-reveal-${item.id}`}
-          onClick={() => onReveal(item)}
-          aria-label={`在文件管理器中显示 ${item.name}`}
+          data-testid={`resource-browser-detail-reveal-${item.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onReveal(item);
+          }}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -687,9 +969,46 @@ function ResourceRow({
           }}
         >
           <ExternalLink size={12} />
-          显示
+          在文件管理器中显示
         </button>
       </div>
     </div>
+  );
+}
+
+/** 详情字段行 — label + value 两列布局。 */
+function DetailField({
+  label,
+  value,
+  mono = false,
+  muted = false,
+  valueColor,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+  muted?: boolean;
+  valueColor?: string;
+}): ReactElement {
+  return (
+    <>
+      <div
+        style={{
+          color: 'var(--text-muted)',
+          fontWeight: 500,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          color: valueColor ?? (muted ? 'var(--text-muted)' : 'var(--text-primary)'),
+          fontFamily: mono ? 'var(--font-mono, monospace)' : 'var(--font-ui)',
+          wordBreak: 'break-all',
+        }}
+      >
+        {value}
+      </div>
+    </>
   );
 }

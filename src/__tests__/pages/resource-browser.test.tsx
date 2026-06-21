@@ -435,3 +435,302 @@ describe('ResourceBrowserPage — F21 search (M2.16)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// F22 — 资源详情预览 (M2.16)
+// 覆盖：点击行展开详情面板、再点收起、多行同时展开、切 tab 清空展开态、
+//       详情字段渲染、详情内 reveal 按钮、点 reveal 按钮不触发行展开。
+// ---------------------------------------------------------------------------
+describe('ResourceBrowserPage — F22 detail panel (M2.16)', () => {
+  it('clicking a row body expands the detail panel', async () => {
+    mockInvoke.mockResolvedValue([item('plugin/code-review', 'plugin')]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 详情面板初始不渲染。
+    expect(
+      screen.queryByTestId('resource-browser-detail-plugin/code-review'),
+    ).not.toBeInTheDocument();
+
+    // 点击行体(非按钮)展开。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-detail-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('clicking an expanded row body collapses the detail panel', async () => {
+    mockInvoke.mockResolvedValue([item('plugin/code-review', 'plugin')]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 展开。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+    expect(
+      screen.getByTestId('resource-browser-detail-plugin/code-review'),
+    ).toBeInTheDocument();
+
+    // 再点收起。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+    expect(
+      screen.queryByTestId('resource-browser-detail-plugin/code-review'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('multiple rows can be expanded simultaneously', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin'),
+      item('plugin/doc-writer', 'plugin'),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 展开第一行。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+    // 展开第二行。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/doc-writer'),
+      );
+    });
+
+    expect(
+      screen.getByTestId('resource-browser-detail-plugin/code-review'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId('resource-browser-detail-plugin/doc-writer'),
+    ).toBeInTheDocument();
+  });
+
+  it('switching tabs clears all expanded detail panels', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_resources') {
+        const kind = (args as { kind: string }).kind;
+        if (kind === 'plugin') {
+          return [item('plugin/code-review', 'plugin')];
+        }
+        if (kind === 'command') {
+          return [item('command/build', 'command')];
+        }
+      }
+      return [];
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 展开 plugin 行。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+    expect(
+      screen.getByTestId('resource-browser-detail-plugin/code-review'),
+    ).toBeInTheDocument();
+
+    // 切到 command tab。
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-command'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-command/build'),
+      ).toBeInTheDocument();
+    });
+
+    // command 行默认未展开。
+    expect(
+      screen.queryByTestId('resource-browser-detail-command/build'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('detail panel shows name / kind / source / path / size / enabled state', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin', {
+        size_bytes: 4096,
+        enabled: true,
+        path: 'C:/Users/foo/.claude/plugins/code-review',
+      }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    const panel = screen.getByTestId(
+      'resource-browser-detail-plugin/code-review',
+    );
+    // 名称、路径、大小、启用状态都应渲染。
+    expect(panel.textContent).toContain('code-review');
+    expect(panel.textContent).toContain('C:/Users/foo/.claude/plugins/code-review');
+    expect(panel.textContent).toContain('4.0 KB');
+    expect(panel.textContent).toContain('启用');
+    // 来源字段应有语义说明。
+    expect(panel.textContent).toContain('插件目录');
+  });
+
+  it('detail panel shows 禁用 state for disabled mcp entry', async () => {
+    mockInvoke.mockResolvedValue([
+      item('mcp/web', 'mcp', { enabled: false }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-mcp'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-mcp/web'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-mcp/web'),
+      );
+    });
+
+    const panel = screen.getByTestId('resource-browser-detail-mcp/web');
+    expect(panel.textContent).toContain('禁用');
+    expect(panel.textContent).toContain('mcp.json');
+  });
+
+  it('clicking the row reveal button does NOT toggle expand (stopPropagation)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'reveal_in_file_manager') {
+        return null;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 点 reveal 按钮应调 reveal,但不应展开详情面板。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-reveal-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'reveal_in_file_manager',
+      );
+      expect(calls.length).toBe(1);
+    });
+    expect(
+      screen.queryByTestId('resource-browser-detail-plugin/code-review'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('detail panel has its own reveal button that calls reveal', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'reveal_in_file_manager') {
+        return null;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 先展开。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    // 点详情面板内的 reveal 按钮。
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId(
+          'resource-browser-detail-reveal-plugin/code-review',
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'reveal_in_file_manager',
+      );
+      expect(calls.length).toBe(1);
+    });
+  });
+
+  it('keyboard Enter on row body toggles expand', async () => {
+    mockInvoke.mockResolvedValue([item('plugin/code-review', 'plugin')]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    const rowBody = screen.getByTestId(
+      'resource-browser-row-body-plugin/code-review',
+    );
+    await act(async () => {
+      fireEvent.keyDown(rowBody, { key: 'Enter' });
+    });
+
+    expect(
+      screen.getByTestId('resource-browser-detail-plugin/code-review'),
+    ).toBeInTheDocument();
+  });
+});
