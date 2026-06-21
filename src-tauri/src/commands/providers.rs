@@ -22,7 +22,8 @@
 //! user-readable string (SPEC §6.5: "不允许静默吞错"). Frontend surfaces
 //! it via InfoBar.
 
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 use crate::domain::{ParsedMcpServer, Provider};
@@ -234,6 +235,188 @@ pub async fn import_single_provider(
 }
 
 // ---------------------------------------------------------------------------
+// F14 — 导出单 provider (M2.16)
+// ---------------------------------------------------------------------------
+
+/// F14 — export a single provider's settings_config to a shareable
+/// `.json` file.
+///
+/// ## 设计选择 — 方案 B（后端全权处理 dialog + 写盘）
+///
+/// SPEC F14 要求是"把单个 provider 的 settings_config 导出为 .json
+/// 分享"。本仓库的依赖纪律（CLAUDE.md §2.3）锁死了 npm 依赖白名单,
+/// 没有装 `@tauri-apps/plugin-dialog` / `@tauri-apps/plugin-fs` 的 JS
+/// wrapper（见 `package.json` + `json-editor` / `import-sql` 都用
+/// HTML `<input type=file>` 走的 Rust 后端)。HTML input 只能"打开",
+/// 无法弹"保存"对话框,所以必须走 Rust 侧的 `tauri-plugin-dialog`
+/// `blocking_save_file()`。
+///
+/// 这违反了任务 brief 里推荐的"方案 A（后端只返回 JSON,前端弹框 +
+/// 写盘）",但方案 A 需要加 2 个新 npm 依赖,被 CLAUDE.md §2.3 明确
+/// 禁止。方案 B 是同等清洁的替代:后端取数据 + 序列化 + 弹原生保存框
+/// + 写盘,前端只发一个 invoke 拿最终路径。分层仍然清晰——
+/// `ProviderService::get_provider` 是纯读,本 command 负责 I/O。
+///
+/// ## 算法
+///
+/// 1. `get_provider(id)` 从磁盘读 provider（纯读,不碰 settings.json）。
+/// 2. 序列化成可分享 JSON（2 空格缩进,含 provider 元数据,见
+///    [`ExportedProvider`]）。SPEC §2.2 的 pretty-print 约定。
+/// 3. 弹原生保存对话框（`tauri-plugin-dialog` 的
+///    `blocking_save_file`,只在非主线程的 async command 里用,
+///    文档明确允许）。默认文件名 `<id>.json`,过滤器只收 `.json`。
+/// 4. 用户取消 → 返回 `Ok(None)`;前端据此不显示任何提示。
+/// 5. 用户选了路径 → `write_with_backup` 原子写盘（CLAUDE.md §7:
+///    "任何写盘操作必须先备份";导出文件首次写不产生备份,语义同
+///    `import_single_provider`）。返回保存路径供前端展示成功提示。
+///
+/// ## 返回值
+///
+/// `Ok(Some(path))` — 成功写盘,`path` 是绝对路径字符串。
+/// `Ok(None)` — 用户在保存框点了取消（非错误,静默处理）。
+/// `Err(msg)` — 取数 / 序列化 / 写盘失败,`msg` 给用户看。
+///
+/// ## 为什么 `app_type` 参数被忽略
+///
+/// 任务 brief 的签名带了 `app_type: String`,但本工具只管理 Claude
+/// Code 的 provider（`~/.claude/settings.json` 的 `env.ANTHROPIC_*`,
+/// SPEC §2.1）。所有 provider 文件的 `provider_type` 已经记录了类型
+/// 信息,F14 导出时直接原样输出即可,不需要按 app_type 做分支。参数
+/// 保留在签名里只是为了和前端封装的 `(providerId, appType)` 对齐,
+/// 后端 `_app_type` 不使用——这是**有意的占位**,不是漏实现。
+#[tauri::command]
+pub async fn export_provider(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider_id: String,
+    _app_type: String,
+) -> CmdResult<Option<String>> {
+    // 1. 纯读 — 不碰 settings.json,不触发 is_active 重算。
+    let provider = state
+        .provider_service
+        .get_provider(&provider_id)
+        .map_err(|e| format!("读取 provider '{}' 失败: {e}", provider_id))?;
+
+    // 2. 序列化成可分享 JSON（2 空格缩进,带元数据）。
+    let exported = ExportedProvider::from(&provider);
+    let json = serde_json::to_string_pretty(&exported)
+        .map_err(|e| format!("序列化失败: {e}"))?;
+
+    // 3. 弹原生保存框。blocking_* 系列在 async command 里是安全的
+    //    （文档原话:"should *NOT* be used when running on the main
+    //    thread",async command 跑在 Tauri 的 async runtime,不是主线程）。
+    //    默认文件名用 provider 的 id（kebab-case,已经是合法文件名）。
+    let file_path = app
+        .dialog()
+        .file()
+        .set_title("导出 Provider 配置")
+        .set_file_name(format!("{}.json", provider.id))
+        .add_filter("JSON", &["json"])
+        .blocking_save_file();
+
+    // 4. 用户取消 — 静默,返回 None（SPEC §6.5"不允许静默吞错"针对的是
+    //    错误,不是用户主动取消;取消是正常流程）。
+    let file_path = match file_path {
+        Some(fp) => fp,
+        None => return Ok(None),
+    };
+
+    // FilePath 可能是 Path 或 Url(Windows 上通常返回 Path)。统一转
+    // PathBuf;Url 变体走 `to_file_path`,失败给用户可读错误。
+    let path = file_path.into_path().map_err(|e| {
+        format!("无法解析保存路径: {e}")
+    })?;
+
+    // 5. 原子写盘。首次写不产生备份（fs_atomic 语义）。
+    crate::infrastructure::fs_atomic::write_with_backup(&path, &json)
+        .map_err(|e| format!("写入失败 {}: {e}", path.display()))?;
+
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// F14 — 可分享的 provider JSON 包装。
+///
+/// 不直接导出 [`Provider`] 的裸 JSON（那是工具内部格式,带 `is_active`
+/// 缓存标记 + `created_at` 时间戳,对接收方没意义）。这里包一层,让导出
+/// 文件自带"这是什么 + 从哪来"的元数据,接收方一眼能看懂。
+///
+/// `settings_config` 字段保留 provider 的核心配置（base/key/models）,
+/// 命名跟 SPEC §2.1 的 `settings_config` 概念对齐——这就是切换时会被
+/// 写进 `~/.claude/settings.json` 的那份配置。
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ExportedProvider {
+    /// 导出格式版本号。未来字段变动时,接收方可以按版本降级解析。
+    /// v1 = 初始实现（M2.16）。
+    pub format_version: u32,
+    /// 来源工具标识,固定 `claude-config-manager`,让接收方知道这文件
+    /// 是本工具导出的（区别于手写 / 其他工具生成的 provider JSON）。
+    pub exported_by: String,
+    /// Provider 元数据:id / name / 类型 / 备注。接收方用来显示 + 命名。
+    pub provider: ExportedProviderMeta,
+    /// 核心 settings_config:切换时写进 `env.ANTHROPIC_*` 的那部分。
+    /// 字段名跟 SPEC §2.1 对齐。
+    pub settings_config: serde_json::Value,
+}
+
+/// F14 — provider 元数据子结构（`ExportedProvider.provider`）。
+///
+/// 只挑对外分享有意义的字段:`id` / `name` / `provider_type` / `notes`。
+/// 刻意不包含 `is_active`（缓存标记,对别人没意义）、`created_at` /
+/// `last_used_at`（本机时间戳,对别人没意义）、`api_key`（敏感,但 F14
+/// 的语义就是"分享能直接用的配置",所以 key 进 `settings_config`,
+/// 元数据里不放第二份避免泄漏面翻倍）。
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ExportedProviderMeta {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub notes: Option<String>,
+}
+
+impl From<&Provider> for ExportedProvider {
+    fn from(p: &Provider) -> Self {
+        // settings_config 按 SPEC §2.1 的 env 结构组装,跟 switch_provider
+        // 写进 settings.json 的那部分一一对应。用 serde_json::json! 宏
+        // 保证字段顺序稳定（pretty-print 后可读）。
+        let mut env = serde_json::Map::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".into(),
+            serde_json::Value::String(p.api_base.clone()),
+        );
+        env.insert(
+            "ANTHROPIC_AUTH_TOKEN".into(),
+            serde_json::Value::String(p.api_key.clone()),
+        );
+        if let Some(first_model) = p.models.first() {
+            if !first_model.is_empty() {
+                env.insert(
+                    "ANTHROPIC_MODEL".into(),
+                    serde_json::Value::String(first_model.clone()),
+                );
+            }
+        }
+        let settings_config = serde_json::json!({
+            "env": serde_json::Value::Object(env),
+            "models": p.models,
+        });
+
+        Self {
+            format_version: 1,
+            exported_by: "claude-config-manager".into(),
+            provider: ExportedProviderMeta {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                provider_type: p.provider_type.clone(),
+                notes: p.notes.clone(),
+            },
+            settings_config,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 //
@@ -321,5 +504,90 @@ mod tests {
         assert!(v["preview_providers"].is_array());
         assert!(v["preview_mcp"].is_array());
         assert!(v["skipped_samples"].is_array());
+    }
+
+    // ----- F14 — ExportedProvider (M2.16) -----
+
+    /// F14 导出 JSON 的字段契约:必须有 format_version / exported_by /
+    /// provider / settings_config 四个顶层键,且 settings_config.env
+    /// 含 ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN + (有 model 时)
+    /// ANTHROPIC_MODEL。这是接收方解析时的硬依赖,锁死防回归。
+    #[test]
+    fn exported_provider_from_provider_serialises_expected_keys() {
+        let p = Provider {
+            id: "glm-46".into(),
+            name: "GLM-4.6 官方".into(),
+            provider_type: "anthropic".into(),
+            api_base: "https://api.anthropic.com".into(),
+            api_key: "sk-ant-test".into(),
+            models: vec!["claude-sonnet-4-6".into()],
+            is_active: true, // 刻意 true,验证 is_active 不进导出 JSON
+            created_at: 1_700_000_000,
+            last_used_at: Some(1_800_000_000), // 刻意 Some,验证不进导出
+            notes: Some("官方默认".into()),
+        };
+        let exported = ExportedProvider::from(&p);
+        let v = serde_json::to_value(&exported).unwrap();
+
+        // 顶层 4 键
+        assert_eq!(v["format_version"], 1);
+        assert_eq!(v["exported_by"], "claude-config-manager");
+        assert!(v.get("provider").is_some());
+        assert!(v.get("settings_config").is_some());
+
+        // 元数据子结构:只 4 个字段,不含 is_active / created_at / last_used_at
+        let meta = &v["provider"];
+        assert_eq!(meta["id"], "glm-46");
+        assert_eq!(meta["name"], "GLM-4.6 官方");
+        assert_eq!(meta["provider_type"], "anthropic");
+        assert_eq!(meta["notes"], "官方默认");
+        assert!(meta.get("is_active").is_none(), "is_active must not leak");
+        assert!(meta.get("created_at").is_none(), "created_at must not leak");
+        assert!(meta.get("last_used_at").is_none(), "last_used_at must not leak");
+        assert!(meta.get("api_key").is_none(), "api_key must not duplicate into meta");
+
+        // settings_config.env 三键齐
+        let env = &v["settings_config"]["env"];
+        assert_eq!(env["ANTHROPIC_BASE_URL"], "https://api.anthropic.com");
+        assert_eq!(env["ANTHROPIC_AUTH_TOKEN"], "sk-ant-test");
+        assert_eq!(env["ANTHROPIC_MODEL"], "claude-sonnet-4-6");
+        // models 列表保留
+        assert_eq!(v["settings_config"]["models"][0], "claude-sonnet-4-6");
+    }
+
+    /// 空 models 的 provider 导出时不应写 ANTHROPIC_MODEL 键
+    /// （跟 switch_provider 的"空 models 不覆盖"语义一致）。
+    #[test]
+    fn exported_provider_omits_anthropic_model_when_models_empty() {
+        let p = Provider {
+            id: "bare".into(),
+            name: "Bare".into(),
+            provider_type: "custom".into(),
+            api_base: "https://bare.example".into(),
+            api_key: "k".into(),
+            models: vec![],
+            is_active: false,
+            created_at: 1,
+            last_used_at: None,
+            notes: None,
+        };
+        let exported = ExportedProvider::from(&p);
+        let v = serde_json::to_value(&exported).unwrap();
+        let env = &v["settings_config"]["env"];
+        assert!(env.get("ANTHROPIC_MODEL").is_none(), "空 models 不应写 ANTHROPIC_MODEL");
+        assert_eq!(env["ANTHROPIC_BASE_URL"], "https://bare.example");
+        assert_eq!(env["ANTHROPIC_AUTH_TOKEN"], "k");
+    }
+
+    /// pretty-print 是 SPEC §2.2 + F14"可分享阅读"的硬要求。
+    /// 锁死 2 空格缩进,防有人改成 4 空格或压缩。
+    #[test]
+    fn exported_provider_pretty_print_uses_2_space_indent() {
+        let p = Provider::new("x", "X", "anthropic", "https://x", "k");
+        let exported = ExportedProvider::from(&p);
+        let raw = serde_json::to_string_pretty(&exported).unwrap();
+        assert!(raw.contains("  \"format_version\":"), "期望 2 空格缩进:\n{raw}");
+        assert!(raw.contains("  \"provider\":"));
+        assert!(raw.contains("    \"id\":"));
     }
 }

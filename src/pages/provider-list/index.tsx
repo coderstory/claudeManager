@@ -34,7 +34,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { listProviders, switchProvider } from '../../lib/api/providers';
+import { listProviders, switchProvider, exportProvider } from '../../lib/api/providers';
 import type { Provider } from '../../types/provider';
 
 type LoadState =
@@ -48,9 +48,29 @@ type SwitchState =
   | { kind: 'success'; id: string; name: string }
   | { kind: 'failure'; message: string };
 
+/**
+ * F14 导出流程的页面级状态机。和 SwitchState 解耦——导出不刷新列表、
+ * 不影响切换的 InfoBar,各自独立的生命周期。
+ *
+ * - `idle` — 无操作。
+ * - `exporting` — 后端正在读 provider + 弹保存框（native dialog 阻塞,
+ *   按钮显示"导出中…"）。
+ * - `exported` — 用户选了路径 + 写盘成功。InfoBar 显示路径（截断）。
+ * - `cancelled` — 用户在保存框点了取消。静默,不显示 InfoBar（取消是
+ *   正常流程,不是错误）。
+ * - `export_failure` — 取数 / 序列化 / 写盘失败。红色 InfoBar。
+ */
+type ExportState =
+  | { kind: 'idle' }
+  | { kind: 'exporting'; id: string }
+  | { kind: 'exported'; path: string }
+  | { kind: 'cancelled' }
+  | { kind: 'export_failure'; message: string };
+
 export function ProviderListPage(): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [switchState, setSwitchState] = useState<SwitchState>({ kind: 'idle' });
+  const [exportState, setExportState] = useState<ExportState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -90,6 +110,30 @@ export function ProviderListPage(): ReactElement {
     [],
   );
 
+  /**
+   * F14 — 导出单 provider。后端全权处理读 + 弹框 + 写盘,
+   * 前端只接收最终路径(或 null = 用户取消)。
+   *
+   * `appType` 传 provider 的 provider_type,后端当前忽略但签名对齐。
+   */
+  const handleExport = useCallback(
+    async (provider: Provider) => {
+      setExportState({ kind: 'exporting', id: provider.id });
+      try {
+        const path = await exportProvider(provider.id, provider.provider_type);
+        if (path === null) {
+          // 用户在保存框取消 — 静默,不报错。
+          setExportState({ kind: 'cancelled' });
+        } else {
+          setExportState({ kind: 'exported', path });
+        }
+      } catch (e) {
+        setExportState({ kind: 'export_failure', message: stringifyError(e) });
+      }
+    },
+    [],
+  );
+
   return (
     <div
       data-testid="provider-list-page"
@@ -103,7 +147,17 @@ export function ProviderListPage(): ReactElement {
     >
       <HeaderBar onRefresh={reload} />
       <InfoBars switchState={switchState} onDismiss={() => setSwitchState({ kind: 'idle' })} />
-      <Body state={state} switchState={switchState} onActivate={handleActivate} />
+      <ExportInfoBar
+        exportState={exportState}
+        onDismiss={() => setExportState({ kind: 'idle' })}
+      />
+      <Body
+        state={state}
+        switchState={switchState}
+        exportState={exportState}
+        onActivate={handleActivate}
+        onExport={handleExport}
+      />
     </div>
   );
 }
@@ -196,13 +250,90 @@ function InfoBars({ switchState, onDismiss }: InfoBarsProps): ReactElement | nul
   );
 }
 
+/**
+ * F14 导出流程的 InfoBar。和切换的 InfoBars 分离,因为:
+ * 1. 导出有自己的状态机(exported / cancelled / export_failure)。
+ * 2. 取消是静默的(cancelled 不渲染任何东西),成功/失败才显示。
+ * 3. 成功提示显示路径,需要截断(Windows 路径可能很长)。
+ *
+ * 自动消失:成功 4s,失败 5s(比切换的成功 3s 略长,因为路径需要阅读)。
+ * cancelled 立即回 idle(无 UI),不设 timer。
+ */
+interface ExportInfoBarProps {
+  exportState: ExportState;
+  onDismiss: () => void;
+}
+
+function ExportInfoBar({ exportState, onDismiss }: ExportInfoBarProps): ReactElement | null {
+  const bar = useMemo(() => {
+    if (exportState.kind === 'exported') {
+      return {
+        kind: 'success' as const,
+        text: `已导出到 ${truncatePath(exportState.path)}`,
+      };
+    }
+    if (exportState.kind === 'export_failure') {
+      return {
+        kind: 'error' as const,
+        text: `导出失败：${exportState.message}`,
+      };
+    }
+    return null;
+  }, [exportState]);
+
+  useEffect(() => {
+    if (!bar) return;
+    const ms = bar.kind === 'success' ? 4000 : 5000;
+    const t = window.setTimeout(onDismiss, ms);
+    return () => window.clearTimeout(t);
+  }, [bar, onDismiss]);
+
+  if (!bar) return null;
+  const color = bar.kind === 'success' ? 'var(--success)' : 'var(--danger)';
+  return (
+    <div
+      data-testid={`provider-export-${bar.kind}-bar`}
+      role="status"
+      style={{
+        background: 'var(--bg-elevated)',
+        border: `1px solid ${color}`,
+        color: 'var(--text-primary)',
+        padding: 'var(--space-2) var(--space-3)',
+        borderRadius: 'var(--radius-button)',
+        marginBottom: 'var(--space-3)',
+        fontSize: 'var(--fs-body)',
+        wordBreak: 'break-all',
+      }}
+    >
+      {bar.text}
+    </div>
+  );
+}
+
+/** 截断长路径:保留首尾,中间省略号。Windows 路径常超 80 字符。 */
+function truncatePath(path: string): string {
+  const MAX = 60;
+  if (path.length <= MAX) return path;
+  const head = path.slice(0, 24);
+  const tail = path.slice(-28);
+  return `${head}…${tail}`;
+}
+
 interface BodyProps {
   state: LoadState;
   switchState: SwitchState;
+  exportState: ExportState;
   onActivate: (id: string) => void;
+  onExport: (provider: Provider) => void;
 }
 
-function Body({ state, switchState, onActivate }: BodyProps): ReactElement {
+function Body({
+  state,
+  switchState,
+  exportState,
+  onActivate,
+  onExport,
+}: BodyProps): ReactElement {
   if (state.kind === 'loading') {
     return (
       <div data-testid="provider-list-loading" style={emptyStateStyle}>
@@ -227,7 +358,9 @@ function Body({ state, switchState, onActivate }: BodyProps): ReactElement {
           key={p.id}
           provider={p}
           switching={switchState.kind === 'switching' && switchState.id === p.id}
+          exporting={exportState.kind === 'exporting' && exportState.id === p.id}
           onActivate={onActivate}
+          onExport={onExport}
         />
       ))}
     </ul>
@@ -269,10 +402,18 @@ function EmptyState(): ReactElement {
 interface ProviderRowProps {
   provider: Provider;
   switching: boolean;
+  exporting: boolean;
   onActivate: (id: string) => void;
+  onExport: (provider: Provider) => void;
 }
 
-function ProviderRow({ provider, switching, onActivate }: ProviderRowProps): ReactElement {
+function ProviderRow({
+  provider,
+  switching,
+  exporting,
+  onActivate,
+  onExport,
+}: ProviderRowProps): ReactElement {
   const isActive = provider.is_active;
   return (
     <li
@@ -352,7 +493,31 @@ function ProviderRow({ provider, switching, onActivate }: ProviderRowProps): Rea
           {lastUsedLabel(provider)}
         </div>
       </div>
-      <div style={{ flexShrink: 0 }}>
+      {/* 右侧操作区:导出按钮 + 激活按钮/徽章。
+          导出按钮对 active / inactive 行都可用(F14 是分享配置,不要求激活)。
+          exporting 时禁用 + 显示"导出中…"。 */}
+      <div
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-2)',
+        }}
+      >
+        <button
+          type="button"
+          data-testid={`provider-export-${provider.id}`}
+          disabled={exporting}
+          onClick={() => onExport(provider)}
+          title="导出为 .json 分享"
+          style={{
+            ...btnStyle,
+            opacity: exporting ? 0.6 : 1,
+            cursor: exporting ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {exporting ? '导出中…' : '导出'}
+        </button>
         {isActive ? (
           <span
             data-testid={`provider-active-badge-${provider.id}`}

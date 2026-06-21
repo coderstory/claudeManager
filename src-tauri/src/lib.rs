@@ -64,6 +64,8 @@ pub fn run() {
             commands::providers::import_providers_from_sql,
             commands::providers::parse_deeplink_url,
             commands::providers::import_single_provider,
+            // M2.16 — F14 导出单 provider（Rust 侧弹保存框 + 原子写盘）
+            commands::providers::export_provider,
             commands::fs::read_file,
             commands::fs::write_file_atomic,
             commands::mcp::list_mcp_servers,

@@ -247,3 +247,151 @@ describe('ProviderListPage — F2 switching', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// F14 — 导出单 provider (M2.16)
+// ---------------------------------------------------------------------------
+
+describe('ProviderListPage — F14 export', () => {
+  it('renders an export button on each provider row', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      p('a', 'A', { is_active: true }),
+      p('b', 'B'),
+    ]);
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    // 两行都有导出按钮(active + inactive 都可导出)。
+    expect(screen.getByTestId('provider-export-a')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-export-b')).toBeInTheDocument();
+  });
+
+  it('clicking export calls export_provider with providerId + appType', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A', { provider_type: 'anthropic' })]);
+    // export_provider 返回一个路径(写盘成功)。
+    mockInvoke.mockResolvedValueOnce('C:\\Users\\me\\Desktop\\a.json');
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-export-a'));
+    });
+
+    // invoke 收到 export_provider + 正确的 snake_case 参数。
+    expect(mockInvoke).toHaveBeenCalledWith('export_provider', {
+      providerId: 'a',
+      appType: 'anthropic',
+    });
+    // 成功 InfoBar 出现,含路径。
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-export-success-bar')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/已导出到/)).toBeInTheDocument();
+    expect(screen.getByText(/a\.json/)).toBeInTheDocument();
+  });
+
+  it('shows no InfoBar when export returns null (user cancelled save dialog)', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A')]);
+    // 后端返回 null = 用户在保存框点了取消。
+    mockInvoke.mockResolvedValueOnce(null);
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-export-a'));
+    });
+
+    // 取消是静默的:不显示成功 bar,也不显示失败 bar。
+    expect(screen.queryByTestId('provider-export-success-bar')).toBeNull();
+    expect(screen.queryByTestId('provider-export-error-bar')).toBeNull();
+  });
+
+  it('shows red failure InfoBar when export_provider rejects', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A')]);
+    mockInvoke.mockRejectedValueOnce(new Error('disk full'));
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-export-a'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-export-error-bar')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/导出失败：disk full/)).toBeInTheDocument();
+  });
+
+  it('disables the export button while exporting', async () => {
+    // 让 export_provider hang,观察 disabled 态。
+    let resolveExport!: (v: string | null) => void;
+    mockInvoke.mockResolvedValueOnce([p('a', 'A')]);
+    mockInvoke.mockImplementationOnce(
+      () => new Promise<string | null>((res) => { resolveExport = res; }),
+    );
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    const btn = screen.getByTestId('provider-export-a');
+    fireEvent.click(btn);
+
+    await waitFor(() => {
+      expect(btn).toBeDisabled();
+    });
+    expect(btn).toHaveTextContent(/导出中/);
+
+    // 解掉 promise 清理。
+    await act(async () => {
+      resolveExport('C:\\out\\a.json');
+    });
+  });
+
+  it('export does not interfere with the switch flow (separate state machines)', async () => {
+    // 导出成功后,切换流程照常工作(两个状态机独立)。
+    mockInvoke.mockResolvedValueOnce([p('a', 'A'), p('b', 'B', { is_active: true })]);
+    // export a
+    mockInvoke.mockResolvedValueOnce('C:\\out\\a.json');
+    // switch a
+    const switched = p('a', 'A', { is_active: true, last_used_at: 1_800_000_000 });
+    mockInvoke.mockResolvedValueOnce(switched);
+    // list reload after switch
+    mockInvoke.mockResolvedValueOnce([p('a', 'A', { is_active: true }), p('b', 'B')]);
+
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    // 先导出 a
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-export-a'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-export-success-bar')).toBeInTheDocument();
+    });
+
+    // 再激活 a — 切换 InfoBar 独立出现,不受导出态影响。
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-activate-a'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-success-bar')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/已切换到 A/)).toBeInTheDocument();
+  });
+});

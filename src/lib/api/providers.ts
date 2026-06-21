@@ -119,6 +119,38 @@ export function importSingleProvider(provider: Provider): Promise<void> {
   return invoke<void>('import_single_provider', { provider });
 }
 
+// ---------------------------------------------------------------------------
+// F14 — 导出单 provider (M2.16)
+// ---------------------------------------------------------------------------
+
+/**
+ * F14 — export a single provider's settings_config to a shareable .json.
+ *
+ * 后端全权处理:读 provider → 序列化 → 弹原生保存框 → 原子写盘。
+ * 前端只发一个 invoke 拿最终路径（或 null 表示用户取消了保存框）。
+ *
+ * 为什么不像 F3/F4 那样前端自己弹框:本仓库没装 `@tauri-apps/plugin-dialog`
+ * / `@tauri-apps/plugin-fs` 的 JS wrapper（CLAUDE.md §2.3 依赖白名单）,
+ * HTML `<input type=file>` 只能"打开"不能"保存",所以必须走 Rust 侧的
+ * `tauri-plugin-dialog::blocking_save_file`。详见后端
+ * `commands::providers::export_provider` 的设计选择注释。
+ *
+ * @param providerId 要导出的 provider 的 id（kebab-case）
+ * @param appType    应用类型占位（后端当前忽略,本工具只管 Claude Code
+ *                   的 provider;参数保留是为了和 brief 签名对齐）
+ * @returns 成功写盘 → 绝对路径字符串;用户在保存框取消 → `null`。
+ *          失败时 invoke 会 reject,页面用 catch 展示红色 InfoBar。
+ */
+export function exportProvider(
+  providerId: string,
+  appType: string,
+): Promise<string | null> {
+  return invoke<string | null>('export_provider', {
+    providerId,
+    appType,
+  });
+}
+
 // Re-export the F3 McpServer type (parser shape, used in SqlPreview
 // `preview_mcp`) for the page so callers don't need a second import.
 // The F6 write-side `McpServer` lives in `../../types/mcp` and is

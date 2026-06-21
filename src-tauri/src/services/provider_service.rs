@@ -170,6 +170,29 @@ impl ProviderService {
     }
 
     // -----------------------------------------------------------------------
+    // F14 — get_provider (导出单 provider, M2.16)
+    // -----------------------------------------------------------------------
+
+    /// Read a single provider by id (F14 export). Returns the provider
+    /// exactly as stored on disk — `is_active` keeps its cached value
+    /// (the recipient recomputes it via `list_providers`, so a stale
+    /// `true` is harmless). The command layer
+    /// (`commands::providers::export_provider`) owns serialisation +
+    /// native save dialog + write; this method is the *pure read* so it
+    /// stays unit-testable without a Tauri `AppHandle`.
+    ///
+    /// # Errors
+    ///
+    /// - [`ProviderError::Io`] — no file for `provider_id` (cold path:
+    ///   the user picked an id that isn't in the library). Mirrors
+    ///   `switch_provider`'s unknown-id behaviour.
+    /// - [`ProviderError::Json`] — the file is present but malformed.
+    pub fn get_provider(&self, provider_id: &str) -> Result<Provider, ProviderError> {
+        let path = self.provider_path(provider_id);
+        Provider::from_json_file(&path)
+    }
+
+    // -----------------------------------------------------------------------
     // F4 — import_single_provider (M2.3)
     // -----------------------------------------------------------------------
 
@@ -925,6 +948,55 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         assert_eq!(second.imported, 0, "second import writes nothing");
         assert_eq!(second.skipped, 2, "second import sees both as duplicates");
         assert!(second.errors.is_empty());
+    }
+
+    // ----- get_provider (F14, M2.16) -----
+
+    #[test]
+    fn get_provider_returns_stored_provider_round_trip() {
+        // 正常路径：取一个已写盘的 provider,字段逐个对得上。
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_provider(
+            &p_dir,
+            &sample_provider("glm-46", "GLM-4.6", "https://api.anthropic.com"),
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let p = svc.get_provider("glm-46").unwrap();
+        assert_eq!(p.id, "glm-46");
+        assert_eq!(p.name, "GLM-4.6");
+        assert_eq!(p.api_base, "https://api.anthropic.com");
+        assert_eq!(p.api_key, "key-for-glm-46");
+    }
+
+    #[test]
+    fn get_provider_unknown_id_errors_io() {
+        // 不存在的 id → Io error(同 switch_provider 的未知 id 行为)。
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_provider(&p_dir, &sample_provider("a", "A", "https://a.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let err = svc.get_provider("does-not-exist").unwrap_err();
+        assert!(matches!(err, ProviderError::Io(_)));
+    }
+
+    #[test]
+    fn get_provider_corrupt_file_errors_json() {
+        // 文件在但不是合法 JSON → Json error(和 list_providers_with_warnings
+        // 对坏文件的判定一致,只是这里冒泡给调用方)。
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        std::fs::create_dir_all(&p_dir).unwrap();
+        std::fs::write(p_dir.join("bad.json"), "{ not json").unwrap();
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let err = svc.get_provider("bad").unwrap_err();
+        assert!(matches!(err, ProviderError::Json(_)));
     }
 
     // ----- import_single_provider (F4, M2.3) -----
