@@ -838,19 +838,27 @@ fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<ParsedMcpServ
     let server_config = get("server_config").unwrap_or_default();
 
     // server_config is a JSON object describing { command, args, env }.
-    // We accept either a direct object or a stringified one (cc-switch
-    // sometimes double-encodes).
+    // We accept either a direct object or a string-encoded one (cc-switch
+    // sometimes double-encodes — i.e. the column stores a JSON string
+    // whose contents are themselves JSON).
     let server_obj: ServerConfigJson = if server_config.trim().is_empty() {
         ServerConfigJson::default()
     } else {
-        let parsed: Result<ServerConfigJson, _> = serde_json::from_str(&server_config);
-        match parsed {
+        // 第一次尝试:直接解析为对象(主流情况)。
+        match serde_json::from_str::<ServerConfigJson>(&server_config) {
             Ok(v) => v,
             Err(_) => {
-                // Try string-encoded (cc-switch sometimes does this).
-                let inner: Result<ServerConfigJson, _> =
-                    serde_json::from_str(&server_config);
-                inner.map_err(|e| format!("server_config invalid JSON: {e}"))?
+                // 第二次尝试:先解析为 JSON string(整体带引号),
+                // 再 unquote 后用 ServerConfigJson 解析内容。
+                // 这是真正的"string-encoded JSON"分支,老代码只是
+                // 复制粘贴第一次调用(死代码,无效)。
+                match serde_json::from_str::<String>(&server_config) {
+                    Ok(unquoted) => serde_json::from_str::<ServerConfigJson>(&unquoted)
+                        .map_err(|e| format!("server_config invalid JSON: {e}"))?,
+                    Err(e) => {
+                        return Err(format!("server_config invalid JSON: {e}"));
+                    }
+                }
             }
         }
     };
@@ -1259,5 +1267,76 @@ COMMIT;
             assert_eq!(x.api_base, y.api_base);
             assert_eq!(x.api_key, y.api_key);
         }
+    }
+
+    // ----- M2.16 — C3: parse_mcp_row server_config 解码 -----
+
+    /// C3: 直接 JSON 对象(主流情况) — 必须正确解析。
+    #[test]
+    fn parse_mcp_row_direct_json_object() {
+        let id = SqlValue::Str("fs".into());
+        let name = SqlValue::Str("fs".into());
+        let cfg = SqlValue::Str(r#"{"command":"npx","args":["fs-server"]}"#.into());
+        let row: Vec<(&str, &SqlValue)> = vec![
+            ("id", &id),
+            ("name", &name),
+            ("server_config", &cfg),
+        ];
+        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        assert_eq!(parsed.command, "npx");
+        assert_eq!(parsed.args, vec!["fs-server".to_string()]);
+    }
+
+    /// C3: 双重编码 JSON(cc-switch 偶尔这样)— 整体被引号包,
+    /// 内容是合法 JSON。老实现是复制粘贴的死代码(无效),新实现
+    /// 先解析为 String 再解析内容。
+    #[test]
+    fn parse_mcp_row_double_encoded_json() {
+        // 整体 JSON string:外层双引号 + 内容是合法 JSON 对象。
+        let inner = r#"{"command":"uvx","args":["mcp-fetch"]}"#;
+        let outer = format!(r#""{}""#, inner);
+        let id = SqlValue::Str("fetch".into());
+        let name = SqlValue::Str("fetch".into());
+        let cfg = SqlValue::Str(outer);
+        let row: Vec<(&str, &SqlValue)> = vec![
+            ("id", &id),
+            ("name", &name),
+            ("server_config", &cfg),
+        ];
+        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        assert_eq!(parsed.command, "uvx");
+        assert_eq!(parsed.args, vec!["mcp-fetch".to_string()]);
+    }
+
+    /// C3: 真正畸形的 JSON — 返回 Err,错误信息准确。
+    #[test]
+    fn parse_mcp_row_invalid_json_errors_with_clear_message() {
+        let id = SqlValue::Str("bad".into());
+        let name = SqlValue::Str("bad".into());
+        let cfg = SqlValue::Str("not json at all".into());
+        let row: Vec<(&str, &SqlValue)> = vec![
+            ("id", &id),
+            ("name", &name),
+            ("server_config", &cfg),
+        ];
+        let err = parse_mcp_row(&row, 1).unwrap_err();
+        assert!(err.contains("server_config invalid JSON"), "got: {err}");
+    }
+
+    /// C3: 空 server_config — 用 default(空 command/args/env)。
+    #[test]
+    fn parse_mcp_row_empty_server_config_uses_default() {
+        let id = SqlValue::Str("empty".into());
+        let name = SqlValue::Str("empty".into());
+        let cfg = SqlValue::Str(String::new());
+        let row: Vec<(&str, &SqlValue)> = vec![
+            ("id", &id),
+            ("name", &name),
+            ("server_config", &cfg),
+        ];
+        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        assert_eq!(parsed.command, "");
+        assert!(parsed.args.is_empty());
+        assert!(parsed.env.is_empty());
     }
 }
