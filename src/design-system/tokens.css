@@ -17,6 +17,10 @@ body,
   height: 100%;
   overflow: hidden;
   box-sizing: border-box;
+  /* M2.16 — window-vibrancy 官方 README 要求 html/body 背景透明,
+   * 否则 Mica/vibrancy backdrop 被默认白底盖住透不出来。
+   * body 在下方再按主题档覆写(--bg-primary),html 始终透明。 */
+  background: transparent;
 }
 
 *,
@@ -127,19 +131,20 @@ body,
  * The old 'dark' stub has been removed. The palette is now a
  * 3-way light → glass-clear → glass-tinted cycle.
  *
- * The key insight: the React shell (App.tsx app-root + app-main)
- * paints its background from --bg-primary. In 'light' that's the
- * opaque #FAFAF7 cream, which intentionally covers the native
- * Mica / vibrancy backdrop. In the two glass modes we drop the
- * alpha so the OS-level material shows through:
+ * M2.16 决定性验证结论(纯红壁纸 + CDP + CopyFromScreen 像素采样):
+ *   Tauri v2 tao + WebView2 + transparent:true + decorations:false 在
+ *   Win11 上 OS Mica/Acrylic backdrop **无视觉效果**(详见 lib.rs 注释)。
+ *   壁纸透不出窗口,原 glass-clear 的 --bg-primary: transparent 会让
+ *   窗口显示成纯白(host HWND 白底)。为避免"假透明"误导用户,glass
+ *   主题改为"瓷白磨砂玻璃":近不透明瓷白 + backdrop-filter 模拟磨砂。
+ *   透不出壁纸,但有"瓷白玻璃"质感,WCAG-AA 对比保留。
  *
- *   - glass-clear:   --bg-primary = transparent.
- *                    Mica (Win11) / vibrancy (macOS) shows through
- *                    directly — the app looks like a fully clear
- *                    pane floating over the desktop.
- *   - glass-tinted:  --bg-primary = rgba(250, 250, 247, 0.7).
- *                    Mica bleeds through but the cream tone is
- *                    preserved — reads as "porcelain glass".
+ *   - glass-clear:   --bg-primary = rgba(250,250,247,0.92) + blur(40px)。
+ *                    近不透明瓷白(92% alpha)+ 强磨砂,读起来像"瓷板玻璃"。
+ *                    不是真透明(透不出壁纸),是诚实 CSS 模拟。
+ *   - glass-tinted:  --bg-primary = rgba(250,250,247,0.7)。
+ *                    原设计保留(略透瓷白),macOS vibrancy 真机有效时
+ *                    透出系统壁纸色调;Win11 CSS 模拟下读为"淡瓷白"。
  *
  * All other tokens (text, accent, border, glass-bg, status colours)
  * stay at their light values. The glass modes are conceptually
@@ -150,13 +155,19 @@ body,
  * backdrop shows through the body.
  */
 [data-theme="glass-clear"] {
-  /* Body becomes fully transparent so the native Mica / vibrancy
-   * material (applied by applyEffects.ts at startup) is the only
-   * background. Header / sidebar / cards keep their glass-bg /
-   * glass-bg-strong alphas so they still read as floating panes. */
-  --bg-primary:  transparent;
-  --bg-elevated: rgba(255, 255, 255, 0.75);
-  --bg-overlay:  rgba(255, 255, 255, 0.5);
+  /* M2.16 — Win11 Mica 不生效(见 lib.rs 决定性验证),transparent 会让
+   * 窗口显示成纯白。改用近不透明瓷白(0.92)+ backdrop-filter 模拟磨砂
+   * 玻璃质感。透不出壁纸但视觉上是"瓷白玻璃窗",不是"破掉的透明"。
+   * macOS vibrancy 真机有效时此层会被系统材质叠加,视觉更丰富。 */
+  --bg-primary:  rgba(250, 250, 247, 0.92);
+  --bg-elevated: rgba(255, 255, 255, 0.85);
+  --bg-overlay:  rgba(255, 255, 255, 0.6);
+  /* backdrop-filter 模拟磨砂:模糊 webview 后面的内容(host 白底)。
+   * 在 Win11 host 白底下效果有限(模糊白色还是白色),但保留语义 +
+   * 在 macOS vibrancy 真机上有真实模糊效果。saturate 提升色彩饱和
+   * 让瓷白更有"玻璃"质感。 */
+  --glass-blur: 40px;
+  --glass-saturate: 180%;
 }
 
 [data-theme="glass-tinted"] {
@@ -166,6 +177,8 @@ body,
   --bg-primary:  rgba(250, 250, 247, 0.7);
   --bg-elevated: rgba(255, 255, 255, 0.85);
   --bg-overlay:  rgba(255, 255, 255, 0.6);
+  --glass-blur: 30px;
+  --glass-saturate: 160%;
 }
 
 /* --- 全局基线：让 body / 等宽走 token --- */
@@ -174,6 +187,13 @@ body {
   font-size: var(--fs-body);
   color: var(--text-primary);
   background: var(--bg-primary);
+  /* M2.16 — glass 主题 backdrop-filter 模拟磨砂玻璃。
+   * --glass-blur / --glass-saturate 只在 glass-* 主题定义;
+   * light 主题未定义 → var() fallback 为 0 / 100%,无 blur,
+   * 性能无影响。Win11 host 白底下 blur 效果有限(模糊白色还是
+   * 白色),但保留语义 + macOS vibrancy 真机有真实模糊。 */
+  backdrop-filter: blur(var(--glass-blur, 0px)) saturate(var(--glass-saturate, 100%));
+  -webkit-backdrop-filter: blur(var(--glass-blur, 0px)) saturate(var(--glass-saturate, 100%));
   /* M2.10 F12 polish — 200ms ease transition on bg + text so a
    * light→dark toggle (or vice versa) fades smoothly instead of
    * snapping. We deliberately do NOT transition border / shadow

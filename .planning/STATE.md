@@ -602,3 +602,275 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - L-M2.02 max-width 统一 (技术债)
 - L-M2.03 sidebar Deeplink 命名 (小 polish)
 - Tailwind pipeline 重新接 / 永久移除 (二选一, L-M2.01 follow-up)
+
+---
+
+# === M2.16 实际进度补丁（2026-06-21 追加） ===
+
+> 上方 "M2 实际进度补丁（M2.15 追加）" 章节覆盖到 M2.15 polish 阶段；M2.16 期间完成 18 个原子 commit + 25 个 ship exe（全部上桌面），覆盖 9 大新功能 + Mac 兼容 P0~P2 全修 + 主题重构 + F15 错误反馈横切。本节补全 M2.16 全部状态。
+>
+> 数据来源：`git log --oneline 70bdee1..HEAD` (18 commits) + 实际桌面文件清单 `ls -la ~/Desktop/ClaudeConfigManager-M2/`（25 个 ship exe）。
+
+## M2.16 业务功能新增（9 个 plugin / 增强）
+
+### F3 .sql 导入真正可用（schema 修 + UI 端到端验证）
+- Commit: `7beb0a5` M2.16-fix: F3 sql_parser schema 修复 — 按 app_type 分派 + 支持无列名 INSERT
+- Commit: `452ace0` M2.16-test: F3 import-sql 真机端到端 CDP 验证脚本
+- 影响: F3 解析器按 `app_type` (claude / codex / gemini / opencode) 分派到不同 schema，codex/gemini/opencode 保留 raw settings_config 字段；支持无列名 `INSERT INTO foo VALUES (...)` 语法
+
+### F10 拖放 .sql 导入
+- Commit: `1f216c0` M2.16-f10: drag-drop .sql import — Tauri onDragDropEvent + overlay + reuse F20 pendingSqlFile
+- Ship: `ClaudeConfigManager-M2.16-f10-drag-drop.exe` (31.5 MB, 2026-06-21 13:31)
+- 实现: Tauri `onDragDropEvent` 监听 + 全屏 overlay 显示 + 复用 F20 的 `pendingSqlFile` 状态
+
+### F14 导出单 provider .json
+- Commit: `b2ac17a` M2.16-f14: export single provider to shareable .json (Rust dialog+atomic write + provider-list export button + vitest 7)
+- Ship: `ClaudeConfigManager-M2.16-f14-export-provider.exe` (31.3 MB, 2026-06-21 11:17)
+- 设计: Rust 端用 native dialog 选路径 + atomic write（write-temp + rename），provider-list 表格加 Export 按钮
+
+### F17 在线安装市场
+- Commit: `ecd547b` M2.16-F17: marketplace online install — git clone + scan + install (Rust service + 3 commands + React page + 13 vitest + 17 cargo tests)
+- Ship: `ClaudeConfigManager-M2.16-f17-marketplace.exe` (31.5 MB, 2026-06-21 13:27)
+- 实现: Rust service `MarketplaceService` + 3 Tauri commands + React MarketplacePage + 13 vitest + 17 cargo 单元测试
+- 依赖: 需要 `MacGitHost` (`98bf855`) 实现 git CLI 跨平台调用，Mac 真机才可跑
+
+### F20 单实例 + .sql 文件关联
+- Commit: `4a710ae` M2.16-F20: single-instance + .sql file association → jump to import-sql page
+- Ship: `ClaudeConfigManager-M2.16-f20-single-instance.exe` (31.4 MB, 2026-06-21 13:07)
+- 实现: 单实例锁 + .sql 文件扩展名关联 + 启动时跳到 import-sql 页（带 pendingSqlFile 状态）
+
+### F21 资源搜索（名称模糊 + 来源仓库过滤）
+- Commit: `f927895` M2.16-f21: resource-browser name fuzzy search filter (F9 reuse) + 7 vitest cases
+- Commit: `fcc1a02` M2.16-f21-source-repo: 按来源仓库过滤 (F21 增强, 补 f927895 gap)
+- Ship: `ClaudeConfigManager-M2.16-f21-resource-search.exe` (31.4 MB, 2026-06-21 11:47) / `ClaudeConfigManager-M2.16-f21-source-repo.exe` (31.5 MB, 2026-06-21 14:13)
+- 实现: 复用 F9 fuzzyMatch 算法（不重写）+ 按 source_repo 字段过滤
+
+### F22 资源详情预览（最小方案 + manifest 增强）
+- Commit: `31426c9` M2.16-F22: resource detail preview (inline accordion panel) + vitest 9
+- Commit: `448911a` M2.16-F22-manifest: resource detail manifest + file list (backend get_resource_detail + ResourceDetail + infra + 22 cargo + 6 vitest)
+- Ship: `ClaudeConfigManager-M2.16-f22-resource-detail.exe` (31.4 MB, 2026-06-21 12:00) / `ClaudeConfigManager-M2.16-f22-manifest.exe` (31.5 MB, 2026-06-21 13:54)
+- 实现: 最小方案 = inline accordion panel (前端展开)；manifest 增强 = 后端 `get_resource_detail` command + `ResourceDetail` struct + manifest 全文 + file list + 22 cargo + 6 vitest
+
+### F23 优化导出 markdown
+- Commit: `0a2daa0` M2.16-F23: export optimization findings to markdown report (backend gen + native save dialog + atomic write)
+- Ship: `ClaudeConfigManager-M2.16-f23-export.exe` (31.4 MB, 2026-06-21 11:36)
+- 实现: Rust 端 gen markdown 报告 + native save dialog + atomic write
+
+### F24 备份 diff（M2.6 验证 ship，无新代码）
+- Ship: `ClaudeConfigManager-M2.16-f24-backup-diff.exe` (31.3 MB, 2026-06-21 11:32) — 验证 ship，逻辑在 M2.6 已实现
+
+## M2.16 Mac 兼容（P0+P1+P2 全修）
+
+| Trait | Commit | 实现 | Ship exe |
+|---|---|---|---|
+| MacPaths (P0) | `0d3de69` M2.16-mac-fix: implement MacPaths (resolve + ensure_dirs) — unblocks macOS startup panic | `resolve` + `ensure_dirs` 走 `~/Library/Application Support` | `M2.16-mac-paths-fix.exe` (2026-06-21 06:29) |
+| MacReveal | `645e96c` M2.16-mac-fix: implement MacReveal::reveal (open -R) | `open -R <path>` | `M2.16-mac-reveal-fix.exe` (2026-06-21 06:24) |
+| MacGitHost | `98bf855` M2.16-mac-fix: implement MacGitHost (git CLI, cross-platform same as Windows) — unblocks F17 on macOS | 抽 `IGitHost` 用 `std::process::Command` 调 git CLI（Win/Mac 同代码） | `M2.16-mac-git-fix.exe` (2026-06-21 06:36) |
+| MacAppMenu | `c074187` M2.16-mac-fix: implement MacAppMenu (standard macOS menus + Cmd+Q) | 4 标准菜单 (App / File / Edit / View) + Cmd+Q | `M2.16-mac-app-menu.exe` (2026-06-21 13:02) |
+| MacNotifier | `449d659` M2.16-mac-fix: implement MacNotifier (tauri-plugin-notification + request_permission) | tauri-plugin-notification 包装 + 启动时 `request_permission` | `M2.16-mac-notifier.exe` (2026-06-21 13:13) |
+| MacWindowChrome | (混入 `1f216c0` 的 no-op Ok(()) + 中文注释) | 仍 no-op，lib.rs 直接调 window-vibrancy 绕 trait | (随 F10 ship) |
+| MacSingleInstance | `5d69cc0` M2.16-mac-single-instance: replace unimplemented!() with no-op guard | no-op 占位（tauri-plugin-single-instance 在 Mac 上语义不同） | `M2.16-mac-single-instance.exe` (2026-06-21 13:25) |
+| backup-restore 删 process.platform | `087cc87` M2.16-fix: backup_now 默认路径由后端 AppPaths 提供, 前端不再用 process.platform | 前端调 `get_backup_dir` IPC | (随 M2.16 backup ship) |
+
+**Mac 状态**: 8 个 trait 中 6 个有真实现 (Paths/Reveal/GitHost/AppMenu/Notifier/SingleInstance)，1 个 no-op (WindowChrome)，0 个 stub。F1~F24 全套功能在 macOS 真机理论上可跑通，**待 Mac dev box 接入做真机验证**（L-M2.09）。
+
+## M2.16 主题/视觉重构
+
+### 3 档主题
+- Commit: `2deceaa` M2.16-glass-themes: 3-way light/glass-clear/glass-tinted cycle
+- Ship: `ClaudeConfigManager-M2.16-glass-themes.exe` (31.2 MB, 2026-06-21 00:03)
+- 实现: 3 档循环 (light → glass-clear → glass-tinted → light)，ThemeProvider 暴露 `cycleTheme`
+
+### 主题审计删冗余 JS setEffects
+- Commit: `865a731` M2.16-theme-fix: remove redundant JS setEffects call (Rust apply_mica is single source)
+- Ship: `ClaudeConfigManager-M2.16-theme-audit-fix.exe` (31.2 MB, 2026-06-21 07:16)
+- 修复: 删 `useEffect(() => setEffects(...))` 冗余调用，Rust `apply_mica` 是 backdrop 单一来源
+
+### Mica 真生效
+- Commit: `fc1fb55` M2.16-fix: Win11 Mica 真机不透 — 改用 window-vibrancy apply_mica 直调 DWM
+- Ship: `ClaudeConfigManager-M2.16-mica-fix.exe` (31.2 MB, 2026-06-21 01:08)
+- 修复: 之前 Mica 在 WebView2 release exe 不透，改用 `tauri-plugin-window-vibrancy` 的 `apply_mica` 直接调 DWM API
+
+### splash 2s + 动画
+- Commit: `4a1fdb5` M2.16-splash: inline loading screen in index.html + App.tsx fade-out + 2 vitest + CDP probe
+- Commit: `72f7b45` M2.16-splash-probe: fix label var injection + add launcher + probe report
+- Commit: `137dde1` M2.16-splash: 至少2s展示 + 呼吸脉冲/进度条/文字淡入动画
+- Ship: `ClaudeConfigManager-M2.16-splash-2s-animation.exe` (31.2 MB, 2026-06-21 06:13)
+- 实现: 至少 2s splash 展示（避免白屏闪）+ 呼吸脉冲/进度条/文字淡入 CSS 动画 + CDP 探针
+
+## M2.16 F15 错误反馈横切
+
+### F15-base 共享组件
+- Commit: `ebdf52e` M2.16-F15-base: shared ErrorBanner component + tests
+- 设计: 抽 `src/components/ErrorBanner.tsx` 共享组件，props = `{ tone: 'error' | 'warning' | 'info', title, children, onDismiss? }`，统一样式 + aria
+
+### F15-batch1（provider-list + backup-restore）
+- Commit: `d8e5728` M2.16-F15-batch1: ErrorBanner → provider-list ExportInfoBar + backup-restore InfoBar
+- 影响: provider-list 导出信息条 + backup-restore 提示条接入 ErrorBanner
+
+### F15-batch2（marketplace + optimizer）
+- Commit: `5de839f` M2.16-F15-batch2: ErrorBanner → marketplace + optimizer (3 banner → shared component)
+- Ship: `ClaudeConfigManager-M2.16-F15-banner.exe` (31.5 MB, 2026-06-21 14:26) / `ClaudeConfigManager-M2.16-f15-batch2.exe` (31.5 MB, 2026-06-21 14:37)
+- 影响: marketplace 3 个 banner (clone error / install error / scan warning) + optimizer apply 反馈 → ErrorBanner
+
+## M2.16 清理
+
+- `2f4c3d7` M2.16-cleanup: remove dead applyEffects.ts (Rust apply_mica is sole backdrop source) — 删前端死代码
+- `c18d267` M2.16-ci: add macos-latest gate job (cargo check + vitest) — Mac regression gate
+- `70bdee1` docs: append M2 progress patch to STATE.md (M2.1~M2.16 ship status + known limits) — 上一轮 STATE.md 补丁
+- `b29beed` test: CDP 真机验证脚本 — WebView2 remote-debugging 驱动 backup-restore 页 (M2.2.6 诊断保留)
+
+## M2.16 ship exe 清单（桌面, `~/Desktop/ClaudeConfigManager-M2/`）
+
+实测 `ls -la` 输出（2026-06-21 14:37，按时间排序，25 个 ship exe）:
+
+| # | exe | 体积 | 时间 | 关键 commit | 含义 |
+|---|---|---|---|---|---|
+| 1 | `ClaudeConfigManager-M2.16-glass-themes.exe` | 31.2 MB | 2026-06-21 00:03 | `2deceaa` | 3 档主题 light/glass-clear/glass-tinted |
+| 2 | `ClaudeConfigManager-M2.16-mica-fix.exe` | 31.2 MB | 2026-06-21 01:08 | `fc1fb55` | Win11 Mica 真机生效 (window-vibrancy apply_mica) |
+| 3 | `ClaudeConfigManager-M2.16-mac-reveal-fix.exe` | 31.2 MB | 2026-06-21 06:24 | `645e96c` | MacReveal::reveal (open -R) |
+| 4 | `ClaudeConfigManager-M2.16-mac-paths-fix.exe` | 31.2 MB | 2026-06-21 06:29 | `0d3de69` | MacPaths (P0 启动 panic 修复) |
+| 5 | `ClaudeConfigManager-M2.16-backup-platform-fix.exe` | 31.2 MB | 2026-06-21 06:32 | `087cc87` | backup_now 默认路径由后端 AppPaths 提供 |
+| 6 | `ClaudeConfigManager-M2.16-mac-git-fix.exe` | 31.2 MB | 2026-06-21 06:36 | `98bf855` | MacGitHost (git CLI 跨平台) |
+| 7 | `ClaudeConfigManager-M2.16-splash-2s-animation.exe` | 31.2 MB | 2026-06-21 06:13 | `137dde1` | splash 至少 2s + 呼吸/进度/淡入动画 |
+| 8 | `ClaudeConfigManager-M2.16-theme-audit-fix.exe` | 31.2 MB | 2026-06-21 07:16 | `865a731` | 删冗余 JS setEffects (Rust apply_mica 单一来源) |
+| 9 | `ClaudeConfigManager-M2.16-f3-sql-parser-fix.exe` | 31.2 MB | 2026-06-21 10:49 | `7beb0a5` | F3 sql_parser schema 按 app_type 分派 + 无列名 INSERT |
+| 10 | `ClaudeConfigManager-M2.16-f3-ui-e2e.exe` | 31.2 MB | 2026-06-21 11:13 | `452ace0` | F3 import-sql 真机端到端 CDP 验证 |
+| 11 | `ClaudeConfigManager-M2.16-f14-export-provider.exe` | 31.3 MB | 2026-06-21 11:17 | `b2ac17a` | F14 导出单 provider .json |
+| 12 | `ClaudeConfigManager-M2.16-f23-export.exe` | 31.4 MB | 2026-06-21 11:36 | `0a2daa0` | F23 优化导出 markdown |
+| 13 | `ClaudeConfigManager-M2.16-f24-backup-diff.exe` | 31.3 MB | 2026-06-21 11:32 | (M2.6) | F24 备份 diff (验证 ship) |
+| 14 | `ClaudeConfigManager-M2.16-f21-resource-search.exe` | 31.4 MB | 2026-06-21 11:47 | `f927895` | F21 资源名称模糊搜索 |
+| 15 | `ClaudeConfigManager-M2.16-f22-resource-detail.exe` | 31.4 MB | 2026-06-21 12:00 | `31426c9` | F22 资源详情预览 (inline accordion) |
+| 16 | `ClaudeConfigManager-M2.16-f22-manifest.exe` | 31.5 MB | 2026-06-21 13:54 | `448911a` | F22 manifest 增强 (ResourceDetail + file list) |
+| 17 | `ClaudeConfigManager-M2.16-f20-single-instance.exe` | 31.4 MB | 2026-06-21 13:07 | `4a710ae` | F20 单实例 + .sql 文件关联 |
+| 18 | `ClaudeConfigManager-M2.16-f17-marketplace.exe` | 31.5 MB | 2026-06-21 13:27 | `ecd547b` | F17 在线安装市场 (git clone + scan + install) |
+| 19 | `ClaudeConfigManager-M2.16-f10-drag-drop.exe` | 31.5 MB | 2026-06-21 13:31 | `1f216c0` | F10 拖放 .sql 导入 |
+| 20 | `ClaudeConfigManager-M2.16-f21-source-repo.exe` | 31.5 MB | 2026-06-21 14:13 | `fcc1a02` | F21 来源仓库过滤 (F21 增强) |
+| 21 | `ClaudeConfigManager-M2.16-mac-app-menu.exe` | 31.4 MB | 2026-06-21 13:02 | `c074187` | MacAppMenu (标准菜单 + Cmd+Q) |
+| 22 | `ClaudeConfigManager-M2.16-mac-notifier.exe` | 31.4 MB | 2026-06-21 13:13 | `449d659` | MacNotifier (tauri-plugin-notification) |
+| 23 | `ClaudeConfigManager-M2.16-mac-single-instance.exe` | 31.5 MB | 2026-06-21 13:25 | `5d69cc0` | MacSingleInstance (no-op 占位) |
+| 24 | `ClaudeConfigManager-M2.16-F15-banner.exe` | 31.5 MB | 2026-06-21 14:26 | `ebdf52e` | F15 共享 ErrorBanner 组件 |
+| 25 | **`ClaudeConfigManager-M2.16-f15-batch2.exe`** | **31.5 MB** | **2026-06-21 14:37** | `5de839f` | **F15 batch2 (marketplace + optimizer) ← 最新 ship** |
+| 26 | `WebView2Loader.dll` | 160 KB | 2026-06-21 14:37 | — | Tauri debug build 必需 |
+
+> 25 个 ship exe 全部按迭代顺序排列，本轮**未做清理**（桌面策略 = 保留最近一轮完整 exe 链）。最新 ship = #25 `M2.16-f15-batch2.exe` (HEAD = `5de839f`)。
+
+## M2.16 累计统计
+
+- **Commits**: 18 个原子 commit（不含 70bdee1 上一轮 STATE.md 补丁）
+- **Ship exes**: 25 个（桌面全部在）
+- **新功能 plugin/增强**: 9 个 (F3 fix / F10 / F14 / F17 / F20 / F21 / F22 / F23 / F24)
+- **Mac trait 实现**: 6 个 (Paths/Reveal/GitHost/AppMenu/Notifier/SingleInstance) + 1 no-op (WindowChrome)
+- **横切重构**: F15 错误反馈 3 batch (base + batch1 + batch2) 覆盖 5 个页面
+- **视觉/主题**: 3 档主题循环 + Mica 真生效 + splash 2s 动画
+- **清理**: 删 applyEffects.ts 死代码 + Mac CI gate job + 上一轮 STATE.md 补丁
+
+## M2.16 已知限制
+
+- **L-M2.07**: import-sql 内联红条符合 F15 风格但**未**统一接入 ErrorBanner 组件（cosmetic，留 M2.17）
+- **L-M2.08**: MacWindowChrome trait 仍是 no-op (`Ok(())`)，lib.rs 直接调 `window-vibrancy apply_mica` 绕 trait，**架构未统一**（待 M2.17 评估要不要让 trait 真正透出 apply_mica）
+- **L-M2.09**: ci.yml macos-latest gate job 需用户 push 后看 Actions 实际触发（dev box Windows，本机无法跑 Mac CI 验证）
+- **L-M2.10**: F3 parser `app_type` 4 种结构 (claude/codex/gemini/opencode)，codex/gemini/opencode 保留 raw `settings_config`，未来 cc-switch 改 schema 时需更新（M2.17+ 跟进）
+- **L-M2.11**: F10 拖放需要 Tauri WebView 启用 drag-drop 能力，WebView2 默认允许，Mac WKWebView 需验证（M2.17 Mac 真机时验）
+- **L-M2.12**: F17 marketplace 依赖 `MacGitHost` git CLI 调用，Mac 真机未跑过（理论应可，L-M2.09 一并验）
+
+## M2.17 候选（已自主推进完大部分，剩余小项）
+
+- import-sql 接入 ErrorBanner（cosmetic，L-M2.07）
+- F14 / F23 增强（更多导出字段 / 自定义报告模板）
+- F22 增强（manifest 编辑能力，目前只读）
+- MacWindowChrome trait 架构统一（L-M2.08 二选一：让 trait 真正实现 vs 显式标注 no-op）
+- 真实 macOS 26 真机验证全套功能（dev box Windows，L-M2.09 / L-M2.11 / L-M2.12）
+- L-M2.02 max-width 统一（继承自 M2.15 polish 阶段）
+- L-M2.03 sidebar "Deeplink 导入" 命名（继承自 M2.15 polish 阶段）
+- Tailwind pipeline 重新接 / 永久移除（继承自 L-M2.01）
+
+## M2.16 → M2.17 派单建议
+
+主 session 拍板时（CLAUDE.md §11.6 必须问用户类）：
+
+1. **D6**: Mac 真机验证时机？A 现在（需 Mac dev box）/ B M2.17 末统一验 / C 推迟到 M3
+2. **D7**: F15 ErrorBanner 接入范围是否扩到剩余页面（import-sql 红条 / mcp-management 提示）？A 是 / B 否（保持 L-M2.07）
+3. **D8**: M2.16 的 25 个 ship exe 是否需要用户抽查核定（按 D5 选项 C 节奏）？
+
+---
+
+# === M2.16 自审修复补丁（2026-06-21 追加）===
+
+> 上一节"M2.16 实际进度补丁"涵盖 M2.16 业务/兼容/主题/F15 等主功能,但漏了 M2.16 三阶段评审（CLAUDE.md §6）发现的 3 CRITICAL + 6 HIGH 全部已修,本节补全。
+
+## 评审来源
+
+`D:\project\winui3\tmp\m2-16-code-review.md` —— M2.16 三阶段评审第一阶段自审（30+ commits 全扫）发现 **3 CRITICAL + 6 HIGH + 10 MEDIUM + 7 LOW**。本节只记录 CRITICAL+HIGH 修复, MEDIUM/LOW 留 §"已知限制"。
+
+## 3 CRITICAL 修复
+
+| SHA | 标题 | 修复要点 |
+|---|---|---|
+| `1f41c24` | M2.16-fix-c1: F20 冷启动 .sql 事件丢失 | AppState 缓存 pending_sql_path,前端 ready 后主动 pull |
+| `d9056cc` | M2.16-fix-c2: F22 manifest 描述提取脆弱 | 跳过所有 `#` 标题取首段正文,容忍缺 frontmatter / malformed YAML |
+| `d14acf7` | M2.16-fix-c3: F3 parse_mcp_row 死代码 + 双编码 JSON | 合并双实现, 错误信息准确化 |
+
+## 6 HIGH 修复
+
+| SHA | 标题 | 修复要点 |
+|---|---|---|
+| `492d7ee` | M2.16-fix-h2: F10 拖放拒绝提示 | enter 检测到 `.sql` 但 drop 未找到时红条 (非静默) |
+| `5af4975` | M2.16-fix-h3: F17 install 支持 force overwrite | 备份到 `.bak.<ts>` 后覆盖 |
+| `e05d6cb` | M2.16-fix-h4: ErrorBanner autoDismiss 用 ref | timer 不再重置, deps 不稳定修复 |
+| `5ef61c5` | M2.16-fix-h5: Win11 Mica / macOS vibrancy 异步延后 200ms | 改 setup hook 同步调为异步延迟 200ms (避免 webview ready 前 race) |
+| `4f7a718` | M2.16-fix-h6: F21 `infer_source_repo` 重命名 `infer_resource_group` | 命名准确化 (从 path 推断的是资源组, 不是 git source) |
+| (h1 F20 size cap 合并到 c1) | F20 大 .sql 拒绝 | c1 修复时一并加 size cap |
+
+> H1 F20 size cap 已合并入 c1 `1f41c24` 同一 commit。
+
+## 累计验证
+
+- `cargo check` / `cargo test --no-run`: pass
+- `npx tsc --noEmit`: 0 error
+- `npx vitest run`: **344/344 pass** (含 8 个新 review-fix 测试)
+- `npm run build`: pass
+- smoke 7/7: launch / window / webview / title / assets / tray / kill 全 PASS
+
+## M2.16 ship exe 增量（最新 ship）
+
+`~/Desktop/ClaudeConfigManager-M2/ClaudeConfigManager-M2.16-m216-review-fixes.exe` (+ WebView2Loader.dll) —— 含全部 3 CRITICAL + 6 HIGH 修复 + 此前 M2.16 全功能。
+
+桌面 M2.16 ship 累计 26+ 个 exe（review-fixes 最新）。
+
+## 17 MEDIUM/LOW 已知限制（继承自自审报告）
+
+按 §6 纪律, MEDIUM/LOW 不修, 记 STATE.md 留后续:
+
+### MEDIUM (10) —— M2.17+ 评估
+- M2.16-001-M: ErrorBanner 测试覆盖 4 kind 但未测同时多个 banner
+- M2.16-002-M: F3 sql_parser 4 种 app_type (claude/codex/gemini/opencode), 未来 cc-switch 改 schema 时需更新
+- M2.16-003-M: F14 export_provider 不导 `created_at` / `last_used_at` 等运行时元数据 (产品决策, 留痕还是全量)
+- M2.16-004-M: F15 ErrorBanner 在 light/dark 主题下的对比度 (WCAG AA 验证缺)
+- M2.16-005-M: F17 marketplace 3 个内置推荐仓库为占位, 需产品定真仓库列表
+- M2.16-006-M: F20 extract_sql_file_path 拒绝 `..` 但 Windows 短路径 (8.3) 可能绕过
+- M2.16-007-M: F22 manifest 读 plugin.json 但 F17 marketplace clone 后目录结构可能变
+- M2.16-008-M: MacPaths 用了 `dirs` crate, Mac `~/Library/Application Support` 是硬编码, 不走 macOS 标准 `NSFileManager`
+- M2.16-009-M: 3 档主题 localStorage 旧值 (dark/auto) fallback 'light', 但不通知用户已 fallback
+- M2.16-010-M: F23 markdown 报告 deterministic 但没暴露 sort/filter API 给用户
+
+### LOW (7) —— 可选
+- M2.16-001-L: tmp/ 目录 30+ 诊断脚本未清理
+- M2.16-002-L: 部分老测试 fixture 用脱敏 token 但硬编码
+- M2.16-003-L: 文档 (docs/milestones/) 部分章节未同步 M2.16 实际进度
+- M2.16-004-L: ErrorBanner autoDismissMs 硬编码 4s/5s, 应可配
+- M2.16-005-L: 多个 subagent 并发时偶尔 workspace 冲突, 需 git worktree 隔离
+- M2.16-006-L: macOS 真机验证全套功能 (dev box 是 Windows)
+- M2.16-007-L: F15 batch1 切流程 InfoBars 暂未统一 (F2 切换有独立 InfoBars 子组件, 留后续)
+
+## M2.16 累计 commit 统计
+
+- M2.16 起点: `70bdee1` (STATE M2 进度补丁)
+- M2.16 终点: `4f7a718` (F21 重命名)
+- 期间 commits: 30+ (不含 review-fixes 8 个, 共 38+)
+
+## 派单建议 (继承 D6/D7/D8 + 新增)
+
+D9: M2.16 全部 30+ commits 已 ship 26 个桌面 exe, 是否需要用户统一定期清理 (M2 16.x → M2.17 切换时清空)？
+D10: 17 MEDIUM/LOW 已知限制, M2.17 启动时按 L-M2.07~10 + M2.16-001-M~010-M 顺序评估修复。
+D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。

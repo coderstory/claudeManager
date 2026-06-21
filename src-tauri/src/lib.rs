@@ -312,16 +312,44 @@ pub fn run() {
                     }
 
                     // 第二步：窗口层 backdrop。
+                    //
+                    // M2.16 决定性验证（纯红壁纸 + CDP captureScreenshot + CopyFromScreen
+                    // 像素采样）实测结论：
+                    //   - apply_mica / apply_acrylic 在 Tauri v2 tao + WebView2 +
+                    //     transparent:true + decorations:false 配置下**无视觉效果**。
+                    //   - CDP Page.captureScreenshot 显示 webview 内 rgba(0,0,0,0) 渲染
+                    //     为黑色(透明),但 CopyFromScreen 拿到 R246/G246/B246 近白 ——
+                    //     DWM 合成路径下 webview 后面是白色,不是壁纸(红色)。
+                    //   - 根因 1: Tauri 官方文档明确 "Windows: alpha channel is ignored"
+                    //     (docs.rs/tauri → Window::set_background_color)。set_background_
+                    //     color(Some(Color(0,0,0,0))) 的 alpha=0 被忽略,webview 背景被
+                    //     设成不透明 RGB(0,0,0) → 盖住一切。
+                    //   - 根因 2: tao 在 decorations:false + transparent:true 下创建的
+                    //     host HWND 用 layered window 实现透明,layered window 不参与
+                    //     DWM Mica/Acrylic backdrop 合成(tao#72)。apply_mica 设
+                    //     DWMWA_SYSTEMBACKDROP_TYPE=2 属性成功,但被 layered 窗口的白色
+                    //     填充盖住。
+                    //   - 方案 A (decorations:true) 实测也不生效:窗口仍是 R246/G246/B246,
+                    //     壁纸红色透不出(0.7% red ratio)。
+                    //   - 方案 B (Acrylic + 显式 tint, alpha 80/200) 实测也不生效:
+                    //     alpha 改 80 vs 200 像素无变化,Acrylic tint 被白色 host 盖住。
+                    //
+                    // 最终方案 C (诚实 CSS 模拟):
+                    //   - 保留 apply_mica 调用(无害,某些 tao 版本/驱动可能生效,且 macOS
+                    //     vibrancy 路径独立有效)。
+                    //   - 不再依赖 OS Mica/Acrylic 作为 glass 主题的唯一背景。
+                    //   - tokens.css 的 glass-clear/glass-tinted 改为"近不透明瓷白 +
+                    //     backdrop-filter 模拟磨砂",透不出壁纸但有"瓷白玻璃"视觉。
+                    //   - 这是诚实方案:不是真 Mica(透壁纸),是 CSS 磨砂瓷白。用户真机
+                    //     看到的是"瓷白磨砂窗口",不是"透明玻璃透壁纸"。
+                    //   - macOS vibrancy 路径保持不变(NSVisualEffectMaterial::Sidebar 在
+                    //     macOS 真机有效)。
                     #[cfg(target_os = "windows")]
                     {
-                        // 先试 Mica（Win11 22000+）。失败 fallback Acrylic（Win10/11 通用）。
+                        // apply_mica 保留(可能在未来 tauri/tao 修复后生效,且对 DWM 属性
+                        // 设置无害)。失败不阻断。
                         if let Err(e) = window_vibrancy::apply_mica(&window_for_effect, None) {
-                            log::warn!("[M2.16] apply_mica failed (Mica backdrop not applied): {e}");
-                            if let Err(e2) = window_vibrancy::apply_acrylic(&window_for_effect, None) {
-                                log::warn!("[M2.16] apply_acrylic fallback also failed: {e2}");
-                            } else {
-                                log::info!("[M2.16] apply_acrylic fallback applied (Mica unsupported, using Acrylic)");
-                            }
+                            log::warn!("[M2.16] apply_mica returned Err (Mica backdrop attribute not set, CSS fallback will be used): {e}");
                         }
                     }
                     #[cfg(target_os = "macos")]
