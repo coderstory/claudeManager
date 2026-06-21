@@ -35,10 +35,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
-  AlertCircle,
   Archive,
   ArrowLeftRight,
-  CheckCircle2,
   FileWarning,
   History,
   RotateCcw,
@@ -61,6 +59,7 @@ import {
   formatSize,
   sourceLabel,
 } from '../../types/backup';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 // ---------------------------------------------------------------------------
 // Page state
@@ -331,36 +330,16 @@ export default function BackupRestorePage(): ReactElement {
         </span>
       </div>
 
-      {/* InfoBar */}
+      {/* InfoBar — M2.16 改造 (F15): 内部用共享 ErrorBanner。
+          保留对外 testid `backup-message` (测试 + e2e 依赖)。
+          不传 onDismiss (原实现也是持久化,直到下次操作覆盖); ErrorBanner 的 ✕ 按钮因此不渲染。 */}
       {state.message && (
-        <div
-          data-testid="backup-message"
-          data-message-kind={state.message.kind}
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 4,
-            background:
-              state.message.kind === 'success'
-                ? 'rgba(56, 142, 60, 0.08)'
-                : 'rgba(211, 47, 47, 0.08)',
-            color:
-              state.message.kind === 'success'
-                ? 'var(--success)'
-                : 'var(--danger)',
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          {state.message.kind === 'success' ? (
-            <CheckCircle2 size={14} />
-          ) : (
-            <AlertCircle size={14} />
-          )}
-          <span>{state.message.text}</span>
-        </div>
+        <ErrorBanner
+          kind={state.message.kind}
+          message={state.message.text}
+          testId="backup-message"
+          style={{ marginBottom: 12 }}
+        />
       )}
 
       <div

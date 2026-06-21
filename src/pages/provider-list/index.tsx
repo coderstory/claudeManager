@@ -36,6 +36,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { listProviders, switchProvider, exportProvider } from '../../lib/api/providers';
 import type { Provider } from '../../types/provider';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 type LoadState =
   | { kind: 'loading' }
@@ -258,6 +259,9 @@ function InfoBars({ switchState, onDismiss }: InfoBarsProps): ReactElement | nul
  *
  * 自动消失:成功 4s,失败 5s(比切换的成功 3s 略长,因为路径需要阅读)。
  * cancelled 立即回 idle(无 UI),不设 timer。
+ *
+ * M2.16 改造 (F15): 内部用共享 ErrorBanner 实现,保留外部
+ * testid `provider-export-{kind}-bar`(原有测试 + e2e 都依赖)。
  */
 interface ExportInfoBarProps {
   exportState: ExportState;
@@ -281,32 +285,20 @@ function ExportInfoBar({ exportState, onDismiss }: ExportInfoBarProps): ReactEle
     return null;
   }, [exportState]);
 
-  useEffect(() => {
-    if (!bar) return;
-    const ms = bar.kind === 'success' ? 4000 : 5000;
-    const t = window.setTimeout(onDismiss, ms);
-    return () => window.clearTimeout(t);
-  }, [bar, onDismiss]);
+  // 成功 4s,失败 5s。ErrorBanner 内部走 useEffect + setTimeout,
+  // 这里只需要把毫秒数透传过去即可,不再自己 setTimeout。
+  const autoDismissMs = bar?.kind === 'success' ? 4000 : bar ? 5000 : undefined;
 
   if (!bar) return null;
-  const color = bar.kind === 'success' ? 'var(--success)' : 'var(--danger)';
   return (
-    <div
-      data-testid={`provider-export-${bar.kind}-bar`}
-      role="status"
-      style={{
-        background: 'var(--bg-elevated)',
-        border: `1px solid ${color}`,
-        color: 'var(--text-primary)',
-        padding: 'var(--space-2) var(--space-3)',
-        borderRadius: 'var(--radius-button)',
-        marginBottom: 'var(--space-3)',
-        fontSize: 'var(--fs-body)',
-        wordBreak: 'break-all',
-      }}
-    >
-      {bar.text}
-    </div>
+    <ErrorBanner
+      kind={bar.kind}
+      message={bar.text}
+      onDismiss={onDismiss}
+      autoDismissMs={autoDismissMs}
+      testId={`provider-export-${bar.kind}-bar`}
+      style={{ marginBottom: 'var(--space-3)' }}
+    />
   );
 }
 
