@@ -53,5 +53,16 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     // Run startup hooks on every plugin.
     host.init_all(ctx)?;
 
+    // M2.17 — observability for the wiring step. tauri-plugin-log
+    // captures this via the `log` facade and writes to a per-app log
+    // file; operators can grep for the marker to confirm 12 plugins
+    // were registered at this process. Per-plugin id is logged so a
+    // broken registration (missing import) shows up as an absent line.
+    log::info!(
+        "[M2.17] PluginHost wired: {} plugins registered: {:?}",
+        host.count(),
+        host.iter().map(|(id, _)| id).collect::<Vec<_>>()
+    );
+
     Ok(host)
 }

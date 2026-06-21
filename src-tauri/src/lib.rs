@@ -4,9 +4,10 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Emitter, Manager,
+    Emitter, Manager, RunEvent,
 };
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 pub mod app_state;
 pub mod commands;
@@ -17,6 +18,7 @@ pub mod plugins;
 pub mod services;
 
 use crate::app_state::AppState;
+use crate::plugins::{init_all, PluginContext, PluginHost};
 
 /// F20 — 从启动 argv 中提取 `.sql` 文件绝对路径。
 ///
@@ -169,6 +171,37 @@ pub fn run() {
             // The bug shipped in M2.1 + M2.2; this commit fixes it.
             let state = AppState::build();
             app.manage(state);
+
+            // M2.17 — wire the 12 plugin stubs into the running app.
+            //
+            // M1.3 created `plugins::init_all` (registers the 12 stubs and
+            // runs their `init`) but never wired it from `lib.rs::run`. As
+            // a result the PluginHost existed only on paper: it was never
+            // constructed at runtime, the `init` hooks never fired, and
+            // `shutdown_all` was never reachable. M2.x business logic
+            // (F1~F24) lives in `services/` + `commands/`, not in plugin
+            // `init` hooks, so this is purely the "let the architecture
+            // match the spec" step — no business behaviour changes.
+            //
+            // Why `Mutex<PluginHost>` (vs. plain `PluginHost`):
+            // - Tauri's `State<T>` derefs to `&T`; we cannot `&mut` a
+            //   managed value from the run-event callback. `Mutex` gives
+            //   us `&mut` interior mutability for `shutdown_all`.
+            // - The host is constructed once in `setup` and only
+            //   mutated on app exit — no contention in practice.
+            //
+            // `PluginContext` holds `&AppHandle` for plugins that need to
+            // register Tauri commands / events during `init`. None of the
+            // M2.17 stubs use it (they're no-op), but the type is wired
+            // correctly for future plugins.
+            // `platform::runtime::paths()` returns an owned `Box<dyn
+            // IPlatformPaths>`; bind it to a let so the borrow inside
+            // `PluginContext::new` outlives the call.
+            let paths_impl = platform::runtime::paths();
+            let plugin_ctx = PluginContext::new(app.app_handle(), &*paths_impl);
+            let host = init_all(&plugin_ctx)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            app.manage(Mutex::new(host));
 
             // M2.3 — F4 deeplink plugin 事件桥接
             //
@@ -388,8 +421,30 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // M2.17 — call `shutdown_all` on the PluginHost when the
+            // app is exiting. Stubs are no-op today, but the wiring
+            // path is now real: future plugins that allocate in
+            // `init` can release in `shutdown`.
+            //
+            // `RunEvent::Exit` fires after `ExitRequested` (when not
+            // prevented). Tauri's `State` API exposes only `&T`, so we
+            // hold the host behind `Mutex` and lock here. A poisoned
+            // mutex (a panic inside `shutdown_all`) is intentionally
+            // ignored — the process is exiting anyway, the next step
+            // is OS cleanup.
+            if matches!(event, RunEvent::Exit) {
+                if let Some(state) = app_handle.try_state::<Mutex<PluginHost>>() {
+                    if let Ok(mut host) = state.lock() {
+                        if let Err(e) = host.shutdown_all() {
+                            log::error!("[M2.17] PluginHost shutdown_all failed: {e}");
+                        }
+                    }
+                }
+            }
+        });
 }
 
 // ---------------------------------------------------------------------------
