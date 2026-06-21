@@ -75,6 +75,50 @@ pub async fn write_file_atomic(
         .map_err(|e| format!("写入失败 {}: {}", resolved.display(), e))
 }
 
+/// F20 — 读取任意路径的 `.sql` 文件内容(文件关联双击导入用)。
+///
+/// 与 `read_file` 的区别:`read_file` 的安全作用域是 `~/.claude/`
+/// (F5 JSON 编辑器用),而 F20 的 `.sql` 文件来自文件管理器双击
+/// (任意路径:桌面 / 下载 / U 盘等)。这里做两层校验:
+///   1. 扩展名必须是 `.sql`(大小写不敏感,拒绝 .exe / .json 等)
+///   2. 路径不含 `..` 组件(防目录穿越)
+/// 不做 `~/.claude/` 作用域限制,因为用户双击的 `.sql` 可能在任何位置。
+///
+/// 返回 UTF-8 字符串内容,供前端调 `parse_sql_preview` 走 F3 既有流程。
+#[tauri::command]
+pub async fn read_sql_file(path: String) -> CmdResult<String> {
+    // 空路径是前端 bug — 直接拒绝
+    if path.trim().is_empty() {
+        return Err("路径为空".into());
+    }
+
+    let user_path = PathBuf::from(&path);
+
+    // 拒绝 `..` 目录穿越(与 read_file 的安全策略一致)
+    for component in user_path.components() {
+        if matches!(component, Component::ParentDir) {
+            return Err(format!(
+                "路径含 '..',拒绝(安全策略): {}",
+                user_path.display()
+            ));
+        }
+    }
+
+    // 扩展名必须是 .sql(大小写不敏感)
+    match user_path.extension().and_then(|e| e.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("sql") => {}
+        _ => {
+            return Err(format!(
+                "仅支持 .sql 文件: {}",
+                user_path.display()
+            ));
+        }
+    }
+
+    std::fs::read_to_string(&user_path)
+        .map_err(|e| format!("读取失败 {}: {}", user_path.display(), e))
+}
+
 /// Resolve a user-supplied path against the security scope.
 ///
 /// Rules:

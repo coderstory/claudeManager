@@ -347,3 +347,107 @@ describe('ImportSqlPage — F3 reset flow', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// F20 — initialFilePath 自动加载(文件关联双击 .sql)
+// ---------------------------------------------------------------------------
+
+describe('ImportSqlPage — F20 initialFilePath auto-load', () => {
+  it('initialFilePath set → auto-reads + parses → shows preview', async () => {
+    // read_sql_file 返回内容,parse_sql_preview 返回 preview
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_sql_file') return 'INSERT INTO providers ...';
+      if (cmd === 'parse_sql_preview') return samplePreview();
+      return undefined;
+    });
+
+    render(<ImportSqlPage initialFilePath="C:\\Users\\test\\dump.sql" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('import-sql-stat-importable').textContent).toContain(
+      '3',
+    );
+    // 文件名从绝对路径提取后显示在 UI
+    expect(screen.getByText('dump.sql')).toBeInTheDocument();
+    // 确认调了 read_sql_file + parse_sql_preview
+    const calls = mockInvoke.mock.calls.map((c) => c[0]);
+    expect(calls).toContain('read_sql_file');
+    expect(calls).toContain('parse_sql_preview');
+  });
+
+  it('initialFilePath null → idle state (no auto-load)', () => {
+    render(<ImportSqlPage initialFilePath={null} />);
+    expect(screen.getByTestId('import-sql-idle')).toBeInTheDocument();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('initialFilePath undefined → idle state (no auto-load)', () => {
+    render(<ImportSqlPage />);
+    expect(screen.getByTestId('import-sql-idle')).toBeInTheDocument();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('read_sql_file rejects → error view with message', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_sql_file') {
+        throw new Error('仅支持 .sql 文件: C:\\test\\dump.txt');
+      }
+      return undefined;
+    });
+
+    render(<ImportSqlPage initialFilePath="C:\\test\\dump.txt" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('import-sql-error').textContent).toMatch(
+      /仅支持 .sql 文件/,
+    );
+  });
+
+  it('parse_sql_preview rejects → error view with message', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_sql_file') return 'garbage';
+      if (cmd === 'parse_sql_preview') {
+        throw new Error('not valid utf-8');
+      }
+      return undefined;
+    });
+
+    render(<ImportSqlPage initialFilePath="C:\\test\\bad.sql" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('import-sql-error').textContent).toMatch(
+      /not valid utf-8/,
+    );
+  });
+
+  it('shows parsing status while loading', async () => {
+    // read_sql_file 永不 resolve(挂起),页面应停在 parsing 状态
+    const resolveRef: { fn: ((v: string) => void) | null } = { fn: null };
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_sql_file') {
+        return new Promise<string>((resolve) => {
+          resolveRef.fn = resolve;
+        });
+      }
+      return undefined;
+    });
+
+    render(<ImportSqlPage initialFilePath="C:\\test\\slow.sql" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-status-parsing')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('import-sql-status-parsing').textContent,
+    ).toContain('slow.sql');
+
+    // 清理:resolve 挂起的 promise 防 unhandled rejection
+    if (resolveRef.fn) resolveRef.fn('done');
+  });
+});

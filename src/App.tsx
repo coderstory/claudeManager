@@ -44,6 +44,7 @@
  */
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -59,6 +60,7 @@ import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
 import SingleFileDeployPage from './pages/single-file-deploy';
 import ResourceBrowserPage from './pages/resource-browser';
+import MarketplacePage from './pages/marketplace';
 import BackupRestorePage from './pages/backup-restore';
 import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -145,6 +147,48 @@ export default function App(): ReactElement {
   // Esc closes. Kept in App.tsx (rather than in a store) because
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+
+  // F20 — 文件关联 .sql 路径(双击 .sql 启动 / 第二实例转发)。
+  //
+  // 后端 lib.rs 的 single-instance callback + setup 冷启动都会 emit
+  // `import-sql-file` 事件(payload = .sql 绝对路径)。App.tsx 作为
+  // 单例生命周期持有者,在这里监听并 setPendingSqlFile + setView
+  // ('import-sql')。ImportSqlPage 收到 initialFilePath 后自动读取 +
+  // 解析该文件。
+  //
+  // 清除时机:用户离开 import-sql view 时(setView 到其他页)清空
+  // pendingSqlFile,避免下次回 import-sql 时重复加载旧文件。
+  const [pendingSqlFile, setPendingSqlFile] = useState<string | null>(null);
+
+  // F20 — 监听 import-sql-file 事件(单例 listener,app 生命周期常驻)。
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void listen<string>('import-sql-file', (event) => {
+      const path = event.payload;
+      if (typeof path === 'string' && path.length > 0) {
+        setPendingSqlFile(path);
+        setView('import-sql');
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return (): void => {
+      if (unlisten) unlisten();
+    };
+  }, [setView]);
+
+  // F20 — 离开 import-sql view 时清空 pendingSqlFile。
+  //
+  // 设计:不清空会导致用户回到 import-sql 页时 ImportSqlPage 的
+  // initialFilePath 仍是旧路径,但 useEffect 依赖不变不会重载(无
+  // 副作用)。不过清空更干净——用户手动回页时看到的是 idle 状态,
+  // 而不是"莫名其妙又加载了一遍旧文件"。只在 view 从 import-sql
+  // 切走时清,不干扰初次进入。
+  useEffect(() => {
+    if (view !== 'import-sql') {
+      setPendingSqlFile(null);
+    }
+  }, [view]);
 
   // M2.16+ splash — 淡出 index.html 里的内联加载屏。
   // 用户明确要求 splash 至少展示 2s，并配好看的动画效果。
@@ -350,7 +394,7 @@ export default function App(): ReactElement {
             ) : view === 'provider-switch' ? (
               <ProviderSwitchPage />
             ) : view === 'import-sql' ? (
-              <ImportSqlPage />
+              <ImportSqlPage initialFilePath={pendingSqlFile} />
             ) : view === 'deeplink-import' ? (
               <DeeplinkImportPage />
             ) : view === 'json-editor' ? (
@@ -363,6 +407,8 @@ export default function App(): ReactElement {
               <SingleFileDeployPage />
             ) : view === 'resource-browser' ? (
               <ResourceBrowserPage />
+            ) : view === 'marketplace' ? (
+              <MarketplacePage />
             ) : view === 'optimizer' ? (
               <OptimizerPage />
             ) : view === 'backup-restore' ? (

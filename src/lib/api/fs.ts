@@ -55,3 +55,28 @@ export function readFile(path: string): Promise<string> {
 export function writeFileAtomic(path: string, content: string): Promise<void> {
   return invoke<void>('write_file_atomic', { path, content });
 }
+
+// ---------------------------------------------------------------------------
+// F20 — 文件关联 .sql 读取 (M2.16)
+// ---------------------------------------------------------------------------
+
+/**
+ * F20 — 读取任意路径的 `.sql` 文件内容(文件关联双击导入用)。
+ *
+ * 与 `readFile` 的区别:`readFile` 的安全作用域是 `~/.claude/`(F5 JSON
+ * 编辑器用),而 F20 的 `.sql` 文件来自文件管理器双击(任意路径:桌面 /
+ * 下载 / U 盘等)。后端 `read_sql_file` 做两层校验:
+ *   1. 扩展名必须是 `.sql`(大小写不敏感)
+ *   2. 路径不含 `..` 组件(防目录穿越)
+ *
+ * 调用场景:App.tsx 收到 `import-sql-file` 事件(带 .sql 绝对路径)→
+ * 跳 import-sql view → ImportSqlPage 用本函数读文件内容 → 走 F3 既有
+ * `parseSqlPreview` 流程。
+ *
+ * @param path  .sql 文件绝对路径(来自 single-instance / setup 的 argv 解析)。
+ * @returns     文件 UTF-8 字符串内容。
+ * @throws      Tauri IPC error:非 .sql 扩展名 / 含 `..` / 读取失败。
+ */
+export function readSqlFile(path: string): Promise<string> {
+  return invoke<string>('read_sql_file', { path });
+}

@@ -6,6 +6,7 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+use std::path::PathBuf;
 
 pub mod app_state;
 pub mod commands;
@@ -16,6 +17,46 @@ pub mod plugins;
 pub mod services;
 
 use crate::app_state::AppState;
+
+/// F20 — 从启动 argv 中提取 `.sql` 文件绝对路径。
+///
+/// 双击 .sql 文件时,OS 会以 `[exe, "/path/to/file.sql"]` 形式启动应用
+/// (Windows / macOS 行为一致)。single-instance callback 和 setup 冷启动
+/// 都需要这段逻辑,所以抽成纯函数便于复用 + 单测。
+///
+/// 规则:
+///   - 跳过 argv[0](exe 自身路径)
+///   - 取第一个扩展名为 `.sql`(大小写不敏感)的项
+///   - 必须是绝对路径(双击启动 OS 传绝对路径;相对路径忽略,防误触发)
+///   - 不含 `..` 组件(防目录穿越)
+///
+/// 返回 `Some(path)` 或 `None`(argv 里没有合法 .sql)。
+fn extract_sql_file_path(argv: &[String]) -> Option<String> {
+    for arg in argv.iter().skip(1) {
+        let path = PathBuf::from(arg);
+        // 必须是绝对路径(双击启动 OS 传绝对路径)
+        if !path.is_absolute() {
+            continue;
+        }
+        // 拒绝含 `..` 的路径(安全策略)
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            continue;
+        }
+        // 扩展名必须是 .sql(大小写不敏感)
+        if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("sql"))
+            .unwrap_or(false)
+        {
+            return Some(arg.clone());
+        }
+    }
+    None
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -45,6 +86,12 @@ pub fn run() {
                     let _ = app.emit("deep-link://new-url", vec![arg.clone()]);
                 }
             }
+            // F20 — .sql 文件关联单实例转发:第二实例(双击 .sql 触发)
+            // 把 .sql 绝对路径 emit 给已运行实例的前端,前端收到后跳
+            // import-sql 页 + 自动加载该文件。
+            if let Some(sql_path) = extract_sql_file_path(&argv) {
+                let _ = app.emit("import-sql-file", sql_path);
+            }
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_log::Builder::default().build())
@@ -68,6 +115,8 @@ pub fn run() {
             commands::providers::export_provider,
             commands::fs::read_file,
             commands::fs::write_file_atomic,
+            // F20 — 读取任意路径 .sql 文件(文件关联双击导入用)
+            commands::fs::read_sql_file,
             commands::mcp::list_mcp_servers,
             commands::mcp::list_mcp_servers_with_warnings,
             commands::mcp::toggle_mcp_server,
@@ -147,6 +196,17 @@ pub fn run() {
                 }
             }
 
+            // F20 — 冷启动 .sql 文件关联转发。
+            //
+            // 双击 .sql 启动应用时(进程未在跑),single-instance callback
+            // 不会触发(那是给第二实例用的),所以这里也扫一次 argv。
+            // 如果有 .sql 路径,emit 'import-sql-file' 给前端,前端收到后
+            // 跳 import-sql 页 + 自动加载该文件。
+            let cold_argv: Vec<String> = std::env::args().collect();
+            if let Some(sql_path) = extract_sql_file_path(&cold_argv) {
+                let _ = app.emit("import-sql-file", sql_path);
+            }
+
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -219,8 +279,134 @@ pub fn run() {
                 }
             }
 
+            // M2.16 — macOS 标准应用菜单（App / Edit / View / Window）。
+            //
+            // macOS 应用规范要求顶部菜单栏有标准应用菜单（About / Hide /
+            // Quit Cmd+Q 等），否则用户体验残缺（P2 审查项）。通过
+            // `IPlatformAppMenu` 抽象走 Tauri v2 menu API——macOS 上自动
+            // 渲染为 NSMenu，Windows 上 `runtime::app_menu` 返回
+            // NotSupported 不走此分支（cfg 保证）。
+            //
+            // 菜单项全用 PredefinedMenuItem，macOS 自动绑定标准快捷键与
+            // 系统行为（Cmd+Q 退出 / Cmd+H 隐藏 / Cmd+M 最小化 / WKWebView
+            // 编辑操作），无需 on_menu_event handler。
+            #[cfg(target_os = "macos")]
+            {
+                let menu = platform::runtime::app_menu(app.app_handle());
+                if let Err(e) = menu.build_app_menu() {
+                    eprintln!("[M2.16] install mac app menu failed: {e}");
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+// ---------------------------------------------------------------------------
+// F20 单元测试 — extract_sql_file_path 纯函数
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_sql_from_absolute_path() {
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "C:\\Users\\test\\dump.sql".to_string(),
+        ];
+        assert_eq!(
+            extract_sql_file_path(&argv),
+            Some("C:\\Users\\test\\dump.sql".to_string())
+        );
+    }
+
+    #[test]
+    fn extracts_sql_from_posix_absolute_path() {
+        let argv = vec![
+            "claude-config-manager".to_string(),
+            "/home/test/dump.sql".to_string(),
+        ];
+        assert_eq!(
+            extract_sql_file_path(&argv),
+            Some("/home/test/dump.sql".to_string())
+        );
+    }
+
+    #[test]
+    fn returns_none_when_no_sql_in_argv() {
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "C:\\Users\\test\\config.json".to_string(),
+        ];
+        assert_eq!(extract_sql_file_path(&argv), None);
+    }
+
+    #[test]
+    fn returns_none_for_relative_sql_path() {
+        // 相对路径忽略(双击启动 OS 传绝对路径,防误触发)
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "dump.sql".to_string(),
+        ];
+        assert_eq!(extract_sql_file_path(&argv), None);
+    }
+
+    #[test]
+    fn returns_none_for_parent_dir_traversal() {
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "C:\\Users\\test\\..\\..\\etc\\passwd.sql".to_string(),
+        ];
+        assert_eq!(extract_sql_file_path(&argv), None);
+    }
+
+    #[test]
+    fn case_insensitive_sql_extension() {
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "C:\\Users\\test\\DUMP.SQL".to_string(),
+        ];
+        assert_eq!(
+            extract_sql_file_path(&argv),
+            Some("C:\\Users\\test\\DUMP.SQL".to_string())
+        );
+    }
+
+    #[test]
+    fn skips_non_sql_args_finds_sql() {
+        // argv 里混了 ccswitch:// deeplink + --minimized flag + .sql,
+        // 应跳过非 .sql 项,返回 .sql 路径。
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "--minimized".to_string(),
+            "ccswitch://v1/import?resource=provider".to_string(),
+            "C:\\Users\\test\\providers.sql".to_string(),
+        ];
+        assert_eq!(
+            extract_sql_file_path(&argv),
+            Some("C:\\Users\\test\\providers.sql".to_string())
+        );
+    }
+
+    #[test]
+    fn returns_first_sql_when_multiple() {
+        // 多个 .sql 时取第一个(与 SPEC F20 "双击单个 .sql" 场景一致,
+        // 多个 .sql 极少见,取第一个足够)。
+        let argv = vec![
+            "claude-config-manager.exe".to_string(),
+            "C:\\a.sql".to_string(),
+            "C:\\b.sql".to_string(),
+        ];
+        assert_eq!(extract_sql_file_path(&argv), Some("C:\\a.sql".to_string()));
+    }
+
+    #[test]
+    fn empty_argv_returns_none() {
+        let argv: Vec<String> = vec!["claude-config-manager.exe".to_string()];
+        assert_eq!(extract_sql_file_path(&argv), None);
+    }
 }

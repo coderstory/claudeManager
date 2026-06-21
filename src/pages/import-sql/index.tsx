@@ -29,13 +29,14 @@
  * - **"确认导入" gating**: disabled until `importable > 0`. Re-enabled
  *   after import so the user can re-import a different file.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
 import { Database, FileWarning, FolderOpen, Upload } from 'lucide-react';
 import {
   importProvidersFromSql,
   parseSqlPreview,
 } from '../../lib/api/providers';
+import { readSqlFile } from '../../lib/api/fs';
 import type {
   ImportResult,
   ImportSkip,
@@ -66,7 +67,19 @@ type PageState =
 // Page
 // ---------------------------------------------------------------------------
 
-export function ImportSqlPage(): ReactElement {
+export interface ImportSqlPageProps {
+  /**
+   * F20 文件关联:双击 .sql 启动应用时,App.tsx 从 single-instance /
+   * setup 的 `import-sql-file` 事件收到 .sql 绝对路径,传给本页。
+   * 页面挂载时自动读取该文件并走 F3 既有 parseSqlPreview 流程。
+   * `null` / `undefined` = 无初始文件(用户从侧栏手动进页)。
+   */
+  initialFilePath?: string | null;
+}
+
+export function ImportSqlPage({
+  initialFilePath,
+}: ImportSqlPageProps = {}): ReactElement {
   const [state, setState] = useState<PageState>({ kind: 'idle' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Holds the latest preview payload across the synchronous setState
@@ -76,6 +89,40 @@ export function ImportSqlPage(): ReactElement {
     fileName: string;
     preview: SqlPreview;
   } | null>(null);
+
+  // F20 — 文件关联自动加载。
+  //
+  // 当 App.tsx 传入 initialFilePath 时(双击 .sql 启动 / 第二实例转发),
+  // 自动读取文件内容并走 parseSqlPreview,等价于用户手动点了"选择 .sql
+  // 文件"。依赖项只含 initialFilePath:路径不变时不重复加载(防 StrictMode
+  // double-invoke + 防父组件 re-render 误触发)。
+  //
+  // cleanup 设 cancelled 标志:如果路径在加载中途变了(用户再双击另一个
+  // .sql),旧请求的 setState 会被忽略,新请求接管。
+  useEffect(() => {
+    if (!initialFilePath) return;
+    let cancelled = false;
+    // 从绝对路径提取文件名(供 UI 显示)。
+    const fileName = initialFilePath.split(/[\\/]/).pop() ?? initialFilePath;
+    setState({ kind: 'parsing', fileName });
+    void (async (): Promise<void> => {
+      try {
+        const content = await readSqlFile(initialFilePath);
+        if (cancelled) return;
+        const preview = await parseSqlPreview(content);
+        if (cancelled) return;
+        handleConfirmRef.current = { content, fileName, preview };
+        setState({ kind: 'preview', fileName, preview, content });
+      } catch (err) {
+        if (cancelled) return;
+        handleConfirmRef.current = null;
+        setState({ kind: 'error', message: stringifyError(err) });
+      }
+    })();
+    return (): void => {
+      cancelled = true;
+    };
+  }, [initialFilePath]);
 
   const handlePickFile = useCallback(() => {
     fileInputRef.current?.click();
