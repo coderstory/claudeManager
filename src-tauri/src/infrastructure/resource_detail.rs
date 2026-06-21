@@ -187,7 +187,7 @@ fn read_skill_manifest(path: &Path, is_dir: bool) -> (Option<String>, Option<Val
 }
 
 /// Command:读 .md 文件,解析 frontmatter。description 取
-/// frontmatter 的 `description`,缺失则取首行正文。
+/// frontmatter 的 `description`,缺失则取首段非标题正文(best-effort)。
 fn read_markdown_manifest(path: &Path) -> (Option<String>, Option<Value>) {
     let body = match std::fs::read_to_string(path) {
         Ok(s) => s,
@@ -206,21 +206,81 @@ fn read_markdown_manifest(path: &Path) -> (Option<String>, Option<Value>) {
             });
         return (desc, Some(Value::Object(frontmatter)));
     }
-    // 无 frontmatter:取首行非空正文作为描述(best-effort)。
-    let first_line = body
-        .lines()
-        .map(|l| l.trim())
-        .find(|l| !l.is_empty() && !l.starts_with('#'));
-    if let Some(line) = first_line {
-        // 截断到 80 字符,避免详情面板被长行撑爆。
-        let desc = if line.len() > 80 {
-            format!("{}...", &line[..80])
-        } else {
-            line.to_string()
-        };
-        return (Some(desc), None);
+    // 无 frontmatter:取首个非空、非标题(`#` 开头)的段落作为描述。
+    //
+    // 真实场景里 SKILL.md / command .md 经常长这样:
+    //   # Title
+    //
+    //   Description text...
+    //
+    // 旧实现用 `find(|l| !l.is_empty() && !l.starts_with('#'))` —— 但遇到
+    // `# Title` 之后第一个非空行仍然是 `#` 开头的二级标题(如 `## Usage`),
+    // 导致返回 None,详情面板一直显示"暂无描述"。
+    //
+    // 新实现:跳过所有 `#` / `<!--` 开头行 + 空行,找到第一个真正的
+    // 段落正文(到下一个空行或 `#` 行为止)。保留 ≤ 80 字符截断。
+    let desc = extract_first_paragraph(&body);
+    if desc.is_some() {
+        return (desc, None);
     }
     (None, None)
+}
+
+/// 从 markdown body 提取第一个非标题段落正文(去首尾空白,截 80 字符)。
+///
+/// 段落定义:跳过所有 `#` / `<!--` 开头的标题 / 注释行 + 空行,直到
+/// 遇到第一个内容行。同一段落内多行用空格拼接(避免显示一堆换行)。
+/// 截断在 80 字符边界,避免详情面板被长行撑爆。
+fn extract_first_paragraph(body: &str) -> Option<String> {
+    let mut started = false;
+    let mut buf = String::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            // 段落结束:如果已开始收集,直接返回;否则继续找起点。
+            if started {
+                let trimmed_buf = buf.trim().to_string();
+                if !trimmed_buf.is_empty() {
+                    return Some(truncate_desc(&trimmed_buf));
+                }
+                return None;
+            }
+            continue;
+        }
+        // 标题 / 注释行:未开始收集时跳过,已开始后视为段落结束。
+        if trimmed.starts_with('#') || trimmed.starts_with("<!--") {
+            if started {
+                let trimmed_buf = buf.trim().to_string();
+                if !trimmed_buf.is_empty() {
+                    return Some(truncate_desc(&trimmed_buf));
+                }
+                return None;
+            }
+            continue;
+        }
+        // 真正的段落正文行。
+        started = true;
+        if !buf.is_empty() {
+            buf.push(' ');
+        }
+        buf.push_str(trimmed);
+    }
+    let trimmed_buf = buf.trim().to_string();
+    if trimmed_buf.is_empty() {
+        None
+    } else {
+        Some(truncate_desc(&trimmed_buf))
+    }
+}
+
+/// 描述文本截断到 80 字符(UTF-8 安全边界用 chars 数)。
+fn truncate_desc(s: &str) -> String {
+    if s.chars().count() > 80 {
+        let truncated: String = s.chars().take(80).collect();
+        format!("{truncated}...")
+    } else {
+        s.to_string()
+    }
 }
 
 /// LSP:读 .json 文件,description 取 `.description` 或 `.name`。
@@ -485,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    fn command_md_without_frontmatter_uses_first_line() {
+    fn command_md_without_frontmatter_uses_first_paragraph() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join("note.md");
         fs::write(&path, "# Title\nThis is the first body line.").unwrap();
@@ -493,6 +553,65 @@ mod tests {
         let (desc, manifest) = read_markdown_manifest(&path);
         assert_eq!(desc.as_deref(), Some("This is the first body line."));
         assert!(manifest.is_none());
+    }
+
+    /// M2.16 — C2 修复:无 frontmatter 时,标题(#) 后多段正文应取首段
+    /// 非标题内容,而不是简单地跳过所有 `#` 行(老逻辑遇到 `## Usage`
+    /// 这种二级标题会返回 None)。
+    #[test]
+    fn command_md_without_frontmatter_skips_subsequent_headings() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+        let body = "# My Note\n\nThis is the actual description.\n\n## Usage\n\nSome usage text.";
+        fs::write(&path, body).unwrap();
+
+        let (desc, _manifest) = read_markdown_manifest(&path);
+        assert_eq!(
+            desc.as_deref(),
+            Some("This is the actual description."),
+            "应取首个非标题段落,不是 '## Usage'"
+        );
+    }
+
+    /// M2.16 — C2 修复:纯多行段落应拼接为单行描述(空格分隔)。
+    #[test]
+    fn command_md_multiline_paragraph_joins_with_spaces() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+        let body = "# Title\n\nLine one of the description.\nLine two continues.\nLine three.";
+        fs::write(&path, body).unwrap();
+
+        let (desc, _manifest) = read_markdown_manifest(&path);
+        assert_eq!(
+            desc.as_deref(),
+            Some("Line one of the description. Line two continues. Line three.")
+        );
+    }
+
+    /// M2.16 — C2 修复:超长描述截断到 80 字符 + "..."。
+    #[test]
+    fn command_md_long_description_truncates_at_80_chars() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+        let long = "a".repeat(200);
+        fs::write(&path, format!("# Title\n\n{long}")).unwrap();
+
+        let (desc, _manifest) = read_markdown_manifest(&path);
+        let d = desc.expect("description present");
+        // chars 数 = 83 = 80 chars + "..."(3 个点)。
+        assert!(d.ends_with("..."));
+        assert_eq!(d.chars().count(), 83);
+    }
+
+    /// M2.16 — C2 修复:空文件 / 只有标题 → 返回 None。
+    #[test]
+    fn command_md_only_headings_returns_none() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+        fs::write(&path, "# Title\n\n## Subtitle\n\n### Subsub").unwrap();
+
+        let (desc, _manifest) = read_markdown_manifest(&path);
+        assert!(desc.is_none(), "只有标题应返回 None");
     }
 
     // ----- lsp (json) -----
