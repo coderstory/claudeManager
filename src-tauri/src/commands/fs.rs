@@ -115,8 +115,44 @@ pub async fn read_sql_file(path: String) -> CmdResult<String> {
         }
     }
 
+    // M2.16 — H1: 大小预检。超过 50MB 直接拒绝,避免恶意 / 误操作
+    // 文件一次性 read_to_string 卡 IO + UTF-8 校验阻塞 webview。
+    // 50MB 已远超真实 cc-switch 14MB dump 的 3.5 倍。
+    let max_bytes: u64 = 50 * 1024 * 1024;
+    match std::fs::metadata(&user_path) {
+        Ok(meta) if meta.len() > max_bytes => {
+            return Err(format!(
+                "文件过大(>50MB),请用 sqlite3 工具预处理: {}",
+                user_path.display()
+            ));
+        }
+        Ok(_) => {} // 正常大小,继续读
+        Err(e) => {
+            return Err(format!("读取失败 {}: {}", user_path.display(), e));
+        }
+    }
+
     std::fs::read_to_string(&user_path)
         .map_err(|e| format!("读取失败 {}: {}", user_path.display(), e))
+}
+
+/// M2.16 — F20 冷启动 .sql 路径取走(take 语义)。
+///
+/// `lib.rs::run` 的 setup 阶段扫描 argv 拿到 `.sql` 路径时,webview
+/// 尚未挂载、emit `import-sql-file` 会丢(broadcast 不缓存)。所以把
+/// 路径先存到 `AppState.pending_sql_file`,前端 `App.tsx` mount 后立即
+/// 调一次本命令,有路径就跳 import-sql 页 + 自动加载。
+///
+/// take 语义:读后清空,避免用户切走再切回时重复触发同一文件。
+#[tauri::command]
+pub fn take_pending_sql_file(
+    state: State<'_, AppState>,
+) -> CmdResult<Option<String>> {
+    let mut guard = state
+        .pending_sql_file
+        .lock()
+        .map_err(|e| format!("pending_sql_file lock poisoned: {e}"))?;
+    Ok(guard.take())
 }
 
 /// Resolve a user-supplied path against the security scope.

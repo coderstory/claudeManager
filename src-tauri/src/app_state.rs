@@ -11,7 +11,7 @@
 //! when running inside a Tauri command — they read `AppPaths` from state.
 //! This guarantees `ensure_dirs` was called exactly once at startup.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::platform::{runtime, AppPaths};
 
@@ -48,6 +48,16 @@ pub struct AppState {
     /// `<app_data>/marketplaces/<slug>/`, scans 5 resource kinds,
     /// copies selected resources into `~/.claude/<subdir>/`.
     pub marketplace_service: Arc<crate::services::marketplace_service::MarketplaceService>,
+    /// M2.16 — F20 冷启动 .sql 文件关联:
+    ///
+    /// setup 阶段(`lib.rs::run`)扫描 argv 时拿到 `.sql` 路径,但此时
+    /// webview 还没挂载、前端 listener 还没注册。emit `import-sql-file`
+    /// 会丢(broadcast 不缓存给晚注册的 listener)。所以把路径先存到
+    /// 这里,前端 `App.tsx` mount 后调 [`crate::commands::fs::take_pending_sql_file`]
+    /// 主动拉一次。
+    ///
+    /// 单值 + take 语义(读后清空),避免重复触发同一文件。
+    pub pending_sql_file: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -111,6 +121,8 @@ impl AppState {
             optimizer_service,
             resource_service,
             marketplace_service,
+            // M2.16 — F20 冷启动 .sql 路径缓存,初始 None。
+            pending_sql_file: Mutex::new(None),
         }
     }
 }

@@ -46,6 +46,7 @@ import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -166,6 +167,8 @@ export default function App(): ReactElement {
   const [pendingSqlFile, setPendingSqlFile] = useState<string | null>(null);
 
   // F20 — 监听 import-sql-file 事件(单例 listener,app 生命周期常驻)。
+  // 同时 mount 后调 `take_pending_sql_file` 拉取冷启动缓存的 .sql 路径
+  // (setup 阶段 webview 未挂,emit 会丢,改用 state 缓存 + 主动 pull)。
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     void listen<string>('import-sql-file', (event) => {
@@ -177,6 +180,21 @@ export default function App(): ReactElement {
     }).then((fn) => {
       unlisten = fn;
     });
+
+    // M2.16 — F20 冷启动 .sql 取走:
+    // 双击 .sql 冷启动时 RUST setup 阶段已把路径存到 AppState.pending_sql_file,
+    // 这里 mount 后主动拉一次 + 跳页 + 清空(useEffect 只跑一次,deps []).
+    void invoke<string | null>('take_pending_sql_file')
+      .then((path) => {
+        if (typeof path === 'string' && path.length > 0) {
+          setPendingSqlFile(path);
+          setView('import-sql');
+        }
+      })
+      .catch(() => {
+        // 非 Tauri 环境(测试 / 浏览器)无此命令,静默跳过。
+      });
+
     return (): void => {
       if (unlisten) unlisten();
     };

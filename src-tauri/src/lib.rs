@@ -117,6 +117,9 @@ pub fn run() {
             commands::fs::write_file_atomic,
             // F20 — 读取任意路径 .sql 文件(文件关联双击导入用)
             commands::fs::read_sql_file,
+            // M2.16 — F20 冷启动 .sql 路径取走(setup 阶段 webview 未挂,
+            // emit 会丢,改用 state 缓存 + 前端 mount 后主动拉取)。
+            commands::fs::take_pending_sql_file,
             commands::mcp::list_mcp_servers,
             commands::mcp::list_mcp_servers_with_warnings,
             commands::mcp::toggle_mcp_server,
@@ -202,15 +205,25 @@ pub fn run() {
                 }
             }
 
-            // F20 — 冷启动 .sql 文件关联转发。
+            // M2.16 — F20 冷启动 .sql 文件关联转发。
             //
             // 双击 .sql 启动应用时(进程未在跑),single-instance callback
             // 不会触发(那是给第二实例用的),所以这里也扫一次 argv。
-            // 如果有 .sql 路径,emit 'import-sql-file' 给前端,前端收到后
-            // 跳 import-sql 页 + 自动加载该文件。
+            //
+            // 历史版本在这里直接 emit 'import-sql-file',但 setup 阶段
+            // webview 还没挂载、前端 listener 还没注册,broadcast 不缓存
+            // 给晚注册的 listener —— 双击 .sql 冷启动时事件丢失,前端
+            // 永远收不到。修复:把路径缓存到 AppState.pending_sql_file,
+            // 前端 App.tsx mount 后调 `take_pending_sql_file` 主动拉。
+            // (single_instance callback 已经在进程跑起来后才触发,emit
+            // 仍然有效 —— 那里保留 emit 行为不变。)
             let cold_argv: Vec<String> = std::env::args().collect();
             if let Some(sql_path) = extract_sql_file_path(&cold_argv) {
-                let _ = app.emit("import-sql-file", sql_path);
+                if let Some(state) = app.try_state::<crate::app_state::AppState>() {
+                    if let Ok(mut guard) = state.pending_sql_file.lock() {
+                        *guard = Some(sql_path);
+                    }
+                }
             }
 
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;

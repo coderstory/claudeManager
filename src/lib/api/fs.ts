@@ -80,3 +80,22 @@ export function writeFileAtomic(path: string, content: string): Promise<void> {
 export function readSqlFile(path: string): Promise<string> {
   return invoke<string>('read_sql_file', { path });
 }
+
+// ---------------------------------------------------------------------------
+// M2.16 — F20 冷启动 .sql 路径取走(冷启动缓存)
+// ---------------------------------------------------------------------------
+
+/**
+ * M2.16 — F20 冷启动 .sql 路径取走。
+ *
+ * 双击 .sql 冷启动应用时,Rust `setup` 阶段 webview 尚未挂载,直接
+ * emit `import-sql-file` 事件会丢(broadcast 不缓存给晚注册的 listener)。
+ * 所以后端把路径先存到 `AppState.pending_sql_file`,前端 mount 后立即
+ * 调一次本命令取走。
+ *
+ * take 语义:调用一次后状态清空,避免重复触发同一文件。无路径时返回
+ * `null`。
+ */
+export function takePendingSqlFile(): Promise<string | null> {
+  return invoke<string | null>('take_pending_sql_file');
+}
