@@ -287,4 +287,91 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
       expect(msg.textContent).toContain('路径超出允许范围');
     });
   });
+
+  // -----------------------------------------------------------------
+  // 清单 20 — 4 scenario InfoBar copy
+  // Backend returns strings prefixed by `classify_io_error` category
+  // word ("文件不存在" / "无权限" / "编码错误" / "I/O 失败"). The
+  // page's `mapBackendError` strips the leading category for a
+  // short, focused message.
+  // -----------------------------------------------------------------
+
+  it('清单 20 scenario 1: 合法路径 → 正常加载 (no InfoBar)', async () => {
+    // Sanity: the default mock returns SAMPLE_JSON, which is a valid
+    // JSON load — InfoBar must NOT show an error.
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([SAMPLE_JSON], 'settings.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('json-editor-textarea')).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('json-editor-message')).toBeNull();
+  });
+
+  it('清单 20 scenario 2: 不存在 → InfoBar 显示"文件不存在"', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') throw new Error('文件不存在 /home/u/.claude/nope.json: No such file or directory (os error 2)');
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([''], 'nope.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() => {
+      const msg = screen.getByTestId('json-editor-message');
+      expect(msg.getAttribute('data-message-kind')).toBe('error');
+      expect(msg.textContent).toContain('读取失败');
+      expect(msg.textContent).toContain('文件不存在');
+    });
+  });
+
+  it('清单 20 scenario 3: 权限拒绝 → InfoBar 显示"无权限"', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') throw new Error('无权限 /home/u/.claude/locked.json: Access is denied. (os error 5)');
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([''], 'locked.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() => {
+      const msg = screen.getByTestId('json-editor-message');
+      expect(msg.textContent).toContain('无权限');
+    });
+  });
+
+  it('清单 20 scenario 4: 编码错误 → InfoBar 显示"编码错误,请检查文件"', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'read_file') throw new Error('编码错误 /home/u/.claude/bom.json: stream did not contain valid UTF-8');
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-editor-file-input'));
+    const file = new File([new Uint8Array([0xFF, 0xFE])], 'bom.json', { type: 'application/json' });
+    const input = screen.getByTestId('json-editor-file-input') as HTMLInputElement;
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [file], configurable: true });
+      fireEvent.change(input);
+    });
+    await waitFor(() => {
+      const msg = screen.getByTestId('json-editor-message');
+      expect(msg.textContent).toContain('编码错误');
+    });
+  });
 });

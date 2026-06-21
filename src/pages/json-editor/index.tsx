@@ -156,8 +156,10 @@ export default function JsonEditorPage(): ReactElement {
       try {
         const content = await readFile(file.name);
         // The `<input type="file">` API gives us a virtual path under
-        // `tauri://localhost/`; the Rust side rejects anything outside
-        // `~/.claude/`. The catch block surfaces the error verbatim.
+        // `tauri://localhost/`; the Rust side resolves bare filenames
+        // (清单 20 fix) into `<home>/.claude/<name>` so the scope
+        // check passes. The catch block surfaces any backend error
+        // verbatim, after light category mapping for InfoBar copy.
         const initial: PageState = {
           ...INITIAL_STATE,
           filePath: file.name,
@@ -172,10 +174,10 @@ export default function JsonEditorPage(): ReactElement {
         };
         setState(initial);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const raw = err instanceof Error ? err.message : String(err);
         setState((prev) => ({
           ...prev,
-          message: { kind: 'error', text: `读取失败: ${msg}` },
+          message: { kind: 'error', text: `读取失败: ${mapBackendError(raw)}` },
         }));
       }
     },
@@ -584,4 +586,38 @@ function toolbarBtn(): React.CSSProperties {
     fontSize: 12,
     cursor: 'pointer',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Backend error → InfoBar copy mapping (清单 20 — 4 scenarios)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a backend `read_file` / `write_file_atomic` error string to a
+ * short, user-readable Chinese message for the InfoBar.
+ *
+ * The Rust side prefixes every IO error with a category word
+ * (see `commands::fs::classify_io_error`):
+ *   - "文件不存在" → NotFound
+ *   - "无权限"      → PermissionDenied
+ *   - "编码错误"    → InvalidData / UnexpectedEof
+ *   - "I/O 失败"    → other IO errors
+ *
+ * Scope / validation errors come back unchanged (they already
+ * start with "路径…" and are human-readable).
+ *
+ * @param raw  The raw error string from the Tauri IPC reject.
+ * @returns    A short InfoBar-friendly message. The original raw
+ *             text is appended after a " · " separator so the user
+ *             can still see the OS-level detail in screenshots /
+ *             bug reports.
+ */
+function mapBackendError(raw: string): string {
+  const m = raw.match(/^(文件不存在|无权限|编码错误|I\/O 失败)\b\s*(.*)$/);
+  if (!m) {
+    // Scope / validation errors are already user-readable.
+    return raw;
+  }
+  const [, category, rest] = m;
+  return rest ? `${category} · ${rest}` : category;
 }
