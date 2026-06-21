@@ -62,10 +62,15 @@ jobs:
           cargo clippy --all-targets --no-deps -- -D warnings
 
   # ---------------------------------------------------------------------------
-  # 2. Frontend — Vitest unit tests
+  # 2. Frontend — Vitest unit tests + production build
   # ---------------------------------------------------------------------------
+  # M2.17-C1: this job is the canonical "every push must keep TS/Vite
+  # healthy" gate. We run BOTH `tsc --noEmit` (type-only, fast) AND a
+  # full `npm run build` (tsc + vite build) so that type errors AND
+  # Vite bundler errors both break the build. Vitest runs last as the
+  # final correctness check.
   test-frontend:
-    name: Frontend unit tests (windows-latest)
+    name: Frontend unit tests + build (windows-latest)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,19 +86,48 @@ jobs:
         run: npm ci
 
       - name: Type-check
+        # Fast type-only check (no JS emit). If this fails, the next
+        # `npm run build` step will also fail — kept explicit so CI logs
+        # surface the type error first.
         run: npx tsc --noEmit
 
+      - name: Production build (tsc + vite build)
+        # Runs `tsc && vite build` (see package.json "build" script).
+        # This is the same command that `tauri.conf.json`'s
+        # `build.beforeBuildCommand` runs before cargo, so a green
+        # build here implies the Tauri release build won't fail on a
+        # stale `dist/`.
+        run: npm run build
+
       - name: Run Vitest
+        # `--run` forces non-watch mode in CI.
         run: npm test -- --run
 
   # ---------------------------------------------------------------------------
   # 3. E2E — Playwright via tauri-driver
   # ---------------------------------------------------------------------------
-  # NOTE: macos-latest deferred to M1.10 (mac platform impls land in M1.x
-  # in stages — see CLAUDE.md §1 "目标平台").
+  # M2.17-C2: the e2e job is configured but currently SKIPPED
+  # (`if: ${{ false }}` on each matrix entry below) for two reasons:
+  #
+  #   1. The dev box cannot run `tauri-driver` reliably (DLL load
+  #      restrictions, see "Rust Windows dev box" reference). So we
+  #      have no green reference run to compare CI against.
+  #   2. Mac tauri-driver setup is non-trivial (codesigning, helper
+  #      bundling); defer until M2.x.
+  #
+  # When un-skipping: remove the `if:` line on each matrix entry, then
+  # verify the runner has the `tauri-driver` binary on PATH
+  # (`npm install -g @tauri-apps/tauri-driver`).
   e2e:
-    name: E2E (tauri-driver, windows-latest)
-    runs-on: windows-latest
+    name: E2E (tauri-driver, ${{ matrix.os }})
+    # TODO: dev box 无法 tauri-driver（无 wix 工具链），CI runner 需
+    # tauri-driver binary；本 job 在配置生效前 skip。
+    if: ${{ false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -104,7 +138,9 @@ jobs:
           node-version: '22.18.0'
           cache: 'npm'
 
-      - uses: msys2/setup-msys2@v2
+      - name: Install MSYS2 + MinGW windres (Windows only)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           install: >-
