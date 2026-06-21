@@ -27,7 +27,7 @@
  *   CLAUDE.md §7 不静默吞错。
  * - **repo_path 原样回传** → 前端不拼路径,避免 OS 差异 (CLAUDE.md §3.2)。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   AlertCircle,
@@ -216,9 +216,9 @@ export default function MarketplacePage(): ReactElement {
   // ---- M3.4 — 第三方仓库批量装 ----
   const handleBatchInstall = useCallback(async () => {
     if (!scanResult || selectedResourceIds.size === 0) return;
-    const url = scanResult.repo_path; // 我们重新走 URL 路径, 但 URL 不在 scanResult
-    // 这里实际 URL 我们存不到 — 重新让用户填回来更稳。
-    // 简化: 我们用 customUrl (如果 scanResult 来自 customUrl)。
+    // 重新走 URL 路径: scanResult 不直接含 URL,我们用 customUrl
+    // (如果 scanResult 来自 customUrl); 推荐源卡片的批量 install
+    // 走 handleBuiltinInstall 路径,不走这条函数。
     if (!customUrl.trim()) {
       setCloneError('批量安装需要原始 URL,请重新填入并预览');
       return;
