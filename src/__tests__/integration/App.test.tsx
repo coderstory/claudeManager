@@ -103,7 +103,9 @@ describe('App — view routing integration', () => {
     act(() => {
       screen.getByTestId('sidebar-item-marketplace').click();
     });
-    expect(screen.getByText('plugin: marketplace')).toBeInTheDocument();
+    // F17 shipped a real MarketplacePage (M2.16) — assert on its
+    // data-testid instead of the old PluginPlaceholder marker.
+    expect(screen.getByTestId('marketplace-page')).toBeInTheDocument();
 
     // Now hit "back" — should bring the home tile grid back.
     const backBtn = screen.getByTestId('app-header-back');
@@ -280,6 +282,7 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'single-file-deploy', realTestId: 'single-file-deploy-page' },
     { view: 'resource-browser', realTestId: 'resource-browser-page' },
+    { view: 'marketplace', realTestId: 'marketplace-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },
     { view: 'optimizer', realTestId: 'optimizer-page' },
   ] as const;
@@ -290,7 +293,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   // delete it from this list — the inverse assertion is what proves
   // the placeholder is no longer reachable for that view.
   const PLACEHOLDER_VIEWS: ReadonlyArray<ViewId> = [
-    'marketplace',
   ] as const;
 
   beforeEach(() => {

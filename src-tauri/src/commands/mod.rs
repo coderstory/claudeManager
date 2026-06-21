@@ -19,6 +19,7 @@ pub mod app;
 pub mod autostart;
 pub mod backup;
 pub mod fs;
+pub mod marketplace;
 pub mod mcp;
 pub mod optimizer;
 pub mod providers;

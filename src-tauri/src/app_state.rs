@@ -44,6 +44,10 @@ pub struct AppState {
     /// (plugins/skills/commands/lsp/mcp) under `<claude_dir>/` and
     /// delegates file-manager reveals to `IPlatformReveal`.
     pub resource_service: Arc<crate::services::resource_service::ResourceService>,
+    /// M2.16 — F17 在线安装 service. Clones git repos into
+    /// `<app_data>/marketplaces/<slug>/`, scans 5 resource kinds,
+    /// copies selected resources into `~/.claude/<subdir>/`.
+    pub marketplace_service: Arc<crate::services::marketplace_service::MarketplaceService>,
 }
 
 impl AppState {
@@ -84,8 +88,18 @@ impl AppState {
             .unwrap_or_else(|| paths.home.join(".claude"));
         let resource_service = Arc::new(
             crate::services::resource_service::ResourceService::new(
-                claude_dir,
+                claude_dir.clone(),
                 runtime::reveal(),
+            ),
+        );
+        // M2.16 — F17 在线安装. clone 缓存根 = `<app_data>/marketplaces/`,
+        // install 目标根 = `~/.claude/`(跟 resource_service 同源),
+        // git 走 `runtime::git_host()`(Windows: GitHostCli / macOS: MacGitHost)。
+        let marketplace_service = Arc::new(
+            crate::services::marketplace_service::MarketplaceService::new(
+                paths.marketplaces_dir.clone(),
+                claude_dir,
+                runtime::git_host(),
             ),
         );
         Self {
@@ -96,6 +110,7 @@ impl AppState {
             usage_service,
             optimizer_service,
             resource_service,
+            marketplace_service,
         }
     }
 }

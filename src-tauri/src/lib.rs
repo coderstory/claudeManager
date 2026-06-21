@@ -139,6 +139,10 @@ pub fn run() {
             // M2.13 — F16 资源浏览
             commands::resource::list_resources,
             commands::resource::reveal_in_file_manager,
+            // M2.16 — F17 在线安装（资源市场 + git URL → clone → 扫描 → 安装）
+            commands::marketplace::list_marketplace_repos,
+            commands::marketplace::clone_and_scan,
+            commands::marketplace::install_from_marketplace,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
