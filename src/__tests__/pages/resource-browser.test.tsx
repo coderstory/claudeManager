@@ -220,3 +220,218 @@ describe('ResourceBrowserPage — F16 (M2.13)', () => {
     ).toHaveTextContent(/禁用/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F21 — 资源搜索 (M2.16)
+// 覆盖：搜索框渲染、实时过滤、清空、空查询不过滤、无匹配空态、
+//       切 tab 清空查询、模糊子序列匹配排序。
+// ---------------------------------------------------------------------------
+describe('ResourceBrowserPage — F21 search (M2.16)', () => {
+  it('renders the search box once items are loaded', async () => {
+    mockInvoke.mockResolvedValue([item('plugin/code-review', 'plugin')]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-search-input'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('does NOT render the search box while loading', async () => {
+    // Never resolves → stays loading → no search box.
+    mockInvoke.mockImplementation(
+      () => new Promise(() => {}),
+    );
+    render(<ResourceBrowserPage />);
+    // Give React a tick to settle into loading state.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      screen.queryByTestId('resource-browser-search-input'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('typing in the search box filters rows by name (substring)', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin'),
+      item('plugin/doc-writer', 'plugin'),
+      item('plugin/git-tools', 'plugin'),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'doc' } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/doc-writer'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/code-review'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/git-tools'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the no-match empty state with the query echoed', async () => {
+    mockInvoke.mockResolvedValue([item('plugin/code-review', 'plugin')]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'zzzz' } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-empty'),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText(/没有匹配「zzzz」/)).toBeInTheDocument();
+    // Result count "0/1" visible.
+    expect(screen.getByText('0/1')).toBeInTheDocument();
+  });
+
+  it('clearing the query restores all rows', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin'),
+      item('plugin/doc-writer', 'plugin'),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // Filter down to one.
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'doc' } },
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('resource-browser-row-plugin/code-review'),
+      ).not.toBeInTheDocument();
+    });
+
+    // Click the clear (X) button.
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-search-clear'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('resource-browser-row-plugin/doc-writer'),
+    ).toBeInTheDocument();
+  });
+
+  it('switching tabs clears the search query', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_resources') {
+        const kind = (args as { kind: string }).kind;
+        if (kind === 'plugin') {
+          return [
+            item('plugin/code-review', 'plugin'),
+            item('plugin/doc-writer', 'plugin'),
+          ];
+        }
+        if (kind === 'command') {
+          return [item('command/build', 'command')];
+        }
+      }
+      return [];
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // Type a filter that hides everything but doc-writer.
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'doc' } },
+      );
+    });
+    const input = screen.getByTestId(
+      'resource-browser-search-input',
+    ) as HTMLInputElement;
+    expect(input.value).toBe('doc');
+
+    // Switch to commands tab.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-command'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-command/build'),
+      ).toBeInTheDocument();
+    });
+    // Query should be reset to empty.
+    const inputAfter = screen.getByTestId(
+      'resource-browser-search-input',
+    ) as HTMLInputElement;
+    expect(inputAfter.value).toBe('');
+  });
+
+  it('fuzzy subsequence matches across a gap (mp → MCP-like names)', async () => {
+    // Names with 'm' then later 'p' should match query "mp".
+    mockInvoke.mockResolvedValue([
+      item('plugin/marketplace-sync', 'plugin'), // has m...p
+      item('plugin/zip-pack', 'plugin'), // no m before p
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/marketplace-sync'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'mp' } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/marketplace-sync'),
+      ).toBeInTheDocument();
+    });
+    // zip-pack has 'p' but no 'm' before it → subsequence fails.
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/zip-pack'),
+    ).not.toBeInTheDocument();
+  });
+});

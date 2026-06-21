@@ -9,6 +9,7 @@
  *   4. Click reveal → `revealInFileManager(path)`.
  *      - Success → clear any prior reveal error.
  *      - Failure → non-blocking modal (CLAUDE.md §7).
+ *   5. (F21) Type in the search box → rows filter by fuzzy name match.
  *
  * ## Design choices (CLAUDE.md §5 + SPEC §5.5)
  *
@@ -24,7 +25,7 @@
  *   a `throw` or `alert()` — per CLAUDE.md §7 ("不允许静默吞错"
  *   means show the error, not block the UI).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   AlertCircle,
@@ -34,9 +35,12 @@ import {
   Loader2,
   PowerOff,
   RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
 
 import { listResources, revealInFileManager } from '../../lib/api/resources';
+import { fuzzyMatch } from '../../lib/fuzzy';
 import type {
   ResourceItem as TauriResourceItem,
   ResourceKind,
@@ -76,8 +80,16 @@ const INITIAL_STATE: PageState = {
 
 export default function ResourceBrowserPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // F21 — search box query. Kept separate from PageState so re-typing
+  // does NOT clobber the loaded items / loading flag. Switching tabs
+  // (runList) clears the query so the new kind starts unfiltered.
+  const [searchQuery, setSearchQuery] = useState('');
 
   const runList = useCallback(async (kind: ResourceKind) => {
+    // F21 — reset the query whenever we re-scan / switch kind, so
+    // the new list starts unfiltered. (If we kept the old query it
+    // would hide everything in a kind that doesn't share the name.)
+    setSearchQuery('');
     setState((prev) => ({
       ...prev,
       kind,
@@ -142,6 +154,34 @@ export default function ResourceBrowserPage(): ReactElement {
       revealError: null,
       revealErrorItemName: null,
     }));
+  }, []);
+
+  // F21 — 实时按 name 模糊过滤当前 tab 的列表.
+  //
+  // 复用 F9 的 `fuzzyMatch`（src/lib/fuzzy.ts，M2.11 已 ship）。
+  // 空查询 → 返回全部（渲染层会自己处理空列表态）。
+  // 非空查询 → 子序列匹配 name 字段，按 score 降序排列，
+  //   连续命中 / 词首命中排前面（fuzzyMatch 内部已加权）。
+  //
+  // 这里用 useMemo 而不是 useEffect——过滤是纯派生状态，
+  // 不需要副作用，render 期间计算即可。
+  const filteredItems = useMemo<TauriResourceItem[]>(() => {
+    const q = searchQuery.trim();
+    if (q === '') return state.items;
+    const scored: Array<{ item: TauriResourceItem; score: number }> = [];
+    for (const item of state.items) {
+      const r = fuzzyMatch(q, item.name);
+      if (r !== null) {
+        scored.push({ item, score: r.score });
+      }
+    }
+    // 分数降序；分数相同则保持原列表顺序（稳定排序）。
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map((s) => s.item);
+  }, [state.items, searchQuery]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
   }, []);
 
   // ---- render ----
@@ -269,6 +309,79 @@ export default function ResourceBrowserPage(): ReactElement {
         {state.kind === 'mcp' ? '' : '/'}
       </div>
 
+      {/* F21 — 搜索框（按 name 模糊过滤当前 tab 列表） */}
+      {!state.loading && !state.listError && state.items.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+          }}
+        >
+          <Search
+            size={14}
+            style={{ flexShrink: 0, color: 'var(--text-muted)' }}
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={`搜索 ${resourceKindLabel(state.kind)} 名称...`}
+            data-testid="resource-browser-search-input"
+            aria-label={`搜索${resourceKindLabel(state.kind)}名称`}
+            style={{
+              flex: '1 1 auto',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: 13,
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-ui)',
+              padding: '2px 0',
+            }}
+          />
+          {searchQuery !== '' && (
+            <button
+              type="button"
+              data-testid="resource-browser-search-clear"
+              onClick={handleClearSearch}
+              aria-label="清空搜索"
+              title="清空搜索"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                lineHeight: 1,
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
+          {/* 结果计数 — 帮用户判断过滤是否生效 */}
+          {searchQuery.trim() !== '' && (
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {filteredItems.length}/{state.items.length}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Reveal error — non-blocking alert (CLAUDE.md §7) */}
       {state.revealError && (
         <div
@@ -349,8 +462,8 @@ export default function ResourceBrowserPage(): ReactElement {
         </div>
       )}
 
-      {/* Empty state */}
-      {!state.loading && !state.listError && state.items.length === 0 && (
+      {/* Empty state — 区分"目录本身为空"和"搜索无匹配"两种情况 */}
+      {!state.loading && !state.listError && filteredItems.length === 0 && (
         <div
           data-testid="resource-browser-empty"
           style={{
@@ -362,22 +475,56 @@ export default function ResourceBrowserPage(): ReactElement {
             color: 'var(--text-secondary)',
           }}
         >
-          <Eye
-            size={32}
-            color="var(--text-muted)"
-            style={{ marginBottom: 8 }}
-          />
-          <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-            未发现 {resourceKindLabel(state.kind)} 资源
-          </div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>
-            目录 ~/.claude/{resourceKindSubdir(state.kind)} 为空或不存在。
-          </div>
+          {searchQuery.trim() !== '' ? (
+            <>
+              <Search
+                size={32}
+                color="var(--text-muted)"
+                style={{ marginBottom: 8 }}
+              />
+              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                没有匹配「{searchQuery}」的 {resourceKindLabel(state.kind)} 资源
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                共 {state.items.length} 项,0 项命中。修改关键词或
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accent)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 12,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  清空搜索
+                </button>
+                。
+              </div>
+            </>
+          ) : (
+            <>
+              <Eye
+                size={32}
+                color="var(--text-muted)"
+                style={{ marginBottom: 8 }}
+              />
+              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                未发现 {resourceKindLabel(state.kind)} 资源
+              </div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                目录 ~/.claude/{resourceKindSubdir(state.kind)} 为空或不存在。
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Items list */}
-      {!state.loading && state.items.length > 0 && (
+      {!state.loading && filteredItems.length > 0 && (
         <div
           data-testid="resource-browser-list"
           style={{
@@ -406,7 +553,7 @@ export default function ResourceBrowserPage(): ReactElement {
             <div style={{ textAlign: 'center' }}>状态</div>
             <div style={{ textAlign: 'right' }}>操作</div>
           </div>
-          {state.items.map((item) => (
+          {filteredItems.map((item) => (
             <ResourceRow
               key={item.id}
               item={item}
