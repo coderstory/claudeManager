@@ -278,24 +278,32 @@ pub fn run() {
                 // 原 applyEffects.ts 的 Effect.Sidebar。macOSPrivateApi:true +
                 // tauri macos-private-api feature 已在 tauri.conf.json / Cargo.toml
                 // 启用（macOS vibrancy + transparent:true 必需）。
-                #[cfg(target_os = "windows")]
-                {
-                    if let Err(e) = window_vibrancy::apply_mica(&window, None) {
-                        eprintln!("[M2.16] apply_mica failed (Mica will not show): {e}");
+                // M2.16 — H5: 同步调用可能因为 NSWindow/HWND 未完全 realized 而失败
+                // (macOS 真机未验证,Win11 已验证)。改为 spawn 出去 +
+                // 加 200ms 缓冲,让 webview 完全初始化后再 apply。失败
+                // 不阻断启动,跟同步路径行为一致。
+                let window_for_effect = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    #[cfg(target_os = "windows")]
+                    {
+                        if let Err(e) = window_vibrancy::apply_mica(&window_for_effect, None) {
+                            eprintln!("[M2.16] apply_mica failed (Mica will not show): {e}");
+                        }
                     }
-                }
-                #[cfg(target_os = "macos")]
-                {
-                    use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-                    if let Err(e) = apply_vibrancy(
-                        &window,
-                        NSVisualEffectMaterial::Sidebar,
-                        Some(NSVisualEffectState::Active),
-                        None,
-                    ) {
-                        eprintln!("[M2.16] apply_vibrancy failed (vibrancy will not show): {e}");
+                    #[cfg(target_os = "macos")]
+                    {
+                        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                        if let Err(e) = apply_vibrancy(
+                            &window_for_effect,
+                            NSVisualEffectMaterial::Sidebar,
+                            Some(NSVisualEffectState::Active),
+                            None,
+                        ) {
+                            eprintln!("[M2.16] apply_vibrancy failed (vibrancy will not show): {e}");
+                        }
                     }
-                }
+                });
             }
 
             // M2.16 — macOS 标准应用菜单（App / Edit / View / Window）。
