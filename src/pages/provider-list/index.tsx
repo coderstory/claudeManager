@@ -209,6 +209,12 @@ interface InfoBarsProps {
   onDismiss: () => void;
 }
 
+/**
+ * F2 切换流程的 InfoBar。M2.17 F15 batch3: 用共享 ErrorBanner 替换内联
+ * 红/绿条(M2.16-007-L 关闭),保留对外 testid `provider-list-{kind}-bar`
+ * + role="status"。autoDismiss 由 ErrorBanner 内部 useEffect 处理,
+ * 保留原 3s (success) / 5s (failure) 计时。
+ */
 function InfoBars({ switchState, onDismiss }: InfoBarsProps): ReactElement | null {
   const bar = useMemo(() => {
     if (switchState.kind === 'success') {
@@ -223,30 +229,19 @@ function InfoBars({ switchState, onDismiss }: InfoBarsProps): ReactElement | nul
     return null;
   }, [switchState]);
 
-  useEffect(() => {
-    if (!bar) return;
-    const ms = bar.kind === 'success' ? 3000 : 5000;
-    const t = window.setTimeout(onDismiss, ms);
-    return () => window.clearTimeout(t);
-  }, [bar, onDismiss]);
-
   if (!bar) return null;
-  const color = bar.kind === 'success' ? 'var(--success)' : 'var(--danger)';
+  const autoDismissMs = bar.kind === 'success' ? 3000 : 5000;
   return (
     <div
       data-testid={`provider-list-${bar.kind}-bar`}
-      role="status"
-      style={{
-        background: 'var(--bg-elevated)',
-        border: `1px solid ${color}`,
-        color: 'var(--text-primary)',
-        padding: 'var(--space-2) var(--space-3)',
-        borderRadius: 'var(--radius-button)',
-        marginBottom: 'var(--space-3)',
-        fontSize: 'var(--fs-body)',
-      }}
+      style={{ marginBottom: 'var(--space-3)' }}
     >
-      {bar.text}
+      <ErrorBanner
+        kind={bar.kind}
+        message={bar.text}
+        onDismiss={onDismiss}
+        autoDismissMs={autoDismissMs}
+      />
     </div>
   );
 }

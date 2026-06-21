@@ -395,3 +395,60 @@ describe('ProviderListPage — F14 export', () => {
     expect(screen.getByText(/已切换到 A/)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// M2.17 — F15 batch3: InfoBars(切流程)改用共享 ErrorBanner。
+// 原 testid `provider-list-{kind}-bar` 保留 + 内部 ErrorBanner 通过
+// data-banner-kind 区分 success/error;autoDismiss 走 ErrorBanner 内部 useEffect。
+// ---------------------------------------------------------------------------
+
+describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () => {
+  it('switch success bar uses ErrorBanner kind=success (role=status) inside testid wrapper', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A')]);
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'switch_provider') return { ...(args as { providerId: string }).providerId.length ? p('a', 'A') : p('a', 'A') };
+      if (cmd === 'list_providers') {
+        return [p('a', 'A', { is_active: true })];
+      }
+      return null;
+    });
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-activate-a'));
+    });
+    await waitFor(() => {
+      const wrapper = screen.getByTestId('provider-list-success-bar');
+      expect(wrapper).toBeInTheDocument();
+      // ErrorBanner kind=success → role="status"
+      const banner = wrapper.querySelector('[data-banner-kind="success"]');
+      expect(banner).not.toBeNull();
+      expect(banner!.getAttribute('role')).toBe('status');
+      // success bar 内部应显示 dismiss 按钮 (autoDismiss 模式下 onDismiss 必传)
+      expect(banner!.querySelector('button[aria-label="关闭提示"]')).not.toBeNull();
+    });
+  });
+
+  it('switch failure bar uses ErrorBanner kind=error (role=alert) inside testid wrapper', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A')]);
+    mockInvoke.mockRejectedValueOnce(new Error('disk full'));
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-activate-a'));
+    });
+    await waitFor(() => {
+      const wrapper = screen.getByTestId('provider-list-error-bar');
+      expect(wrapper).toBeInTheDocument();
+      // ErrorBanner kind=error → role="alert"
+      const banner = wrapper.querySelector('[data-banner-kind="error"]');
+      expect(banner).not.toBeNull();
+      expect(banner!.getAttribute('role')).toBe('alert');
+      expect(banner!.textContent).toContain('disk full');
+    });
+  });
+});
