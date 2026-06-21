@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
 import { Database, FileWarning, FolderOpen, Upload } from 'lucide-react';
+import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   importProvidersFromSql,
   parseSqlPreview,
@@ -856,31 +857,24 @@ function ErrorView({
   message: string;
   onReset: () => void;
 }): ReactElement {
+  // M2.17 — F15 batch3: 用 ErrorBanner 替换内联红条,获得统一的视觉 / aria。
+  // 保留外壳(标题 + 重试按钮),ErrorBanner 只负责红条 message 区。
   return (
-    <div
-      data-testid="import-sql-error"
-      style={{
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--danger)',
-        borderRadius: 'var(--radius-card)',
-        padding: 'var(--space-4)',
-        color: 'var(--danger)',
-      }}
-    >
-      <h2
-        style={{
-          margin: 0,
-          marginBottom: 'var(--space-2)',
-          fontSize: 'var(--fs-heading)',
-        }}
-      >
-        导入失败
-      </h2>
+    <div data-testid="import-sql-error" style={{ marginTop: 'var(--space-3)' }}>
+      <ErrorBanner
+        kind="error"
+        message="导入失败"
+        style={{ marginBottom: 'var(--space-3)' }}
+      />
       <div
         style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-card)',
+          padding: 'var(--space-4)',
           fontSize: 'var(--fs-body)',
-          marginBottom: 'var(--space-3)',
           color: 'var(--text-primary)',
+          marginBottom: 'var(--space-3)',
         }}
       >
         {message}

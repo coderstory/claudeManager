@@ -346,6 +346,26 @@ describe('ImportSqlPage — F3 reset flow', () => {
       expect(screen.getByTestId('import-sql-idle')).toBeInTheDocument();
     });
   });
+
+  // M2.17 — F15 batch3: ErrorView 改用共享 ErrorBanner (kind='error')。
+  // 测试断言 banner 出现 + role="alert",保证 UI 一致性 + aria。
+  it('error view renders shared ErrorBanner (kind=error) with role=alert', async () => {
+    mockInvoke.mockRejectedValueOnce(new Error('boom'));
+    render(<ImportSqlPage />);
+
+    pickFile('broken');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-error')).toBeInTheDocument();
+    });
+    // ErrorBanner kind=error → role="alert" + data-banner-kind="error"
+    const banner = screen
+      .getByTestId('import-sql-error')
+      .querySelector('[data-banner-kind="error"]');
+    expect(banner).not.toBeNull();
+    expect(banner!.getAttribute('role')).toBe('alert');
+    // banner message 显示中文标题 "导入失败"
+    expect(banner!.textContent).toContain('导入失败');
+  });
 });
 
 // ---------------------------------------------------------------------------

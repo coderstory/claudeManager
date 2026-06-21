@@ -1,15 +1,59 @@
-# Claude Config Manager — Architecture (M1 invariants)
+# Claude Config Manager — Architecture (M1 + M2 invariants)
 
-> **Status**: M1 架构期 final. Locked at commit `04395dd` (M1.9.2)
-> + review commits `6ea5e97` (self-review) through
-> `51e78c5` (business flow). Any deviation requires a
-> documented exception in STATE.md.
+> **Status**: M1 架构期 locked at `04395dd` (M1.9.2). M2 业务实现期
+> done through M2.16 (`d820b82`). Any deviation from locked M1 layers
+> requires a documented exception in `STATE.md`.
+>
+> **Audience**: First-time contributor — read this in 5 minutes before
+> opening any source file. This document is the **higher authority for
+> code structure**; `CLAUDE.md` is the higher authority for project
+> process. In conflict, `CLAUDE.md` wins for process questions.
 
-This document is the **framework invariant** reference. It tells
-the next contributor what is and is not allowed to change without
-explicit design discussion. The rules here supersede CLAUDE.md
-when in conflict (CLAUDE.md is the higher authority for project
-process; this document is the higher authority for *code* structure).
+---
+
+## 0. 30-second overview
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  React 19 + TypeScript 5 + Tailwind/shadcn                       │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ │
+│  │ AppHeader   │ │ AppSidebar  │ │ pages/<F#>  │ │ design-sys  │ │
+│  │ ErrorBanner │ │ WindowCtl   │ │ (12 stubs + │ │ tokens.css  │ │
+│  │             │ │             │ │  real impl) │ │ ThemeProv   │ │
+│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ │
+│         │                │                │              │       │
+│         └────────────────┴──── @tauri-apps/api ─────────┘       │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ IPC (invoke + emit)
+┌──────────────────────────┴───────────────────────────────────────┐
+│  Rust (Tauri v2)                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │ lib.rs  →  PluginHost::init_all()  →  commands::<F#>::cmd   │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+│            │                │                  │                  │
+│    ┌───────┴────┐  ┌────────┴───────┐  ┌───────┴──────┐         │
+│    │ domain/    │  │ services/      │  │ commands/    │         │
+│    │ Provider   │  │ ProviderSvc    │  │ fs.rs        │         │
+│    │ McpServer  │  │ MarketplaceSvc │  │ marketplace  │         │
+│    │ UsageSnap  │  │ ResourceSvc    │  │ resource     │         │
+│    └────────────┘  └────────────────┘  └──────────────┘         │
+│            │                │                  │                  │
+│            └────────────────┴──── infrastructure/ ─────┘         │
+│                       (sql_parser / git / fs / http)             │
+│                            │                                     │
+│              ┌─────────────┴─────────────┐                       │
+│              │ platform/traits.rs (8)    │                       │
+│              │  ├── windows/  (live)     │                       │
+│              │  └── macos/    (M2.16:    │                       │
+│              │       7/8 live; 1 stub)   │                       │
+│              └───────────────────────────┘                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+The two trees (`src/` + `src-tauri/src/`) are **mirrored**: every
+business feature has a Rust backend service + command, a React
+frontend page, and a Tauri command wrapper in between. No business
+code lives in `lib.rs` or `App.tsx` directly — those are wiring only.
 
 ---
 
@@ -115,25 +159,40 @@ M1.12 backlog.
 
 ## 3. Plugin system (CLAUDE.md §3.3, locked)
 
-12 stub plugins ship in M1.x. Real implementations land in M2+.
+12 stub plugins ship in M1.x. **As of M2.16**, the following are
+real implementations (replacing the stub):
 
-| ID | Display name | F-number | Stub file | Status |
+| ID | Display name | F-number | Stub file | M2.16 status |
 |---|---|---|---|---|
-| `provider-list` | Provider 列表 | F1 | `src-tauri/src/plugins/stubs/provider_list.rs` | Stub |
-| `provider-switch` | Provider 切换 | F2 | `provider_switch.rs` | Stub (action-only, no route) |
-| `import-sql` | 导入 .sql | F3 | `import_sql.rs` | Stub |
-| `deeplink-import` | Deeplink 导入 | F4 | `deeplink_import.rs` | Stub |
-| `json-editor` | JSON 编辑器 | F5 | `json_editor.rs` | Stub |
-| `mcp-management` | MCP 管理 | F6 | `mcp_management.rs` | Stub |
+| `provider-list` | Provider 列表 | F1 | `src-tauri/src/plugins/stubs/provider_list.rs` | **Real** (M2.1) |
+| `provider-switch` | Provider 切换 | F2 | `provider_switch.rs` | **Real** (M2.1) |
+| `import-sql` | 导入 .sql | F3 | `import_sql.rs` | **Real** (M2.2) |
+| `deeplink-import` | Deeplink 导入 | F4 | `deeplink_import.rs` | **Real** (M2.3) |
+| `json-editor` | JSON 编辑器 | F5 | `json_editor.rs` | **Real** (M2.4) |
+| `mcp-management` | MCP 管理 | F6 | `mcp_management.rs` | Stub (M2.5 candidate) |
 | `usage-query` | 用量查询 | F7 | `usage_query.rs` | Stub |
 | `single-file-deploy` | 单文件部署 | F8 | `single_file_deploy.rs` | Stub |
-| `resource-browser` | 资源浏览 | F16 | `resource_browser.rs` | Stub |
-| `marketplace` | 资源市场 | F17 | `marketplace.rs` | Stub |
-| `optimizer` | 配置优化 | F18 | `optimizer.rs` | Stub |
+| `resource-browser` | 资源浏览 | F16 | `resource_browser.rs` | **Real** (M2.16 — F9 search + F21 source-group) |
+| `marketplace` | 资源市场 | F17 | `marketplace.rs` | **Real** (M2.16 — git clone + scan + install) |
+| `optimizer` | 配置优化 | F18 | `optimizer.rs` | **Real** (M2.16 — F23 markdown export) |
 | `backup-restore` | 备份与恢复 | F19 | `backup_restore.rs` | Stub |
 
-The F-number gap (F9..F15, F20..F24) is intentional — these land
-in M2+ as additional plugins.
+Additional M2.16 surfaces (not in original 12-stub list):
+- **F10 drag-drop .sql** — Tauri `onDragDropEvent` + overlay
+  (`src-tauri/src/lib.rs:213` + `src/App.tsx:235-244`)
+- **F13 backup** — `settings.json` timeline + diff + rollback
+- **F14 export** — single-provider `.json` share (Rust dialog
+  + atomic write + provider-list export button)
+- **F15 error feedback (横切)** — shared `ErrorBanner` component
+  used by provider-list / backup-restore / marketplace / optimizer
+- **F20 single-instance + file association** — `tauri-plugin-single-instance`
+  + OS file association (`.sql` cold-start → import-sql page)
+- **F21 source-group filter** — `infer_resource_group` rename
+  of `infer_source_repo` (M2.16-fix-h6)
+- **F22 resource detail** — manifest + file list + inline preview
+
+The F-number gap (F9, F11, F12, F24) is intentional — these land
+in M2+ as additional surfaces or stay as M3 candidates.
 
 ### Adding a new plugin
 
@@ -147,6 +206,67 @@ in M2+ as additional plugins.
 
 The drift-detector test in `src/__tests__/hooks/useViewState.test.ts:108-131`
 fails if any of steps 4-5 is missed.
+
+---
+
+## 3.5 Data flow scenarios (3 typical journeys)
+
+### Journey 1 — App startup (cold boot)
+
+```
+main.exe
+  └→ src-tauri/src/main.rs::main()
+      └→ lib::run()
+          ├→ Tauri builder
+          │   ├→ register plugins (PluginHost::init_all → 12 stubs)
+          │   ├→ register commands (commands/mod.rs::invoke_handler)
+          │   ├→ setup() callback:
+          │   │   ├→ create_tray()
+          │   │   ├→ platform::runtime::window_chrome().apply_mica()
+          │   │   ├→ check argv for .sql file → cache in AppState.pending_sql_file
+          │   │   └→ emit "import-sql-file" (if pending)
+          │   └→ on_window_event(close) → hide-to-tray
+          └→ app.run()
+              └→ webview mounts → React App.tsx mounts
+                  ├→ ThemeProvider reads localStorage('ccm.theme')
+                  ├→ useViewState reads localStorage('ccm.lastView')
+                  └→ invoke('take_pending_sql_file') → if Some, setView('import-sql')
+```
+
+### Journey 2 — Switch provider (F2)
+
+```
+User clicks "Activate" on provider-list page
+  └→ ProviderListPage.tsx::handleActivate(providerId)
+      └→ invoke('switch_provider', { providerId })
+          └→ commands::provider::switch_provider (Tauri command)
+              └→ ProviderService::activate() (services/)
+                  ├→ backup current settings.json → settings.json.bak.<ts>
+                  ├→ atomic rename new provider.json → settings.json
+                  └→ emit "provider-activated" event
+                      └→ ProviderListPage listens → reload list + show toast
+```
+
+### Journey 3 — Install from marketplace (F17)
+
+```
+User pastes git URL in marketplace page
+  └→ MarketplacePage.tsx::handleInstall(url)
+      └→ invoke('install_marketplace_resource', { url })
+          └→ commands::marketplace::install_resource
+              └→ MarketplaceService::install_resource()
+                  ├→ IGitHost::clone(url, dest_dir)        ← platform trait
+                  ├→ ResourceScanner::scan(dest_dir)        ← infrastructure
+                  ├→ atomic copy resources → ~/.claude/<type>/<name>/
+                  │   (force overwrite → backup to .bak.<ts>)
+                  └→ return scan result
+                      └→ MarketplacePage refreshes + emits "resource-installed"
+                          └→ ResourceBrowserPage listens → reload grid
+```
+
+All three journeys obey the same rules: front-end never touches
+`fs` directly, OS-specific code lives only in `platform/`, every
+write goes through `infrastructure::fs_atomic`.
 
 ---
 
@@ -317,56 +437,43 @@ handles this correctly.
 
 ---
 
-## 8. Known limitations (M1.x scope)
+## 8. Known limitations (current scope)
 
-The following are **explicitly accepted** limitations of the M1.x
-ship. They are filed in M1.12 / M1.10 / M2 backlogs.
+### M2.16 known limitations (active)
 
-### M1.12 (final audit)
+- **Mac platform: `IGitHost` still compile-only stub** —
+  `MacGitHost::clone` returns `unimplemented!()`. F17 marketplace
+  on macOS will panic at runtime. M2.17+ candidate.
+- **Mac platform: `IPlatformReveal` unimplemented** — `open -R`
+  not wired. Win reveal works.
+- **Mica/vibrancy on macOS unverified** — Win11 Mica实测不生效
+  (commit `e8b4b56` falls back to CSS). Mac vibrancy deferred to
+  real-device test.
+- **Tailwind not compiled** — `cn()` merge is no-op for Tailwind
+  classes. Components use inline `style={{ var(--token) }}`. M2.17+
+  will decide.
+- **F17 marketplace overwrite UX** — `DestExists` shows red bar
+  only; no "overwrite / skip" dialog yet (M3 candidate).
+- **M2.16 review findings (10 MEDIUM + 7 LOW)** — deferred to
+  `docs/milestones/M2-REVIEWS.md`. None are CRITICAL.
 
-- F-1.01 — `react-router-dom` unused dep; remove
-- F-1.02 — `tauri-plugin-positioner` unused; document or remove
-- F-1.04 — ThemeProvider cold-boot race for 'auto' theme
-- F-1.09 — Dark theme token overrides incomplete
-- F-1.11 — close-to-hide has no real e2e test
-- F-1.13 — `tauri-plugin-process` unused
-- F-1.14 — `useViewState.test.ts` registry id list is hard-coded
-- F-1.15 — `WindowsNotifier` stub panics in release (no stderr)
-- F-1.18 — `tauri-plugin-positioner` not pinned to =X.Y.Z
-- F-1.20 — `winreg` still in Cargo.toml after M1.7 autostart rewrite
-- F-1.22 — HANDOFF.json drifts from reality
-- F-1.26 — `src/App.css` may be dead
-- P-2 — `applyEffects` uses `navigator.userAgent` instead of
-  `tauri-plugin-os`
-- P-5 — Updater plugin enabled with empty pubkey (privacy concern)
-- P-6 — `windows = "0.61"` not pinned to =0.61.0
-- P-7 — `WindowControls` swallows close-button errors
-- P-8 — Build tag literal "M1.9 · 架构期" should be env-derived
-- P-9 — Vitest `__dirname` is CJS-only; use `import.meta.url`
-- BP-1.02 — stale kernel mutex cleanup
-- BP-1.06 — Vitest test for tokens.css body bg
-- BP-2.01 — `setViewState` side effect should move to `useEffect`
-- BP-3.01 — Theme toggle destroys 'auto' mode
-- BP-4.01 / P-7 — close-button error swallowing
-- BP-4.02 — 2nd window event handler could override close-to-hide
+### M1.x known limitations (mostly resolved by M2)
 
-### M1.10 (build / CI matrix)
+- ~~`react-router-dom` unused dep~~ — removed in M2.x
+- ~~`winreg` leftover in Cargo.toml~~ — removed in M2.x
+- ~~Dark theme token overrides incomplete~~ — M2.16 reduced theme
+  surface (light瓷白 only; glass variants trimmed per
+  `d820b82`); dark mode deferred
+- ~~`tauri-plugin-positioner` unused~~ — kept (F4 deeplink
+  positioner helper)
 
-- F-1.06 — CI workflow doesn't pin Node / Rust / Playwright
-- BP-1.01 — write panic to `AppPaths::logs_dir()` (debug build
-  ship today is the workaround)
-- BP-4.05 — verify `tauri.conf.json::bundle.icon` is set
-- Migrate `scripts/build-and-ship.sh` to use `tauri build`
+### M2+ (not yet in scope)
 
-### M2+ (not in M1.x scope)
-
-- All `domain/`, `services/`, `infrastructure/` modules
-- All 12 plugin implementations (replacing stubs)
-- All 24 F-numbers (currently 12 stubs, 12 missing)
-- Settings drawer (header has a placeholder button)
-- Deep-link auto-routing (F4)
-- Tailwind adoption (M1.12 decision pending)
-- macOS platform impls (compile-only today)
+- All 8 Mac platform impls fully live (7/8 done in M2.16)
+- F7 usage query (real impl)
+- F8 single-file deploy (depends on M3 notarization)
+- F11 / F12 keyboard shortcuts / theme
+- F18/F23 optimizer real impl (M2.16 has export but not scan)
 
 ---
 
