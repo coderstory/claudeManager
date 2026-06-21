@@ -23,8 +23,8 @@ import { ThemeProvider } from "./design-system/ThemeProvider";
 //
 // 删掉 JS 调用后，Rust apply_mica 是唯一的 backdrop 来源（在 setup
 // 同步执行，早于 WebView2 首帧），不再有晚到的 JS 调用干扰合成路径。
-// applyEffects.ts 文件保留（未使用），以便 m1-9-2 测试的历史断言
-// 仍有模块可 import；新架构下入口不再触达它。
+// M2.16-cleanup: applyEffects.ts 已删除（整条 JS setEffects 路径退役），
+// 前端不再触达窗口效果 API；Mica / vibrancy 由 Rust setup hook 独占。
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

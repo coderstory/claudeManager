@@ -26,7 +26,8 @@
  *        (window_vibrancy::apply_mica / apply_vibrancy)。main.tsx 不再
  *        调 JS applyWindowEffects —— Rust apply_mica 是唯一来源，
  *        早于 WebView2 首帧执行，避免晚到的 JS setEffects 重置 DWM
- *        合成状态遮住 Mica。测试断言 lib.rs 调用 + main.tsx 不触达 JS。
+ *        合成状态遮住 Mica。M2.16-cleanup: applyEffects.ts 已删除，
+ *        测试断言 lib.rs 调用 + main.tsx 不触达 JS。
  *
  * These tests assert SHIPPED behaviour, not implementation details:
  * they should fail BEFORE the M1.9.2 implementation lands and pass
@@ -270,8 +271,10 @@ describe('M1.9.2 — effects bootstrap', () => {
   it('main.tsx no longer calls JS applyWindowEffects (Rust is single source)', () => {
     // M2.16-theme-fix: main.tsx 必须不再 import / 调用 applyWindowEffects。
     // Rust apply_mica 是唯一的 backdrop 来源；JS setEffects 与之冲突。
-    // applyEffects.ts 模块保留（未使用），此处断言入口不触达它。
-    // 注意：注释里会提到历史函数名，所以只看非注释代码行。
+    // M2.16-cleanup: applyEffects.ts 已删除，此断言作为"前端不再触达
+    // 窗口效果 API"的回归守卫保留——任何复活 JS setEffects 路径的改动
+    // 都会违反 Rust 单一来源契约。注意：注释里会提到历史函数名，所以
+    // 只看非注释代码行。
     const mainTsx = readFileSync(
       resolve(__dirname, '../../main.tsx'),
       'utf-8',
@@ -287,13 +290,5 @@ describe('M1.9.2 — effects bootstrap', () => {
     expect(codeOnly).not.toMatch(/from\s+["'].*applyEffects/);
     // 不应再调用 applyWindowEffects（匹配函数调用）
     expect(codeOnly).not.toMatch(/applyWindowEffects\s*\(/);
-  });
-
-  it('applyEffects module still exports applyWindowEffects (kept for reference)', async () => {
-    // applyEffects.ts 保留为未使用模块（m1-9-2 历史架构的记录）。
-    // 断言导出仍存在，避免未来误删导致 import 报错。新架构下入口
-    // 不触达此模块。
-    const mod = await import('../../design-system/applyEffects');
-    expect(typeof mod.applyWindowEffects).toBe('function');
   });
 });
