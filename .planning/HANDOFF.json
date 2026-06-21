@@ -1,62 +1,129 @@
 {
-  "version": "1.0",
-  "timestamp": "2026-06-19T12:10:00+08:00",
-  "phase": "M1",
-  "phase_name": "M1 架构期 (architecture milestone)",
+  "version": "2.0",
+  "timestamp": "2026-06-21T22:40:00+08:00",
+  "phase": "M2.17",
+  "phase_name": "M2.17 候选期 (post-M2.16 polish, M1 收尾 3 件套 + 跨切审计)",
   "phase_dir": ".planning/",
   "plan": null,
-  "task": null,
-  "total_tasks": 12,
-  "status": "paused",
-  "completed_tasks": [
-    {"id": 1, "name": "M1.1 Tauri v2 scaffold + tray + minimize-to-tray", "status": "done", "commit": "2914342", "user_accepted": true, "user_accepted_at": "2026-06-19T00:26:16"},
-    {"id": 2, "name": "M1.2 OS abstraction layer (8 traits × Win+Mac)", "status": "done_committed_pending_review", "commit": "13290b3", "ship_exe": "ClaudeConfigManager-M1.1.2-platform-abstractions.exe"},
-    {"id": 3, "name": "M1.3 Plugin host + 12 stubs (frontend + backend)", "status": "done_committed_pending_review", "commit": "77e070a", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host.exe"},
-    {"id": 4, "name": "M1.4 Tauri capabilities with WHY annotations", "status": "done_committed_pending_review", "commit": "cc47b7d", "ship_exe": "ClaudeConfigManager-M1.1.4-platform-plugins-capabilities.exe"},
-    {"id": 8, "name": "M1.8 TDD + UI e2e framework (Vitest + Playwright + tauri-driver + CI)", "status": "done_committed_pending_review", "commit": "6814a7a", "ship_exe": "ClaudeConfigManager-M1.1.8-tdd-scaffold.exe"},
-    {"id": "M1.3-fix-1", "name": "M1.3 fix 1: rebuild release exe to embed latest frontend bundle (stale dist)", "status": "done", "commit": "050eac8", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix.exe", "note": "No source changes; touch src-tauri/src/lib.rs to force Cargo relink."},
-    {"id": "M1.3-fix-2", "name": "M1.3 fix 2: add --features tauri/custom-protocol (custom-protocol feature required for cargo build --release)", "status": "done", "commit": "50abbe6", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix-v2.exe"},
-    {"id": "M1.3-fix-3", "name": "M1.3 fix 3: viewport meta + CSS reset (remove browser scrollbars)", "status": "done_committed_pending_review", "commit": "038aa4f", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe", "note": "AWAITING USER VERIFICATION — last action before pause"},
-    {"id": "smoke-test-upgrade", "name": "smoke-test: add WebView2 child window check + title verification (Test 5, 6)", "status": "done", "commit": "b53693f"},
-    {"id": "smoke-test-upgrade-2", "name": "smoke-test: add Test 7 — grep exe for dist fingerprint (catches missing custom-protocol feature)", "status": "done", "commit": "50abbe6", "note": "Bundled with M1.3-pipeline-fix-v2"},
-    {"id": "kill-app-fix", "name": "kill-app: use -F not /F (Git Bash msys path mangling)", "status": "done", "commit": "dd4456b"}
-  ],
-  "remaining_tasks": [
-    {"id": 5, "name": "M1.5 Frontend deps + design system baseline (Cream White theme + CSS variables + shadcn/Tailwind setup)", "status": "not_started", "blocked_by": ["M1.3 user review of v3 exe"]},
-    {"id": 6, "name": "M1.6 Rust backend deps + version lock (tauri-plugin-fs, dialog, notification, shell, os, path, deep-link, single-instance, store, log, updater)", "status": "not_started", "blocked_by": ["M1.3 user review", "M1.5 may need npm packages first"]},
-    {"id": 7, "name": "M1.7 Autostart integration (Win registry Run key + Mac LaunchAgent plist)", "status": "not_started", "blocked_by": ["M1.6 (single-instance plugin needs version lock)"]},
-    {"id": 9, "name": "M1.9 Main window framework + 12 route placeholders (left rail nav + status bar + plugin placeholder pages)", "status": "not_started", "blocked_by": ["M1.3 user review", "M1.5 (design system needed for nav/status bar styling)"]},
-    {"id": 10, "name": "M1.10 Build/package/sign/CI matrix (Windows MSI/NSIS + Mac DMG, EV cert + Apple notarization placeholders, GitHub Actions matrix windows-latest + macos-latest)", "status": "not_started", "blocked_by": ["M1.7 (autostart test in CI)", "M1.9 (signing tests)"]},
-    {"id": 11, "name": "M1.11 CI + framework invariants doc + three-stage review (AGENTS.md + docs/ARCHITECTURE.md + self-review + brainstorm + peer review + business flow analysis)", "status": "not_started", "blocked_by": ["M1.10"]},
-    {"id": 12, "name": "M1.12 Final self-audit + brainstorm + peer review + business flow analysis", "status": "not_started", "blocked_by": ["M1.11"]}
-  ],
-  "blockers": [
-    {"description": "User verification pending for M1.3 v3 exe (ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe). User reports no scrollbars at any window size; if confirmed, M1.3 is final and M1.5 can start.", "type": "human_action", "blocking": false, "workaround": "Can proceed with M1.5 in parallel if user provides explicit go-ahead"},
-    {"description": "M1.2/M1.4/M1.8 user reviews all pending. These are architecture-layer changes with no visible functional difference from M1.1 (M1.2 adds platform traits not used yet; M1.4 is capability config; M1.8 is test framework). User has not run these exes or verified.", "type": "human_action", "blocking": false, "workaround": "Can be batch-approved if user trusts subagent reports"}
-  ],
+  "task": "M2.17-3.1 (PluginHost wiring)",
+  "total_tasks": 4,
+  "status": "in_progress",
+  "m1_actual_state": {
+    "method": "Derived from git log (NOT from STATE.md reverse-derivation)",
+    "command_used": "git log --oneline --all | grep -E 'M1\\.[0-9]+'",
+    "milestones": [
+      {"id": "M1.1", "name": "Tauri v2 scaffold + tray + minimize-to-tray", "status": "done", "user_accepted": true, "user_accepted_at": "2026-06-19T00:26:16", "ship_exe": "ClaudeConfigManager-M1.1-scaffold-release.exe", "key_commit": "2914342"},
+      {"id": "M1.2", "name": "OS abstraction layer (8 traits × Win+Mac)", "status": "done_committed_pending_review", "key_commit": "13290b3", "ship_exe": "ClaudeConfigManager-M1.1.2-platform-abstractions.exe"},
+      {"id": "M1.3", "name": "Plugin host + 12 stubs (frontend + backend)", "status": "done_committed_pending_review", "key_commit": "77e070a", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe", "note": "M1.3 fix-v3 added viewport+CSS reset to remove scrollbars; user review pending"},
+      {"id": "M1.3-fix-1", "name": "stale dist → touch lib.rs workaround", "status": "done", "key_commit": "050eac8", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix.exe", "note": "Touch src-tauri/src/lib.rs to force Cargo relink (workaround until tauri build migration)"},
+      {"id": "M1.3-fix-2", "name": "--features tauri/custom-protocol required for cargo build --release", "status": "done", "key_commit": "50abbe6", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix-v2.exe", "note": "Without this feature, tauri::generate_context!() emits EmbeddedAssets::default() and webview tries to load vite dev server (ERR_CONNECTION_REFUSED)"},
+      {"id": "M1.3-fix-3", "name": "viewport meta + CSS reset (no browser scrollbars)", "status": "done_committed_pending_review", "key_commit": "038aa4f", "ship_exe": "ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe", "note": "LAST SHIP BEFORE M1 PAUSE; user verification pending"},
+      {"id": "M1.4", "name": "Tauri capabilities with WHY annotations", "status": "done_committed_pending_review", "key_commit": "cc47b7d", "ship_exe": "ClaudeConfigManager-M1.1.4-platform-plugins-capabilities.exe"},
+      {"id": "M1.5", "name": "Frontend deps + design system baseline (Tailwind + shadcn + tokens.css + ThemeProvider)", "status": "done_no_independent_ship", "key_commits": ["5b46d51", "3343db5", "e44972e", "16c90ae", "be955c3"], "note": "Tailwind utility class not actually wired (tokens.css uses CSS var() directly); M2.17 evaluates whether to re-wire tailwind.config.ts or permanently remove"},
+      {"id": "M1.6", "name": "Rust backend deps + version lock (12 tauri-plugin-* deps)", "status": "done_no_independent_ship", "key_commits": ["0397b43", "875b300", "6beeff8", "92a80b3"], "note": "All deps =version-locked per CLAUDE.md §2.3"},
+      {"id": "M1.7", "name": "Autostart integration (Win registry Run + Mac LaunchAgent via tauri-plugin-autostart)", "status": "done_committed_pending_review", "key_commits": ["bb8e873", "de8fffa", "8a1f48a", "bda412f"], "ship_exe": "ClaudeConfigManager-M1.1.7-chrome-with-autostart.exe", "note": "--minimized CLI flag registered to launcher args but no reader (M2.1 added)"},
+      {"id": "M1.8", "name": "TDD + UI e2e framework (Vitest + Playwright + tauri-driver + CI)", "status": "done_committed_pending_review", "key_commit": "6814a7a", "ship_exe": "ClaudeConfigManager-M1.1.8-tdd-scaffold.exe"},
+      {"id": "M1.9", "name": "Main window framework + 12 route placeholders (left rail nav + status bar)", "status": "done_no_independent_ship", "note": "Merged into M1.9.1 ship"},
+      {"id": "M1.9.1", "name": "Scroll layout fix (min-h-0 + overflow-hidden reset)", "status": "done_committed_pending_review", "key_commits": ["e3533ff", "f98f45a", "cf0f8b6", "56f716f"], "ship_exe": "ClaudeConfigManager-M1.9.1-scroll-layout-fix.exe"},
+      {"id": "M1.9.2", "name": "Custom chrome + Liquid Glass (window-vibrancy applyEffects → WebView2 fallback)", "status": "done_committed_pending_review", "key_commits": ["6737fd3", "13076bc", "e5b0d92", "63a096c", "f4bffca", "ac94f11", "b716b01", "28abeed", "04395dd"], "ship_exe": "ClaudeConfigManager-M1.9.2-chrome-and-glass.exe", "note": "M2.16 mica-fallback: WebView2 set_background_color(a=0) + acrylic + log (commit c84a4e3); pure red wallpaper 验证 proved Mica backdrop does not show through webview in DWM synthesis path"},
+      {"id": "M1.9.3", "name": "main position absolute + framer-motion removal (release WebView2 flex:1 miscalc)", "status": "done_committed_pending_review", "key_commits": ["398488c", "fd4c125", "6cc33bb", "6b6f9ef"], "note": "e2e diagnostic spec kept for future regression"},
+      {"id": "M1.10", "name": "Build/package/sign/CI matrix (Windows MSI/NSIS + Mac DMG, EV cert + Apple notarization placeholders, GitHub Actions matrix)", "status": "done", "key_commits": ["87c7365", "9be1e51", "f91e7fa", "d35b81a"], "merge_commit": "d35b81a", "note": "Mac dev box real signing deferred to M3 release phase"},
+      {"id": "M1.11", "name": "CI + framework invariants doc + three-stage review (AGENTS.md + docs/ARCHITECTURE.md + reviews)", "status": "done", "key_commits": ["21de78c", "0f9ee2e", "1009426", "42a4131", "e8a56ab"], "merge_commit": "d79575d", "note": "4-stage review (self-review / brainstorm / peer-review / business-flow) for M2.1~M2.16 retrospective in M2-REVIEWS.md"},
+      {"id": "M1.12", "name": "Final self-audit + brainstorm + peer review + business flow analysis", "status": "done", "key_commits": ["3b41e2c", "f739e74", "5e5e8bf", "d29e912", "9776ee9"], "merge_commit": "9776ee9"},
+      {"id": "smoke-test-upgrade", "name": "smoke-test: add WebView2 child window + title verification (Test 5/6)", "status": "done", "key_commit": "b53693f"},
+      {"id": "smoke-test-upgrade-2", "name": "smoke-test: add Test 7 grep exe for dist fingerprint (catches missing custom-protocol feature)", "status": "done", "key_commit": "50abbe6", "note": "Bundled with M1.3-pipeline-fix-v2"},
+      {"id": "kill-app-fix", "name": "kill-app: use -F not /F (Git Bash msys path mangling)", "status": "done", "key_commit": "dd4456b"},
+      {"id": "M1.11-fix", "name": "M1.11 fix: address HIGH review findings (theme 3-state + close-error + CI pins)", "status": "done", "key_commit": "b45196e"}
+    ]
+  },
+  "m2_actual_state": {
+    "method": "Derived from git log + STATE.md §M2 progress patch (commit 70bdee1)",
+    "milestones": [
+      {"id": "M2.1", "name": "F1 provider-list real impl + Tauri commands (list_providers / list_providers_with_warnings / switch_provider)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.1-provider-list.exe"},
+      {"id": "M2.2", "name": "F3 import-sql real impl + sql parser", "status": "done", "ship_exe": "ClaudeConfigManager-M2.2-import-sql.exe"},
+      {"id": "M2.3", "name": "F4 deeplink import (ccswitch://v1/import?resource=provider) + Tauri command parse_deeplink_url", "status": "done", "ship_exe": "ClaudeConfigManager-M2.3-deeplink-import.exe"},
+      {"id": "M2.4", "name": "F2 provider-switch (atomic backup → write → reload Claude)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.4-provider-switch.exe"},
+      {"id": "M2.5", "name": "F6 MCP management (mcp.json read/write/toggle/add/remove) + 6 commands", "status": "done", "ship_exe": "ClaudeConfigManager-M2.5-mcp-management.exe"},
+      {"id": "M2.6", "name": "F13 backup + F19 backup-restore real impl (auto-backup before write + restore + field-level diff)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.6-backup-restore.exe"},
+      {"id": "M2.7", "name": "F7 usage query (5-min in-memory cache + ~/.claude/usage.json fallback)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.7-usage-query.exe"},
+      {"id": "M2.8", "name": "F8 single-file-deploy (drag-drop + export single provider as .json)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.8-single-file-deploy.exe"},
+      {"id": "M2.9", "name": "F18 optimizer (13 rules across settings.json + providers/ + mcp.json, scan + apply with auto-backup)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.9-optimizer.exe"},
+      {"id": "M2.10", "name": "Theme 3-state + AppHeader chrome cluster", "status": "done", "ship_exe": "ClaudeConfigManager-M2.10-theme-and-chrome.exe"},
+      {"id": "M2.11", "name": "F9 search (QuickSearchModal + fuzzy match + keyboard nav + history)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.11-search.exe"},
+      {"id": "M2.12", "name": "kill-app.sh fixes (taskkill by -PID + suffix-named exes) + scripts/tests", "status": "done", "ship_exe": "(no ship; script-level fix)"},
+      {"id": "M2.13", "name": "F16 resource-browser (5 kinds: plugins/skills/commands/lsp/mcp + reveal)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.13-resource-browser.exe"},
+      {"id": "M2.14", "name": "F15 error feedback横切 (shared ErrorBanner component)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.14-error-banner.exe"},
+      {"id": "M2.15", "name": "Page padding/h1 fontSize 32→24 / 24→18 统一 (polish all 12 pages)", "status": "done", "ship_exe": "ClaudeConfigManager-M2.15-polish.exe"},
+      {"id": "M2.16", "name": "9 new plugins (F10 drag-drop / F14 export / F15 batch / F17 marketplace / F20 file-assoc / F21 / F22 / F23 / F24) + macOS compat (P0+P1+P2) + theme 3-way → light only + splash 2s + cleanup", "status": "done", "ship_exe": "ClaudeConfigManager-M2.16-multi.exe", "key_fixes": ["1f41c24 (F20 cold-start .sql)", "d9056cc (F22 manifest parse)", "d14acf7 (F3 parse_mcp_row)", "c84a4e3 (WebView2 set_background_color(a=0))", "e8b4b56 (mica-fallback CSS)", "d820b82 (theme trim to light only)"]}
+    ]
+  },
+  "m2_17_state": {
+    "method": "Derived from git log --since M2.16 close (post-d820b82)",
+    "phase_purpose": "M1 收尾 3 件套 (PluginHost wiring / M1.10 build pipeline refresh / M1.11 docs refresh) + 跨切审计 (CI gates / tsconfig strict)",
+    "concurrent_slots": [
+      {"slot": 1, "task": "M2.17-3.1 PluginHost wiring", "owner": "general-purpose", "status": "this commit (18d4b29)", "files_touched": ["src-tauri/src/lib.rs", "src-tauri/src/plugins/mod.rs", "src-tauri/tests/plugin_host_wiring.rs (in d5443c3 alongside C3)"]},
+      {"slot": 2, "task": "M2.17-C1+C2 CI gates (npm run build in test-frontend + e2e skip with macos matrix)", "owner": "general-purpose", "status": "done", "key_commit": "a980eeb"},
+      {"slot": 3, "task": "M2.17-C3 build-and-ship.sh refresh (cargo → tauri build)", "owner": "general-purpose", "status": "done", "key_commit": "8ef961d (was d5443c3)"},
+      {"slot": 4, "task": "M2.17-C4 tsconfig strict 8 sub-flags explicit", "owner": "general-purpose", "status": "done", "key_commit": "cc07178"}
+    ]
+  },
+  "m1_3_3_1_plugin_host_wiring": {
+    "task_id": "M2.17-3.1",
+    "name": "Wire PluginHost from lib.rs::run + shutdown on RunEvent::Exit",
+    "status": "done",
+    "key_commits": [
+      "d5443c3 (M2.17-C3, bundled tests/plugin_host_wiring.rs)",
+      "18d4b29 (M2.17-3.1-impl, lib.rs + plugins/mod.rs)"
+    ],
+    "test_executable_compiles": true,
+    "test_executable_runs_on_dev_box": false,
+    "dev_box_test_runner_status": "0xC0000139 (STATUS_ENTRYPOINT_NOT_FOUND) — known L2 limitation; cargo test --no-run is the substitute per STATE.md",
+    "smoke_test_status": "delegated to M2.17 build-and-ship.sh (covered by slot 3); M2.17-3.1 does not run a standalone smoke test",
+    "ship_exe": "ClaudeConfigManager-M2.17-3.1-plugin-host-wiring.exe (TBD by build-and-ship.sh)",
+    "files_changed": [
+      "src-tauri/src/lib.rs (+61 / -3 lines: setup wires init_all, run-event callback wires shutdown_all)",
+      "src-tauri/src/plugins/mod.rs (+11 lines: log::info! observability marker)",
+      "src-tauri/tests/plugin_host_wiring.rs (new, 6 tests: count == 12 + every expected id + unique + non-empty name + 11 routes aggregated + init+shutdown end-to-end)"
+    ],
+    "decisions": [
+      "Why Mutex<PluginHost> (vs. plain PluginHost): Tauri's State<T> derefs to &T, no &mut reachable from run-event callback; Mutex gives interior mutability for shutdown_all.",
+      "Why switch .run(generate_context!()) to .build(generate_context!())...run(callback): callback exposes RunEvent::Exit so we can hook shutdown_all.",
+      "Why PluginHost as separate Tauri state (not in AppState): keeps AppState::build() unchanged (smaller change footprint per CLAUDE.md §2.4)."
+    ],
+    "verification": {
+      "cargo_check": "pass",
+      "cargo_test_no_run": "all 4 test executables compile (plugin_host_wiring / plugin_host / platform_paths / lib unit tests)",
+      "vitest": "342/342 pass (no regression; +1 from baseline 341 due to test count drift; 51 errors are pre-existing ccm-splash test pollution)"
+    }
+  },
+  "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [
-    {"action": "Double-click ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe on desktop. Verify NO scrollbars at default 1024x640, after resize to 720x480, and after resize to 1600x1000. Verify content area scrolls internally (not browser scrollbar). Verify tray + close X + quit still work. Report '完成' or '未完成: <reason>' to proceed to M1.5.", "context": "Last ship before pause was M1.3 v3 which added viewport meta + CSS reset to remove scrollbars", "blocking": true},
-    {"action": "Optionally review M1.2/M1.4/M1.8 exes on desktop (M1.1.2 / M1.1.4 / M1.1.8). These don't visibly differ from M1.1 final — they're architecture changes. User may batch-approve.", "context": "Functional equivalence with M1.1 final; ship was for completeness", "blocking": false}
+    {"action": "User verification pending for M1.2/M1.3-v3/M1.4/M1.7/M1.8/M1.9.1/M1.9.2/M1.9.3 exes (architecture-layer changes; per D5 '抽查 M1.9.3 + M1.3 v3' strategy, user may batch-approve without running every exe)", "context": "M1 final close was 2026-06-19; M2.1~M2.16 shipped 2026-06-20~21; M1 user reviews still open", "blocking": false}
   ],
   "decisions": [
     {"decision": "Choose Tauri v2 over Electron / Flutter Desktop / MAUI / Avalonia / Wails / Qt", "rationale": "Best balance of native feel, bundle size, AI-friendliness, license cleanliness for Win11 + macOS26 cross-platform desktop", "phase": "M1-pre"},
-    {"decision": "Choose Dev build (not release) for M1.x ship pipeline, accepting 19MB exe size", "rationale": "Fast iteration cycle; user originally picked dev but later research showed release build is required for Tauri custom-protocol feature to embed dist", "phase": "M1.1"},
     {"decision": "Switch ship pipeline to release build after M1.1 user feedback about console window", "rationale": "Debug build leaves conhost console window orphaned after quit; release build has PE subsystem = GUI which prevents console allocation", "phase": "M1.1-fix"},
-    {"decision": "Use cargo build --release --features tauri/custom-protocol instead of tauri build", "rationale": "tauri build auto-enables custom-protocol but is slower and bundler-incompatible with our scripts/ pipeline; direct cargo + feature flag gives us same embed behavior with control", "phase": "M1.3-fix-v2"},
-    {"decision": "Smoke test must verify structural markers (WebView2 child window class + dist fingerprint in exe), not just process running", "rationale": "Original 4-test smoke test passed even with blank/stale/ERR_CONNECTION_REFUSED pages — false positive; Test 5/6/7 catch the regression classes", "phase": "M1.3-fix"},
+    {"decision": "Use cargo build --release --features tauri/custom-protocol (M1.3) → tauri build --no-bundle (M2.17-C3)", "rationale": "tauri build auto-runs beforeBuildCommand (= npm run build) AND auto-enables custom-protocol; eliminates stale-dist and dist-not-embedded failure modes at the source", "phase": "M1.3-fix-v2 / M2.17-C3"},
+    {"decision": "Smoke test must verify structural markers (WebView2 child window class + dist fingerprint in exe + window title), not just process running", "rationale": "Original 4-test smoke test passed even with blank/stale/ERR_CONNECTION_REFUSED pages — false positive; Test 5/6/7 catch the regression classes", "phase": "M1.3-fix"},
     {"decision": "CLAUDE.md placed in project root (not global) per user choice 2026-06-19", "rationale": "User wanted project-specific rules to follow the project, not all projects globally", "phase": "M1-pre"},
-    {"decision": "M1.4 capabilities config uses WHY annotations in top-level description field, not per-permission", "rationale": "JSON doesn't support comments; top-level description is most readable for the WHY notes that span multiple permissions", "phase": "M1.4"},
-    {"decision": "macOS impls are compile-only stubs (no runtime tests) on Windows dev box", "rationale": "Cross-compile target = apple-darwin not set up; real macOS impls deferred to Mac dev box; macOS stubs satisfy trait contracts for cargo check", "phase": "M1.2"},
-    {"decision": "12 plugin stubs each returning placeholder '该功能将在 M2+ 开发 (plugin: {id})' UI", "rationale": "Plugin architecture is verified; business logic deferred to M2+ per project policy", "phase": "M1.3"},
-    {"decision": "Cap concurrent subagents at 4 (per CLAUDE.md §11.2)", "rationale": "Avoid main session context pollution + ensure subagent quality; matches GSD guidance", "phase": "M1-cross-cutting"}
+    {"decision": "macOS impls are compile-only stubs (no runtime tests) on Windows dev box", "rationale": "Cross-compile target = apple-darwin not set up; macOS stubs satisfy trait contracts for cargo check; real Mac validation deferred to L-M2.09/11/12", "phase": "M1.2"},
+    {"decision": "12 plugin stubs each returning placeholder UI; M2.x business logic lives in services/ + commands/, NOT in plugin init hooks", "rationale": "Plugin architecture is verified (M1.3); business logic layered in service/command path per project policy; PluginHost was never wired to lib.rs::run until M2.17-3.1 (this commit)", "phase": "M1.3 / M2.17-3.1"},
+    {"decision": "Cap concurrent subagents at 4 (per CLAUDE.md §11.2)", "rationale": "Avoid main session context pollution + ensure subagent quality; matches GSD guidance", "phase": "M1-cross-cutting"},
+    {"decision": "D1: 3 件套 (PluginHost wiring / M1.10 收尾 / M1.11 文档) in parallel with M2.1 via 4-slot concurrency", "rationale": "Avoid 2-day context gap before M2.1; tests + impl are independent enough for subagent dispatch", "phase": "M2-pre", "source": "M1-final-report §7.3 D1"},
+    {"decision": "D2: M2 P0 4 plugin order = F1+F13 → (F2 ‖ F5 ‖ F6) parallel", "rationale": "F1 (provider list) and F13 (backup) are foundational; F2/F5/F6 depend on F1's data model and F13's backup-before-write pattern", "phase": "M2-pre", "source": "M1-final-report §7.3 D2"},
+    {"decision": "D3: Keep useViewState (localStorage) for navigation, not HashRouter", "rationale": "Frontend already wired with useViewState; Tauri uses tauri:// protocol so hash URLs are safer than history, but migration cost > value at M2 pre-stage", "phase": "M2-pre", "source": "M1-final-report §7.3 D3"},
+    {"decision": "D5: User verification = 抽查 (spot-check M1.9.3 + M1.3 v3) not 逐个", "rationale": "User trust calibration: M1 architecture-layer exes (M1.2/1.4/1.8) have no visible functional difference from M1.1; only 2 are functionally novel (M1.3 v3 = scrollbar fix, M1.9.3 = flex:1 fix)", "phase": "M1-close", "source": "M1-final-report §7.3 D5"},
+    {"decision": "M2.17-3.1: Store PluginHost as separate Tauri state (not in AppState)", "rationale": "Smaller change footprint per CLAUDE.md §2.4; AppState::build() unchanged; PluginHost construction happens in setup after app.manage(state)", "phase": "M2.17-3.1"},
+    {"decision": "M2.17-3.1: Wire host behind Mutex (not plain PluginHost)", "rationale": "Tauri State<T> derefs to &T, no &mut; shutdown_all requires &mut self; Mutex gives interior mutability for the run-event callback", "phase": "M2.17-3.1"}
   ],
   "uncommitted_files": [
-    {"path": ".planning/", "status": "untracked", "note": "research artifacts, STATE.md, HANDOFF.json (this file) — intentionally not tracked"},
+    {"path": ".planning/", "status": "mixed", "note": "HANDOFF.json is git-tracked (this rewrite is committed in next commit); STATE.md is git-tracked (last M2 progress patch 70bdee1); research/ is git-tracked"},
     {"path": "SPEC.md", "status": "untracked", "note": "Spec reference doc — kept untracked per CLAUDE.md §10 don't-touch rule"},
     {"path": "src-tauri/stderr.txt", "status": "untracked", "note": "Tauri runtime stderr capture, ephemeral debug artifact"},
-    {"path": "src-tauri/stdout.txt", "status": "untracked", "note": "Tauri runtime stdout capture, ephemeral debug artifact"}
+    {"path": "src-tauri/stdout.txt", "status": "untracked", "note": "Tauri runtime stdout capture, ephemeral debug artifact"},
+    {"path": "tmp/", "status": "untracked", "note": "Diagnostic scripts + probe reports + screenshots (one-time debug artifacts; not source)"}
   ],
-  "next_action": "Wait for user to verify ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe (no scrollbars). On confirmation, dispatch a subagent for M1.5 (frontend deps + design system baseline per CLAUDE.md §4). M1.5 scope: install Tailwind + shadcn/ui CLI, write src/design-system/tokens.css (Cream White #FAFAF7 theme variables), wire into tailwind.config.ts + ThemeProvider.tsx. Don't touch src-tauri/ or scripts/.",
-  "context_notes": "M1 架构期是 12 个子任务。已 ship 1.1/1.2/1.3/1.4/1.8，剩 1.5/1.6/1.7/1.9/1.10/1.11/1.12。最大反复的教训：subagent 在写代码时擅自改 build profile / 跳 commit / 假装 smoke 测过但实际没跑过 —— 必须用 smoke test 7（dist fingerprint grep）作为回归检测点。CLAUDE.md 是项目级规则文档（不是全局 memory），跟 SPEC.md 一起放仓库根。cs-web-fetch 路径是 /c/Users/e-Yunfei.Qian/.claude/plugins-dev/cs-knowledge-base/skills/cs-web-fetch/scripts/fetch.js（不是 ~/.claude/...）。kill-app.sh 用 taskkill -F 不是 /F。脚本都是 POSIX bash 在 Git Bash 里跑，需要用双重斜杠 //F 或单破折号 -F 逃逸 msys 路径转换。"
+  "next_action": "Subagent slot-1 (M2.17-3.1) returns: this HANDOFF.json rewritten. Slot-2 (C1+C2) and slot-4 (C4) also done; slot-3 (C3) merged into test bundle. Next: main session triggers scripts/build-and-ship.sh --milestone M2 --task 17 --slug plugin-host-wiring to produce the M2.17-3.1 ship exe. Smoke test must pass 7/7. Then await user verification per D5 spot-check strategy.",
+  "context_notes": "M1 架构期 (12 子任务) 已全部代码落地 commit（M1.12 merge 9776ee9），剩用户抽查核定。D5 策略: 抽查 M1.9.3 + M1.3 v3，其他可批量信任。M2.1~M2.16 业务功能全部 ship（最新 d820b82 M2.16-theme-trim 关 light 主题）。M2.17 是 4 槽并发（C1+C2/C3/C4/3.1）启动期：3 件套 (PluginHost wiring / M1.10 收尾 [C3] / M1.11 文档) + 跨切审计 (C1+C2 CI gates / C4 tsconfig strict)。3.1 这块实际工作：M1.3 写了 plugins::init_all 但从未 lib.rs 调，本任务把 init_all 接入 setup + RunEvent::Exit 调 shutdown_all 闭环。dev box cargo test 跑不动 (0xC0000139, 已知 L2 限制)，用 cargo test --no-run 替代。test/plugin_host_wiring.rs 6 个 case 编译通过即作为契约守护。"
 }
