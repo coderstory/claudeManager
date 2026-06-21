@@ -115,14 +115,19 @@ pub mod runtime {
     }
 
     /// App menu (macOS-only concept; Windows returns NotSupported).
-    pub fn app_menu() -> Box<dyn IPlatformAppMenu> {
+    ///
+    /// M2.16 — macOS 实现需要 live [`AppHandle`] 来构建 `NSMenu` 并
+    /// `set_menu`（与 [`autostart`] / [`notifier`] 对称）。Windows 分支
+    /// 忽略该参数。
+    pub fn app_menu(app: &AppHandle) -> Box<dyn IPlatformAppMenu> {
         #[cfg(windows)]
         {
+            let _ = app;
             Box::new(windows::WindowsAppMenu)
         }
         #[cfg(target_os = "macos")]
         {
-            Box::new(macos::MacAppMenu)
+            Box::new(macos::MacAppMenu::new(app))
         }
     }
 
