@@ -15,6 +15,7 @@
  *   - vi.useFakeTimers() 控制 autoDismiss 时间。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { ReactElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { ErrorBanner } from '../../components/ErrorBanner';
 
@@ -165,6 +166,41 @@ describe('ErrorBanner — autoDismiss', () => {
       vi.advanceTimersByTime(5000);
     });
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  // M2.16 — H4: 父组件 inline 传新 onDismiss(每次 render 新引用)时,
+  // 老实现 timer 会重置(永不 fire),新实现用 ref 保持 timer 稳定。
+  it('autoDismiss timer survives parent re-renders with new onDismiss ref', () => {
+    vi.useFakeTimers();
+    let dismissCount = 0;
+    // Wrapper 模拟"父组件 inline 传新 onDismiss"。注意 message
+    // 故意保持稳定 —— message/kind/autoDismissMs 变才会真正重置 timer
+    // (这是期望行为);只有 onDismiss 引用变不应该重置。
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    function Parent({ tick: _tick }: { tick: number }): ReactElement {
+      return (
+        <ErrorBanner
+          message="stable"
+          // 每次 render 新引用 —— 老实现会因此重置 timer。
+          onDismiss={() => {
+            dismissCount += 1;
+          }}
+          autoDismissMs={2000}
+        />
+      );
+    }
+    const { rerender } = render(<Parent tick={0} />);
+    // 1s 后,父组件因其他 state 变重渲,onDismiss 引用变了。
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    rerender(<Parent tick={1} />);
+    // 再 1s,刚好到 2s — 应 fire 1 次(老实现会因 onDismiss 引用变
+    // 清掉旧 timer + 起新 timer,这里永远 fire 不了)。
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(dismissCount).toBe(1);
   });
 });
 

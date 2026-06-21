@@ -28,7 +28,7 @@
  *   - import-sql: 评估 ErrorView (含重试按钮) 是否替换。
  *   - marketplace: 提取已存在的 ErrorBanner 到 components/。
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
@@ -98,17 +98,32 @@ export function ErrorBanner({
   const Icon = cfg.Icon;
   const hasDismiss = typeof onDismiss === 'function';
 
+  // M2.16 — H4: 把 onDismiss 存到 ref,这样 autoDismiss 的 useEffect
+  // deps 可以稳定(只 [autoDismissMs, kind, message])。老代码把
+  // onDismiss 放进 deps,父组件 inline 传 `() => setX(null)` 会每次
+  // render 生成新引用 → effect 重跑 → clear + 新 timer → autoDismiss
+  // 倒计时从父组件最后一次 render 算起,极端情况持续 re-render 时
+  // banner 永远不消失。
+  //
+  // 用 ref 存最新 onDismiss,timer fire 时调 ref.current()(永远拿到
+  // 最新值),timer 本身不再因 onDismiss 引用变化而重置。
+  const onDismissRef = useRef<(() => void) | undefined>(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
   // autoDismiss 仅在 onDismiss 存在时生效,避免无人监听时 setState。
   useEffect(() => {
     if (!hasDismiss) return;
     if (typeof autoDismissMs !== 'number' || autoDismissMs <= 0) return;
     const t = window.setTimeout(() => {
-      onDismiss();
+      // 通过 ref 调用,拿到最新的 onDismiss(避免 stale closure)。
+      onDismissRef.current?.();
     }, autoDismissMs);
     return () => {
       window.clearTimeout(t);
     };
-  }, [hasDismiss, autoDismissMs, onDismiss, message, kind]);
+  }, [hasDismiss, autoDismissMs, message, kind]);
 
   return (
     <div
