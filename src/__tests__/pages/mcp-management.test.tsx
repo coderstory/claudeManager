@@ -292,4 +292,54 @@ describe('McpManagementPage — F6 (M2.5)', () => {
       ).toBe('imported');
     });
   });
+
+  // M2.17 — F15 batch3: InfoBar 改用共享 ErrorBanner。
+  // 保留对外 testid `mcp-message` + data-message-kind,新增断言 banner 内部
+  // 走 kind=success (role="status") / kind=error (role="alert")。
+  it('toggle failure → mcp-message wrapper contains ErrorBanner kind=error with role=alert', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') {
+        return [sampleStdio('id-1', 'fs')];
+      }
+      if (cmd === 'toggle_mcp_server') {
+        throw new Error('disk full');
+      }
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-toggle')).toBeInTheDocument();
+    });
+    const toggle = screen.getByTestId('mcp-toggle') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    await waitFor(() => {
+      const msg = screen.getByTestId('mcp-message');
+      expect(msg).toBeInTheDocument();
+      expect(msg.getAttribute('data-message-kind')).toBe('error');
+      // ErrorBanner kind=error → role="alert"
+      const banner = msg.querySelector('[data-banner-kind="error"]');
+      expect(banner).not.toBeNull();
+      expect(banner!.getAttribute('role')).toBe('alert');
+      expect(banner!.textContent).toContain('disk full');
+    });
+  });
+
+  it('delete success → mcp-message wrapper contains ErrorBanner kind=success with role=status', async () => {
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('mcp-delete-btn').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getAllByTestId('mcp-delete-btn')[0]);
+    await waitFor(() => {
+      const msg = screen.getByTestId('mcp-message');
+      expect(msg).toBeInTheDocument();
+      expect(msg.getAttribute('data-message-kind')).toBe('success');
+      // ErrorBanner kind=success → role="status"
+      const banner = msg.querySelector('[data-banner-kind="success"]');
+      expect(banner).not.toBeNull();
+      expect(banner!.getAttribute('role')).toBe('status');
+    });
+  });
 });

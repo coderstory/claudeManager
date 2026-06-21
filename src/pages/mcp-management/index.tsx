@@ -49,8 +49,6 @@ import type {
   ReactElement,
 } from 'react';
 import {
-  AlertCircle,
-  CheckCircle2,
   Clipboard,
   Pencil,
   Plus,
@@ -58,6 +56,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { McpServer, McpTransport } from '../../types/mcp';
+import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   addMcpServer,
   listMcpServers,
@@ -354,35 +353,18 @@ export default function McpManagementPage(): ReactElement {
         </button>
       </div>
 
-      {/* InfoBar */}
+      {/* InfoBar — M2.17 F15 batch3: 内联提示条改用共享 ErrorBanner,
+          保留对外 testid `mcp-message` + `data-message-kind` (原测试断言)。 */}
       {state.message && (
         <div
           data-testid="mcp-message"
           data-message-kind={state.message.kind}
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 4,
-            background:
-              state.message.kind === 'success'
-                ? 'rgba(56, 142, 60, 0.08)'
-                : 'rgba(211, 47, 47, 0.08)',
-            color:
-              state.message.kind === 'success'
-                ? 'var(--success)'
-                : 'var(--danger)',
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
+          style={{ marginBottom: 12 }}
         >
-          {state.message.kind === 'success' ? (
-            <CheckCircle2 size={14} />
-          ) : (
-            <AlertCircle size={14} />
-          )}
-          <span>{state.message.text}</span>
+          <ErrorBanner
+            kind={state.message.kind}
+            message={state.message.text}
+          />
         </div>
       )}
 
