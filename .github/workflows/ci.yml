@@ -154,3 +154,53 @@ jobs:
           tauri-driver --port 4444 &
           sleep 5
           npx playwright test
+
+  # ---------------------------------------------------------------------------
+  # 4. macOS 编译门禁 — cargo check + 前端 build + vitest
+  # ---------------------------------------------------------------------------
+  # P1-6 修复 (M2.16): 加 macos-latest job 防止 Mac 运行时崩溃无门禁。
+  # release.yml 已在 git tag 时构建 macOS dmg,但 push/PR 时无 Mac 编译门禁,
+  # 导致 Mac 专属 impl (MacPaths / MacReveal / MacGitHost) 一旦 unimplemented!()
+  # 或 cfg 漏洞,只在 release 时才暴露。本 job 每次 push/PR 跑 cargo check +
+  # npm build + vitest,确保 Mac impl 编译通过。
+  # 不跑 tauri-driver e2e —— Mac 上配置复杂,本次只做编译+单测门禁
+  # (见上方 e2e job 的 Windows 参考实现)。
+  build-macos:
+    name: macOS gate (cargo check + vitest, macos-latest)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        # M1.11 fix (F-1.06): 与 Windows 同版本锁死,避免 Rust 发新版时 CI 行为漂移。
+        uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          # macos-latest = macos-14 (arm64 M1);显式锁 target 保证确定性
+          # (与 release.yml matrix 的 aarch64-apple-darwin 对齐)。
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - uses: actions/setup-node@v4
+        with:
+          # M1.11 fix (F-1.06): 与 Windows 同 patch 版本锁死。
+          node-version: '22.18.0'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: cargo check (Mac 编译门禁)
+        # 门禁核心:确保 Mac impl 编译通过 —— 无 unimplemented!()、无漏 Mac 的 cfg。
+        # Windows 专属依赖 (windows / winreg) 在 Cargo.toml 里 cfg(windows) 门控,
+        # Mac 上自动跳过,不影响 check。
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Build frontend (跨平台)
+        run: npm run build
+
+      - name: Run Vitest (跨平台)
+        run: npm test -- --run
