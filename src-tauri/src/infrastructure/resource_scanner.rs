@@ -135,10 +135,12 @@ fn scan_dir_children(
         };
         let size_bytes = dir_size_or_zero(&path);
         let id = format!("{}/{name}", kind_sub_tag(&path, sub));
+        let kind = kind_from_sub(sub);
         out.push(ResourceItem {
             id,
+            source_repo: infer_source_repo(kind, &name),
             name,
-            kind: kind_from_sub(sub),
+            kind,
             path: path.to_string_lossy().into_owned(),
             size_bytes,
             enabled: true,
@@ -198,10 +200,12 @@ fn scan_dir_children_with_ext(
         };
         let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         let id = format!("{}/{name}", kind_sub_tag(&path, sub));
+        let kind = kind_from_sub(sub);
         out.push(ResourceItem {
             id,
+            source_repo: infer_source_repo(kind, &name),
             name,
-            kind: kind_from_sub(sub),
+            kind,
             path: path.to_string_lossy().into_owned(),
             size_bytes,
             enabled: true,
@@ -248,6 +252,8 @@ fn scan_mcp_json(
             .unwrap_or(false);
         out.push(ResourceItem {
             id: format!("mcp/{name}"),
+            // mcp server 是 mcp.json 里的聚合条目,无仓库归属 → None。
+            source_repo: infer_source_repo(ResourceKind::Mcp, &name),
             name: name.clone(),
             kind: ResourceKind::Mcp,
             path: path.to_string_lossy().into_owned(),
@@ -262,6 +268,30 @@ fn scan_mcp_json(
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
+
+/// F21 — 从资源 `path` 推断来源仓库名(M2.16)。
+///
+/// 规则(SPEC F21 "按来源仓库过滤"的最小推断方案):
+/// - plugin: `.../.claude/plugins/<X>/...` → `Some(<X>)`
+/// - skill : `.../.claude/skills/<X>/...` → `Some(<X>)`
+/// - command/lsp/mcp:散文件 / 聚合条目,无仓库概念 → `None`
+///
+/// 实现只做字符串解析,不读 `.git/config`(避免 I/O + 跨平台路径坑)。
+/// `name` 对 plugin/skill 恰好等于顶层目录名,直接复用;对 command/lsp
+/// 是文件名(含扩展),对 mcp 是 server 名——这些 kind 不推断,传 `None`。
+///
+/// 之所以单独抽函数(而非内联):测试要覆盖"plugins/skills 命中 /
+/// 其他 kind 返回 None / 路径无 .claude 段"等边界,抽出来好测。
+fn infer_source_repo(kind: ResourceKind, name: &str) -> Option<String> {
+    match kind {
+        // plugin/skill 的 name 就是 `<subdir>` 下的顶层目录/文件名,
+        // 即 repo 分组键。scanner 已保证 name 非空且非 dotfile。
+        ResourceKind::Plugin | ResourceKind::Skill => Some(name.to_string()),
+        // 散文件(command .md / lsp .json)与聚合条目(mcp server)没有
+        // "仓库"归属——它们是用户手写的单文件,不属于任何 repo。
+        ResourceKind::Command | ResourceKind::Lsp | ResourceKind::Mcp => None,
+    }
+}
 
 /// Map the sub-directory name to a kind. Plugin/Skill/Command/Lsp
 /// all use their own enum variant; only the mcp path is special.
@@ -521,5 +551,92 @@ mod tests {
         fs::write(tmp.path().join("commands").join("hi.md"), b"x").unwrap();
         let items = scan_resources(tmp.path(), ResourceKind::Command).unwrap();
         assert_eq!(items[0].id, "command/hi.md");
+    }
+
+    // ----- F21 source_repo 推断 (M2.16) -----
+    //
+    // SPEC F21 要求"按来源仓库过滤"。最小方案:plugin/skill 的
+    // source_repo = 顶层目录名(= name);command/lsp/mcp = None。
+
+    /// plugin 的 source_repo 等于其目录名(= repo 分组键)。
+    #[test]
+    fn source_repo_inferred_for_plugins() {
+        let tmp = make_claude_dir();
+        fs::create_dir(tmp.path().join("plugins").join("code-review")).unwrap();
+        fs::write(
+            tmp.path().join("plugins").join("code-review").join("index.md"),
+            b"x",
+        )
+        .unwrap();
+        let items = scan_resources(tmp.path(), ResourceKind::Plugin).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].source_repo.as_deref(), Some("code-review"));
+    }
+
+    /// skill 的 source_repo 等于其顶层目录/文件名。
+    #[test]
+    fn source_repo_inferred_for_skills() {
+        let tmp = make_claude_dir();
+        let dir_skill = tmp.path().join("skills").join("advanced");
+        fs::create_dir(&dir_skill).unwrap();
+        fs::write(dir_skill.join("SKILL.md"), b"# advanced").unwrap();
+        fs::write(
+            tmp.path().join("skills").join("quickref.md"),
+            b"# quickref",
+        )
+        .unwrap();
+        let items = scan_resources(tmp.path(), ResourceKind::Skill).unwrap();
+        assert_eq!(items.len(), 2);
+        let by_name: std::collections::HashMap<_, _> = items
+            .iter()
+            .map(|i| (i.name.as_str(), i.source_repo.as_deref()))
+            .collect();
+        assert_eq!(by_name["advanced"], Some("advanced"));
+        assert_eq!(by_name["quickref.md"], Some("quickref.md"));
+    }
+
+    /// command/lsp/mcp 的 source_repo 必须是 None —— 散文件 / 聚合条目
+    /// 没有仓库归属。这是前端"全部来源"下拉默认选项存在的语义依据。
+    #[test]
+    fn source_repo_none_for_command_lsp_mcp() {
+        let tmp = make_claude_dir();
+        fs::write(tmp.path().join("commands").join("build.md"), b"x").unwrap();
+        fs::write(
+            tmp.path().join("lsp").join("rust.json"),
+            b"{\"lang\":\"rust\"}",
+        )
+        .unwrap();
+        fs::write(
+            tmp.path().join("mcp.json"),
+            r#"{"mcpServers":{"fs":{"command":"npx"}}}"#,
+        )
+        .unwrap();
+
+        for kind in [ResourceKind::Command, ResourceKind::Lsp, ResourceKind::Mcp] {
+            let items = scan_resources(tmp.path(), kind).unwrap();
+            assert_eq!(items.len(), 1, "kind {kind:?} should yield 1 item");
+            assert!(
+                items[0].source_repo.is_none(),
+                "kind {kind:?} source_repo must be None, got {:?}",
+                items[0].source_repo
+            );
+        }
+    }
+
+    /// 单元覆盖推断函数本身:plugin/skill → Some(name),
+    /// command/lsp/mcp → None。pin 行为防回归。
+    #[test]
+    fn infer_source_repo_rules() {
+        assert_eq!(
+            infer_source_repo(ResourceKind::Plugin, "code-review"),
+            Some("code-review".into())
+        );
+        assert_eq!(
+            infer_source_repo(ResourceKind::Skill, "my-skill"),
+            Some("my-skill".into())
+        );
+        assert_eq!(infer_source_repo(ResourceKind::Command, "build.md"), None);
+        assert_eq!(infer_source_repo(ResourceKind::Lsp, "rust.json"), None);
+        assert_eq!(infer_source_repo(ResourceKind::Mcp, "fs"), None);
     }
 }

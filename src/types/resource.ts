@@ -22,6 +22,19 @@ export interface ResourceItem {
   path: string;
   size_bytes: number;
   enabled: boolean;
+  /**
+   * F21 — 来源仓库分组名(M2.16)。
+   *
+   * Rust 端从 `path` 推断:plugin/skill 取 `.claude/<subdir>/<X>`
+   * 的 `<X>`(顶层目录名 = repo 分组键);command/lsp/mcp 为
+   * `null`(散文件 / 聚合条目,无仓库概念)。
+   *
+   * 前端 `resource-browser` 页用这个字段做"按来源仓库过滤"下拉。
+   * 注意:不要在这里写推断逻辑——保持与 Rust 推断规则一致,避免
+   * 双实现 drift。所有 group-by 都用 `source_repo ?? "(无来源)"`
+   * 把 null 兜底成显示标签。
+   */
+  source_repo: string | null;
 }
 
 /**

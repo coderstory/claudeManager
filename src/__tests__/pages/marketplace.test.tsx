@@ -49,6 +49,8 @@ function resource(
     path: `C:/repo/${kind}s/${id.split('/').pop() ?? id}`,
     size_bytes: 1024,
     enabled: true,
+    // F21 (M2.16) — marketplace test 不关心 source_repo,默认 null。
+    source_repo: null,
     ...overrides,
   };
 }

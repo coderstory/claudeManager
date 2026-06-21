@@ -38,6 +38,11 @@ use serde::{Deserialize, Serialize};
 ///   per-resource enable toggle exists in M2.13); for Mcp it
 ///   mirrors `mcp.json.<server>.disabled` (`true` means
 ///   explicitly turned off by the user via F6).
+/// - `source_repo`: F21 — 来源仓库分组名(M2.16)。从 `path` 推断:
+///   plugin/skill 取 `.claude/<subdir>/<X>` 中的 `<X>`(顶层目录名,
+///   即 repo 名);command/lsp/mcp 为 `None`(散文件 / 聚合条目,无
+///   仓库概念)。前端 F21 据此做"按来源仓库过滤"。详见
+///   `resource_scanner::infer_source_repo`。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResourceItem {
     pub id: String,
@@ -46,6 +51,7 @@ pub struct ResourceItem {
     pub path: String,
     pub size_bytes: u64,
     pub enabled: bool,
+    pub source_repo: Option<String>,
 }
 
 /// Which of the 5 resource categories a [`ResourceItem`] belongs to.
@@ -139,6 +145,7 @@ mod tests {
             path: "C:/Users/foo/.claude/plugins/code-review".into(),
             size_bytes: 4096,
             enabled: true,
+            source_repo: Some("code-review".into()),
         };
         let json = serde_json::to_string(&item).unwrap();
         let parsed: ResourceItem = serde_json::from_str(&json).unwrap();

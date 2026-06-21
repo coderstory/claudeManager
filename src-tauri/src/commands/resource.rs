@@ -126,7 +126,7 @@ mod tests {
 
     /// `ResourceItem` JSON shape stability — pin the fields the
     /// frontend relies on (`id`, `name`, `kind`, `path`,
-    /// `size_bytes`, `enabled`).
+    /// `size_bytes`, `enabled`, `source_repo`).
     #[test]
     fn resource_item_json_shape() {
         let item = ResourceItem {
@@ -136,6 +136,7 @@ mod tests {
             path: "C:/Users/foo/.claude/commands/hi.md".into(),
             size_bytes: 12,
             enabled: true,
+            source_repo: None,
         };
         let v = serde_json::to_value(&item).unwrap();
         assert_eq!(v["id"], "command/hi.md");
@@ -144,6 +145,25 @@ mod tests {
         assert_eq!(v["path"], "C:/Users/foo/.claude/commands/hi.md");
         assert_eq!(v["size_bytes"], 12);
         assert_eq!(v["enabled"], true);
+        // command 无仓库归属 → null。前端 TS 类型是 string | null。
+        assert_eq!(v["source_repo"], serde_json::Value::Null);
+    }
+
+    /// F21 — plugin 的 source_repo 非空时序列化为字符串。
+    /// 前端来源过滤下拉靠这个字段,shape 必须稳定。
+    #[test]
+    fn resource_item_source_repo_some_serialises_to_string() {
+        let item = ResourceItem {
+            id: "plugin/code-review".into(),
+            name: "code-review".into(),
+            kind: ResourceKind::Plugin,
+            path: "C:/Users/foo/.claude/plugins/code-review".into(),
+            size_bytes: 4096,
+            enabled: true,
+            source_repo: Some("code-review".into()),
+        };
+        let v = serde_json::to_value(&item).unwrap();
+        assert_eq!(v["source_repo"], "code-review");
     }
 
     /// F22 — `ResourceDetail` JSON shape stability。前端依赖

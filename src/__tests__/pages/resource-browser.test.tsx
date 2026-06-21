@@ -30,6 +30,8 @@ function item(
   kind: ResourceKind,
   overrides: Partial<ResourceItem> = {},
 ): ResourceItem {
+  // F21 (M2.16) — 默认 source_repo 为 null(command/lsp/mcp 的常见情况)。
+  // 测试覆盖 plugin/skill 时,显式 overrides 即可。
   return {
     id,
     name: id.split('/').pop() ?? id,
@@ -37,6 +39,7 @@ function item(
     path: `C:/Users/foo/.claude/${kind}s/${id.split('/').pop() ?? id}`,
     size_bytes: 1024,
     enabled: true,
+    source_repo: null,
     ...overrides,
   };
 }
@@ -942,5 +945,278 @@ describe('ResourceBrowserPage — F22 manifest detail (M2.16-f22-manifest)', () 
     await waitFor(() => {
       expect(screen.getByText('单文件资源(path 即文件本身)')).toBeInTheDocument();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F21 — 按来源仓库过滤 (M2.16)
+// 覆盖:下拉渲染 unique source_repo、选中后过滤、清空恢复、切 tab
+//      重置、与 fuzzy 搜索叠加、详情面板展示来源仓库、kind=command
+//      时下拉只剩 (无来源)、mock 数据来源纯 null 时不渲染下拉。
+// ---------------------------------------------------------------------------
+describe('ResourceBrowserPage — F21 source-repo filter (M2.16)', () => {
+  it('renders the source filter dropdown with unique source_repos', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin', { source_repo: 'anthropic-tools' }),
+      item('plugin/doc-writer', 'plugin', { source_repo: 'anthropic-tools' }),
+      item('plugin/git-tools', 'plugin', { source_repo: 'community-plugins' }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-filter')).toBeInTheDocument();
+    });
+    const select = screen.getByTestId(
+      'resource-browser-source-select',
+    ) as HTMLSelectElement;
+    // 3 个 plugin 去重后 2 个 unique source_repo + 全部 = 3 个 option;
+    // 无 null 资源所以没有 (无来源) 项。
+    expect(select.options.length).toBe(3);
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels).toContain('全部');
+    expect(labels).toContain('anthropic-tools');
+    expect(labels).toContain('community-plugins');
+  });
+
+  it('selecting a source filters rows down to that repo', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin', { source_repo: 'anthropic-tools' }),
+      item('plugin/doc-writer', 'plugin', { source_repo: 'anthropic-tools' }),
+      item('plugin/git-tools', 'plugin', { source_repo: 'community-plugins' }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-select')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-source-select'),
+        { target: { value: 'community-plugins' } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/git-tools'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/code-review'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/doc-writer'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clearing the source filter restores all rows', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin', { source_repo: 'a' }),
+      item('plugin/git-tools', 'plugin', { source_repo: 'b' }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-select')).toBeInTheDocument();
+    });
+
+    // 过滤到 a
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-source-select'),
+        { target: { value: 'a' } },
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('resource-browser-row-plugin/git-tools'),
+      ).not.toBeInTheDocument();
+    });
+
+    // 点 X 清空来源过滤
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-source-clear'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/git-tools'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('switching tabs resets the source filter', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_resources') {
+        const kind = (args as { kind: string }).kind;
+        if (kind === 'plugin') {
+          return [
+            item('plugin/a', 'plugin', { source_repo: 'x' }),
+            item('plugin/b', 'plugin', { source_repo: 'y' }),
+          ];
+        }
+        if (kind === 'command') {
+          return [
+            item('command/c1', 'command', { source_repo: null }),
+            item('command/c2', 'command', { source_repo: null }),
+          ];
+        }
+      }
+      return [];
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-select')).toBeInTheDocument();
+    });
+
+    // 选 x
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-source-select'),
+        { target: { value: 'x' } },
+      );
+    });
+    const sel = screen.getByTestId(
+      'resource-browser-source-select',
+    ) as HTMLSelectElement;
+    expect(sel.value).toBe('x');
+
+    // 切到 commands tab
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-command'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-command/c1'),
+      ).toBeInTheDocument();
+    });
+
+    // 来源过滤应被清空 → 下拉值回到 "" (全部)
+    const selAfter = screen.getByTestId(
+      'resource-browser-source-select',
+    ) as HTMLSelectElement;
+    expect(selAfter.value).toBe('');
+  });
+
+  it('source filter composes with fuzzy name filter (both must pass)', async () => {
+    mockInvoke.mockResolvedValue([
+      item('plugin/code-review', 'plugin', { source_repo: 'a' }),
+      item('plugin/code-writer', 'plugin', { source_repo: 'a' }),
+      item('plugin/code-helper', 'plugin', { source_repo: 'b' }),
+    ]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-select')).toBeInTheDocument();
+    });
+
+    // source = a, search = code → 命中 2 项
+    await act(async () => {
+      fireEvent.change(
+        screen.getByTestId('resource-browser-source-select'),
+        { target: { value: 'a' } },
+      );
+      fireEvent.change(
+        screen.getByTestId('resource-browser-search-input'),
+        { target: { value: 'code' } },
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('resource-browser-row-plugin/code-writer'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('resource-browser-row-plugin/code-helper'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('command kind with all-null source_repo shows only (无来源) option', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_resources') {
+        const kind = (args as { kind: string }).kind;
+        if (kind === 'command') {
+          return [
+            item('command/build', 'command', { source_repo: null }),
+            item('command/deploy', 'command', { source_repo: null }),
+          ];
+        }
+      }
+      return [];
+    });
+    render(<ResourceBrowserPage />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-command'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-source-select')).toBeInTheDocument();
+    });
+    const select = screen.getByTestId(
+      'resource-browser-source-select',
+    ) as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels).toEqual(['全部', '(无来源)']);
+
+    // 选 (无来源) → 两个 command 都在(它们 source_repo 都是 null)
+    await act(async () => {
+      fireEvent.change(select, { target: { value: '(无来源)' } });
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-command/build'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('resource-browser-row-command/deploy'),
+    ).toBeInTheDocument();
+  });
+
+  it('does NOT render the source filter when source_repos are empty', async () => {
+    // source_repo 全部 null,但这种场景下 NONE_SOURCE_LABEL 会进下拉,
+    // 所以下拉一定会渲染。测试改用 state.items 为空来验证不渲染。
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+    // 整个搜索/过滤区都不渲染(state.items.length === 0 时)
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-empty')).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId('resource-browser-source-filter'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('detail panel shows source_repo (or (无来源) for null)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [
+          item('plugin/code-review', 'plugin', {
+            source_repo: 'anthropic-tools',
+          }),
+          item('command/build', 'command', { source_repo: null }),
+        ];
+      }
+      if (cmd === 'get_resource_detail') {
+        return { files: [], description: null, manifest: null };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    // 展开 plugin 行:详情面板应有 "来源仓库: anthropic-tools"
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+    const pluginPanel = screen.getByTestId(
+      'resource-browser-detail-plugin/code-review',
+    );
+    expect(pluginPanel.textContent).toContain('来源仓库');
+    expect(pluginPanel.textContent).toContain('anthropic-tools');
   });
 });

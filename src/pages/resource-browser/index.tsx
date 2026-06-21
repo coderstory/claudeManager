@@ -94,6 +94,15 @@ const INITIAL_STATE: PageState = {
 // ---------------------------------------------------------------------------
 
 /**
+ * F21 (M2.16) — 来源下拉的"无来源"哨兵值。
+ *
+ * 对应 Rust `ResourceItem.source_repo: Option<String>` 的 `None`
+ * 情形(command / lsp / mcp 资源无仓库归属)。下拉里显示为
+ * "(无来源)",选中后只过滤 source_repo === null 的项。
+ */
+const NONE_SOURCE_LABEL = '(无来源)';
+
+/**
  * 资源形态 — ResourceItem.path 在磁盘上的实际形状。
  *
  * ResourceItem 模型本身没有标明 path 是文件还是目录（F16 领域层故意省略，
@@ -155,6 +164,12 @@ export default function ResourceBrowserPage(): ReactElement {
   // (runList) clears the query so the new kind starts unfiltered.
   const [searchQuery, setSearchQuery] = useState('');
 
+  // F21 (M2.16) — 来源仓库过滤。`null` = 全部;string = 选中某个
+  // source_repo。来源下拉的选项由当前 tab 资源的 unique source_repo
+  // 派生(可能含 `(无来源)` 兜底,对应 Rust 端 None)。切 tab 时清空,
+  // 见 runList。
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+
   // F22 — 详情面板展开状态。
   //
   // 用 Set<ResourceItem.id> 而不是单个 selectedId,允许同时展开多行
@@ -167,6 +182,9 @@ export default function ResourceBrowserPage(): ReactElement {
     // the new list starts unfiltered. (If we kept the old query it
     // would hide everything in a kind that doesn't share the name.)
     setSearchQuery('');
+    // F21 (M2.16) — 切 tab / 重新扫描时同步清空来源过滤,避免跨
+    // kind 残留一个在当前 tab 不存在的 source_repo 过滤。
+    setSourceFilter(null);
     // F22 — 切 tab / 重新扫描时清空展开态,避免跨 kind 残留详情面板。
     setExpandedIds(new Set());
     setState((prev) => ({
@@ -242,22 +260,61 @@ export default function ResourceBrowserPage(): ReactElement {
   // 非空查询 → 子序列匹配 name 字段，按 score 降序排列，
   //   连续命中 / 词首命中排前面（fuzzyMatch 内部已加权）。
   //
+  // F21 (M2.16) — 在 fuzzyMatch 之后再叠一层 source_repo 过滤。
+  // sourceFilter === null → 全部;否则只留 source_repo 匹配(或
+  // sourceFilter === NONE_LABEL 兜底 → 只留 source_repo 为 null 的)。
+  // 顺序是 fuzzy → source:先按相关性排序再按仓库分组,这样
+  // "doc" + "anthropic-tools" 仍会先命中相关性高的 doc-writer。
+  //
   // 这里用 useMemo 而不是 useEffect——过滤是纯派生状态，
   // 不需要副作用，render 期间计算即可。
   const filteredItems = useMemo<TauriResourceItem[]>(() => {
+    // 先按 name fuzzy 过滤
     const q = searchQuery.trim();
-    if (q === '') return state.items;
-    const scored: Array<{ item: TauriResourceItem; score: number }> = [];
-    for (const item of state.items) {
-      const r = fuzzyMatch(q, item.name);
-      if (r !== null) {
-        scored.push({ item, score: r.score });
+    const afterName: TauriResourceItem[] = [];
+    if (q === '') {
+      afterName.push(...state.items);
+    } else {
+      for (const item of state.items) {
+        const r = fuzzyMatch(q, item.name);
+        if (r !== null) {
+          afterName.push(item);
+        }
       }
     }
-    // 分数降序；分数相同则保持原列表顺序（稳定排序）。
-    scored.sort((a, b) => b.score - a.score);
-    return scored.map((s) => s.item);
-  }, [state.items, searchQuery]);
+    // 再按 source_repo 过滤
+    if (sourceFilter === null) return afterName;
+    return afterName.filter((i) =>
+      sourceFilter === NONE_SOURCE_LABEL
+        ? i.source_repo === null
+        : i.source_repo === sourceFilter,
+    );
+  }, [state.items, searchQuery, sourceFilter]);
+
+  // F21 (M2.16) — 来源下拉的选项列表。
+  //
+  // 从当前 tab 的 items 派生 unique source_repo,按字母序排列。
+  // null 兜底成 `NONE_SOURCE_LABEL`(显示为 "(无来源)"),允许用户
+  // 单独看 command/lsp/mcp 这些无仓库归属的项。
+  // 空列表时返回空数组,下拉组件不渲染。
+  const availableSources = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    let hasNull = false;
+    for (const i of state.items) {
+      if (i.source_repo === null) {
+        hasNull = true;
+      } else {
+        set.add(i.source_repo);
+      }
+    }
+    const out = Array.from(set).sort((a, b) => a.localeCompare(b));
+    if (hasNull) out.push(NONE_SOURCE_LABEL);
+    return out;
+  }, [state.items]);
+
+  // F21 (M2.16) — 当前 source 过滤是否生效的标志。
+  // 用于决定下拉右侧是否高亮"激活"角标。
+  const sourceFilterActive = sourceFilter !== null;
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
@@ -404,75 +461,165 @@ export default function ResourceBrowserPage(): ReactElement {
         {state.kind === 'mcp' ? '' : '/'}
       </div>
 
-      {/* F21 — 搜索框（按 name 模糊过滤当前 tab 列表） */}
+      {/* F21 — 搜索 + 来源过滤区(name 模糊 + source_repo 下拉) */}
       {!state.loading && !state.listError && state.items.length > 0 && (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: '6px 12px',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
+            flexWrap: 'wrap',
           }}
         >
-          <Search
-            size={14}
-            style={{ flexShrink: 0, color: 'var(--text-muted)' }}
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`搜索 ${resourceKindLabel(state.kind)} 名称...`}
-            data-testid="resource-browser-search-input"
-            aria-label={`搜索${resourceKindLabel(state.kind)}名称`}
+          {/* 名称模糊搜索框 */}
+          <div
             style={{
-              flex: '1 1 auto',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              fontSize: 13,
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-ui)',
-              padding: '2px 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              flex: '1 1 280px',
+              minWidth: 240,
             }}
-          />
-          {searchQuery !== '' && (
-            <button
-              type="button"
-              data-testid="resource-browser-search-clear"
-              onClick={handleClearSearch}
-              aria-label="清空搜索"
-              title="清空搜索"
+          >
+            <Search
+              size={14}
+              style={{ flexShrink: 0, color: 'var(--text-muted)' }}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`搜索 ${resourceKindLabel(state.kind)} 名称...`}
+              data-testid="resource-browser-search-input"
+              aria-label={`搜索${resourceKindLabel(state.kind)}名称`}
               style={{
-                background: 'transparent',
+                flex: '1 1 auto',
                 border: 'none',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                padding: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: 1,
+                outline: 'none',
+                background: 'transparent',
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-ui)',
+                padding: '2px 0',
               }}
-            >
-              <X size={14} />
-            </button>
-          )}
-          {/* 结果计数 — 帮用户判断过滤是否生效 */}
-          {searchQuery.trim() !== '' && (
-            <span
+            />
+            {searchQuery !== '' && (
+              <button
+                type="button"
+                data-testid="resource-browser-search-clear"
+                onClick={handleClearSearch}
+                aria-label="清空搜索"
+                title="清空搜索"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+            {/* 结果计数 — 帮用户判断过滤是否生效 */}
+            {(searchQuery.trim() !== '' || sourceFilterActive) && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {filteredItems.length}/{state.items.length}
+              </span>
+            )}
+          </div>
+
+          {/* F21 (M2.16) — 来源仓库下拉过滤 */}
+          {availableSources.length > 0 && (
+            <div
+              data-testid="resource-browser-source-filter"
               style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                whiteSpace: 'nowrap',
-                fontVariantNumeric: 'tabular-nums',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px 4px 12px',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
               }}
             >
-              {filteredItems.length}/{state.items.length}
-            </span>
+              <label
+                htmlFor="resource-browser-source-select"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                来源:
+              </label>
+              <select
+                id="resource-browser-source-select"
+                data-testid="resource-browser-source-select"
+                value={sourceFilter ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSourceFilter(v === '' ? null : v);
+                }}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: 13,
+                  color: sourceFilterActive
+                    ? 'var(--accent)'
+                    : 'var(--text-primary)',
+                  fontFamily: 'var(--font-ui)',
+                  padding: '2px 4px',
+                  cursor: 'pointer',
+                }}
+                aria-label="按来源仓库过滤"
+              >
+                <option value="">全部</option>
+                {availableSources.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              {sourceFilterActive && (
+                <button
+                  type="button"
+                  data-testid="resource-browser-source-clear"
+                  onClick={() => setSourceFilter(null)}
+                  aria-label="清空来源过滤"
+                  title="清空来源过滤"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    lineHeight: 1,
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -947,7 +1094,18 @@ function ResourceDetailPanel({
           label="类型"
           value={`${resourceKindLabel(item.kind)} (${item.kind})`}
         />
-        <DetailField label="来源" value={sourceLabel} />
+        <DetailField
+          label="来源"
+          value={sourceLabel}
+        />
+        {/* F21 (M2.16) — 来源仓库分组名。Rust 从 path 推断,
+            plugin/skill 非空,command/lsp/mcp 显示 "(无来源)"。 */}
+        <DetailField
+          label="来源仓库"
+          value={item.source_repo ?? NONE_SOURCE_LABEL}
+          mono
+          muted={item.source_repo === null}
+        />
         <DetailField label="路径" value={item.path} mono />
         <DetailField
           label="大小"
