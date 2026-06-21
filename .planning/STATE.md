@@ -490,3 +490,115 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - 无 sparkline 数据源 —— 占位横线
 - 无 balance 预警 (< $5 通知留 M2.8+)
 - Mac impls 仍是 stub (M2.x 全局限制)
+
+---
+
+# === M2 实际进度补丁（2026-06-20 M2.15 追加） ===
+
+> 上方"M2 业务期启动"~"M2.7 F7 用量查询"小节记录了 M2.1~M2.7 的逐步 ship 过程；M2.8+ F8 / F18 / F11-F12 / F9 / F16 都在 M2.8~M2.13 落地。本节补全 M2.8~M2.15 实际状态（含 F8 / F18 / F11-F12 / F9 / F16 + 全项目 Tailwind inline 化 + 详情页布局统一）。
+>
+> 数据来源：`git log --oneline` (172 M2 相关 commit，HEAD = `e8df5c8`) + 实际桌面文件清单 `ls ~/Desktop/ClaudeConfigManager-M2/`。
+
+## M2.8~M2.15 业务功能期 ship 总览
+
+| Plugin | F 编号 | ship 迭代 | 关键 commit | ship exe | 状态 |
+|---|---|---|---|---|---|
+| F8 单文件部署 | F8 | M2.2.8 + M2.8 + M2.8.1 | (见 §M2.8) | `ClaudeConfigManager-M2.2.8-f8-single-file-deploy.exe` | ✅ (ship 过, 桌面已清理) |
+| F8 routing-fix | F8 | M2.2.9 | (fix) | `ClaudeConfigManager-M2.2.9-f8-routing-fix.exe` | ✅ (ship 过, 桌面已清理) |
+| F18 配置优化 | F18 | M2.2.9 + M2.9 | (见 §M2.9) | `ClaudeConfigManager-M2.2.9-f18-optimizer.exe` | ✅ (ship 过, 桌面已清理) |
+| F11/F12 快捷键+主题 | F11/F12 | M2.3.0 + M2.10 | (见 §M2.10) | `ClaudeConfigManager-M2.3.0-f11-f12-shortcuts-theme.exe` | ✅ (ship 过, 桌面已清理) |
+| F9 模糊搜索 | F9 | M2.3.1 + M2.11 | (见 §M2.11) | `ClaudeConfigManager-M2.3.1-f9-fuzzy-search.exe` | ✅ (ship 过, 桌面已清理) |
+| F16 资源浏览 | F16 | M2.13 + M2.3.2 | `f0ab769` + `fe39126` | `ClaudeConfigManager-M2.3.2-f16-resource-browser.exe` | ✅ (ship 过, 桌面已清理) |
+| M2.15 polish | — | M2.15 | `a216aff` + `ce6357a` + 7×uniform | `ClaudeConfigManager-M2.15-tailwind-inline-v2.exe` (历史) / `ClaudeConfigManager-M2.15-detail-page-padding-trim.exe` / **`ClaudeConfigManager-M2.15-detail-page-uniform.exe`** | ✅ (最新 ship 在桌面) |
+
+> 注：上方"ship exe"列中标记 `(ship 过, 桌面已清理)` 的 exe 在本次收尾（2026-06-20 21:13）执行 `ls ~/Desktop/ClaudeConfigManager-M2/` 时已不在桌面（可能因后续 polish 替换 + 桌面保留策略 = 仅保留最近 2 个 ship）。这些 exe 在上方 M2.1~M2.13 各小节中已 ship 记录过。
+
+## M2.15 关键修复（M2.13~M2.15 polish 阶段）
+
+### M2.13-page (f0ab769) + M2.13-fix (fe39126) — F16 资源浏览真实实现
+- Status: ✅ 修复
+- 内容: ResourceBrowserPage 5 tabs (Prompts / Skills / Commands / Templates / Hooks) + reveal_in_file_manager 集成 + 9 vitest + 3 playwright e2e
+- 修复: drop 重复 `resource-browser` branch in App.tsx router (冲突分支合并后导致路由断裂) + 删 `unused args param` in test
+- 相关 commit: `2079cef` (M2.3.1-verify: real-invoke e2e spec) / `855b447` (M2.13-domain: ResourceItem + ResourceKind + 3 cases) / `1dce1c3` (M2.13-service: resource_scanner 5 kinds + 12 cases) / `4a0c527` (M2.13-partial: Tauri commands + AppState wiring) / `be4e12a` (M2.15-regression: defensive test) / `79cf8a4` (M2.3.2-verify-test: commit ui-layout real-invoke spec)
+
+### M2.15-fix-v2 (a216aff) — Tailwind pipeline 缺失 (root cause)
+- Status: ✅ Root cause 修复
+- Root cause: 项目 `tailwindcss@3.4.17` 列在 devDeps 但**没有** `tailwind.config.js` / `postcss.config.js` / vite plugin → `dist/assets/index-*.css` 仅 1.99KB tokens + 0 utility rules → 所有 Tailwind utility class (`flex` / `items-center` / `gap-1` / `hover:` 等) 在真机 release exe 是 dead code
+- 影响: chrome cluster (search/refresh/toggle/settings/shortcut) 之前在 AppHeader 内 y=-40.4 / y=87.6 溢出 viewport → 修复后 5 按钮 x∈[832..1008] y=7.6 在 viewport 内
+- 修复: inline 所有 flex/gap/hover 到 style 属性; 新建 `src/design-system/utilities.css` 集中 hover/transition 规则, 由 `main.tsx` 显式 import
+
+### M2.15-inline-tailwind (9 commits) — 全项目 inline 化 Tailwind utility class
+- Status: ✅ 修复 (9 原子 commit)
+- Root cause: 同 M2.15-fix-v2 (Tailwind pipeline 缺失, 所有 className 是 dead code)
+- 修复 (9 commits):
+  1. `fd28093` 新建 `src/design-system/utilities.css` + `main.tsx` 显式 import (共享 hover/animation 规则)
+  2. `f48c0be` `src/App.tsx` 移除冗余 Tailwind utility className (style 已 inline)
+  3. `d7eb817` `src/components/AppSidebar.tsx` drop cn() + inline flex/gap + `data-app-sidebar-hover` 处理 hover
+  4. `9ed20de` `src/components/PluginPlaceholder.tsx` drop cn() + inline flex/p/margin/font + `className` prop → `style` prop
+  5. `4199018` `src/components/QuickSearchModal.tsx` close button: 删 hover utility className + `data-app-close-hover`
+  6. `cf7169a` `src/pages/home/index.tsx` drop cn() + inline flex/grid/margin/font + `data-app-home-tile` 处理 hover shadow
+  7. `888494c` `src/pages/single-file-deploy/index.tsx` inline ~25 utility classes + `data-app-cmd-toggle` 处理 hover
+  8. `110dfec` `src/pages/usage-query/index.tsx` inline ~25 utility classes + 4 个 `data-app-*` 处理 stateful 规则
+  9. `a7cee0b` tailwind audit + cdp probe helper (working artifacts)
+
+### M2.15-fix-main-top (ce6357a) — <main> 顶部 phantom gap
+- Status: ✅ 修复
+- Root cause: `<main>` 用 `position: absolute; top: var(--header-height)` 但其父 `app-content` 已被 `<AppHeader>` flex 顶下 48px → 双重偏移 = 48+48 = 96px
+- 修复: `<main>` top 改为 0
+- 影响: 修复前 header→content gap = 93.4px (header 48 + phantom 48 - 2.6); 修复后 = 24px (header 48 - wrapper padding 24)
+- Ship: `ClaudeConfigManager-M2.15-detail-page-padding-trim.exe` (29.7 MB, 2026-06-20 20:48)
+
+### M2.15-uniform-detail-pages (7 commits) — 详情页布局统一
+- Status: ✅ 修复 (7 原子 commit, 当前最新 ship)
+- Root cause: 4 种 padding 值 / 3 种 h1 字号 / 6 种 max-width 在 7 个 plugin 详情页混用, 视觉一致性破坏
+- 修复: 7 个文件改 padding 到 `var(--space-6)` (24px) + h1 fontSize 到 `var(--fs-heading)` (18px) + h1 marginTop 0, 与 `provider-list` baseline 对齐
+- 7 commits:
+  1. `5549858` deeplink-import
+  2. `29e4af2` json-editor
+  3. `837c852` mcp-management
+  4. `025d6e6` backup-restore
+  5. `857f509` usage-query (h1 fontSize 24→18)
+  6. `c343b0b` single-file-deploy (h1 fontSize 24→18)
+  7. `e8df5c8` PluginPlaceholder (padding 32→24)
+- 不动的页面: `provider-list` (baseline) / `provider-switch` / `import-sql` (已匹配) / `optimizer` (用 h2) / `resource-browser` (用 h2) / `home` (用户没要求)
+- Ship: **`ClaudeConfigManager-M2.15-detail-page-uniform.exe`** (29.7 MB, 2026-06-20 21:13) ← **当前推荐用户核定**
+
+### M2.15-fix-header (fa2b301 + ad228b2) — AppHeader chrome cluster 真机回归修复
+- Status: ✅ 修复
+- Root cause: chrome 按钮在 release exe 上位置漂移 (Tailwind utility class 是 dead code → flex 计算异常)
+- 修复:
+  - `fa2b301` left zone maxWidth 确保 chrome 可见
+  - `ad228b2` right zone `flexShrink: 0` + `gap: 1` (chrome cluster 紧密排列)
+- 验证: `be4e12a` regression test 锁住 header chrome + modal labels 行为
+
+### M2.15-fix-modal (173695a) — QuickSearchModal 缺可访问性
+- Status: ✅ 修复
+- 修复: X button 加 `aria-label` + Esc 键 hint 文字 + danger hover 样式
+- 验证: `769293e` align assertions (storage key + 2/3-value padding)
+
+## M2.15 当前 ship exe 清单（桌面, `~/Desktop/ClaudeConfigManager-M2/`）
+
+实测 `ls` 输出（2026-06-20 21:13）:
+
+1. `ClaudeConfigManager-M2.15-detail-page-padding-trim.exe` (29.7 MB, 2026-06-20 20:48) — `ce6357a` main top 修复
+2. **`ClaudeConfigManager-M2.15-detail-page-uniform.exe`** (29.7 MB, 2026-06-20 21:13) ← **最新 ship, 7 个详情页统一 padding + h1**
+3. `WebView2Loader.dll` (160 KB, 2026-06-20 21:13) — Tauri debug build 必需
+
+> 历史 ship exe (M2.1~M2.13 期间) 在本节前的小节中记录; 桌面目前仅保留最近 2 个 ship exe。M2.13 之前的 ship (`M2.2.3` ~ `M2.3.2-f16`) 在更早清理轮次中已不在桌面, 但 commit 链 + 上述各小节保留了完整记录。
+
+## M2 已知限制（继承到 M2.16+）
+
+- **L-M2.01**: Tailwind utility class 全项目已 inline 化（9 commits, 8 文件）；如未来重新接 Tailwind pipeline 需审视 `utilities.css` + 全部 inline style
+- **L-M2.02**: 12 个详情页 max-width 未统一（部分 none / 部分 896 / 1080）；M2.16 评估是否补
+- **L-M2.03**: Sidebar "Deeplink 导入" 命名（Deeplink 不算中文通用词），可改为 "URL 导入"；M2.16 评估
+- **L-M2.04**: macOS impls 全是 stub（继承自 M1 L3），Mac 真机验证推迟
+- **L-M2.05**: Playwright e2e 本机未实跑（继承自 M1 L1，部分 e2e spec 在 dev 模式跑过）
+- **L-M2.06**: M2 桌面 exe 仅保留最近 2 个 ship (M2.15 polish 阶段)；历史 M2.1~M2.13 ship 不可在桌面复现, 需 git 历史或重新 build
+
+## M2.16 候选启动
+
+- F3 .sql 导入 (P2) — 用户已确认优先级；需先确认 .sql schema
+- F14 / F15 / F17 / F20~F24 (P3) — backup diff / 错误反馈 / 在线安装等
+- L-M2.02 max-width 统一 (技术债)
+- L-M2.03 sidebar Deeplink 命名 (小 polish)
+- Tailwind pipeline 重新接 / 永久移除 (二选一, L-M2.01 follow-up)
