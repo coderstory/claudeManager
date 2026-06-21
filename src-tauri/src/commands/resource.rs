@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::domain::{ResourceItem, ResourceKind};
+use crate::domain::{ResourceDetail, ResourceItem, ResourceKind};
 
 /// Tauri-friendly error type.
 type CmdResult<T> = Result<T, String>;
@@ -42,6 +42,33 @@ pub async fn list_resources(
     state
         .resource_service
         .list(parsed)
+        .map_err(|e| e.to_string())
+}
+
+/// F22 — 读取单个资源的详情(manifest 描述 + 文件列表)。
+///
+/// `path` 必须是 `list_resources` 返回的 `ResourceItem.path`。
+/// `kind` 同 `list_resources` 的 kind 参数(用于 manifest 识别)。
+///
+/// 安全:拒绝空路径 + `..` 目录穿越(与 `read_sql_file` 同策略)。
+/// 读取是 best-effort:manifest 缺失/损坏不报错,对应字段为 `None`。
+#[tauri::command]
+pub async fn get_resource_detail(
+    state: State<'_, AppState>,
+    path: String,
+    kind: String,
+) -> CmdResult<ResourceDetail> {
+    if path.trim().is_empty() {
+        return Err("路径为空".into());
+    }
+    let parsed = ResourceKind::from_str_opt(&kind).ok_or_else(|| {
+        format!(
+            "未知资源类型: '{kind}'(允许: plugin, skill, command, lsp, mcp)"
+        )
+    })?;
+    state
+        .resource_service
+        .detail(&PathBuf::from(&path), parsed)
         .map_err(|e| e.to_string())
 }
 
@@ -117,5 +144,37 @@ mod tests {
         assert_eq!(v["path"], "C:/Users/foo/.claude/commands/hi.md");
         assert_eq!(v["size_bytes"], 12);
         assert_eq!(v["enabled"], true);
+    }
+
+    /// F22 — `ResourceDetail` JSON shape stability。前端依赖
+    /// `files`(数组) / `description`(string|null) /
+    /// `manifest`(object|null)。如果后端重命名字段,这个测试先炸。
+    #[test]
+    fn resource_detail_json_shape() {
+        let detail = ResourceDetail {
+            files: vec!["a.txt".into(), "b/c.md".into()],
+            description: Some("测试描述".into()),
+            manifest: Some(serde_json::json!({"name": "x"})),
+        };
+        let v = serde_json::to_value(&detail).unwrap();
+        assert_eq!(v["files"][0], "a.txt");
+        assert_eq!(v["files"][1], "b/c.md");
+        assert_eq!(v["description"], "测试描述");
+        assert_eq!(v["manifest"]["name"], "x");
+    }
+
+    /// F22 — `ResourceDetail` 空值序列化(None → null,空 Vec → [])。
+    /// 前端 TS 类型是 `Option<string>` / `string[]`,必须能正确反序列化。
+    #[test]
+    fn resource_detail_none_fields_serialize_to_null() {
+        let detail = ResourceDetail {
+            files: Vec::new(),
+            description: None,
+            manifest: None,
+        };
+        let v = serde_json::to_value(&detail).unwrap();
+        assert_eq!(v["files"], serde_json::json!([]));
+        assert_eq!(v["description"], serde_json::Value::Null);
+        assert_eq!(v["manifest"], serde_json::Value::Null);
     }
 }

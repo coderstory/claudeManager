@@ -24,6 +24,22 @@ export interface ResourceItem {
   enabled: boolean;
 }
 
+/**
+ * F22 — 资源详情(M2.16)。对应 Rust `ResourceDetail`。
+ *
+ * 由 `get_resource_detail` 命令按需读取(列表层 ResourceItem 不含这些
+ * 字段)。读取是 best-effort:manifest 缺失 → description/manifest 为
+ * null;单文件资源 → files 为空数组。
+ */
+export interface ResourceDetail {
+  /** 目录下的相对路径列表(深度 ≤ 2,上限 200 项)。单文件资源为空。 */
+  files: string[];
+  /** manifest 提取的描述。无 manifest 时为 null。 */
+  description: string | null;
+  /** 解析后的 manifest(JSON 对象)。无 manifest 时为 null。 */
+  manifest: Record<string, unknown> | null;
+}
+
 /** Ordered list of all 5 kinds for tab rendering. */
 export const ALL_RESOURCE_KINDS: ReadonlyArray<ResourceKind> = [
   'plugin',

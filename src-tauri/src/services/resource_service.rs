@@ -21,7 +21,8 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use crate::domain::ResourceKind;
+use crate::domain::{ResourceDetail, ResourceKind};
+use crate::infrastructure::resource_detail;
 use crate::infrastructure::resource_scanner::{self, ResourceScannerError};
 use crate::platform::IPlatformReveal;
 
@@ -55,6 +56,27 @@ impl ResourceService {
     pub fn list(&self, kind: ResourceKind) -> Result<Vec<crate::domain::ResourceItem>, ResourceServiceError> {
         let items = resource_scanner::scan_resources(&self.claude_dir, kind)?;
         Ok(items)
+    }
+
+    /// F22 — 读取单个资源的详情(manifest 描述 + 文件列表)。
+    ///
+    /// 委托给 [`resource_detail::read_resource_detail`],后者是
+    /// best-effort(不报错)。这里只做 path 合法性校验(空 / `..`
+    /// 穿越),失败返回 `Err`。
+    ///
+    /// `path` 必须是 `list` 返回的 `ResourceItem.path`。前端不能
+    /// 传任意路径(安全:与 F20 read_sql_file 同策略,拒绝 `..`)。
+    pub fn detail(&self, path: &Path, kind: ResourceKind) -> Result<ResourceDetail, ResourceServiceError> {
+        // 安全:拒绝 `..` 目录穿越(与 fs::resolve_claude_path 同策略)。
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(ResourceServiceError::Reveal(
+                "路径含 '..',拒绝(安全策略)".into(),
+            ));
+        }
+        Ok(resource_detail::read_resource_detail(path, kind))
     }
 
     /// Open the system file manager with `path` selected. Wraps

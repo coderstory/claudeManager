@@ -139,6 +139,8 @@ pub fn run() {
             // M2.13 — F16 资源浏览
             commands::resource::list_resources,
             commands::resource::reveal_in_file_manager,
+            // M2.16 — F22 资源详情(manifest 描述 + 文件列表)
+            commands::resource::get_resource_detail,
             // M2.16 — F17 在线安装（资源市场 + git URL → clone → 扫描 → 安装）
             commands::marketplace::list_marketplace_repos,
             commands::marketplace::clone_and_scan,

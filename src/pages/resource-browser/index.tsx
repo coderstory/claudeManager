@@ -1,7 +1,7 @@
 /**
  * F16 — 资源浏览 (M2.13 real implementation).
  * F21 — 资源搜索 (M2.16, commit f927895).
- * F22 — 资源详情预览 (M2.16).
+ * F22 — 资源详情预览 (M2.16, manifest + 文件列表 M2.16-f22-manifest).
  *
  * User flow (per docs/design/M2.13-dataflow.md):
  *   1. Page mounts → fetches the default kind ('plugin') via
@@ -13,7 +13,9 @@
  *      - Failure → non-blocking modal (CLAUDE.md §7).
  *   5. (F21) Type in the search box → rows filter by fuzzy name match.
  *   6. (F22) Click a row body → inline accordion detail panel shows
- *      name / kind / source / path / size / shape / enabled state.
+ *      name / kind / source / path / size / shape / enabled state
+ *      (同步,从 ResourceItem 直接取) + description / 文件列表
+ *      (异步,调 get_resource_detail 读 manifest + list_dir)。
  *      Re-click collapses. Multiple rows may be expanded at once.
  *
  * ## Design choices (CLAUDE.md §5 + SPEC §5.5)
@@ -29,10 +31,11 @@
  * - **Reveal failure** is a non-blocking alert (top-of-page), never
  *   a `throw` or `alert()` — per CLAUDE.md §7 ("不允许静默吞错"
  *   means show the error, not block the UI).
- * - **F22 detail panel** is pure-frontend (no backend command). It
- *   shows everything ResourceItem already carries and honestly marks
- *   "描述" and "文件列表" as gaps needing backend manifest/list_dir
- *   support — anti-事故: don't change F16's shipped domain model.
+ * - **F22 detail panel** 同步字段(name/path/size/enabled)立即渲染,
+ *   异步字段(description/files)在面板挂载时调 get_resource_detail
+ *   读取,加载中显示 spinner,失败显示非阻塞错误。manifest 读取是
+ *   best-effort(缺失 → "暂无描述")。不改 F16 的 ResourceItem 模型
+ *   (detail 用独立 ResourceDetail 结构)—— anti-事故。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -50,9 +53,10 @@ import {
   X,
 } from 'lucide-react';
 
-import { listResources, revealInFileManager } from '../../lib/api/resources';
+import { listResources, getResourceDetail, revealInFileManager } from '../../lib/api/resources';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import type {
+  ResourceDetail as TauriResourceDetail,
   ResourceItem as TauriResourceItem,
   ResourceKind,
 } from '../../types/resource';
@@ -850,11 +854,15 @@ function ResourceRow({
  * 一行资源的详情面板。
  *
  * 展示内容(SPEC F22 "来源 / 描述 / 文件列表 / 启用状态"):
- *   - 名称 / 类型 / 来源(path) / 大小 / 启用状态 ✓(全部从 ResourceItem 直接取)
- *   - 描述 ✗(ResourceItem 无描述字段;面板诚实标注"暂无描述")
- *   - 文件列表 ✗(需要后端 list_dir command;面板诚实标注"需后端支持,留后续")
+ *   - 名称 / 类型 / 来源(path) / 大小 / 启用状态 ✓(全部从 ResourceItem 直接取,同步渲染)
+ *   - 描述 ✓(调 get_resource_detail 读取 manifest,异步)
+ *   - 文件列表 ✓(调 get_resource_detail 列目录,异步)
  *
- * 不调后端、不改 domain——纯前端派生,符合反事故"最小方案优先"。
+ * 同步字段(name/path/size/enabled)立即渲染,异步字段(description/
+ * files)在 useEffect 触发的 fetch 完成后填充。加载中显示 spinner,
+ * 失败显示非阻塞错误提示(CLAUDE.md §7)。
+ *
+ * 不改 domain、不改 F16 扫描逻辑——纯增量(反事故)。
  */
 function ResourceDetailPanel({
   item,
@@ -865,6 +873,37 @@ function ResourceDetailPanel({
 }): ReactElement {
   const shape = inferResourceShape(item.kind);
   const sourceLabel = describeSourceField(item.kind);
+
+  // F22 — 异步读取 manifest + 文件列表。
+  //
+  // 面板只在 expanded=true 时挂载,所以这里直接在 mount 时 fetch。
+  // 卸载时通过 ignore flag 避免设置 state 到已卸载组件。
+  const [detail, setDetail] = useState<TauriResourceDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    setDetailLoading(true);
+    setDetailError(null);
+    setDetail(null);
+    getResourceDetail(item.path, item.kind)
+      .then((d) => {
+        if (!ignore) {
+          setDetail(d);
+          setDetailLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setDetailError(err instanceof Error ? err.message : String(err));
+          setDetailLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [item.path, item.kind]);
 
   return (
     <div
@@ -929,21 +968,128 @@ function ResourceDetailPanel({
           value={item.enabled ? '启用' : '禁用'}
           valueColor={item.enabled ? 'var(--success)' : 'var(--text-muted)'}
         />
-        {/* 描述 — ResourceItem 无此字段,诚实标注 gap */}
-        <DetailField label="描述" value="暂无(需后端 manifest 解析,留后续)" muted />
+        {/* 描述 — 异步从 manifest 读取 */}
+        <DetailField
+          label="描述"
+          value={
+            detailLoading
+              ? '加载中...'
+              : detailError
+                ? '读取失败'
+                : detail?.description ?? '暂无描述'
+          }
+          muted={
+            !detailLoading &&
+            !detailError &&
+            (detail?.description ?? null) === null
+          }
+          valueColor={
+            detailError ? 'var(--danger)' : undefined
+          }
+        />
       </div>
 
-      {/* 文件列表 — 需后端 list_dir,诚实标注 gap */}
+      {/* manifest 元信息(非空时展示,帮用户判断来源) */}
+      {detail?.manifest && (
+        <div
+          data-testid={`resource-browser-detail-manifest-${item.id}`}
+          style={{
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono, monospace)',
+            background: 'rgba(0,0,0,0.02)',
+            padding: '6px 8px',
+            borderRadius: 4,
+            border: '1px solid var(--border)',
+            wordBreak: 'break-all',
+            maxHeight: 120,
+            overflow: 'auto',
+          }}
+        >
+          manifest: {JSON.stringify(detail.manifest).slice(0, 500)}
+          {JSON.stringify(detail.manifest).length > 500 ? '...' : ''}
+        </div>
+      )}
+
+      {/* 详情读取错误 — 非阻塞提示 */}
+      {detailError && (
+        <div
+          data-testid={`resource-browser-detail-error-${item.id}`}
+          style={{
+            fontSize: 11,
+            color: 'var(--danger)',
+            padding: '6px 8px',
+            background: 'rgba(211, 47, 47, 0.06)',
+            borderRadius: 4,
+          }}
+        >
+          详情读取失败: {detailError}
+        </div>
+      )}
+
+      {/* 文件列表 — 异步列目录(仅目录形态有) */}
       <div
         style={{
-          fontSize: 12,
-          color: 'var(--text-muted)',
-          fontStyle: 'italic',
           borderTop: '1px dashed var(--border)',
           paddingTop: 8,
         }}
       >
-        文件列表: 需后端 list_dir command 支持,当前版本暂未提供。
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            marginBottom: 4,
+          }}
+        >
+          文件列表
+          {detail?.files && detail.files.length > 0 && (
+            <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+              {' '}
+              ({detail.files.length} 项)
+            </span>
+          )}
+        </div>
+        {detailLoading ? (
+          <div
+            data-testid={`resource-browser-detail-files-loading-${item.id}`}
+            style={{ fontSize: 12, color: 'var(--text-muted)' }}
+          >
+            加载中...
+          </div>
+        ) : detail?.files && detail.files.length > 0 ? (
+          <ul
+            data-testid={`resource-browser-detail-files-${item.id}`}
+            style={{
+              margin: 0,
+              paddingLeft: 18,
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono, monospace)',
+              lineHeight: 1.6,
+              maxHeight: 160,
+              overflow: 'auto',
+            }}
+          >
+            {detail.files.map((f) => (
+              <li key={f} title={f}>
+                {f}
+              </li>
+            ))}
+          </ul>
+        ) : shape === 'directory' ? (
+          <div
+            style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}
+          >
+            空目录
+          </div>
+        ) : (
+          <div
+            style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}
+          >
+            单文件资源(path 即文件本身)
+          </div>
+        )}
       </div>
 
       {/* 快捷操作 */}

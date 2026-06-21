@@ -96,6 +96,32 @@ impl ResourceKind {
     }
 }
 
+/// F22 — 资源详情(manifest 描述 + 文件列表),M2.16。
+///
+/// 与 [`ResourceItem`] **分离**:ResourceItem 是列表层(扫描产出,
+/// F16 已 ship),ResourceDetail 是详情层(按需读取)。这样不破坏
+/// F16 已 ship 的领域模型(反事故:不改 ResourceItem)。
+///
+/// ## 字段
+/// - `files`:资源目录下的相对路径列表(深度 ≤ 2,上限 200 项,
+///   `/` 分隔)。单文件资源(command/lsp/mcp)为空 Vec。
+/// - `description`:从 manifest 提取的描述(plugin.json /
+///   package.json 的 description 字段,或 SKILL.md frontmatter 的
+///   description)。无 manifest 或解析失败时为 `None`。
+/// - `manifest`:解析后的 manifest(JSON Value)。markdown
+///   frontmatter 也转成 JSON 对象。无 manifest 时为 `None`。
+///
+/// 读取是 best-effort:manifest 缺失/损坏不报错,只返回 `None`。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ResourceDetail {
+    /// 资源目录下的相对路径(深度 ≤ 2,上限 200 项)。单文件资源为空。
+    pub files: Vec<String>,
+    /// manifest 提取的描述。无 manifest 时为 `None`。
+    pub description: Option<String>,
+    /// 解析后的 manifest(JSON Value)。无 manifest 时为 `None`。
+    pub manifest: Option<serde_json::Value>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

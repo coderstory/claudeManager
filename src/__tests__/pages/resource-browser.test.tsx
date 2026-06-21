@@ -734,3 +734,213 @@ describe('ResourceBrowserPage — F22 detail panel (M2.16)', () => {
     ).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// F22 — 资源详情 manifest + 文件列表 (M2.16-f22-manifest)
+// 覆盖：展开触发 get_resource_detail、description 渲染、文件列表渲染、
+//       暂无描述、读取错误非阻塞提示。
+// ---------------------------------------------------------------------------
+describe('ResourceBrowserPage — F22 manifest detail (M2.16-f22-manifest)', () => {
+  it('expanding a row fires get_resource_detail(path, kind)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'get_resource_detail') {
+        // 校验 path + kind 参数被正确传递。
+        const { path, kind } = args as { path: string; kind: string };
+        return {
+          files: [],
+          description: null,
+          manifest: null,
+          _echo: { path, kind },
+        };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'get_resource_detail',
+      );
+      expect(calls.length).toBe(1);
+      const arg = calls[0][1] as { path: string; kind: string };
+      expect(arg.kind).toBe('plugin');
+      expect(arg.path).toContain('code-review');
+    });
+  });
+
+  it('renders description from manifest when present', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'get_resource_detail') {
+        return {
+          files: [],
+          description: '代码审查插件,自动 review PR',
+          manifest: { name: 'code-review' },
+        };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('代码审查插件,自动 review PR'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('renders file list when resource is a directory', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'get_resource_detail') {
+        return {
+          files: ['index.js', 'plugin.json', 'src/main.js'],
+          description: null,
+          manifest: null,
+        };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    const filesList = await screen.findByTestId(
+      'resource-browser-detail-files-plugin/code-review',
+    );
+    expect(filesList.textContent).toContain('index.js');
+    expect(filesList.textContent).toContain('plugin.json');
+    expect(filesList.textContent).toContain('src/main.js');
+  });
+
+  it('shows 暂无描述 when description is null', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'get_resource_detail') {
+        return { files: [], description: null, manifest: null };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('暂无描述')).toBeInTheDocument();
+    });
+  });
+
+  it('shows non-blocking error when get_resource_detail rejects', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('plugin/code-review', 'plugin')];
+      }
+      if (cmd === 'get_resource_detail') {
+        throw new Error('路径含 ..,拒绝');
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-plugin/code-review'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-plugin/code-review'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          'resource-browser-detail-error-plugin/code-review',
+        ),
+      ).toBeInTheDocument();
+    });
+    // 描述字段显示"读取失败"。
+    expect(screen.getByText('读取失败')).toBeInTheDocument();
+  });
+
+  it('single-file resource shows "单文件资源" hint instead of file list', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') {
+        return [item('command/build', 'command')];
+      }
+      if (cmd === 'get_resource_detail') {
+        return { files: [], description: '构建命令', manifest: null };
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-tab-command'));
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-row-command/build'),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-row-body-command/build'),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('单文件资源(path 即文件本身)')).toBeInTheDocument();
+    });
+  });
+});
