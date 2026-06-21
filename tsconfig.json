@@ -14,8 +14,22 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
+    /* Linting — M2.17-C4 strict audit */
+    // `strict: true` implicitly enables all 8 sub-flags below, but we
+    // list them EXPLICITLY so (a) the audit intent is visible at a
+    // glance, and (b) disabling `strict` in a future PR does NOT
+    // accidentally relax any of these. Bump one at a time, with a
+    // documented reason.
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": true,
+
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
