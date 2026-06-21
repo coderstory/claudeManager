@@ -49,6 +49,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
+import { ErrorBanner } from './components/ErrorBanner';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { HomeView } from './pages/home';
@@ -154,6 +155,12 @@ export default function App(): ReactElement {
   // 显示"松开以导入 .sql"遮罩,drop / leave 后隐藏。
   const [dragOverlayVisible, setDragOverlayVisible] = useState(false);
 
+  // M2.16 — H2: drop 时若用户已看到遮罩(enter 阶段检测到 .sql)但
+  // drop 时路径里却没有 .sql,显示一个瞬时行内红条提示"未检测到
+  // .sql 文件"。否则用户会困惑"我明明看到遮罩,咋没反应?"。
+  // 5s 后自动消失,避免长时间霸屏。
+  const [dropRejectionMsg, setDropRejectionMsg] = useState<string | null>(null);
+
   // F20 — 文件关联 .sql 路径(双击 .sql 启动 / 第二实例转发)。
   //
   // 后端 lib.rs 的 single-instance callback + setup 冷启动都会 emit
@@ -214,8 +221,6 @@ export default function App(): ReactElement {
   }, [view]);
 
   // F10 — 拖放 .sql 导入(SPEC F10)。
-  //
-  // Tauri v2 的 webview 拖放事件 `onDragDropEvent` 由 Rust 端 emit,
   // payload 是 `{ type, paths, position }`,其中 `paths` 是文件绝对
   // 路径数组(不是浏览器受限的 File 对象)。这样我们就能拿到真实
   // 路径,直接复用 F20 的 `setPendingSqlFile` + `setView('import-sql')`
@@ -238,6 +243,9 @@ export default function App(): ReactElement {
   // WebView2 / WKWebView)正常。捕获后静默跳过(无拖放功能但不崩溃)。
   useEffect(() => {
     let unlisten: (() => void) | null = null;
+    // M2.16 — H2: 追踪当前 enter 事件是否触发了遮罩(用于 drop 时
+    // 判断是否要给"未检测到 .sql"提示)。
+    let lastEnterHadSql = false;
     try {
       const win = getCurrentWindow();
       void win.onDragDropEvent((event) => {
@@ -247,6 +255,7 @@ export default function App(): ReactElement {
           const hasSql = payload.paths.some((p) =>
             p.toLowerCase().endsWith('.sql'),
           );
+          lastEnterHadSql = hasSql;
           setDragOverlayVisible(hasSql);
         } else if (payload.type === 'over') {
           // over 不带 paths,保持 enter 决定的遮罩状态。
@@ -258,10 +267,17 @@ export default function App(): ReactElement {
           if (sqlPath) {
             setPendingSqlFile(sqlPath);
             setView('import-sql');
+          } else if (lastEnterHadSql) {
+            // M2.16 — H2: 用户在 enter 阶段看到遮罩了(说明路径里
+            // 含 .sql),但 drop 时 find 居然没找到 —— 罕见情况(OS
+            // 路径截断 / 竞态),给一个行内红条提示。
+            setDropRejectionMsg('未检测到 .sql 文件,请确保拖入的是 SQLite dump');
           }
           setDragOverlayVisible(false);
+          lastEnterHadSql = false;
         } else if (payload.type === 'leave') {
           setDragOverlayVisible(false);
+          lastEnterHadSql = false;
         }
       }).then((fn) => {
         unlisten = fn;
@@ -273,6 +289,15 @@ export default function App(): ReactElement {
       if (unlisten) unlisten();
     };
   }, [setView]);
+
+  // M2.16 — H2: dropRejectionMsg 自动消失(5s 后 setState(null))。
+  // 不复用 ErrorBanner 的 autoDismiss(它是计时器 + 用户可控) —— 这里
+  // 简单一个 setTimeout 就够,语义"瞬时反馈,不要霸屏"。
+  useEffect(() => {
+    if (!dropRejectionMsg) return;
+    const t = window.setTimeout(() => setDropRejectionMsg(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [dropRejectionMsg]);
 
   // M2.16+ splash — 淡出 index.html 里的内联加载屏。
   // 用户明确要求 splash 至少展示 2s，并配好看的动画效果。
@@ -515,6 +540,30 @@ export default function App(): ReactElement {
         onClose={() => setQuickSearchOpen(false)}
         onNavigate={handleNavigate}
       />
+      {/* M2.16 — H2: 拖放拒绝提示。drop 时若 enter 阶段显示过遮罩
+          但 drop 没找到 .sql,显示 5s 红条 + ✕ 让用户手动关闭。 */}
+      {dropRejectionMsg && (
+        <div
+          data-testid="drop-rejection-banner"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10000,
+            minWidth: 320,
+            maxWidth: 560,
+          }}
+        >
+          <ErrorBanner
+            kind="error"
+            message={dropRejectionMsg}
+            onDismiss={() => setDropRejectionMsg(null)}
+            autoDismissMs={5000}
+            testId="drop-rejection"
+          />
+        </div>
+      )}
       {/* F10 — 拖放 .sql 导入遮罩。用户拖入 .sql 文件悬停在窗口上
           时显示,提示"松开以导入 .sql"。drop / leave 后隐藏。遮罩
           用 position:fixed 全屏覆盖,pointer-events:none 让 drop

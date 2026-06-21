@@ -253,4 +253,50 @@ describe('F10 — 拖放 .sql 导入', () => {
 
     expect(screen.getByTestId('drag-drop-overlay')).toBeInTheDocument();
   });
+
+  // M2.16 — H2: enter 时检测到 .sql 但 drop 时路径里没有 .sql,
+  // 显示"未检测到 .sql 文件"红条提示(罕见但用户会困惑)。
+  it('enter 显示遮罩后 drop 未找到 .sql → 显示拒绝提示', () => {
+    renderApp();
+    fireDragDropEvent({
+      type: 'enter',
+      paths: ['C:\\test\\dump.sql'],
+      position: { x: 100, y: 100 },
+    });
+    expect(screen.getByTestId('drag-drop-overlay')).toBeInTheDocument();
+
+    // 模拟 OS 路径被截断的极端场景:drop 时只剩 readme.txt
+    fireDragDropEvent({
+      type: 'drop',
+      paths: ['C:\\test\\readme.txt'],
+      position: { x: 100, y: 100 },
+    });
+
+    // 遮罩隐藏 + 拒绝提示出现。
+    expect(screen.queryByTestId('drag-drop-overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drop-rejection')).toBeInTheDocument();
+    expect(
+      screen.getByText(/未检测到 .sql 文件/),
+    ).toBeInTheDocument();
+  });
+
+  // M2.16 — H2: enter 时就没 .sql(纯非 .sql 文件),drop 时也不
+  // 显示拒绝提示 —— 因为用户根本没看到遮罩,不会困惑。
+  it('enter 时未检测到 .sql → drop 时不显示拒绝提示', () => {
+    renderApp();
+    fireDragDropEvent({
+      type: 'enter',
+      paths: ['C:\\test\\readme.txt'],
+      position: { x: 100, y: 100 },
+    });
+    expect(screen.queryByTestId('drag-drop-overlay')).not.toBeInTheDocument();
+
+    fireDragDropEvent({
+      type: 'drop',
+      paths: ['C:\\test\\readme.txt'],
+      position: { x: 100, y: 100 },
+    });
+
+    expect(screen.queryByTestId('drop-rejection')).not.toBeInTheDocument();
+  });
 });
