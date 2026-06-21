@@ -36,6 +36,7 @@ import {
   Wand2,
 } from 'lucide-react';
 
+import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   applyOptimizations,
   exportOptimizationReport,
@@ -338,103 +339,37 @@ export default function OptimizerPage(): ReactElement {
         </div>
       </div>
 
-      {/* Scan error banner */}
+      {/* 扫描失败提示(F15 ErrorBanner 统一横切,kind=error) */}
       {state.scanError && (
-        <div
-          data-testid="optimizer-scan-error"
-          style={{
-            padding: '10px 14px',
-            borderRadius: 4,
-            background: 'rgba(211, 47, 47, 0.08)',
-            border: '1px solid var(--danger)',
-            color: 'var(--danger)',
-            fontSize: 13,
-          }}
-        >
-          扫描失败: {state.scanError}
-        </div>
+        <ErrorBanner
+          kind="error"
+          testId="optimizer-scan-error"
+          message={`扫描失败: ${state.scanError}`}
+        />
       )}
 
-      {/* F23 — 导出成功提示（绿色,含路径,可手动清除） */}
+      {/* F23 — 导出成功提示(F15 ErrorBanner kind=success,带 dismiss ✕) */}
       {state.exportSuccessPath && (
-        <div
-          data-testid="optimizer-export-success"
-          style={{
-            padding: '10px 14px',
-            borderRadius: 4,
-            background: 'rgba(56, 142, 60, 0.08)',
-            border: '1px solid var(--success)',
-            color: 'var(--success)',
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
+        <ErrorBanner
+          kind="success"
+          testId="optimizer-export-success"
+          message={`报告已导出: ${state.exportSuccessPath}`}
+          onDismiss={() => {
+            setState((prev) => ({ ...prev, exportSuccessPath: null }));
           }}
-        >
-          <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, wordBreak: 'break-all' }}>
-            报告已导出: {state.exportSuccessPath}
-          </span>
-          <button
-            type="button"
-            data-testid="optimizer-export-success-dismiss"
-            onClick={() => {
-              setState((prev) => ({ ...prev, exportSuccessPath: null }));
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--success)',
-              cursor: 'pointer',
-              fontSize: 13,
-              padding: 0,
-            }}
-            aria-label="关闭导出成功提示"
-          >
-            ✕
-          </button>
-        </div>
+        />
       )}
 
-      {/* F23 — 导出失败提示（红色,含错误信息,可手动清除） */}
+      {/* F23 — 导出失败提示(F15 ErrorBanner kind=error,带 dismiss ✕) */}
       {state.exportError && (
-        <div
-          data-testid="optimizer-export-error"
-          style={{
-            padding: '10px 14px',
-            borderRadius: 4,
-            background: 'rgba(211, 47, 47, 0.08)',
-            border: '1px solid var(--danger)',
-            color: 'var(--danger)',
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
+        <ErrorBanner
+          kind="error"
+          testId="optimizer-export-error"
+          message={`导出失败: ${state.exportError}`}
+          onDismiss={() => {
+            setState((prev) => ({ ...prev, exportError: null }));
           }}
-        >
-          <AlertCircle size={14} style={{ flexShrink: 0 }} />
-          <span style={{ flex: 1, wordBreak: 'break-word' }}>
-            导出失败: {state.exportError}
-          </span>
-          <button
-            type="button"
-            data-testid="optimizer-export-error-dismiss"
-            onClick={() => {
-              setState((prev) => ({ ...prev, exportError: null }));
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--danger)',
-              cursor: 'pointer',
-              fontSize: 13,
-              padding: 0,
-            }}
-            aria-label="关闭导出错误提示"
-          >
-            ✕
-          </button>
-        </div>
+        />
       )}
 
       {/* Empty state */}
@@ -534,21 +469,13 @@ export default function OptimizerPage(): ReactElement {
         </div>
       )}
 
-      {/* Apply error banner */}
+      {/* 应用失败提示(F15 ErrorBanner kind=error) */}
       {state.applyError && (
-        <div
-          data-testid="optimizer-apply-error"
-          style={{
-            padding: '10px 14px',
-            borderRadius: 4,
-            background: 'rgba(211, 47, 47, 0.08)',
-            border: '1px solid var(--danger)',
-            color: 'var(--danger)',
-            fontSize: 13,
-          }}
-        >
-          应用失败: {state.applyError}
-        </div>
+        <ErrorBanner
+          kind="error"
+          testId="optimizer-apply-error"
+          message={`应用失败: ${state.applyError}`}
+        />
       )}
 
       {/* Apply results */}

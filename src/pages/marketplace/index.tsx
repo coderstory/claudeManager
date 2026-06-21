@@ -33,6 +33,7 @@ import {
   Store,
 } from 'lucide-react';
 
+import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   cloneAndScan,
   installFromMarketplace,
@@ -707,34 +708,9 @@ function ResourceInstallRow({
 }
 
 // ---------------------------------------------------------------------------
-// ErrorBanner — 内联红条(F15 风格)
+// 行级 install 状态已迁移到共享 ErrorBanner(components/ErrorBanner.tsx,
+// F15 统一横切),见页面顶部 import。
+// 这里原本有一个本地 ErrorBanner 函数(对外 testId 透传为
+// marketplace-{repos,clone}-error),现已被共享组件替代——
+// 共享组件的 testId 仍透传同名,外部 e2e / 单元测试无需变更。
 // ---------------------------------------------------------------------------
-
-function ErrorBanner({
-  testId,
-  message,
-}: {
-  testId: string;
-  message: string;
-}): ReactElement {
-  return (
-    <div
-      data-testid={testId}
-      role="alert"
-      style={{
-        padding: '12px 16px',
-        background: 'rgba(211, 47, 47, 0.08)',
-        border: '1px solid var(--danger)',
-        borderRadius: 4,
-        color: 'var(--danger)',
-        fontSize: 13,
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-      }}
-    >
-      <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-      <div style={{ flex: 1 }}>{message}</div>
-    </div>
-  );
-}
