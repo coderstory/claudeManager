@@ -22,6 +22,7 @@ pub mod fs;
 pub mod marketplace;
 pub mod mcp;
 pub mod optimizer;
+pub mod project;
 pub mod providers;
 pub mod resource;
 pub mod usage;

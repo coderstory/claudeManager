@@ -90,6 +90,25 @@ impl IPlatformPaths for MacPaths {
         }
         Ok(())
     }
+
+    /// M3.10 — macOS compile-only stub.
+    ///
+    /// Per D6 (M3 启动门决策),mac 真机验证暂缓。本方法始终返回
+    /// `None` —— macOS 用户永远在"用户级"模式下,直到 M4 backlog
+    /// 重新评估 Mac 真机验证时机。
+    ///
+    /// 后续 Mac 真机实现需要:
+    ///   1. 读 `<app_data>/projects.json`(同 Windows 路径解析)
+    ///   2. 查 `current_project_id` 对应 project 的 `root_dir`
+    ///   3. 返回 `Some(root_dir)` 或 `None`(用户级)
+    ///
+    /// 当前直接依赖 trait 的默认实现(None)即可 —— 这里显式 override
+    /// 是为了在 macOS 编译时锁住"必须返回 None"的契约,防止未来
+    /// 不小心改成读默认实现(虽然默认实现也是 None,语义一致)。
+    #[allow(dead_code)]
+    fn active_root_dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -182,5 +201,12 @@ mod tests {
             r2.is_ok(),
             "ensure_dirs() 必须幂等——两次调用结果应一致"
         );
+    }
+
+    /// M3.10 — D6 决策:macOS 暂不实装 active_root_dir 真机读取，
+    /// 永远返回 None（用户级）。
+    #[test]
+    fn mac_paths_active_root_dir_is_always_none() {
+        assert_eq!(MacPaths.active_root_dir(), None);
     }
 }

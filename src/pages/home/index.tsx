@@ -1,34 +1,118 @@
 /**
- * HomeView — landing tile shown when there's no persisted last view,
- * or when the user explicitly clicks the "home" sidebar entry.
+ * HomeView — M3.10 (清单 23) project switcher landing page.
  *
- * In M1.9 the home tile is a small dashboard that links to each
- * plugin slot. In M2+ it'll grow into the real "first-run" entry
- * point with a "create your first provider" CTA + drag-import
- * drop zone (see SPEC §4.1 cold start journey).
+ * Replaces the M1.9 plain tile grid with a "user / project"
+ * dual-mode hub: a dropdown of all known projects, an
+ * "active project" callout, an [新增项目] button, and a per-row
+ * [删除] button (greyed out for the system project).
  *
- * M2.x-inline: previously used `cn(...)` to compose Tailwind utility
- * classes (`grid gap-3`, `w-full text-left p-4 transition-shadow`,
- * `hover:shadow-md focus:outline-none focus:ring-2`, etc). The
- * project has no Tailwind pipeline, so those classes silently
- * noop'd on the real Tauri WebView2 release exe. All structural
- * rules are now inlined as `style={{}}` properties and the
- * hover/focus rules live in src/design-system/utilities.css under
- * the [data-app-home-tile] selector.
+ * Layout (top → bottom):
+ *   1. Title + tagline
+ *   2. Active project callout (name + root_dir + is_system badge)
+ *   3. Project list table:
+ *        - each row: name / root_dir / [切换] / [删除]
+ *        - system row: [删除] disabled with title="用户级不可删除"
+ *   4. [新增项目] button — opens the in-page form (name + root_dir)
+ *
+ * Why a single component (vs split into ProjectCard + ProjectList):
+ *   - This page is M3.10-arch's primary deliverable for the
+ *     frontend; keeping it monolithic makes the visual contract
+ *     obvious in one file.
+ *   - Splitting it would mean importing a Form + Table from
+ *     `/components` — those don't exist yet (the project's M2.x
+ *     pages all inline their markup).
  */
 import type { ReactElement } from 'react';
+import { useState } from 'react';
+import { useProjects } from '../../hooks/useProjects';
 import type { ViewId } from '../../hooks/useViewState';
-import { ALL_VIEWS, HOME_VIEW } from '../../hooks/useViewState';
 
+/**
+ * Optional navigation props kept for compatibility with App.tsx's
+ * existing `<HomeView onNavigate={...} pageTitle={...} />` call
+ * site. M3.10-arch doesn't navigate between views via tiles
+ * anymore (the welcome page IS the project switcher), but we keep
+ * the props optional so App.tsx doesn't need to special-case
+ * `view === 'home'`.
+ */
 export interface HomeViewProps {
-  onNavigate: (view: ViewId) => void;
-  /** The ViewId → Chinese title map, used to label the cards. */
-  pageTitle: (view: ViewId) => string;
+  onNavigate?: (next: ViewId) => void;
+  pageTitle?: (view: ViewId) => string;
 }
 
-const PLUGIN_VIEWS: ViewId[] = ALL_VIEWS.filter((v) => v !== HOME_VIEW);
+export function HomeView(_props: HomeViewProps = {}): ReactElement {
+  const {
+    projects,
+    currentProject,
+    loading,
+    error,
+    reload,
+    add,
+    remove,
+    switchTo,
+  } = useProjects();
 
-export function HomeView({ onNavigate, pageTitle }: HomeViewProps): ReactElement {
+  const [adding, setAdding] = useState<boolean>(false);
+  const [newName, setNewName] = useState<string>('');
+  const [newRoot, setNewRoot] = useState<string>('');
+  const [busy, setBusy] = useState<boolean>(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleSwitch = async (id: string): Promise<void> => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await switchTo(id);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setActionError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async (id: string, name: string): Promise<void> => {
+    if (!window.confirm(`确定要删除项目「${name}」吗？此操作不可撤销。`)) {
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await remove(id);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setActionError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Note (M3.10-arch): we deliberately do NOT depend on
+  // `@tauri-apps/plugin-dialog` here. CLAUDE.md §2.3 locks the npm
+  // dep list — adding `plugin-dialog` requires a main-session
+  // approval. Instead, the user pastes / types the root_dir path
+  // into the input. Future M3.11+ polish can add a native picker
+  // once the dep is approved.
+  const handleAdd = async (): Promise<void> => {
+    if (!newName.trim() || !newRoot.trim()) {
+      setActionError('项目名和根目录不能为空');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await add(newName.trim(), newRoot.trim());
+      setNewName('');
+      setNewRoot('');
+      setAdding(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setActionError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -42,7 +126,7 @@ export function HomeView({ onNavigate, pageTitle }: HomeViewProps): ReactElement
         <h1
           style={{
             color: 'var(--text-primary)',
-            fontSize: '20px',
+            fontSize: 20,
             fontWeight: 600,
             marginBottom: 8,
           }}
@@ -56,63 +140,453 @@ export function HomeView({ onNavigate, pageTitle }: HomeViewProps): ReactElement
             marginBottom: 24,
           }}
         >
-          M1 架构期 — 12 个功能模块已注册为 stub,业务实现将在 M2+ 替换。
-          点击下方任意卡片进入对应功能页。
+          选择当前生效的项目 — 所有 plugin (Provider / MCP / 备份 / 优化器) 都会读取该项目的
+          <code style={{ marginLeft: 4, marginRight: 4 }}>.claude/</code>
+          配置。
         </p>
-        <ul
+
+        {(error || actionError) && (
+          <div
+            data-testid="welcome-error"
+            style={{
+              padding: 12,
+              marginBottom: 16,
+              border: '1px solid var(--danger, #D32F2F)',
+              borderRadius: 6,
+              background: 'var(--bg-overlay)',
+              color: 'var(--danger, #D32F2F)',
+              fontSize: 'var(--fs-body)',
+            }}
+          >
+            {error || actionError}
+          </div>
+        )}
+
+        {/* Active project callout */}
+        <section
+          data-testid="active-project"
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 12,
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
+            padding: 16,
+            marginBottom: 24,
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-card)',
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
-          {PLUGIN_VIEWS.map((view) => (
-            <li key={view}>
+          <div
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: 'var(--fs-caption)',
+              marginBottom: 4,
+            }}
+          >
+            当前激活项目
+          </div>
+          <div
+            style={{
+              color: 'var(--text-primary)',
+              fontSize: 'var(--fs-body)',
+              fontWeight: 600,
+              marginBottom: 4,
+            }}
+          >
+            {currentProject ? currentProject.name : '(加载中)'}
+            {currentProject?.is_system && (
+              <span
+                style={{
+                  marginLeft: 8,
+                  padding: '2px 8px',
+                  fontSize: 'var(--fs-caption)',
+                  color: 'var(--accent)',
+                  background: 'var(--bg-overlay)',
+                  borderRadius: 4,
+                }}
+              >
+                用户级
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'var(--fs-caption)',
+            }}
+          >
+            {currentProject?.root_dir ?? ''}
+          </div>
+        </section>
+
+        {/* Project list */}
+        <section style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}
+          >
+            <h2
+              style={{
+                color: 'var(--text-primary)',
+                fontSize: 16,
+                fontWeight: 600,
+                margin: 0,
+              }}
+            >
+              项目列表（{projects.length}）
+            </h2>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
-                onClick={() => onNavigate(view)}
-                data-testid={`home-tile-${view}`}
-                // M2.x-inline: hover/focus rules live in
-                // src/design-system/utilities.css under
-                // [data-app-home-tile].
-                data-app-home-tile="true"
+                data-testid="refresh-projects"
+                onClick={() => void reload()}
+                disabled={busy || loading}
                 style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: 16,
+                  padding: '6px 12px',
                   background: 'var(--bg-elevated)',
                   border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-card)',
-                  boxShadow: 'var(--shadow-sm)',
+                  borderRadius: 'var(--radius-button)',
+                  cursor: busy || loading ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
                 }}
               >
-                <div
-                  style={{
-                    color: 'var(--text-primary)',
-                    fontSize: 'var(--fs-body)',
-                    fontWeight: 600,
-                    marginBottom: 4,
-                  }}
-                >
-                  {pageTitle(view)}
-                </div>
-                <code
-                  style={{
-                    color: 'var(--accent)',
-                    fontSize: 'var(--fs-caption)',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {view}
-                </code>
+                刷新
               </button>
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                data-testid="add-project-toggle"
+                onClick={() => setAdding((v) => !v)}
+                disabled={busy}
+                style={{
+                  padding: '6px 12px',
+                  background: 'var(--accent)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {adding ? '取消' : '+ 新增项目'}
+              </button>
+            </div>
+          </div>
+
+          {loading && projects.length === 0 && (
+            <div
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: 'var(--fs-body)',
+                padding: 16,
+              }}
+            >
+              加载中...
+            </div>
+          )}
+
+          {!loading && projects.length === 0 && (
+            <div
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: 'var(--fs-body)',
+                padding: 16,
+                border: '1px dashed var(--border)',
+                borderRadius: 6,
+                textAlign: 'center',
+              }}
+            >
+              暂无项目。点击 [新增项目] 添加，或检查系统级项目是否被删除。
+            </div>
+          )}
+
+          {projects.length > 0 && (
+            <table
+              data-testid="project-table"
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-card)',
+                overflow: 'hidden',
+              }}
+            >
+              <thead>
+                <tr style={{ background: 'var(--bg-overlay)' }}>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: 8,
+                      borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-secondary)',
+                      fontSize: 'var(--fs-caption)',
+                    }}
+                  >
+                    项目名
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'left',
+                      padding: 8,
+                      borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-secondary)',
+                      fontSize: 'var(--fs-caption)',
+                    }}
+                  >
+                    根目录
+                  </th>
+                  <th
+                    style={{
+                      textAlign: 'right',
+                      padding: 8,
+                      borderBottom: '1px solid var(--border)',
+                      color: 'var(--text-secondary)',
+                      fontSize: 'var(--fs-caption)',
+                    }}
+                  >
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.map((p) => {
+                  const isActive = p.id === currentProject?.id;
+                  return (
+                    <tr
+                      key={p.id}
+                      data-testid={`project-row-${p.id}`}
+                      style={{
+                        background: isActive ? 'var(--bg-overlay)' : 'transparent',
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: 8,
+                          borderBottom: '1px solid var(--border)',
+                          color: 'var(--text-primary)',
+                          fontSize: 'var(--fs-body)',
+                        }}
+                      >
+                        {p.name}
+                        {p.is_system && (
+                          <span
+                            style={{
+                              marginLeft: 8,
+                              fontSize: 'var(--fs-caption)',
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            (系统)
+                          </span>
+                        )}
+                        {isActive && (
+                          <span
+                            style={{
+                              marginLeft: 8,
+                              fontSize: 'var(--fs-caption)',
+                              color: 'var(--accent)',
+                              fontWeight: 600,
+                            }}
+                          >
+                            ● 当前
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        style={{
+                          padding: 8,
+                          borderBottom: '1px solid var(--border)',
+                          color: 'var(--text-muted)',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 'var(--fs-caption)',
+                        }}
+                      >
+                        {p.root_dir}
+                      </td>
+                      <td
+                        style={{
+                          padding: 8,
+                          borderBottom: '1px solid var(--border)',
+                          textAlign: 'right',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          data-testid={`switch-${p.id}`}
+                          onClick={() => void handleSwitch(p.id)}
+                          disabled={busy || isActive}
+                          style={{
+                            marginRight: 8,
+                            padding: '4px 10px',
+                            background: 'var(--accent)',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: 'var(--radius-button)',
+                            cursor: busy || isActive ? 'not-allowed' : 'pointer',
+                            opacity: isActive ? 0.5 : 1,
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          {isActive ? '当前' : '切换'}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`remove-${p.id}`}
+                          onClick={() => void handleRemove(p.id, p.name)}
+                          disabled={busy || p.is_system}
+                          title={p.is_system ? '用户级项目不可删除' : '删除此项目'}
+                          style={{
+                            padding: '4px 10px',
+                            background: 'var(--bg-elevated)',
+                            color: p.is_system ? 'var(--text-muted)' : 'var(--danger, #D32F2F)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius-button)',
+                            cursor: busy || p.is_system ? 'not-allowed' : 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        {/* Add project form */}
+        {adding && (
+          <section
+            data-testid="add-project-form"
+            style={{
+              padding: 16,
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            <h3
+              style={{
+                color: 'var(--text-primary)',
+                fontSize: 16,
+                fontWeight: 600,
+                marginTop: 0,
+                marginBottom: 12,
+              }}
+            >
+              新增项目
+            </h3>
+            <div style={{ marginBottom: 12 }}>
+              <label
+                htmlFor="new-project-name"
+                style={{
+                  display: 'block',
+                  color: 'var(--text-secondary)',
+                  fontSize: 'var(--fs-caption)',
+                  marginBottom: 4,
+                }}
+              >
+                项目名（≤ 64 字符）
+              </label>
+              <input
+                id="new-project-name"
+                type="text"
+                data-testid="new-project-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                maxLength={64}
+                placeholder="我的项目 A"
+                style={{
+                  width: '100%',
+                  padding: 8,
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-button)',
+                  fontFamily: 'inherit',
+                  fontSize: 'var(--fs-body)',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label
+                htmlFor="new-project-root"
+                style={{
+                  display: 'block',
+                  color: 'var(--text-secondary)',
+                  fontSize: 'var(--fs-caption)',
+                  marginBottom: 4,
+                }}
+              >
+                项目根目录（须含 .claude/ 子目录）
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  id="new-project-root"
+                  type="text"
+                  data-testid="new-project-root"
+                  value={newRoot}
+                  onChange={(e) => setNewRoot(e.target.value)}
+                  placeholder="D:/projects/foo"
+                  style={{
+                    flex: 1,
+                    padding: 8,
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-button)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--fs-caption)',
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAdding(false);
+                  setNewName('');
+                  setNewRoot('');
+                  setActionError(null);
+                }}
+                disabled={busy}
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--bg-overlay)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-button)',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                data-testid="confirm-add-project"
+                onClick={() => void handleAdd()}
+                disabled={busy || !newName.trim() || !newRoot.trim()}
+                style={{
+                  padding: '6px 14px',
+                  background: 'var(--accent)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  cursor: busy || !newName.trim() || !newRoot.trim()
+                    ? 'not-allowed'
+                    : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                添加
+              </button>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

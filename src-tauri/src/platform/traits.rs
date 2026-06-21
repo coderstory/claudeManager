@@ -222,6 +222,34 @@ pub trait IPlatformPaths: Send + Sync {
     /// Create any required directories that don't yet exist (`app_data`,
     /// `backups_dir`, `marketplaces_dir`, `logs_dir`). Idempotent.
     fn ensure_dirs(&self) -> Result<(), PlatformError>;
+
+    /// M3.10 (清单 23) — return the active project's root directory.
+    ///
+    /// Semantics:
+    /// - `None` = user-level ("system project"). Plugin code reads
+    ///   from `~/.claude/` exactly like M2.x did.
+    /// - `Some(p)` = user-added project whose `.claude/` lives at
+    ///   `p.join(".claude")`.
+    ///
+    /// Default implementation returns `None` so the trait change is
+    /// backwards-compatible (mock implementations and any future
+    /// platform we haven't ported yet keep working unchanged).
+    ///
+    /// The Windows implementation reads `<app_data>/projects.json`
+    /// (via `ProjectService`) and looks up the project whose id
+    /// matches `current_project_id`. The macOS implementation
+    /// returns `None` (compile-only stub; M4 backlog).
+    ///
+    /// # Why a method, not an `AppPaths` field
+    ///
+    /// `AppPaths` is resolved once in `lib.rs::setup` and stored in
+    /// `Tauri State`. The active project can change at RUNTIME
+    /// (user clicks "switch project" in the sidebar). A trait
+    /// method called on demand lets us read the live state without
+    /// rebuilding `AppPaths` or restarting the process.
+    fn active_root_dir(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// Acquire a per-user single-instance lock. Returns `Err` if another instance
@@ -290,6 +318,7 @@ mod tests {
         impl IPlatformPaths for PathsShim {
             fn resolve(&self) -> AppPaths;
             fn ensure_dirs(&self) -> Result<(), PlatformError>;
+            fn active_root_dir(&self) -> Option<PathBuf>;
         }
     }
 
@@ -381,6 +410,46 @@ mod tests {
         m.expect_ensure_dirs().times(1).returning(|| Ok(()));
         let p: Box<dyn IPlatformPaths> = Box::new(m);
         assert!(p.ensure_dirs().is_ok());
+    }
+
+    /// M3.10 — the new `active_root_dir` method dispatches through
+    /// the trait object and returns whatever the impl says.
+    #[test]
+    fn paths_active_root_dir_dispatch() {
+        let mut m = MockPathsShim::new();
+        m.expect_active_root_dir()
+            .times(1)
+            .return_const(Some(PathBuf::from("/proj-a")));
+        let p: Box<dyn IPlatformPaths> = Box::new(m);
+        assert_eq!(p.active_root_dir(), Some(PathBuf::from("/proj-a")));
+    }
+
+    /// M3.10 — when no impl overrides `active_root_dir`, the default
+    /// returns `None` (user-level / system project). This is the
+    /// backwards-compat safety net for mocks and future platforms.
+    #[test]
+    fn paths_active_root_dir_default_is_none() {
+        struct DefaultOnly;
+        impl IPlatformPaths for DefaultOnly {
+            fn resolve(&self) -> AppPaths {
+                AppPaths {
+                    home: PathBuf::from("/h"),
+                    app_data: PathBuf::from("/h/.config/CCM"),
+                    settings_json: PathBuf::from("/h/.claude/settings.json"),
+                    claude_json: PathBuf::from("/h/.claude.json"),
+                    backups_dir: PathBuf::from("/h/.config/CCM/backups"),
+                    marketplaces_dir: PathBuf::from("/h/.config/CCM/marketplaces"),
+                    logs_dir: PathBuf::from("/h/.config/CCM/logs"),
+                }
+            }
+            fn ensure_dirs(&self) -> Result<(), PlatformError> {
+                Ok(())
+            }
+            // Note: NO override of active_root_dir — relies on the
+            // default. The test confirms the default returns None.
+        }
+        let p: Box<dyn IPlatformPaths> = Box::new(DefaultOnly);
+        assert_eq!(p.active_root_dir(), None);
     }
 
     #[test]

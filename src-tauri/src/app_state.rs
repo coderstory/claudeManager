@@ -48,6 +48,12 @@ pub struct AppState {
     /// `<app_data>/marketplaces/<slug>/`, scans 5 resource kinds,
     /// copies selected resources into `~/.claude/<subdir>/`.
     pub marketplace_service: Arc<crate::services::marketplace_service::MarketplaceService>,
+    /// M3.10 (清单 23) — 双模式 (用户/项目) service. Owns
+    /// `<app_data>/projects.json`. Used by the 5 project commands
+    /// (list / add / remove / switch / current) and indirectly by
+    /// `IPlatformPaths::active_root_dir()` (Windows impl reads the
+    /// same file).
+    pub project_service: Arc<crate::services::project_service::ProjectService>,
     /// M2.16 — F20 冷启动 .sql 文件关联:
     ///
     /// setup 阶段(`lib.rs::run`)扫描 argv 时拿到 `.sql` 路径,但此时
@@ -112,6 +118,13 @@ impl AppState {
                 runtime::git_host(),
             ),
         );
+        // M3.10 (清单 23) — 双模式 (用户/项目) service. Holds the
+        // same AppPaths snapshot as the other services. Built
+        // unconditionally so the 5 project commands are always
+        // available (no feature-flag gating).
+        let project_service = Arc::new(
+            crate::services::project_service::ProjectService::new(paths.clone()),
+        );
         Self {
             paths,
             provider_service,
@@ -121,6 +134,7 @@ impl AppState {
             optimizer_service,
             resource_service,
             marketplace_service,
+            project_service,
             // M2.16 — F20 冷启动 .sql 路径缓存,初始 None。
             pending_sql_file: Mutex::new(None),
         }
