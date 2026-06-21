@@ -138,7 +138,7 @@ fn scan_dir_children(
         let kind = kind_from_sub(sub);
         out.push(ResourceItem {
             id,
-            source_repo: infer_source_repo(kind, &name),
+            source_repo: infer_resource_group(kind, &name),
             name,
             kind,
             path: path.to_string_lossy().into_owned(),
@@ -203,7 +203,7 @@ fn scan_dir_children_with_ext(
         let kind = kind_from_sub(sub);
         out.push(ResourceItem {
             id,
-            source_repo: infer_source_repo(kind, &name),
+            source_repo: infer_resource_group(kind, &name),
             name,
             kind,
             path: path.to_string_lossy().into_owned(),
@@ -252,8 +252,8 @@ fn scan_mcp_json(
             .unwrap_or(false);
         out.push(ResourceItem {
             id: format!("mcp/{name}"),
-            // mcp server 是 mcp.json 里的聚合条目,无仓库归属 → None。
-            source_repo: infer_source_repo(ResourceKind::Mcp, &name),
+            // mcp server 是 mcp.json 里的聚合条目,无分组归属 → None。
+            source_repo: infer_resource_group(ResourceKind::Mcp, &name),
             name: name.clone(),
             kind: ResourceKind::Mcp,
             path: path.to_string_lossy().into_owned(),
@@ -269,26 +269,22 @@ fn scan_mcp_json(
 // Utilities
 // ---------------------------------------------------------------------------
 
-/// F21 — 从资源 `path` 推断来源仓库名(M2.16)。
-///
-/// 规则(SPEC F21 "按来源仓库过滤"的最小推断方案):
-/// - plugin: `.../.claude/plugins/<X>/...` → `Some(<X>)`
-/// - skill : `.../.claude/skills/<X>/...` → `Some(<X>)`
-/// - command/lsp/mcp:散文件 / 聚合条目,无仓库概念 → `None`
-///
-/// 实现只做字符串解析,不读 `.git/config`(避免 I/O + 跨平台路径坑)。
-/// `name` 对 plugin/skill 恰好等于顶层目录名,直接复用;对 command/lsp
-/// 是文件名(含扩展),对 mcp 是 server 名——这些 kind 不推断,传 `None`。
-///
-/// 之所以单独抽函数(而非内联):测试要覆盖"plugins/skills 命中 /
-/// 其他 kind 返回 None / 路径无 .claude 段"等边界,抽出来好测。
-fn infer_source_repo(kind: ResourceKind, name: &str) -> Option<String> {
+// M2.16 — H6: 内部推断函数从 `infer_source_repo` 改名为
+// `infer_resource_group`。原因:对 Plugin/Skill 返回的其实只是资源
+// **自身的名字**(顶层目录 / 文件名),不是真正的 git 仓库 URL。叫
+// `source_repo` 误导 —— 用户可能以为能选 "anthropics/awesome-claude"
+// 这种仓库。`resource_group` 更准确:这只是 plugin/skill 的"分组键"
+// (group-by key),不是 git remote。
+//
+// 字段名 `source_repo` 保留(前端 wire format 已 ship,改了就是
+// breaking)。文档统一用"分组"措辞。
+fn infer_resource_group(kind: ResourceKind, name: &str) -> Option<String> {
     match kind {
         // plugin/skill 的 name 就是 `<subdir>` 下的顶层目录/文件名,
-        // 即 repo 分组键。scanner 已保证 name 非空且非 dotfile。
+        // 即 group 分组键。scanner 已保证 name 非空且非 dotfile。
         ResourceKind::Plugin | ResourceKind::Skill => Some(name.to_string()),
         // 散文件(command .md / lsp .json)与聚合条目(mcp server)没有
-        // "仓库"归属——它们是用户手写的单文件,不属于任何 repo。
+        // "分组"归属 —— 它们是用户手写的单文件,不属于任何分组。
         ResourceKind::Command | ResourceKind::Lsp | ResourceKind::Mcp => None,
     }
 }
@@ -626,17 +622,17 @@ mod tests {
     /// 单元覆盖推断函数本身:plugin/skill → Some(name),
     /// command/lsp/mcp → None。pin 行为防回归。
     #[test]
-    fn infer_source_repo_rules() {
+    fn infer_resource_group_rules() {
         assert_eq!(
-            infer_source_repo(ResourceKind::Plugin, "code-review"),
+            infer_resource_group(ResourceKind::Plugin, "code-review"),
             Some("code-review".into())
         );
         assert_eq!(
-            infer_source_repo(ResourceKind::Skill, "my-skill"),
+            infer_resource_group(ResourceKind::Skill, "my-skill"),
             Some("my-skill".into())
         );
-        assert_eq!(infer_source_repo(ResourceKind::Command, "build.md"), None);
-        assert_eq!(infer_source_repo(ResourceKind::Lsp, "rust.json"), None);
-        assert_eq!(infer_source_repo(ResourceKind::Mcp, "fs"), None);
+        assert_eq!(infer_resource_group(ResourceKind::Command, "build.md"), None);
+        assert_eq!(infer_resource_group(ResourceKind::Lsp, "rust.json"), None);
+        assert_eq!(infer_resource_group(ResourceKind::Mcp, "fs"), None);
     }
 }

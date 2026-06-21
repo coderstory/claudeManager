@@ -38,11 +38,14 @@ use serde::{Deserialize, Serialize};
 ///   per-resource enable toggle exists in M2.13); for Mcp it
 ///   mirrors `mcp.json.<server>.disabled` (`true` means
 ///   explicitly turned off by the user via F6).
-/// - `source_repo`: F21 — 来源仓库分组名(M2.16)。从 `path` 推断:
-///   plugin/skill 取 `.claude/<subdir>/<X>` 中的 `<X>`(顶层目录名,
-///   即 repo 名);command/lsp/mcp 为 `None`(散文件 / 聚合条目,无
-///   仓库概念)。前端 F21 据此做"按来源仓库过滤"。详见
-///   `resource_scanner::infer_source_repo`。
+/// - `source_repo`: F21 — 资源分组键(M2.16)。从 `path` 推断:
+///   plugin/skill 取 `.claude/<subdir>/<X>` 中的 `<X>`(顶层目录名);
+///   command/lsp/mcp 为 `None`(散文件 / 聚合条目,无分组概念)。
+///   前端 F21 据此做"按来源过滤"。注意:这只是 group-by key,**不**
+///   是 git remote URL(详见 `resource_scanner::infer_resource_group`)。
+///   字段名沿用 `source_repo` 是历史原因(M2.13 wire format 已 ship),
+///   改字段名 = breaking change。内部推断函数已重命名为
+///   `infer_resource_group`。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResourceItem {
     pub id: String,
