@@ -45,6 +45,7 @@
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { AppHeader } from './components/AppHeader';
 import { AppSidebar } from './components/AppSidebar';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
@@ -148,6 +149,10 @@ export default function App(): ReactElement {
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
 
+  // F10 — 拖放遮罩可见性。当用户拖入 .sql 文件悬停在窗口上时
+  // 显示"松开以导入 .sql"遮罩,drop / leave 后隐藏。
+  const [dragOverlayVisible, setDragOverlayVisible] = useState(false);
+
   // F20 — 文件关联 .sql 路径(双击 .sql 启动 / 第二实例转发)。
   //
   // 后端 lib.rs 的 single-instance callback + setup 冷启动都会 emit
@@ -189,6 +194,67 @@ export default function App(): ReactElement {
       setPendingSqlFile(null);
     }
   }, [view]);
+
+  // F10 — 拖放 .sql 导入(SPEC F10)。
+  //
+  // Tauri v2 的 webview 拖放事件 `onDragDropEvent` 由 Rust 端 emit,
+  // payload 是 `{ type, paths, position }`,其中 `paths` 是文件绝对
+  // 路径数组(不是浏览器受限的 File 对象)。这样我们就能拿到真实
+  // 路径,直接复用 F20 的 `setPendingSqlFile` + `setView('import-sql')`
+  // 机制,ImportSqlPage 收到 initialFilePath 后自动读取 + 解析。
+  //
+  // 事件类型:
+  //   - enter:用户拖入文件悬停在窗口上 → 检查是否含 .sql → 显示遮罩
+  //   - over :文件在窗口内移动 → 不改变遮罩状态(enter 已决定)
+  //   - drop :用户松开鼠标 → 取第一个 .sql 路径 → 跳转导入页 + 加载
+  //   - leave:用户拖出窗口 → 隐藏遮罩
+  //
+  // 为什么不用 JS 的 onDrop/onDragOver:Tauri webview 里 File 对象
+  // 只有 name 没有 path(浏览器安全限制),拿不到绝对路径无法调
+  // readSqlFile。Tauri 的 onDragDropEvent 是 Rust 端给的真实路径,
+  // 是 SPEC F10 要求的"拖到主窗口 → 自动跳导入页 + 加载该文件"的
+  // 唯一可靠方案。
+  //
+  // try-catch 包裹 getCurrentWindow():jsdom 测试环境没有
+  // __TAURI_INTERNALS__,getCurrentWindow() 会抛错。生产环境(Tauri
+  // WebView2 / WKWebView)正常。捕获后静默跳过(无拖放功能但不崩溃)。
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    try {
+      const win = getCurrentWindow();
+      void win.onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === 'enter') {
+          // 拖入时检查是否含 .sql 文件(大小写不敏感)。
+          const hasSql = payload.paths.some((p) =>
+            p.toLowerCase().endsWith('.sql'),
+          );
+          setDragOverlayVisible(hasSql);
+        } else if (payload.type === 'over') {
+          // over 不带 paths,保持 enter 决定的遮罩状态。
+        } else if (payload.type === 'drop') {
+          // 取第一个 .sql 文件路径(如有)。
+          const sqlPath = payload.paths.find((p) =>
+            p.toLowerCase().endsWith('.sql'),
+          );
+          if (sqlPath) {
+            setPendingSqlFile(sqlPath);
+            setView('import-sql');
+          }
+          setDragOverlayVisible(false);
+        } else if (payload.type === 'leave') {
+          setDragOverlayVisible(false);
+        }
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    } catch {
+      // 非 Tauri 环境(测试 / 浏览器)无法注册拖放,静默跳过。
+    }
+    return (): void => {
+      if (unlisten) unlisten();
+    };
+  }, [setView]);
 
   // M2.16+ splash — 淡出 index.html 里的内联加载屏。
   // 用户明确要求 splash 至少展示 2s，并配好看的动画效果。
@@ -431,6 +497,43 @@ export default function App(): ReactElement {
         onClose={() => setQuickSearchOpen(false)}
         onNavigate={handleNavigate}
       />
+      {/* F10 — 拖放 .sql 导入遮罩。用户拖入 .sql 文件悬停在窗口上
+          时显示,提示"松开以导入 .sql"。drop / leave 后隐藏。遮罩
+          用 position:fixed 全屏覆盖,pointer-events:none 让 drop
+          事件穿透到 Tauri webview(Rust 端处理,不阻断)。 */}
+      {dragOverlayVisible && (
+        <div
+          data-testid="drag-drop-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(9, 105, 218, 0.08)',
+            border: '3px dashed var(--accent)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              padding: 'var(--space-6) var(--space-8)',
+              background: 'var(--bg-elevated)',
+              borderRadius: 'var(--radius-card)',
+              boxShadow: 'var(--shadow-md)',
+              color: 'var(--accent)',
+              fontSize: 'var(--fs-heading)',
+              fontWeight: 600,
+            }}
+          >
+            松开以导入 .sql 文件
+          </div>
+        </div>
+      )}
     </div>
   );
 }
