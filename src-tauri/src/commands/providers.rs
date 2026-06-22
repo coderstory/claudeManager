@@ -42,19 +42,44 @@ type CmdResult<T> = Result<T, String>;
 /// is the cold-start case the M2.1 UI handles with an "empty state".
 /// Individual corrupt files are silently skipped (the UI can call
 /// `list_providers_with_warnings` later if it wants to surface them).
+///
+/// M3.12 adapter (3-medium A1#1) — reads the live active root via
+/// the platform shim and routes the list through
+/// `ProviderService::list_providers_with_active_root`. When a
+/// project is active (`Some(root)`) the listing is scoped to
+/// `<root>/.claude/providers/`. The legacy (no-active-root) code
+/// path is preserved as a fallback so the M2.x UI keeps working
+/// unchanged.
 #[tauri::command]
 pub async fn list_providers(state: State<'_, AppState>) -> CmdResult<Vec<Provider>> {
-    Ok(state.provider_service.list_providers())
+    // M3.12 (A1#1) — query the live active root via the platform shim
+    // (state.paths is a one-shot startup snapshot; active_root can
+    // change at runtime via the project switcher).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let active_root_ref = active_root.as_deref();
+    let (providers, _warnings) = state
+        .provider_service
+        .list_providers_with_active_root(active_root_ref)
+        .map_err(|e| e.to_string())?;
+    Ok(providers)
 }
 
 /// F1+ — same as `list_providers` but also returns the paths of any
 /// provider files that failed to parse. The frontend can show a
 /// non-fatal warning toast.
+///
+/// M3.12 adapter (A1#1) — routes through the active root exactly
+/// like `list_providers`.
 #[tauri::command]
 pub async fn list_providers_with_warnings(
     state: State<'_, AppState>,
 ) -> CmdResult<ListProvidersResult> {
-    let (providers, warnings) = state.provider_service.list_providers_with_warnings();
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let active_root_ref = active_root.as_deref();
+    let (providers, warnings) = state
+        .provider_service
+        .list_providers_with_active_root(active_root_ref)
+        .map_err(|e| e.to_string())?;
     let warnings = warnings
         .into_iter()
         .map(|p| p.to_string_lossy().into_owned())
@@ -155,14 +180,23 @@ pub async fn parse_sql_preview(content: String) -> CmdResult<SqlPreview> {
 /// Returns a serialisable summary of what was imported, what was
 /// skipped, and any per-row errors (UI surfaces them as a toast +
 /// details panel).
+///
+/// M3.12 adapter (3-medium A1#3) — routes the import through the
+/// active root: when a project is active (`Some(root)`) providers
+/// land in `<root>/.claude/providers/`; otherwise the legacy
+/// `<app_data>/providers/` location is used. The parser + idempotency
+/// logic is unchanged.
 #[tauri::command]
 pub async fn import_providers_from_sql(
     state: State<'_, AppState>,
     content: String,
 ) -> CmdResult<ImportResultDto> {
+    // M3.12 (A1#3) — query the live active root via the platform shim.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let active_root_ref = active_root.as_deref();
     let result = state
         .provider_service
-        .import_providers_from_sql(&content)
+        .import_providers_from_sql_with_active_root(&content, active_root_ref)
         .map_err(|e| e.to_string())?;
     Ok(result.into())
 }

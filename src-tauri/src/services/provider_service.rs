@@ -77,6 +77,10 @@ impl ProviderService {
     /// directory or an empty library. Individual corrupt files are
     /// silently skipped (the UI gets a partial list + a warning via
     /// [`list_providers_with_warnings`] for that case).
+    ///
+    /// **M3.12 deprecation note:** this is the legacy (user-level only)
+    /// entry point. New callers MUST use [`list_providers_with_active_root`]
+    /// (A1#1) so the read target honours the live active project.
     pub fn list_providers(&self) -> Vec<Provider> {
         self.list_providers_with_warnings().0
     }
@@ -84,6 +88,12 @@ impl ProviderService {
     /// Same as [`list_providers`] but also returns the list of
     /// corrupted provider file paths so the UI can show a warning.
     /// The tuple is `(providers, warnings)`.
+    ///
+    /// M3.12 adapter — prefer [`list_providers_with_active_root`]
+    /// (A1#1). This legacy method is kept for callers that don't
+    /// know about `active_root_dir` (e.g. internal unit tests for
+    /// pre-M3.10 flows). It always reads from the user-level
+    /// `<app_data>/providers/` directory.
     pub fn list_providers_with_warnings(&self) -> (Vec<Provider>, Vec<PathBuf>) {
         let dir = self.paths.app_data.join("providers");
         let mut providers = Vec::new();
@@ -126,6 +136,76 @@ impl ProviderService {
         }
 
         (providers, warnings)
+    }
+
+    /// M3.12 adapter (A1#1) — `list_providers` with active-root
+    /// awareness. Returns the same `(providers, warnings)` tuple as
+    /// [`list_providers_with_warnings`] but routes the read target
+    /// through the active root when one is set.
+    ///
+    /// ## Behavior
+    ///
+    /// - `Some(root)` → reads `<root>/.claude/providers/`.
+    ///   - If that directory is missing → **returns an empty list**
+    ///     (does NOT fall back to user-level). This is a deliberate
+    ///     safety choice (A1#1): a project view must not silently
+    ///     surface globally-installed providers.
+    /// - `None` → reads the user-level `<app_data>/providers/`
+    ///   (same as the legacy method).
+    ///
+    /// `is_active` is recomputed from the *project's* settings.json
+    /// when in project mode (so the active-marker matches the file
+    /// Claude Code actually uses in that project).
+    pub fn list_providers_with_active_root(
+        &self,
+        active_root: Option<&Path>,
+    ) -> Result<(Vec<Provider>, Vec<PathBuf>), ProviderError> {
+        let dir = self.providers_dir_for_active_root(active_root);
+
+        // Project mode + missing dir → return empty (no fallback).
+        // User-level + missing dir → also empty (same as legacy
+        // `list_providers_with_warnings`).
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(it) => it,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok((Vec::new(), Vec::new()));
+            }
+            Err(e) => return Err(ProviderError::Io(e)),
+        };
+
+        let mut providers = Vec::new();
+        let mut warnings = Vec::new();
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+            match Provider::from_json_file(&path) {
+                Ok(p) => providers.push(p),
+                Err(_) => warnings.push(path),
+            }
+        }
+
+        // Sort by name for stable display order.
+        providers.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // Recompute is_active from the active root's settings.json
+        // (project mode) or the user-level one (user mode).
+        let settings_for_active =
+            self.settings_json_for_active_root(active_root);
+        let (current_base, current_key) = read_current_active_env(&settings_for_active);
+        for p in &mut providers {
+            p.is_active = match (&current_base, &current_key) {
+                (Some(b), Some(k)) => p.api_base == *b && p.api_key == *k,
+                _ => false,
+            };
+        }
+
+        Ok((providers, warnings))
     }
 
     // -----------------------------------------------------------------------
@@ -182,6 +262,13 @@ impl ProviderService {
     /// Directory where provider JSON files live.
     fn providers_dir(&self) -> PathBuf {
         self.paths.app_data.join("providers")
+    }
+
+    /// M3.12 helper — full path to a provider's JSON file under the
+    /// active root (or user-level when `active_root` is `None`).
+    fn provider_path_for_active_root(&self, id: &str, active_root: Option<&Path>) -> PathBuf {
+        self.providers_dir_for_active_root(active_root)
+            .join(format!("{id}.json"))
     }
 
     /// M3.10 adapter (3-high F2) — switch_provider with active-root awareness.
@@ -539,6 +626,99 @@ impl ProviderService {
 
         for provider in parsed.providers {
             let target = self.provider_path(&provider.id);
+            if target.exists() {
+                skipped += 1;
+                continue;
+            }
+            let json = match serde_json::to_string_pretty(&provider) {
+                Ok(s) => s,
+                Err(e) => {
+                    write_errors.push(WriteError {
+                        id: provider.id.clone(),
+                        reason: format!("serialise failed: {e}"),
+                    });
+                    continue;
+                }
+            };
+            if let Err(e) = fs_atomic::write_with_backup(&target, &json) {
+                write_errors.push(WriteError {
+                    id: provider.id.clone(),
+                    reason: format!("atomic write failed: {e}"),
+                });
+                continue;
+            }
+            imported += 1;
+        }
+
+        // Merge parser-level skip reasons + write-level errors into one
+        // list the UI can show as a unified "skipped lines" panel.
+        let errors = parsed
+            .skipped_lines
+            .into_iter()
+            .map(|s| ImportSkip {
+                kind: "parse".into(),
+                line: s.line,
+                id: None,
+                reason: s.reason,
+            })
+            .chain(write_errors.into_iter().map(|w| ImportSkip {
+                kind: "write".into(),
+                line: 0,
+                id: Some(w.id),
+                reason: w.reason,
+            }))
+            .collect();
+
+        Ok(ImportResult {
+            imported,
+            skipped,
+            errors,
+            mcp_count: parsed.mcp_servers.len(),
+        })
+    }
+
+    /// M3.12 adapter (A1#3) — `import_providers_from_sql` with
+    /// active-root awareness.
+    ///
+    /// ## Behavior
+    ///
+    /// - `None` → identical to the legacy `import_providers_from_sql`
+    ///   (writes to `<app_data>/providers/`).
+    /// - `Some(root)` → writes to `<root>/.claude/providers/`.
+    ///
+    /// ## Safety
+    ///
+    /// **Does NOT auto-`mkdir` the project root.** If
+    /// `<root>/.claude/providers/` does not exist, `fs_atomic` will
+    /// fail with an `Io` error (parent dir missing). This matches
+    /// M3.11 F18's safety boundary — the active project must already
+    /// be initialized (e.g. via `claude init`) before providers are
+    /// imported. Silently creating directories under an unknown
+    /// project path is a footgun we explicitly avoid.
+    ///
+    /// Returns the same `ImportResult` shape as the legacy method
+    /// (imported count / skipped count / per-row errors / mcp_count).
+    /// Per-row write errors are surfaced via `ImportSkip { kind:
+    /// "write", id, reason }` so the UI can show them in a details
+    /// panel.
+    pub fn import_providers_from_sql_with_active_root(
+        &self,
+        content: &str,
+        active_root: Option<&Path>,
+    ) -> Result<ImportResult, ProviderError> {
+        let parsed = crate::infrastructure::sql_parser::parse_sql_dump(content)
+            .map_err(|e| {
+                ProviderError::Json(serde_json::Error::custom(format!(
+                    "SQL parse failed: {e}"
+                )))
+            })?;
+
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+        let mut write_errors: Vec<WriteError> = Vec::new();
+
+        for provider in parsed.providers {
+            let target = self.provider_path_for_active_root(&provider.id, active_root);
             if target.exists() {
                 skipped += 1;
                 continue;
@@ -1671,9 +1851,167 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         );
     }
 
-    /// 失败/边界:不存在的项目根 → 调用方负责创建;.claude/ 父目录不存
-    /// 在则 fs_atomic::write_with_backup 自己报错(写盘失败不属于此函数
-    /// 范围)。这里验证:函数正确把目标路径解析到项目根下的 settings.json。
+    /// F1 + F3 — M3.12 adapter (3-medium A1#1 + A1#3): `list_providers` +
+    /// `list_providers_with_warnings` + `import_providers_from_sql` 接
+    /// `active_root_dir`。业务方法签名从 `()` 变成
+    /// `(Option<&Path>, content: &str)` 等,这样命令层先读 live
+    /// active_root 再注入,避免 service 自己再读 platform runtime
+    /// (保持 service 的"只接业务参数"分层原则)。
+    ///
+    /// 行为契约(与 A1#1 / A1#3 决策一致):
+    ///   - `None` → 走用户级 `<app_data>/providers/`(完全向后兼容)
+    ///   - `Some(root)` → 走 `<root>/.claude/providers/`
+    ///   - 项目模式读取时,providers 目录不存在 → **返回空数组**(不
+    ///     fallback 到用户级,防止读到与项目无关的全局 provider)
+    ///   - 项目模式写时,providers 目录不存在 → 写盘失败(Io 错)
+    ///     (M3.11 F18 安全边界:不自动 mkdir 未知 root)
+
+    /// F1 用户级 (None) — 与原 `list_providers` 行为完全一致。
+    #[test]
+    fn list_providers_with_active_root_none_matches_user_level_legacy() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_settings(&settings, "https://api.anthropic.com", "key-glm");
+        write_provider(
+            &p_dir,
+            &sample_provider("glm-46", "GLM-4.6", "https://api.anthropic.com"),
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let (list, _warnings) = svc.list_providers_with_active_root(None).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, "glm-46");
+        assert!(list[0].is_active);
+    }
+
+    /// F1 项目级 (Some) — root 下有 providers → 读到正确内容。
+    #[test]
+    fn list_providers_with_active_root_some_reads_project_providers() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("proj-x");
+        std::fs::create_dir_all(project_root.join(".claude").join("providers")).unwrap();
+        write_provider(
+            &project_root.join(".claude").join("providers"),
+            &sample_provider("proj-only", "ProjOnly", "https://proj.example"),
+        );
+        // 用户级也写一个同名 id 的 provider,但 *不同* name — 验证
+        // 走的是项目级目录而非 fallback。
+        let p_dir = tmp.path().join("providers");
+        write_provider(
+            &p_dir,
+            &sample_provider("user-only", "UserOnly", "https://user.example"),
+        );
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let (list, _warnings) = svc
+            .list_providers_with_active_root(Some(&project_root))
+            .unwrap();
+        assert_eq!(list.len(), 1, "only project-level providers visible");
+        assert_eq!(list[0].id, "proj-only");
+    }
+
+    /// F1 项目级 (Some) — root 下 *无* providers 目录 → **返回空数
+    /// 组**(不 fallback 到用户级)。这是 A1#1 的安全决策:避免泄漏
+    /// 全局 provider 到项目视图。
+    #[test]
+    fn list_providers_with_active_root_missing_project_dir_returns_empty_no_fallback() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("proj-empty");
+        std::fs::create_dir_all(&project_root).unwrap(); // .claude 不存在
+        // 用户级有 1 个 provider — 确认不会泄漏。
+        let p_dir = tmp.path().join("providers");
+        write_provider(
+            &p_dir,
+            &sample_provider("user-leak", "UserLeak", "https://user.example"),
+        );
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let (list, _warnings) = svc
+            .list_providers_with_active_root(Some(&project_root))
+            .unwrap();
+        assert!(
+            list.is_empty(),
+            "missing project dir must NOT fallback to user-level"
+        );
+    }
+
+    /// F3 用户级 (None) — 写盘走 `<app_data>/providers/`,与原
+    /// `import_providers_from_sql` 一致。
+    #[test]
+    fn import_providers_from_sql_with_active_root_none_writes_user_level() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('a1', 'claude', 'A1', '{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://a\",\"ANTHROPIC_AUTH_TOKEN\":\"k1\",\"ANTHROPIC_MODEL\":\"m1\"},\"model\":\"m1\"}');";
+        let result = svc
+            .import_providers_from_sql_with_active_root(sql, None)
+            .unwrap();
+        assert_eq!(result.imported, 1);
+        assert!(p_dir.join("a1.json").exists());
+    }
+
+    /// F3 项目级 (Some) — 写盘走 `<root>/.claude/providers/`。
+    /// 关键验证:用户级 providers 目录不会被触碰(无泄漏)。
+    #[test]
+    fn import_providers_from_sql_with_active_root_some_writes_project_level() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("proj-y");
+        std::fs::create_dir_all(&project_root).unwrap();
+        let user_p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('proj-import', 'claude', 'P', '{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://p\",\"ANTHROPIC_AUTH_TOKEN\":\"k\",\"ANTHROPIC_MODEL\":\"m\"},\"model\":\"m\"}');";
+        let result = svc
+            .import_providers_from_sql_with_active_root(sql, Some(&project_root))
+            .unwrap();
+        assert_eq!(result.imported, 1);
+
+        // 写到项目级。
+        let target = project_root.join(".claude").join("providers").join("proj-import.json");
+        assert!(target.exists(), "project provider file must exist: {target:?}");
+
+        // 用户级未被污染。
+        assert!(!user_p_dir.join("proj-import.json").exists());
+    }
+
+    /// F3 项目级 (Some) — 写后读回,内容正确。
+    #[test]
+    fn import_providers_from_sql_with_active_root_some_round_trip() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("proj-z");
+        std::fs::create_dir_all(&project_root).unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let sql = "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('rt', 'claude', 'RT', '{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://rt\",\"ANTHROPIC_AUTH_TOKEN\":\"krt\",\"ANTHROPIC_MODEL\":\"mrt\"},\"model\":\"mrt\"}');";
+        svc.import_providers_from_sql_with_active_root(sql, Some(&project_root))
+            .unwrap();
+
+        let raw = std::fs::read_to_string(
+            project_root.join(".claude").join("providers").join("rt.json"),
+        )
+        .unwrap();
+        let p = Provider::from_json_file(
+            &project_root.join(".claude").join("providers").join("rt.json"),
+        )
+        .unwrap();
+        assert_eq!(p.id, "rt");
+        assert_eq!(p.name, "RT");
+        assert_eq!(p.api_base, "https://rt");
+        assert_eq!(p.api_key, "krt");
+        assert!(raw.contains("\"id\": \"rt\""));
+    }
+
+    /// 失败/边界:不存在的项目根 (Some) → 调用方负责创建;.claude/
+    /// 父目录不存在则 fs_atomic::write_with_backup 自己报错(写盘
+    /// 失败不属于此函数范围,符合 M3.11 F18 的安全边界 — 不自动
+    /// mkdir 未知 root)。
     #[test]
     fn switch_provider_with_active_root_resolves_to_correct_target() {
         let tmp = TempDir::new().unwrap();
