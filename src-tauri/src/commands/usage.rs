@@ -80,6 +80,11 @@ fn resolve_active_provider_id(state: &AppState) -> String {
 /// F7 — return the cached usage snapshot for the active provider
 /// in the requested window (`"5h"` / `"1w"` / `"1m"`). Cache TTL is
 /// 5 minutes; the page can call `refresh_usage` to force a re-scan.
+///
+/// M3.12 (A1#13) — reads live `active_root_dir` from the platform
+/// shim and routes the JSONL scan accordingly. `None` → scan the
+/// user-level `~/.claude/projects/...` (M3.8 default); `Some(root)` →
+/// scan `<root>/.claude/projects/...` (project mode).
 #[tauri::command]
 pub async fn get_current_usage(
     state: State<'_, AppState>,
@@ -88,15 +93,19 @@ pub async fn get_current_usage(
     let w = UsageWindow::from_str(&window)
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
+    // M3.12 (A1#13) — read live active root via the platform shim.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .usage_service
-        .get_snapshot_only(&provider_id, w)
+        .get_snapshot_only_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
 
 /// F7 — return per-day per-model history for the active provider
 /// in the requested window. Cache TTL is shared with
 /// `get_current_usage` — same `(provider_id, window)` key.
+///
+/// M3.12 (A1#13) — routes the JSONL scan through `active_root_dir`.
 #[tauri::command]
 pub async fn get_usage_history(
     state: State<'_, AppState>,
@@ -105,15 +114,18 @@ pub async fn get_usage_history(
     let w = UsageWindow::from_str(&window)
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .usage_service
-        .get_history_only(&provider_id, w)
+        .get_history_only_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
 
 /// F7 — drop the cache entry for `(active_provider, window)` and
 /// re-scan `~/.claude/projects/**/*.jsonl`. Returns the fresh
 /// snapshot.
+///
+/// M3.12 (A1#13) — routes the JSONL scan through `active_root_dir`.
 #[tauri::command]
 pub async fn refresh_usage(
     state: State<'_, AppState>,
@@ -122,9 +134,10 @@ pub async fn refresh_usage(
     let w = UsageWindow::from_str(&window)
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     let (snap, _history) = state
         .usage_service
-        .refresh(&provider_id, w)
+        .refresh_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())?;
     Ok(snap)
 }

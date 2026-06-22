@@ -49,6 +49,7 @@
 //! - `refresh(window)` drops the cache entry and re-reads.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -170,10 +171,34 @@ impl UsageService {
     /// Errors only on truly exceptional conditions (path
     /// resolution + I/O + fatal JSON parse of metadata).
     /// Missing `~/.claude/projects/` directory → empty snapshot.
+    ///
+    /// Thin wrapper around [`Self::get_usage_with_active_root`] that
+    /// defaults to user-level mode (`active_root_dir = None`).
+    /// Backward-compatible with M3.8 callers.
     pub fn get_usage(
         &self,
         provider_id: &str,
         window: UsageWindow,
+    ) -> Result<(UsageSnapshot, Vec<UsageHistoryEntry>), UsageError> {
+        self.get_usage_with_active_root(provider_id, window, None)
+    }
+
+    /// M3.12 (A1#13) — get usage with explicit `active_root_dir`.
+    ///
+    /// - `None` → scan `~/.claude/projects/...jsonl` (the cached
+    ///   `paths.claude_dir()` from AppPaths; M3.8 default).
+    /// - `Some(root)` → scan `<root>/.claude/projects/...jsonl`
+    ///   (project mode). Missing `<root>/.claude/projects/` → empty
+    ///   snapshot (same cold-start tolerance as None mode).
+    ///
+    /// The 5-minute cache is keyed by `(provider_id, window)` only;
+    /// switching `active_root_dir` between calls naturally produces
+    /// a cache miss for the same key (the snapshot content differs).
+    pub fn get_usage_with_active_root(
+        &self,
+        provider_id: &str,
+        window: UsageWindow,
+        active_root_dir: Option<&Path>,
     ) -> Result<(UsageSnapshot, Vec<UsageHistoryEntry>), UsageError> {
         let key = cache_key(provider_id, window);
         // Cache hit + fresh?
@@ -183,7 +208,8 @@ impl UsageService {
             }
         }
         // Cache miss or expired — re-scan.
-        let (snap, history) = self.compute_usage_for_window(provider_id, window)?;
+        let (snap, history) =
+            self.compute_usage_for_window(provider_id, window, active_root_dir)?;
         self.cache.lock().unwrap().insert(
             key,
             CacheEntry {
@@ -196,36 +222,77 @@ impl UsageService {
     }
 
     /// Drop the cache entry for `(provider_id, window)` and re-scan.
+    ///
+    /// Thin wrapper around [`Self::refresh_with_active_root`] that
+    /// defaults to user-level mode (`active_root_dir = None`).
     pub fn refresh(
         &self,
         provider_id: &str,
         window: UsageWindow,
     ) -> Result<(UsageSnapshot, Vec<UsageHistoryEntry>), UsageError> {
+        self.refresh_with_active_root(provider_id, window, None)
+    }
+
+    /// M3.12 (A1#13) — refresh with explicit `active_root_dir`.
+    pub fn refresh_with_active_root(
+        &self,
+        provider_id: &str,
+        window: UsageWindow,
+        active_root_dir: Option<&Path>,
+    ) -> Result<(UsageSnapshot, Vec<UsageHistoryEntry>), UsageError> {
         let key = cache_key(provider_id, window);
         self.cache.lock().unwrap().remove(&key);
-        self.get_usage(provider_id, window)
+        self.get_usage_with_active_root(provider_id, window, active_root_dir)
     }
 
     /// Return only the snapshot (no history). Used by the command
     /// layer when the UI doesn't need history (cheap path).
+    ///
+    /// Thin wrapper around [`Self::get_snapshot_only_with_active_root`].
     #[allow(dead_code)]
     pub fn get_snapshot_only(
         &self,
         provider_id: &str,
         window: UsageWindow,
     ) -> Result<UsageSnapshot, UsageError> {
-        let (snap, _history) = self.get_usage(provider_id, window)?;
+        self.get_snapshot_only_with_active_root(provider_id, window, None)
+    }
+
+    /// M3.12 (A1#13) — get snapshot only with explicit `active_root_dir`.
+    #[allow(dead_code)]
+    pub fn get_snapshot_only_with_active_root(
+        &self,
+        provider_id: &str,
+        window: UsageWindow,
+        active_root_dir: Option<&Path>,
+    ) -> Result<UsageSnapshot, UsageError> {
+        let (snap, _history) =
+            self.get_usage_with_active_root(provider_id, window, active_root_dir)?;
         Ok(snap)
     }
 
     /// Return only the history. Re-uses the cache.
+    ///
+    /// Thin wrapper around [`Self::get_history_only_with_active_root`].
     #[allow(dead_code)]
     pub fn get_history_only(
         &self,
         provider_id: &str,
         window: UsageWindow,
     ) -> Result<Vec<UsageHistoryEntry>, UsageError> {
-        let (_snap, history) = self.get_usage(provider_id, window)?;
+        self.get_history_only_with_active_root(provider_id, window, None)
+    }
+
+    /// M3.12 (A1#13) — get history only with explicit `active_root_dir`.
+    #[allow(dead_code)]
+    pub fn get_history_only_with_active_root(
+        &self,
+        provider_id: &str,
+        window: UsageWindow,
+        active_root_dir: Option<&Path>,
+    ) -> Result<Vec<UsageHistoryEntry>, UsageError> {
+        let (_snap, history) =
+            self.get_usage_with_active_root(provider_id, window, active_root_dir)?;
         Ok(history)
     }
 
@@ -233,18 +300,31 @@ impl UsageService {
     // Internal
     // -----------------------------------------------------------------------
 
-    /// Compute the snapshot + history by scanning JSONL. Path
-    /// comes from `AppPaths::claude_dir().join("projects")`.
+    /// Compute the snapshot + history by scanning JSONL.
+    ///
+    /// Path resolution:
+    /// - `None` → `<AppPaths::claude_dir>/projects/`
+    ///   (M3.8 default; backward-compatible)
+    /// - `Some(root)` → `<root>/.claude/projects/`
+    ///   (M3.12 project mode)
+    ///
+    /// Missing `projects/` dir → empty snapshot (cold-start tolerance).
     fn compute_usage_for_window(
         &self,
         provider_id: &str,
         window: UsageWindow,
+        active_root_dir: Option<&Path>,
     ) -> Result<(UsageSnapshot, Vec<UsageHistoryEntry>), UsageError> {
-        let claude_dir = self
-            .paths
-            .claude_dir()
-            .ok_or(UsageError::PathUnresolved)?;
-        let projects_dir = claude_dir.join("projects");
+        let projects_dir = match active_root_dir {
+            Some(root) => root.join(".claude").join("projects"),
+            None => {
+                let claude_dir = self
+                    .paths
+                    .claude_dir()
+                    .ok_or(UsageError::PathUnresolved)?;
+                claude_dir.join("projects")
+            }
+        };
         let result = usage_provider_ccswitch::compute_usage_from_jsonl(
             &projects_dir,
             window,
@@ -488,5 +568,76 @@ mod tests {
         let history = svc.get_history_only("p1", UsageWindow::OneMonth).unwrap();
         assert_eq!(history.len(), 2);
         assert_eq!(history[0].date, "2026-06-20");
+    }
+
+    // ---- M3.12 (A1#13) — F7 get_current_usage 接入 active_root_dir ----
+    //
+    // Read-only, 2 个场景:
+    // - None  → 读 AppPaths::claude_dir()/projects/ (用户级,向后兼容)
+    // - Some(root) → 读 <root>/.claude/projects/,**不**碰 user-level
+    //
+    // 用 2 份独立的 JSONL fixture(user 和 project 各一份,token 数不同),
+    // 验证 active_root 路由正确。
+
+    /// 1. `active_root_dir = None` → 读 AppPaths::claude_dir()/projects/
+    /// (用户级,向后兼容)。
+    #[test]
+    fn get_usage_with_active_root_none_reads_user_dotclaude() {
+        let tmp = TempDir::new().unwrap();
+        let user_claude = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(&user_claude).unwrap();
+        write_sess_jsonl(
+            &user_claude,
+            "C--user",
+            &[("claude-sonnet-4-20250514", 1000, 500, "m1", "2026-06-22T10:00:00Z")],
+        );
+        // 同时建一份 project JSONL(用更大 token 数),验证 None 模式**不**碰它。
+        let project_root = tmp.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(&project_claude).unwrap();
+        write_sess_jsonl(
+            &project_claude,
+            "C--project",
+            &[("claude-sonnet-4-20250514", 9999, 9999, "m2", "2026-06-22T10:00:00Z")],
+        );
+
+        let svc = UsageService::new(build_paths(&user_claude));
+        let (snap, _history) = svc
+            .get_usage_with_active_root("p1", UsageWindow::OneMonth, None)
+            .unwrap();
+        // 读到 user 的 1000+500=1500,**不**是 project 的 9999+9999=19998
+        assert_eq!(snap.tokens_used, 1500, "None 模式应读 user-level");
+        assert_eq!(snap.breakdown.len(), 1);
+    }
+
+    /// 2. `active_root_dir = Some(root)` → 读 `<root>/.claude/projects/`,
+    /// **不**碰 AppPaths baked 的 user-level claude_dir。
+    #[test]
+    fn get_usage_with_active_root_some_reads_project_dotclaude() {
+        let tmp = TempDir::new().unwrap();
+        // user-level: AppPaths baked 的 (含 1000+500=1500)
+        let user_claude = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(&user_claude).unwrap();
+        write_sess_jsonl(
+            &user_claude,
+            "C--user",
+            &[("claude-sonnet-4-20250514", 1000, 500, "m1", "2026-06-22T10:00:00Z")],
+        );
+        // project-level: 独立 root,含 9999+9999=19998
+        let project_root = tmp.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(&project_claude).unwrap();
+        write_sess_jsonl(
+            &project_claude,
+            "C--project",
+            &[("claude-sonnet-4-20250514", 9999, 9999, "m2", "2026-06-22T10:00:00Z")],
+        );
+
+        let svc = UsageService::new(build_paths(&user_claude));
+        let (snap, _history) = svc
+            .get_usage_with_active_root("p1", UsageWindow::OneMonth, Some(&project_root))
+            .unwrap();
+        // 读到 project 的 9999+9999=19998,**不**是 user 的 1000+500=1500
+        assert_eq!(snap.tokens_used, 19998, "Some 模式应只读 project-level");
     }
 }

@@ -60,6 +60,12 @@ pub async fn clone_and_scan(
 /// `resourceId` 格式 `<kind>/<name>`(如 `plugin/code-review`)。
 /// 目标已存在 → 默认 `Err`(不覆盖用户数据);force=true 时备份现有
 /// 目标到 `.bak.<ts>` 后覆盖。MCP → `installed: false` + 提示。
+///
+/// M3.12 (A1#12) — read live `active_root_dir` from the platform shim
+/// and route the install target through `install_resource_with_active_root`.
+/// `None` → user-level `claude_dir` (M2.16 default); `Some(root)` →
+/// `<root>/.claude/` (project mode, with root-existence safety
+/// boundary; no auto-mkdir).
 #[tauri::command]
 pub async fn install_from_marketplace(
     state: State<'_, AppState>,
@@ -67,9 +73,16 @@ pub async fn install_from_marketplace(
     resource_id: String,
     options: Option<InstallOptions>,
 ) -> CmdResult<InstallResult> {
+    // M3.12 (A1#12) — read live active root via the platform shim.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .marketplace_service
-        .install_resource(&repo_path, &resource_id, options)
+        .install_resource_with_active_root(
+            &repo_path,
+            &resource_id,
+            options,
+            active_root.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -78,14 +91,17 @@ pub async fn install_from_marketplace(
 /// `pluginId` 必须是 [`list_marketplace_repos`] 返回的 id,且对应条目
 /// `install_mode = "builtin"`。后端调 `claude plugin install <target>`
 /// CLI 一步到位,不 git clone。
+///
+/// M3.12 (A1#12) — routes the install target through `active_root_dir`.
 #[tauri::command]
 pub async fn install_builtin_plugin(
     state: State<'_, AppState>,
     plugin_id: String,
 ) -> CmdResult<InstallResult> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .marketplace_service
-        .install_builtin(&plugin_id)
+        .install_builtin_with_active_root(&plugin_id, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
 
@@ -94,6 +110,8 @@ pub async fn install_builtin_plugin(
 /// 单步完成 clone + scan + 循环 install(对 `selections` 里每个资源)。
 /// `selections` 是 `resource_id` 列表(如 `["plugin/code-review", "command/deploy.md"]`)。
 /// 不需要前端先 clone_and_scan 再 install_resource 两步。
+///
+/// M3.12 (A1#12) — routes the install target through `active_root_dir`.
 #[tauri::command]
 pub async fn install_third_party_repo(
     state: State<'_, AppState>,
@@ -101,9 +119,15 @@ pub async fn install_third_party_repo(
     selections: Vec<String>,
     options: Option<InstallOptions>,
 ) -> CmdResult<Vec<InstallResult>> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .marketplace_service
-        .install_third_party(&url, selections, options)
+        .install_third_party_with_active_root(
+            &url,
+            selections,
+            options,
+            active_root.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -111,14 +135,17 @@ pub async fn install_third_party_repo(
 ///
 /// `package` 形如 `@opengsd/gsd-core@latest`。后端调
 /// `npx <package> --global --silent`,落地到 `~/.claude/plugins/<basename>/`。
+///
+/// M3.12 (A1#12) — routes the install target through `active_root_dir`.
 #[tauri::command]
 pub async fn install_npx_package(
     state: State<'_, AppState>,
     package: String,
 ) -> CmdResult<InstallResult> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .marketplace_service
-        .install_npx(&package)
+        .install_npx_with_active_root(&package, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
 

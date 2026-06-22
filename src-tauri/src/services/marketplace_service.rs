@@ -177,6 +177,10 @@ pub enum MarketplaceError {
     /// slug / 路径穿越攻击防护。
     #[error("path unsafe: {0}")]
     PathUnsafe(String),
+    /// M3.12 (A1#12) — `active_root_dir = Some(root)` 但 root 不存在。
+    /// 安全边界:不自动 mkdir 未知 root(CLAUDE.md §7 + SPEC §6.1)。
+    #[error("active root 目录不存在,拒绝写入(避免 mkdir 未知路径): {0}")]
+    RootNotFound(PathBuf),
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +191,9 @@ pub enum MarketplaceError {
 pub struct MarketplaceService {
     /// `<app_data>/marketplaces/` —— clone 缓存根目录。
     marketplaces_dir: PathBuf,
-    /// `~/.claude/` —— install 目标根。
+    /// `~/.claude/` —— install 目标根(baked at construction time;
+    /// 仅在 `active_root_dir = None` 时使用;project 模式下
+    /// `<active_root>/.claude/` 由 `_with_active_root` 方法解析)。
     claude_dir: PathBuf,
     /// git CLI shim(Windows: GitHostCli / macOS: MacGitHost)。
     git: Box<dyn IGitHost>,
@@ -261,11 +267,40 @@ impl MarketplaceService {
     /// 重新扫描 repo 找源路径(不信任前端传 path,防穿越)。dest 已存在
     /// → 默认报错(`InstallOptions::force = false`);force=true 时备份
     /// 现有目标到 `.bak.<ts>` 后覆盖。
+    ///
+    /// Thin wrapper around [`Self::install_resource_with_active_root`]
+    /// that defaults to user-level mode (`active_root_dir = None`).
+    /// Backward-compatible with M2.16 callers.
     pub fn install_resource(
         &self,
         repo_path: &str,
         resource_id: &str,
         options: Option<InstallOptions>,
+    ) -> Result<InstallResult, MarketplaceError> {
+        self.install_resource_with_active_root(repo_path, resource_id, options, None)
+    }
+
+    /// M3.12 (A1#12) — install resource with explicit `active_root_dir`.
+    ///
+    /// - `None` → install to the user-level `claude_dir` baked at
+    ///   construction time (M2.16 behavior).
+    /// - `Some(root)` → install to `<root>/.claude/` (project mode).
+    ///
+    /// **Safety boundary** (CLAUDE.md §7 + SPEC §6.1): if
+    /// `Some(root)` and `<root>` does not exist, the install is REJECTED
+    /// with `MarketplaceError::RootNotFound(root)` and the service does
+    /// NOT auto-`mkdir` the unknown root. This prevents accidentally
+    /// creating directories in paths the user didn't intend.
+    ///
+    /// The clone cache (`<app_data>/marketplaces/<slug>/`) is NOT
+    /// affected by `active_root_dir` — it stays in the global app-data
+    /// pool regardless of mode.
+    pub fn install_resource_with_active_root(
+        &self,
+        repo_path: &str,
+        resource_id: &str,
+        options: Option<InstallOptions>,
+        active_root_dir: Option<&Path>,
     ) -> Result<InstallResult, MarketplaceError> {
         let options = options.unwrap_or_default();
         // 解析 resource_id → "<kind_tag>/<name>"。
@@ -306,9 +341,22 @@ impl MarketplaceService {
             });
         }
 
+        // M3.12 (A1#12) — 解析 install 目标 claude_dir。
+        // None → 用构造时 baked 的 user-level claude_dir。
+        // Some(root) → 用 <root>/.claude/,但先校验 root 存在(不自动 mkdir)。
+        let target_claude_dir = match active_root_dir {
+            None => self.claude_dir.clone(),
+            Some(root) => {
+                if !root.exists() {
+                    return Err(MarketplaceError::RootNotFound(root.to_path_buf()));
+                }
+                root.join(".claude")
+            }
+        };
+
         // install 目标子目录(白名单 4 种)。
         let sub = kind_subdir(kind);
-        let dest_dir = self.claude_dir.join(sub);
+        let dest_dir = target_claude_dir.join(sub);
         std::fs::create_dir_all(&dest_dir)?;
         let dest = dest_dir.join(&name);
         if dest.exists() {
@@ -450,7 +498,23 @@ impl MarketplaceService {
     ///
     /// 与 `clone_and_scan` 的区别: 不 git clone, 一次到位。CLI 失败
     /// → `Err(Git(...))` 含 stderr (CLAUDE.md §7 不静默吞错)。
+    ///
+    /// Thin wrapper around [`Self::install_builtin_with_active_root`]
+    /// that defaults to user-level mode (`active_root_dir = None`).
     pub fn install_builtin(&self, plugin_id: &str) -> Result<InstallResult, MarketplaceError> {
+        self.install_builtin_with_active_root(plugin_id, None)
+    }
+
+    /// M3.12 (A1#12) — install builtin with explicit `active_root_dir`.
+    ///
+    /// Same semantics as [`Self::install_resource_with_active_root`]:
+    /// `None` → user-level `claude_dir`; `Some(root)` → `<root>/.claude/`
+    /// (with root-existence check, no auto-mkdir).
+    pub fn install_builtin_with_active_root(
+        &self,
+        plugin_id: &str,
+        active_root_dir: Option<&Path>,
+    ) -> Result<InstallResult, MarketplaceError> {
         let repo = builtin_repos()
             .into_iter()
             .find(|r| r.id == plugin_id)
@@ -481,8 +545,18 @@ impl MarketplaceService {
                 "claude plugin install 失败: {stderr}"
             )));
         }
+        // M3.12 (A1#12) — 解析目标 claude_dir。
+        let target_claude_dir = match active_root_dir {
+            None => self.claude_dir.clone(),
+            Some(root) => {
+                if !root.exists() {
+                    return Err(MarketplaceError::RootNotFound(root.to_path_buf()));
+                }
+                root.join(".claude")
+            }
+        };
         // 落地路径 = ~/.claude/plugins/<plugin_id>/
-        let dest_dir = self.claude_dir.join("plugins").join(&repo.id);
+        let dest_dir = target_claude_dir.join("plugins").join(&repo.id);
         Ok(InstallResult {
             resource_id: format!("plugin/{}", repo.id),
             installed: true,
@@ -499,17 +573,41 @@ impl MarketplaceService {
     /// 与 `clone_and_scan` + `install_resource` 两步流程的区别:
     /// 单步完成, 不需要前端先扫后装中间态。**保留** `clone_and_scan`
     /// 作为"预览" (用户先看仓库里有什么)。
+    ///
+    /// Thin wrapper around [`Self::install_third_party_with_active_root`]
+    /// that defaults to user-level mode (`active_root_dir = None`).
     pub fn install_third_party(
         &self,
         url: &str,
         selections: Vec<String>,
         options: Option<InstallOptions>,
     ) -> Result<Vec<InstallResult>, MarketplaceError> {
+        self.install_third_party_with_active_root(url, selections, options, None)
+    }
+
+    /// M3.12 (A1#12) — install third party with explicit `active_root_dir`.
+    ///
+    /// Same semantics as [`Self::install_resource_with_active_root`]:
+    /// routes the install target through `active_root_dir`.
+    pub fn install_third_party_with_active_root(
+        &self,
+        url: &str,
+        selections: Vec<String>,
+        options: Option<InstallOptions>,
+        active_root_dir: Option<&Path>,
+    ) -> Result<Vec<InstallResult>, MarketplaceError> {
         // 复用 clone_and_scan 做 clone + 5 kind scan。
+        // (clone_and_scan 本身不动 active_root:它是 clone 缓存到
+        //  <app_data>/marketplaces/,与 active_root 无关。)
         let scan = self.clone_and_scan(url)?;
         let mut out = Vec::with_capacity(selections.len());
         for sel in selections {
-            let r = self.install_resource(&scan.repo_path, &sel, options.clone())?;
+            let r = self.install_resource_with_active_root(
+                &scan.repo_path,
+                &sel,
+                options.clone(),
+                active_root_dir,
+            )?;
             out.push(r);
         }
         Ok(out)
@@ -522,7 +620,22 @@ impl MarketplaceService {
     ///
     /// `--global` 让 npx 把包装到全局 node_modules;
     /// `--silent` 抑制 npx 自身的 banner (CLAUDE.md §7)。
+    ///
+    /// Thin wrapper around [`Self::install_npx_with_active_root`] that
+    /// defaults to user-level mode (`active_root_dir = None`).
     pub fn install_npx(&self, pkg: &str) -> Result<InstallResult, MarketplaceError> {
+        self.install_npx_with_active_root(pkg, None)
+    }
+
+    /// M3.12 (A1#12) — install npx with explicit `active_root_dir`.
+    ///
+    /// Same semantics as [`Self::install_resource_with_active_root`]:
+    /// routes the install target through `active_root_dir`.
+    pub fn install_npx_with_active_root(
+        &self,
+        pkg: &str,
+        active_root_dir: Option<&Path>,
+    ) -> Result<InstallResult, MarketplaceError> {
         if pkg.trim().is_empty() {
             return Err(MarketplaceError::InvalidResourceId(
                 "npx package 名不能为空".into(),
@@ -553,7 +666,17 @@ impl MarketplaceService {
             .split('@')
             .next()
             .unwrap_or(pkg);
-        let dest_dir = self.claude_dir.join("plugins").join(basename);
+        // M3.12 (A1#12) — 解析目标 claude_dir。
+        let target_claude_dir = match active_root_dir {
+            None => self.claude_dir.clone(),
+            Some(root) => {
+                if !root.exists() {
+                    return Err(MarketplaceError::RootNotFound(root.to_path_buf()));
+                }
+                root.join(".claude")
+            }
+        };
+        let dest_dir = target_claude_dir.join("plugins").join(basename);
         Ok(InstallResult {
             resource_id: format!("plugin/{basename}"),
             installed: true,
@@ -1295,6 +1418,165 @@ mod tests {
             result.dest_path.contains("chalk"),
             "dest_path 应含 'chalk' basename: {}",
             result.dest_path
+        );
+    }
+
+    // ---- M3.12 (A1#12) — F17 install_from_marketplace 接入 active_root_dir ----
+    //
+    // 写路径测试 (medium 风险) — 验证 install 目标根据 active_root_dir
+    // 路由:
+    // - None → 写到 baked user-level claude_dir (向后兼容 M2.16)
+    // - Some(root) → 写到 <root>/.claude/,且 root 必须存在 (拒绝 mkdir)
+    //
+    // 测试 fixture: 同时建 user .claude/ + project .claude/,写入两份
+    // 完全独立的内容,验证 install 只命中其中一份。
+
+    /// 1. `active_root_dir = None` → install 到 baked 的 user-level
+    /// claude_dir (M2.16 向后兼容路径)。
+    #[test]
+    fn install_resource_with_active_root_none_writes_to_user_dotclaude() {
+        let fake_repo = make_fake_repo();
+        let tmp = TempDir::new().unwrap();
+        let user_claude = tmp.path().join("user").join(".claude");
+        // 预建 user .claude/ (与构造时 baked 的 user-level 一致)
+        fs::create_dir_all(&user_claude).unwrap();
+        // 同时建一个 project root + .claude/,验证 None 模式**不**碰它。
+        let project_root = tmp.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(project_claude.join("plugins")).unwrap();
+        fs::create_dir_all(project_claude.join("commands")).unwrap();
+
+        let svc = make_service(
+            tmp.path().join("mk"),
+            user_claude.clone(),
+            fake_repo.path().to_path_buf(),
+        );
+
+        let scan = svc
+            .clone_and_scan("https://github.com/foo/bar.git")
+            .unwrap();
+        let result = svc
+            .install_resource_with_active_root(
+                &scan.repo_path,
+                "plugin/code-review",
+                None,
+                None,
+            )
+            .expect("None 模式应成功 install");
+        assert!(result.installed);
+
+        // user-level: code-review 落地
+        let user_dest = user_claude.join("plugins").join("code-review").join("index.md");
+        assert!(user_dest.exists(), "user-level 应有落地文件: {}", user_dest.display());
+        // project-level: 不应有落地文件
+        let project_dest = project_claude.join("plugins").join("code-review");
+        assert!(
+            !project_dest.exists(),
+            "None 模式不应写到 project-level: {}",
+            project_dest.display()
+        );
+    }
+
+    /// 2. `active_root_dir = Some(root)` → install 到 `<root>/.claude/`,
+    /// **不**碰 user-level baked claude_dir。
+    #[test]
+    fn install_resource_with_active_root_some_writes_to_project_dotclaude() {
+        let fake_repo = make_fake_repo();
+        let tmp = TempDir::new().unwrap();
+        // user-level: 与构造时 baked 一致,验证**不**被碰
+        let user_claude = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(&user_claude).unwrap();
+        // project root 必须存在(M3.12 安全边界)
+        let project_root = tmp.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(project_claude.join("plugins")).unwrap();
+
+        let svc = make_service(
+            tmp.path().join("mk"),
+            user_claude.clone(),
+            fake_repo.path().to_path_buf(),
+        );
+
+        let scan = svc
+            .clone_and_scan("https://github.com/foo/bar.git")
+            .unwrap();
+        let result = svc
+            .install_resource_with_active_root(
+                &scan.repo_path,
+                "plugin/code-review",
+                None,
+                Some(&project_root),
+            )
+            .expect("Some 模式应成功 install");
+        assert!(result.installed);
+
+        // project-level: code-review 落地
+        let project_dest = project_claude.join("plugins").join("code-review").join("index.md");
+        assert!(
+            project_dest.exists(),
+            "project-level 应有落地文件: {}",
+            project_dest.display()
+        );
+        // user-level: 不应有落地文件
+        let user_dest = user_claude.join("plugins").join("code-review");
+        assert!(
+            !user_dest.exists(),
+            "Some 模式不应写到 user-level: {}",
+            user_dest.display()
+        );
+        // dest_path 应包含 project_root 路径
+        assert!(
+            result.dest_path.contains("project"),
+            "dest_path 应包含 project 路径, got: {}",
+            result.dest_path
+        );
+    }
+
+    /// 3. `active_root_dir = Some(root)` + root 目录不存在 →
+    /// 拒绝 install,返回 `RootNotFound`,且**不**自动 mkdir 未知 root。
+    #[test]
+    fn install_resource_with_active_root_rejects_missing_root() {
+        let fake_repo = make_fake_repo();
+        let tmp = TempDir::new().unwrap();
+        let user_claude = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(&user_claude).unwrap();
+
+        let svc = make_service(
+            tmp.path().join("mk"),
+            user_claude,
+            fake_repo.path().to_path_buf(),
+        );
+
+        // 故意指向不存在的 root
+        let bogus_root = tmp.path().join("does_not_exist_yet");
+        assert!(!bogus_root.exists());
+
+        let scan = svc
+            .clone_and_scan("https://github.com/foo/bar.git")
+            .unwrap();
+        let err = svc
+            .install_resource_with_active_root(
+                &scan.repo_path,
+                "plugin/code-review",
+                None,
+                Some(&bogus_root),
+            )
+            .unwrap_err();
+        match &err {
+            MarketplaceError::RootNotFound(p) => {
+                assert_eq!(p, &bogus_root, "RootNotFound 应带原 root 路径");
+            }
+            other => panic!("expected RootNotFound, got {other:?}"),
+        }
+
+        // 不应该创建 bogus_root 或其 .claude/ 子目录(不自动 mkdir)
+        assert!(
+            !bogus_root.exists(),
+            "service must NOT auto-mkdir unknown root"
+        );
+        assert!(
+            !bogus_root.join(".claude").exists(),
+            "service must NOT auto-mkdir .claude/ under unknown root"
         );
     }
 }

@@ -35,6 +35,13 @@ type RevealCmdResult = Result<(), RevealFailure>;
 /// `kind` is a lowercase tag matching [`ResourceKind::as_str`]
 /// (`"plugin"` / `"skill"` / `"command"` / `"lsp"` / `"mcp"`).
 /// Unknown kinds return `Err(...)` with a user-readable message.
+///
+/// M3.12 (A1#11) — reads live `active_root_dir` from the platform
+/// shim and routes the scan accordingly. `None` → user-level
+/// `~/.claude/` (M2.13 default); `Some(root)` → `<root>/.claude/`
+/// (project mode). The service-side `list()` retains the legacy
+/// signature for tests/back-compat; this command is the only entry
+/// point that needs to follow the live project switch.
 #[tauri::command]
 pub async fn list_resources(
     state: State<'_, AppState>,
@@ -45,9 +52,12 @@ pub async fn list_resources(
             "未知资源类型: '{kind}'(允许: plugin, skill, command, lsp, mcp)"
         )
     })?;
+    // M3.12 (A1#11) — read live active root via the platform shim
+    // (state.paths is a one-shot startup snapshot).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .resource_service
-        .list(parsed)
+        .list_with_active_root(parsed, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
 

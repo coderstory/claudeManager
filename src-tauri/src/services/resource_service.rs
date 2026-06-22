@@ -91,8 +91,35 @@ impl ResourceService {
 
     /// List resources of the given kind. Missing subdirectories
     /// produce an empty Vec (cold-start case for first-time users).
+    ///
+    /// Thin wrapper around [`Self::list_with_active_root`] that
+    /// defaults to user-level mode (`active_root_dir = None`).
+    /// Backward-compatible with M2.13 callers that hardcode the
+    /// `~/.claude/` path baked at construction time.
     pub fn list(&self, kind: ResourceKind) -> Result<Vec<crate::domain::ResourceItem>, ResourceServiceError> {
-        let items = resource_scanner::scan_resources(&self.claude_dir, kind)?;
+        self.list_with_active_root(kind, None)
+    }
+
+    /// M3.12 (A1#11) — list with explicit `active_root_dir`.
+    ///
+    /// - `None` → scan the user-level `<claude_dir>/` (the one baked
+    ///   into this service at construction time; M2.13 behavior).
+    /// - `Some(root)` → scan `<root>/.claude/` (project mode).
+    ///
+    /// The `claude_dir` baked into the struct is only consulted when
+    /// `active_root_dir = None`; in project mode the `root/.claude`
+    /// path is resolved fresh on each call so a runtime project
+    /// switch is picked up without restarting the service.
+    pub fn list_with_active_root(
+        &self,
+        kind: ResourceKind,
+        active_root_dir: Option<&Path>,
+    ) -> Result<Vec<crate::domain::ResourceItem>, ResourceServiceError> {
+        let scan_root = match active_root_dir {
+            Some(root) => root.join(".claude"),
+            None => self.claude_dir.clone(),
+        };
+        let items = resource_scanner::scan_resources(&scan_root, kind)?;
         Ok(items)
     }
 
@@ -307,6 +334,77 @@ mod tests {
         let json = serde_json::to_string(&items[0]).unwrap();
         let back: ResourceItem = serde_json::from_str(&json).unwrap();
         assert_eq!(back, items[0]);
+    }
+
+    // ---- M3.12 (A1#11) — F16 list_resources 接入 active_root_dir ----
+    //
+    // Read-only, 2 个场景:
+    // - None  → 读 user-level ~/.claude/(即构造时 baked 的 claude_dir)
+    // - Some(root) → 读 <root>/.claude/,**不**碰 user-level
+    //
+    // 用 2 个独立的 TempDir 各自建一份 commands/<file>.md,验证
+    // active_root 路由正确,且 user 端不被 project 端污染。
+
+    /// 1. `active_root_dir = None` → 读构造时 baked 的 user-level
+    /// `claude_dir` (M2.13 向后兼容路径)。
+    #[test]
+    fn list_with_active_root_none_reads_user_dotclaude() {
+        let user_dir = TempDir::new().unwrap();
+        let user_claude = user_dir.path().join("user").join(".claude");
+        fs::create_dir_all(user_claude.join("commands")).unwrap();
+        fs::write(
+            user_claude.join("commands").join("user-cmd.md"),
+            b"# user command",
+        )
+        .unwrap();
+
+        // 同时建一个 project .claude/ ,验证 None 路径**不**碰它。
+        let project_root = user_dir.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(project_claude.join("commands")).unwrap();
+        fs::write(
+            project_claude.join("commands").join("project-cmd.md"),
+            b"# project command",
+        )
+        .unwrap();
+
+        let svc = ResourceService::new(user_claude, Box::new(NoopReveal));
+        let items = svc
+            .list_with_active_root(ResourceKind::Command, None)
+            .unwrap();
+        assert_eq!(items.len(), 1, "None 模式应只读 user-level, got: {:?}", items);
+        assert_eq!(items[0].name, "user-cmd.md");
+    }
+
+    /// 2. `active_root_dir = Some(root)` → 读 `<root>/.claude/`,
+    /// **不**碰构造时 baked 的 user-level claude_dir。
+    #[test]
+    fn list_with_active_root_some_reads_project_dotclaude() {
+        let tmp = TempDir::new().unwrap();
+        // user-level: 构造时 baked (含 user-cmd.md,应该**不**被读到)
+        let user_claude = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(user_claude.join("commands")).unwrap();
+        fs::write(
+            user_claude.join("commands").join("user-cmd.md"),
+            b"# user",
+        )
+        .unwrap();
+        // project-level: 独立 root, 含 project-cmd.md (应该被读到)
+        let project_root = tmp.path().join("project");
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(project_claude.join("commands")).unwrap();
+        fs::write(
+            project_claude.join("commands").join("project-cmd.md"),
+            b"# project",
+        )
+        .unwrap();
+
+        let svc = ResourceService::new(user_claude, Box::new(NoopReveal));
+        let items = svc
+            .list_with_active_root(ResourceKind::Command, Some(&project_root))
+            .unwrap();
+        assert_eq!(items.len(), 1, "Some 模式应只读 project, got: {:?}", items);
+        assert_eq!(items[0].name, "project-cmd.md");
     }
 
     // ---- test fakes ----
