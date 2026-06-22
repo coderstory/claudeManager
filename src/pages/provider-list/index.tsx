@@ -357,7 +357,6 @@ function Body({
 function EmptyState(): ReactElement {
   return (
     <div data-testid="provider-list-empty" style={emptyStateStyle}>
-      <div style={{ fontSize: '48px', marginBottom: 'var(--space-3)' }}>📭</div>
       <h2
         style={{
           fontSize: 'var(--fs-heading)',
@@ -406,19 +405,23 @@ function ProviderRow({
     <li
       data-testid={`provider-row-${provider.id}`}
       data-active={isActive ? 'true' : 'false'}
+      className={`list-row${isActive ? ' active' : ''}`}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 'var(--space-3)',
         padding: 'var(--space-3) var(--space-4)',
         marginBottom: 'var(--space-2)',
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
-        borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+        background: isActive ? 'var(--accent-soft)' : 'var(--bg-elevated)',
+        border: 'var(--card-border-width) solid var(--border)',
+        borderColor: isActive ? 'var(--accent)' : 'var(--border)',
         borderRadius: 'var(--radius-card)',
         boxShadow: 'var(--shadow-sm)',
       }}
     >
+      <div className="provider-avatar" style={{ flexShrink: 0 }}>
+        {provider.name.slice(0, 2).toUpperCase()}
+      </div>
       <div style={{ flex: '1 1 auto', minWidth: 0 }}>
         <div
           style={{
@@ -437,18 +440,9 @@ function ProviderRow({
           >
             {provider.name}
           </span>
-          <code
-            style={{
-              fontFamily: 'monospace',
-              fontSize: 'var(--fs-caption)',
-              color: 'var(--text-muted)',
-              background: 'var(--bg-overlay)',
-              padding: '1px 6px',
-              borderRadius: 'var(--radius-button)',
-            }}
-          >
+          <span className="badge badge-type" style={{ flexShrink: 0 }}>
             {provider.provider_type}
-          </code>
+          </span>
           {provider.models.length > 0 && (
             <span
               style={{
@@ -480,67 +474,51 @@ function ProviderRow({
           {lastUsedLabel(provider)}
         </div>
       </div>
-      {/* 右侧操作区:导出按钮 + 激活按钮/徽章。
-          导出按钮对 active / inactive 行都可用(F14 是分享配置,不要求激活)。
-          exporting 时禁用 + 显示"导出中…"。 */}
-      <div
+      {/* §4.8.4: 行级状态指示器(badge) + 行级操作按钮(导出/激活)
+          必须在同一 flex 层级, 让 .list-row 的 align-items: center 统一对齐。 */}
+      {isActive && (
+        <span
+          data-testid={`provider-active-badge-${provider.id}`}
+          className="badge badge-active"
+          style={{ flexShrink: 0 }}
+        >
+          ● 已激活
+        </span>
+      )}
+      <button
+        type="button"
+        data-testid={`provider-export-${provider.id}`}
+        disabled={exporting}
+        onClick={() => onExport(provider)}
+        title="导出为 .json 分享"
         style={{
+          ...btnStyle,
+          opacity: exporting ? 0.6 : 1,
+          cursor: exporting ? 'not-allowed' : 'pointer',
           flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-2)',
         }}
       >
+        {exporting ? '导出中…' : '导出'}
+      </button>
+      {!isActive && (
         <button
           type="button"
-          data-testid={`provider-export-${provider.id}`}
-          disabled={exporting}
-          onClick={() => onExport(provider)}
-          title="导出为 .json 分享"
+          data-testid={`provider-activate-${provider.id}`}
+          disabled={switching}
+          onClick={() => onActivate(provider.id)}
           style={{
             ...btnStyle,
-            opacity: exporting ? 0.6 : 1,
-            cursor: exporting ? 'not-allowed' : 'pointer',
+            background: switching ? 'var(--bg-overlay)' : 'var(--accent)',
+            color: switching ? 'var(--text-muted)' : '#fff',
+            border: 'none',
+            fontWeight: 600,
+            minWidth: 80,
+            flexShrink: 0,
           }}
         >
-          {exporting ? '导出中…' : '导出'}
+          {switching ? '切换中…' : '激活'}
         </button>
-        {isActive ? (
-          <span
-            data-testid={`provider-active-badge-${provider.id}`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: '4px 10px',
-              background: 'var(--accent)',
-              color: '#fff',
-              fontSize: 'var(--fs-caption)',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-            }}
-          >
-            ● 已激活
-          </span>
-        ) : (
-          <button
-            type="button"
-            data-testid={`provider-activate-${provider.id}`}
-            disabled={switching}
-            onClick={() => onActivate(provider.id)}
-            style={{
-              ...btnStyle,
-              background: switching ? 'var(--bg-overlay)' : 'var(--accent)',
-              color: switching ? 'var(--text-muted)' : '#fff',
-              border: 'none',
-              fontWeight: 600,
-              minWidth: 80,
-            }}
-          >
-            {switching ? '切换中…' : '激活'}
-          </button>
-        )}
-      </div>
+      )}
     </li>
   );
 }
