@@ -8,8 +8,8 @@
 
 - ✅ **v1.0 架构期 (M1.1 ~ M1.12)** — 12 phases,shipped 2026-06-19 (5 exes on Desktop)
 - ✅ **v1.5 业务期 (M2.1 ~ M2.16)** — 16 phases,shipped 2026-06-21 (26+ exes on Desktop)
-- 🚧 **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1 ~ M3.10)** — 11 phases,in progress
-- 📋 **v3.0 公证发布 (M4.1 ~ M4.6)** — 6 phases,planned
+- ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1 ~ M3.10)** — 11 phases,shipped 2026-06-22,tag v2.0
+- 🚧 **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3 + M4.6)** — in progress
 
 ## Phases
 
@@ -254,86 +254,88 @@ Plans:
 - [ ] M3.10-03: 欢迎页改造 + sidebar 顶部 switcher
 - [ ] M3.10-04: 跨 plugin 集成测试 + 数据隔离单测
 
-### 📋 v3.0 公证发布 (Planned)
+### 🚧 v3.0 功能完善 + updater 基础 (In Progress)
+
+**Milestone Goal**: M3.10 双模式全 plugin 落地 + updater 基础启用 + 测试补齐 + Tailwind 闭环。M4.1 证书 / M4.5 商店取消（用户拍板），M4.2/M4.4 暂缓，D6 Mac 真机不处理。
+
+> v3.0 round 1 (2026-06-22) 已 ship 7 phase: A1 13/13 plugin 接入 / B3#10 Tailwind 移除 / B2#1 usage 测试 / A3 备份增量 / L-M2.08 WindowChrome / M4.3 updater Phase 1。剩余 e2e / 云备份 / updater UI / M4.6 长尾项。
+
+### Phase 12: M3.11~M3.12 M3.10-adapter plugin 适配 (13 个 active_root_dir 接入点)
+**Status**: ✅ 完成 (2026-06-22)
+**Commits**: f375bf1 (F5) / 2e4e75b (F18) / afd090e (F1+F3) / 8a2650f (F6) / a9bd4b5 (F13+F19) / f145d38 (F16+F17+F7)
+**内容**: 13 个 plugin 全部接入 active_root_dir,双模式架构从骨架到全 plugin 落地
+
+### Phase 13: B3#10 Tailwind 移除
+**Status**: ✅ 完成 (2026-06-22)
+**Commit**: ed5a3e5
+**内容**: 删 tailwindcss/postcss/autoprefixer/tailwind-merge/clsx/cva 6 包 + cn util + dead className + tokens.css 误导注释
+
+### Phase 14: B2#1 usage fixture 8 子任务功能测试
+**Status**: ✅ 完成 (2026-06-22)
+**Commit**: 4f5df37
+**内容**: cc-switch JSONL 解析 / 聚合 / 时间窗口 / 容错 / 性能 / 去重 8 场景测试
+
+### Phase 15: A3 备份增强 Phase 1 (增量)
+**Status**: ✅ 完成 (2026-06-22)
+**Commit**: 3eadae2
+**内容**: backup_incremental (skip identical snapshots)
+
+### Phase 16: L-M2.08 MacWindowChrome 架构统一
+**Status**: ✅ 完成 (2026-06-22)
+**Commit**: 7efb0f8
+**内容**: lib.rs 走 IPlatformWindowChrome trait dispatch, Mac impl = apply_vibrancy
+
+### Phase 17: M4.3 updater Phase 1 (pubkey + endpoint)
+**Status**: ✅ 完成 (2026-06-22)
+**Commit**: da6ba67
+**内容**: 真实 ed25519 pubkey + GitHub release endpoint, 私钥未泄露
+
+### Phase 18: M1 L1 Playwright e2e (Windows only)
+**Status**: ⏳ pending (402 余额不足中止, 待重派)
+**内容**: 6 个 e2e spec 本机实跑
+
+### Phase 19: A3 备份增强 Phase 2 (云备份)
+**Status**: ⏳ pending
+**内容**: 远程备份 (S3/OSS)
+
+### Phase 20: M4.3 updater Phase 2/3
+**Status**: ⏳ pending
+**内容**: 前端 updater UI + E2E 灰度回滚
+
+### Phase 21: M4.6 长期 backlog
+**Status**: ⏳ pending (按需启动)
+**内容**: i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02
+
+## v3.0 round 1 关键决策 (2026-06-22)
+
+- D15: B3#10 Tailwind 选 B 移除（已 ship, commit `ed5a3e5`）
+- D16: v3.0 milestone goal = "M3.10 双模式落地 + 测试补齐 + updater 基础 + Tailwind 闭环"
+- M4.1 证书 (代码签名) — 拍板：都不买（用户口头确认）→ M4.2/M4.4 暂缓
+- M4.5 应用商店上架 — 拍板：不上架（用户口头确认）→ M4.5 取消
+- D6 Mac 真机验证 — 暂缓, M4 启动前再问
+
+### 📋 v4.0+ 公证发布 (Deferred, 待用户拍板重启)
 
 **Milestone Goal**: 获取代码签名证书 + 公证 (SmartScreen + notarization) + 启用 updater + 双轨打包 + (可选) 应用商店上架。
 
-### Phase 12: M4.1 代码签名证书
+> v3.0 已 ship 后,v4.0+ 才考虑重启 M4.1~M4.6 公证发布主线。当前不在 v3.0 范围。
+>
+> 用户拍板（2026-06-22）：M4.1 证书不买 / M4.5 商店不上架 → M4.2/M4.4 暂缓 / M4.5 取消。
+> M4.3 已在 v3.0 round 1 ship Phase 1 (pubkey + endpoint, commit `da6ba67`),Phase 2/3 (前端 UI + E2E 灰度) 留 v3.0 round 2。
 
-**Goal**: 申请 Windows EV 代码签名证书 + macOS Developer ID。
-**Depends on**: M3.10 ship
-**Status**: planned
-**Success Criteria**:
-  1. Windows EV 证书到位 (DigiCert / Sectigo / GlobalSign 三选一, ~$300-500/年)
-  2. macOS Developer ID 到位 (~$99/年,Apple 强制)
-  3. 证书本地导入 + 私钥保护方案落地
-**Plans**: TBD (2-4 周,可与 M3 并行)
-
-### Phase 13: M4.2 公证 (SmartScreen + notarization + staple)
-
-**Goal**: Windows SmartScreen 提交 + macOS notarization + staple ticket。
-**Depends on**: M4.1
-**Status**: planned
-**Success Criteria**:
-  1. Windows SmartScreen 首次提交通过
-  2. macOS notarization 成功 + staple ticket 嵌入
-  3. 文档化 SmartScreen 信誉积累策略 (新证书前几次会有警告)
-**Plans**: TBD (~1 周)
-
-### Phase 14: M4.3 updater 启用
-
-**Goal**: Tauri updater 真实 pubkey + endpoint + E2E 更新流程。
-**Depends on**: M4.1 (pubkey 关联签名)
-**Status**: planned
-**Success Criteria**:
-  1. updater pubkey 配置 + 端点 (GitHub Releases / S3 / 自建 CDN 三选一)
-  2. E2E 更新流程: v1.0 → v1.1 灰度 + 回滚
-  3. 签名校验强制开启
-**Plans**: TBD (1-2 周)
-
-### Phase 15: M4.4 双轨打包
-
-**Goal**: Windows MSI/NSIS + macOS DMG + CI matrix (Windows Server 2019 + macOS 14 真机)。
-**Depends on**: M4.2 (公证后才能分发)
-**Status**: planned
-**Success Criteria**:
-  1. Windows MSI + NSIS 双格式 ship (二选一主推,另一个作为企业分发备用)
-  2. macOS DMG + PKG 双格式 ship
-  3. CI matrix 在 Windows + macOS 真机分别跑完整 e2e
-**Plans**: TBD (2-3 周)
-
-### Phase 16: M4.5 应用商店上架 (可选)
-
-**Goal**: Microsoft Store + Mac App Store 上架 (需用户拍板)。
-**Depends on**: M4.2 + M4.4
-**Status**: planned (需用户拍板)
-**Success Criteria**:
-  1. Microsoft Store 上架提交
-  2. Mac App Store 上架提交
-  3. 商店审核往返跟踪
-**Plans**: TBD (2-4 周)
-
-### Phase 17: M4.6 长期 Backlog (按需启动)
-
-**Goal**: 不在 M4 主线,按需启动的增强项。
-**Depends on**: 不适用
-**Status**: backlog
-
-候选清单:
-- F13/F19 备份增强 (增量备份 / 云备份) — 2 周, P1
-- i18n 国际化 (en / zh-CN) — 1-2 周, P2
-- SQLite 历史查询 (用量 / 备份历史) — 1 周, P2
-- 多窗口 (主窗口 + 独立弹窗) — 1 周, P3
-- Telemetry (崩溃报告 + 匿名统计) — 1-2 周, P3 (需用户拍板)
-- L-M2.02 已知限制回归 — 1 天, P3
-- Tailwind 接入评估 — 待评估, P3
-- MacWindowChrome (vibrancy + traffic light) — 2-3 天, P2
-- **D6 Mac 真机验证** — 待定, M4 启动前再问
+候选清单 (M4.1~M4.6 现状):
+- ❌ M4.1 代码签名证书 (取消)
+- ⏸ M4.2 公证 (M4.1 取消 → 暂缓)
+- 🟡 M4.3 updater (Phase 1 已 ship, Phase 2/3 pending)
+- ⏸ M4.4 双轨打包 (M4.1 取消 → 暂缓)
+- ❌ M4.5 应用商店上架 (取消)
+- 🟡 M4.6 长期 backlog (i18n / SQLite / 多窗口 / Telemetry / L-M2.02 — 按需启动,部分留 v3.0 round 2)
 
 ## Progress
 
-**Execution Order:**
-M2.17 → M3.1 → M3.2 → M3.3 → M3.4 → M3.5 → M3.6 → M3.7 → M3.8 → M3.9 → M3.10
+**Execution Order (v3.0 round 1 已 ship 7 phase):**
+Phase 12 → 13 → 14 → 15 → 16 → 17 ✅
+Round 2 pending: Phase 18 (e2e) → 19 (云备份) → 20 (updater UI) → 21 (M4.6 long tail)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -348,11 +350,15 @@ M2.17 → M3.1 → M3.2 → M3.3 → M3.4 → M3.5 → M3.6 → M3.7 → M3.8 �
 | 9. M3.8 用量查询 (cc-switch JSONL) | v2.0 | 1/1 | Complete | 2026-06-22 |
 | 10. M3.9 SQL 导入命名 + 校验 | v2.0 | 1/1 | Complete | 2026-06-22 |
 | 11. M3.10 双模式 用户/项目 | v2.0 | 1/1 | Complete | 2026-06-22 |
-| M4.1 | v3.0 | 0/TBD | Planned | - |
-| M4.2 | v3.0 | 0/TBD | Planned | - |
-| M4.3 | v3.0 | 0/TBD | Planned | - |
-| M4.4 | v3.0 | 0/TBD | Planned | - |
-| M4.5 | v3.0 | 0/TBD | Planned (需用户拍板) | - |
-| M4.6 | v3.0 | 0/TBD | Backlog | - |
+| 12. M3.11~M3.12 plugin 适配 (13 接入点) | v3.0 | 6 commits | Complete | 2026-06-22 |
+| 13. B3#10 Tailwind 移除 | v3.0 | 1 commit | Complete | 2026-06-22 |
+| 14. B2#1 usage fixture 8 子任务 | v3.0 | 1 commit | Complete | 2026-06-22 |
+| 15. A3 备份增量 Phase 1 | v3.0 | 1 commit | Complete | 2026-06-22 |
+| 16. L-M2.08 WindowChrome 统一 | v3.0 | 1 commit | Complete | 2026-06-22 |
+| 17. M4.3 updater Phase 1 (pubkey+endpoint) | v3.0 | 1 commit | Complete | 2026-06-22 |
+| 18. M1 L1 Playwright e2e (Windows) | v3.0 | 0/1 | Pending (402 余额) | - |
+| 19. A3 备份 Phase 2 (云备份) | v3.0 | 0/1 | Pending | - |
+| 20. M4.3 updater Phase 2/3 | v3.0 | 0/1 | Pending | - |
+| 21. M4.6 长期 backlog | v3.0 | 0/1 | Pending (按需) | - |
 </content>
 </invoke>

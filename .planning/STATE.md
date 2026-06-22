@@ -1,12 +1,15 @@
 ---
-milestone_version: v2.0
-status: shipped
+milestone_version: v3.0
+status: in_progress
 progress:
-  phases_complete: 11/11
-  completed: [M2.17, M3.1, M3.2, M3.3, M3.4, M3.5, M3.6, M3.7, M3.8, M3.9, M3.10]
+  phases_complete: 7/10
+  v2.0_phases_complete: 11/11 (shipped, tag v2.0)
+  v3.0_phases_complete: 7/10 (Phase 12-17 ship, Phase 18-21 pending)
+  completed: [M2.17, M3.1, M3.2, M3.3, M3.4, M3.5, M3.6, M3.7, M3.8, M3.9, M3.10, M3.11~M3.12, B3#10 Tailwind, B2#1 usage, A3 backup-incremental, L-M2.08 WindowChrome, M4.3-updater-Phase1]
+  v3.0_pending: [Phase 18 e2e, Phase 19 cloud backup, Phase 20 updater UI, Phase 21 M4.6 long tail]
 last_updated: 2026-06-22
 v3.0_round1_commits: [ed5a3e5, f375bf1, 2e4e75b, afd090e, 8a2650f, a9bd4b5, f145d38, e2d5e06, 4f5df37, 3eadae2, 7efb0f8, da6ba67]
-v3.0_round1_completed: [A1 12/13 plugin 接入, B3#10 Tailwind 移除, B2#1 usage 测试, A3 备份增强 Phase 1, L-M2.08 WindowChrome 统一, M4.3 updater Phase 1]
+v3.0_round1_completed: [A1 13/13 plugin 接入, B3#10 Tailwind 移除, B2#1 usage 测试, A3 备份增强 Phase 1, L-M2.08 WindowChrome 统一, M4.3 updater Phase 1]
 v3.0_round1_pending: [#9 F18 scan_optimizations, #14 e2e (402), 备份 Phase 2, updater Phase 2-3, M4.6 其余]
 ---
 
@@ -20,11 +23,11 @@ v3.0_round1_pending: [#9 F18 scan_optimizations, #14 e2e (402), 备份 Phase 2, 
 
 ## Current Position
 
-Phase: Milestone v2.0 complete (11/11 phases shipped) + **v3.0 round 1（2026-06-22）已 ship 12 commits**
+Phase: Milestone v2.0 complete (11/11 phases shipped) + **v3.0 round 1（2026-06-22）已 ship 7 phases (Phase 12-17)**
 Plan: —
-Status: **v3.0 round 1 收尾 / 等待 round 2 启动**
-Last activity: 2026-06-22 — v3.0 round 1 完成 (A1 12/13 接入 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1)
-Next: v3.0 round 2 启动（#9 F18 scan_optimizations + #14 e2e 余额恢复 + 备份 Phase 2 + updater Phase 2-3）
+Status: **v3.0 in progress — 7/10 phases ship / 4 pending (Phase 18-21)**
+Last activity: 2026-06-22 — v3.0 round 1 完成 (A1 13/13 接入 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1)
+Next: v3.0 round 2 启动（Phase 18 e2e 余额恢复 + Phase 19 云备份 + Phase 20 updater UI + Phase 21 M4.6 长尾项）
 
 **v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1。#14 e2e 待余额恢复。
 

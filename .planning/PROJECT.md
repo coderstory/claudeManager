@@ -21,8 +21,8 @@
 
 ## Current Milestone
 
-- ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1~M3.10)** — 11/11 ship, smoke 7/7
-- 📋 **v3.0 公证发布 (M4.1~M4.6)** — 6 phases, planned
+- ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1~M3.10)** — 11/11 ship, smoke 7/7, tag v2.0
+- 🚧 **v3.0 功能完善 + updater 基础 (M3.11~M3.15 + M4.3 + M4.6)** — 7/10 ship, round 1 (Phase 12-17) 已 ship 2026-06-22
 
 ## Requirements
 
@@ -67,29 +67,43 @@
 - [x] **M3.8 用量查询 (cc-switch JSONL)** — D14 D 选
 - [x] **M3.9 SQL 导入命名 + 校验** — commit `3ed3ff3`
 - [x] **M3.10 双模式 用户/项目** — commit `98429b5`
+- [x] **v3.0 round 1 (Phase 12-17, 2026-06-22)**:
+  - A1 plugin 适配 13/13 (F5/F18/F1/F3/F6/F13/F19/F16/F17/F7) — commits `f375bf1` / `2e4e75b` / `afd090e` / `8a2650f` / `a9bd4b5` / `f145d38`
+  - B3#10 Tailwind 移除 (6 包 + cn util + dead className + 注释) — commit `ed5a3e5`
+  - B2#1 usage fixture 8 子任务测试 — commit `4f5df37`
+  - A3 备份增量 Phase 1 (skip identical snapshots) — commit `3eadae2`
+  - L-M2.08 MacWindowChrome 架构统一 (trait dispatch) — commit `7efb0f8`
+  - M4.3 updater Phase 1 (真实 pubkey + GitHub endpoint) — commit `da6ba67`
 
 ### Active
 
-> v2.0 milestone 已 ship 11/11 phase。当前空 — 等待 v3.0 公证 (M4.1~M4.6) 启动。
+> v3.0 进行中：A1 13/13 + updater Phase1 + 备份增量 + WindowChrome 统一已完成；e2e/云备份/updater UI/M4.6 长尾 pending。
 
-- [ ] **M4.1~M4.6**：代码签名证书 / 公证 / updater / 双轨打包 / 应用商店（可选）/ 长期 backlog
+- [ ] **Phase 18: M1 L1 Playwright e2e (Windows only)** — 402 余额不足中止, 待重派
+- [ ] **Phase 19: A3 备份增强 Phase 2 (云备份)** — 远程备份 (S3/OSS)
+- [ ] **Phase 20: M4.3 updater Phase 2/3** — 前端 updater UI + E2E 灰度回滚
+- [ ] **Phase 21: M4.6 长期 backlog** — i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02（按需启动）
 
 ### Out of Scope
 
-- ❌ **其他 Claude client 应用 (Codex / Cursor / Gemini / OpenCode)** — SPEC.md §1.4 硬约束;M4 不考虑
+- ❌ **其他 Claude client 应用 (Codex / Cursor / Gemini / OpenCode)** — SPEC.md §1.4 硬约束;v3.0/v4.0+ 不考虑
 - ❌ **云同步 / 多人协作** — SPEC.md §1.4 硬约束;无服务器依赖
 - ❌ **M2.17 业务 4 槽之外的新功能** — 4 槽上限 (D11);不插队
-- ❌ **macOS 应用商店 / Microsoft Store 上架** — M4.5 标"可选",需用户拍板
+- ❌ **macOS 应用商店 / Microsoft Store 上架** — M4.5 用户拍板不上架;v4.0+ 之前不会重提
+- ❌ **M4.1 代码签名证书** — 用户拍板不买;M4.2/M4.4 暂缓
+- ❌ **D6 Mac 真机验证** — 用户拍板不处理;v3.0 期间不启动
 
 ## Context
 
 - **技术栈定型**: Tauri v2 已在 EVALUATION-REPORT.md (`.planning/research/EVALUATION-REPORT.md`) 中对比 7 框架后确认最佳 (包体积 / 内存最低 + 系统 webview + Rust + 跨平台)
 - **架构纪律**: 见 `D:\project\winui3\CLAUDE.md` §2-11 (架构先行 / TDD / 版本锁 / 谨慎修改 / UI 一致性 / 三层测试 / 评审纪律 / 4-slot concurrent subagent / iteration ship 流程)
-- **当前进度**: M1 + M2 全 ship (40+ exes),M2.17 收尾中 (3 件套 + 17 已知限制),M3 启动门 4 槽待派 (待 M2.17 首批完成 + D14 用户回答 + D9 桌面清理)
-- **已知阻塞**: D14 (M3.8 用量查询方向) 待用户回答;这是 M3 启动前唯一硬阻塞
-- **桌面状态**: `~/Desktop/ClaudeConfigManager-M1/` (5 exes) + `~/Desktop/ClaudeConfigManager-M2/` (26+ exes);D8 抽查 2 个 + D9 清空策略已拍板
+- **当前进度**: M1 + M2 + v2.0 (M2.17 + M3.1~M3.10) 全 ship, v3.0 round 1 (Phase 12-17) 已 ship 7/10。round 2 (Phase 18-21) 启动门 4 槽待派
+- **v3.0 goal**: "M3.10 双模式落地 + 测试补齐 + updater 基础 + Tailwind 闭环"（D16 2026-06-22）
+- **v3.0 排除**: M4.1 证书 / M4.5 商店 / D6 Mac 真机 / M4.2 / M4.4（用户拍板 2026-06-22）
+- **桌面状态**: `~/Desktop/ClaudeConfigManager-M1/` (5 exes) + `~/Desktop/ClaudeConfigManager-M2/` (26+ exes) + v3.0 round 1 ships; D8 抽查 + D9 归档策略
 - **Review 文档**: `docs/REVIEWS/M1-REVIEWS.md` + `docs/REVIEWS/M2-REVIEWS.md` 已归档
-- **M3 草案详细**: `docs/milestones/M3-issues-and-roadmap.md` (359 行,27 用户反馈 + M3.1~M3.10 + M4.1~M4.6 + D6~D13 决策)
+- **M3 草案详细**: `docs/milestones/M3-issues-and-roadmap.md` (359 行, 27 用户反馈 + M3.1~M3.10 + M4.1~M4.6 + D6~D13 决策)
+- **v3.0 草案详细**: `.planning/milestones/v3.0-EXECUTION-PLAN.md` (Wave 1/2/3 派单顺序 + 4 个决策点)
 
 ## Constraints
 
