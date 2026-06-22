@@ -22,6 +22,19 @@
 //! user-readable string (SPEC §6.5: "不允许静默吞错"). Frontend
 //! surfaces it via the page InfoBar.
 
+//! ## M3.12 (A1#4) — `active_root_dir` 接入
+//!
+//! Each mcp command reads the live `active_root_dir` from the
+//! platform shim (`crate::platform::runtime::paths()`) and dispatches
+//! through `McpService::with_root(...)`. `state.mcp_service` is the
+//! user-level snapshot from app startup; the per-call `with_root`
+//! re-resolves the path so project-mode (active project in
+//! `projects.json`) immediately affects reads/writes without
+//! requiring an app restart.
+//!
+//! `parse_mcp_deeplink` is intentionally NOT adapted — it's a pure
+//! URL parser with no on-disk dependency (F4 deeplink protocol).
+
 use tauri::State;
 
 use crate::app_state::AppState;
@@ -32,14 +45,18 @@ use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, Par
 /// is the user-visible message (SPEC §6.5).
 type CmdResult<T> = Result<T, String>;
 
-/// F6 — list all MCP servers in `~/.claude/mcp.json`.
+/// F6 — list all MCP servers in the active `mcp.json`.
 ///
-/// Returns an empty Vec if the file is missing or `mcpServers` is
-/// absent. Corrupt JSON is silently treated as empty (the page
-/// can call `list_mcp_servers_with_warnings` to surface that).
+/// Reads `~/.claude/mcp.json` (user-level) when no project is active,
+/// or `<active_root>/.claude/mcp.json` (project mode) when a project
+/// is selected. Returns an empty Vec if the file is missing or
+/// `mcpServers` is absent. Corrupt JSON is silently treated as empty
+/// (the page can call `list_mcp_servers_with_warnings` to surface
+/// that).
 #[tauri::command]
 pub async fn list_mcp_servers(state: State<'_, AppState>) -> CmdResult<Vec<McpServer>> {
-    Ok(state.mcp_service.list())
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    Ok(state.mcp_service.with_root(active_root.as_deref()).list())
 }
 
 /// F6+ — same as `list_mcp_servers` but also returns a parse
@@ -48,7 +65,11 @@ pub async fn list_mcp_servers(state: State<'_, AppState>) -> CmdResult<Vec<McpSe
 pub async fn list_mcp_servers_with_warnings(
     state: State<'_, AppState>,
 ) -> CmdResult<ListMcpServersResult> {
-    let (servers, warning) = state.mcp_service.list_with_warnings();
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let (servers, warning) = state
+        .mcp_service
+        .with_root(active_root.as_deref())
+        .list_with_warnings();
     Ok(ListMcpServersResult { servers, warning })
 }
 
@@ -66,8 +87,10 @@ pub async fn toggle_mcp_server(
     id: String,
     enabled: bool,
 ) -> CmdResult<McpServer> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .mcp_service
+        .with_root(active_root.as_deref())
         .toggle(&id, enabled)
         .map_err(|e| e.to_string())
 }
@@ -76,7 +99,12 @@ pub async fn toggle_mcp_server(
 /// `name` already exists.
 #[tauri::command]
 pub async fn add_mcp_server(state: State<'_, AppState>, server: McpServer) -> CmdResult<()> {
-    state.mcp_service.add(server).map_err(|e| e.to_string())
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    state
+        .mcp_service
+        .with_root(active_root.as_deref())
+        .add(server)
+        .map_err(|e| e.to_string())
 }
 
 /// F6 — update an existing MCP server (identified by `id`).
@@ -87,8 +115,10 @@ pub async fn update_mcp_server(
     id: String,
     server: McpServer,
 ) -> CmdResult<McpServer> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .mcp_service
+        .with_root(active_root.as_deref())
         .update(&id, server)
         .map_err(|e| e.to_string())
 }
@@ -96,7 +126,12 @@ pub async fn update_mcp_server(
 /// F6 — remove the MCP server with the given UUID.
 #[tauri::command]
 pub async fn remove_mcp_server(state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    state.mcp_service.remove(&id).map_err(|e| e.to_string())
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    state
+        .mcp_service
+        .with_root(active_root.as_deref())
+        .remove(&id)
+        .map_err(|e| e.to_string())
 }
 
 /// F6+ — parse a `ccswitch://v1/import?resource=mcp&...` URL into

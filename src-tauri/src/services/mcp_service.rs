@@ -55,25 +55,75 @@ use crate::platform::AppPaths;
 
 /// Business logic for F6 (MCP list/toggle/add/update/remove).
 /// Stateless apart from the resolved `AppPaths` snapshot.
+///
+/// M3.12 (A1#4) — `active_root_dir` is the project-mode switch:
+/// - `None` → read/write `~/.claude/mcp.json` (user-level, M2.5
+///   backwards compatible).
+/// - `Some(root)` → read/write `<root>/.claude/mcp.json` (project
+///   mode). Refuses to write when `root` does not exist (no auto-
+///   `mkdir`); mirrors F18 `apply_findings`.
 pub struct McpService {
     paths: AppPaths,
-    /// Resolved at construction: `<claude_dir>/mcp.json`. Cached so
-    /// the service doesn't re-allocate a `PathBuf` on every call.
+    /// M3.12 — optional project-mode root. `None` = user-level.
+    /// Stored as `Option<PathBuf>` (owned) so the service is `'static`
+    /// friendly for `Arc` sharing in `AppState`.
+    active_root_dir: Option<PathBuf>,
+    /// Resolved at construction: either
+    /// `<claude_dir>/mcp.json` (user-level) or
+    /// `<active_root>/.claude/mcp.json` (project mode). Cached so the
+    /// service doesn't re-allocate a `PathBuf` on every call.
     mcp_json_path: PathBuf,
 }
 
 impl McpService {
-    /// Build a service from the resolved `AppPaths`. The mcp.json
-    /// path is derived as `<claude_dir>/mcp.json` per SPEC §2.2.
+    /// Build a service from the resolved `AppPaths` (M2.5 compat).
+    /// The mcp.json path is derived as `<claude_dir>/mcp.json` per
+    /// SPEC §2.2 — i.e. **user-level** mode (M3.12).
+    ///
+    /// Existing call sites in `commands/mcp.rs` keep using this ctor;
+    /// project-mode is opt-in via `new_with_active_root` /
+    /// `with_root`.
     pub fn new(paths: AppPaths) -> Self {
-        let mcp_json_path = paths
-            .claude_dir()
-            .map(|p| p.join("mcp.json"))
-            .unwrap_or_else(|| PathBuf::from("mcp.json"));
+        Self::new_with_active_root(paths, None)
+    }
+
+    /// M3.12 (A1#4) — build a service with an explicit project root.
+    ///
+    /// - `active_root_dir = None` → resolves to `<claude_dir>/mcp.json`
+    ///   (user-level, M2.5 behaviour).
+    /// - `active_root_dir = Some(root)` → resolves to
+    ///   `<root>/.claude/mcp.json` (project mode).
+    ///
+    /// Does **not** check `root.exists()` here — the safety boundary
+    /// is enforced at `write_all` time (refuses to write into a
+    /// non-existent root, matching F18 `apply_findings`).
+    pub fn new_with_active_root(paths: AppPaths, active_root_dir: Option<&Path>) -> Self {
+        let mcp_json_path = match active_root_dir {
+            Some(root) => root.join(".claude").join("mcp.json"),
+            None => paths
+                .claude_dir()
+                .map(|p| p.join("mcp.json"))
+                .unwrap_or_else(|| PathBuf::from("mcp.json")),
+        };
         Self {
             paths,
+            active_root_dir: active_root_dir.map(|p| p.to_path_buf()),
             mcp_json_path,
         }
+    }
+
+    /// M3.12 (A1#4) — command-layer convenience: return a new
+    /// `McpService` view rooted at `active_root_dir`. Keeps the
+    /// existing `Arc<McpService>` in `AppState` intact (cheap shallow
+    /// clone of `paths` + a small `PathBuf` for the root).
+    ///
+    /// Usage (from `commands/mcp.rs`):
+    /// ```ignore
+    /// let active_root = crate::platform::runtime::paths().active_root_dir();
+    /// state.mcp_service.with_root(active_root.as_deref()).list()
+    /// ```
+    pub fn with_root(&self, active_root_dir: Option<&Path>) -> Self {
+        Self::new_with_active_root(self.paths.clone(), active_root_dir)
     }
 
     /// Borrow the resolved paths (read-only).
@@ -86,6 +136,12 @@ impl McpService {
     #[allow(dead_code)]
     pub fn mcp_json_path(&self) -> &Path {
         &self.mcp_json_path
+    }
+
+    /// M3.12 — current `active_root_dir`, if any.
+    #[allow(dead_code)]
+    pub fn active_root_dir(&self) -> Option<&Path> {
+        self.active_root_dir.as_deref()
     }
 
     // -----------------------------------------------------------------------
@@ -239,7 +295,32 @@ impl McpService {
     /// Write the full server list back to `mcp.json`, preserving
     /// any other top-level keys (preferences, etc.) and going
     /// through `fs_atomic::write_with_backup` (CLAUDE.md §7).
+    ///
+    /// M3.12 (A1#4) — safety boundary: when `active_root_dir =
+    /// Some(root)` and `<root>` does NOT exist on disk, this method
+    /// **rejects** the write with `McpError::Io(NotFound)` and does
+    /// NOT auto-`mkdir` the unknown root. Mirrors F18
+    /// `apply_findings` (CLAUDE.md §7 + §2.4: 不 mkdir 未知路径).
+    /// User-level mode (`active_root_dir = None`) skips this check —
+    /// the existing `add_creates_parent_dir_if_missing` test pins
+    /// that behaviour.
     fn write_all(&self, servers: &[McpServer]) -> Result<(), McpError> {
+        // SAFETY BOUNDARY — refuse writes into a non-existent
+        // project root. The check is intentionally one level deep
+        // (root only, not `.claude/`) so we don't accidentally
+        // materialise a project layout the user hasn't authorised.
+        if let Some(root) = &self.active_root_dir {
+            if !root.exists() {
+                return Err(McpError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!(
+                        "active root 目录不存在: {} (拒绝写入,避免 mkdir 未知路径)",
+                        root.display()
+                    ),
+                )));
+            }
+        }
+
         let mut root: Value = match std::fs::read_to_string(&self.mcp_json_path) {
             Ok(s) if !s.trim().is_empty() => serde_json::from_str(&s)
                 .map_err(|e| McpError::Json(serde_json::Error::custom(format!(
@@ -773,6 +854,193 @@ mod tests {
         assert!(raw.contains("\"theme\": \"dark\""), "preserved");
         assert!(raw.contains("\"userDefined\""), "preserved");
         assert!(raw.contains("[1, 2, 3]") || raw.contains("1,\n    2,\n    3"), "preserved");
+    }
+
+    // ----- M3.12 (A1#4) — `active_root_dir` 接入 -----
+    //
+    // F6 mcp-management 读写 `active_root/.claude.json` (即
+    // `active_root/.claude/mcp.json`)。`None` 走用户级
+    // `~/.claude/mcp.json` (向后兼容 M2.5)，`Some(root)` 走
+    // `<root>/.claude/mcp.json` (project mode)。写盘前必须校验 root
+    // 存在（拒绝 mkdir 未知 root），与 F18 `apply_findings` 同源。
+
+    /// Build an `McpService` rooted at a synthetic home dir, with an
+    /// optional `active_root_dir` (M3.12). Mirrors F18's
+    /// `build_svc_with_root`.
+    ///
+    /// Returns `(svc, user_mcp_path, project_mcp_path)`. The project
+    /// path is `Some(...)` iff `active_root` is `Some(p)` AND the test
+    /// caller is expected to materialise `<p>/.claude/mcp.json` itself
+    /// — the helper does NOT pre-create it (the safety-boundary test
+    /// needs an absent root).
+    fn build_svc_with_root(
+        tmp: &TempDir,
+        active_root: Option<&Path>,
+    ) -> (McpService, PathBuf /* user mcp */, Option<PathBuf> /* project mcp */) {
+        let user_claude_dir = tmp.path().join("user").join(".claude");
+        fs::create_dir_all(&user_claude_dir).unwrap();
+        let user_mcp_path = user_claude_dir.join("mcp.json");
+
+        let project_mcp_path = active_root.map(|root| root.join(".claude").join("mcp.json"));
+
+        let paths = AppPaths {
+            home: tmp.path().join("user"),
+            app_data: tmp.path().join("user").join("AppData"),
+            settings_json: user_claude_dir.join("settings.json"),
+            claude_json: tmp.path().join("user").join(".claude.json"),
+            backups_dir: tmp.path().join("user").join("AppData").join("backups"),
+            marketplaces_dir: tmp.path().join("user").join("AppData").join("marketplaces"),
+            logs_dir: tmp.path().join("user").join("AppData").join("logs"),
+        };
+        let svc = McpService::new_with_active_root(paths, active_root);
+        (svc, user_mcp_path, project_mcp_path)
+    }
+
+    /// 1. `active_root_dir() = None` + 读 → 读用户级 `~/.claude/mcp.json`。
+    ///    向后兼容：M2.5 行为不变（已被现有测试间接覆盖，这里显式 pin 路径）。
+    #[test]
+    fn read_with_active_root_none_reads_user_dotclaude_mcp_json() {
+        let tmp = TempDir::new().unwrap();
+        let (svc, user_mcp_path, project_mcp_path) = build_svc_with_root(&tmp, None);
+        assert!(project_mcp_path.is_none());
+
+        // Write the user-level mcp.json directly (mimic M2.5 path).
+        let body = serde_json::json!({
+            "mcpServers": {
+                "fs": { "command": "npx" }
+            }
+        });
+        fs::write(&user_mcp_path, serde_json::to_string_pretty(&body).unwrap()).unwrap();
+
+        let list = svc.list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "fs");
+    }
+
+    /// 2. `active_root_dir() = Some(root)` + 读 → 读 `<root>/.claude/mcp.json`，
+    ///    **忽略** 用户级 mcp.json（验证路径已切换）。
+    #[test]
+    fn read_with_active_root_some_reads_project_mcp_json_not_user() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("project");
+        fs::create_dir_all(&project_root).unwrap();
+        let project_claude = project_root.join(".claude");
+        fs::create_dir_all(&project_claude).unwrap();
+
+        // User-level has a different server — must NOT be returned.
+        let (_, user_mcp_path, _) = build_svc_with_root(&tmp, Some(&project_root));
+        let user_body = serde_json::json!({
+            "mcpServers": {
+                "user-only": { "command": "should-not-show" }
+            }
+        });
+        fs::write(&user_mcp_path, serde_json::to_string_pretty(&user_body).unwrap()).unwrap();
+
+        // Project-level has the real data we expect to read.
+        let project_body = serde_json::json!({
+            "mcpServers": {
+                "proj-fs": { "command": "npx", "args": ["-y", "@mcp/proj"] },
+                "proj-remote": { "type": "http", "url": "https://proj.example/sse" }
+            }
+        });
+        fs::write(
+            project_claude.join("mcp.json"),
+            serde_json::to_string_pretty(&project_body).unwrap(),
+        )
+        .unwrap();
+
+        let (svc, _, _) = build_svc_with_root(&tmp, Some(&project_root));
+        let list = svc.list();
+        assert_eq!(list.len(), 2, "should read project, not user");
+        let names: Vec<&str> = list.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"proj-fs"));
+        assert!(names.contains(&"proj-remote"));
+        assert!(!names.contains(&"user-only"), "user-level must not leak");
+    }
+
+    /// 3. `active_root_dir() = Some(root)` + 写（add 触发 write_all）→
+    ///    写到 `<root>/.claude/mcp.json` + atomic rename + 备份；
+    ///    用户级 mcp.json 不动。
+    #[test]
+    fn write_with_active_root_some_writes_to_project_and_creates_backup() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path().join("project");
+        fs::create_dir_all(project_root.join(".claude")).unwrap();
+
+        // Pre-existing project-level mcp.json so backup has something to save.
+        let existing_body = serde_json::json!({
+            "mcpServers": {
+                "old": { "command": "echo" }
+            }
+        });
+        fs::write(
+            project_root.join(".claude").join("mcp.json"),
+            serde_json::to_string_pretty(&existing_body).unwrap(),
+        )
+        .unwrap();
+
+        let (svc, user_mcp_path, project_mcp_path) =
+            build_svc_with_root(&tmp, Some(&project_root));
+        let project_mcp_path = project_mcp_path.unwrap();
+
+        // add triggers write_all.
+        let s = sample_stdio("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "new-proj");
+        svc.add(s).unwrap();
+
+        // Project-level: new entry + atomic backup of the original.
+        let raw = fs::read_to_string(&project_mcp_path).unwrap();
+        assert!(raw.contains("\"new-proj\""));
+        assert!(!raw.contains("\"old\""), "old entry replaced");
+        let mut found_bak = None;
+        for entry in fs::read_dir(project_root.join(".claude")).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            if name.starts_with("mcp.json.bak.") {
+                found_bak = Some(name);
+                break;
+            }
+        }
+        let bak = found_bak.expect("project backup should exist");
+        let bak_raw = fs::read_to_string(project_root.join(".claude").join(&bak)).unwrap();
+        assert!(bak_raw.contains("\"old\""), "backup preserves pre-write content");
+
+        // User-level: untouched (file does not even exist).
+        assert!(!user_mcp_path.exists(), "user-level mcp.json must not be touched");
+    }
+
+    /// 4. `active_root_dir() = Some(root)` + root 目录不存在 → 写拒绝
+    ///    返回 `McpError::Io`，**不** mkdir root，也不创建 mcp.json。
+    ///    安全边界：与 F18 `apply_findings` 同源 (CLAUDE.md §7 + §2.4)。
+    #[test]
+    fn write_with_active_root_some_missing_root_rejects_no_mkdir() {
+        let tmp = TempDir::new().unwrap();
+        // project_root is **inside** tmp but NEVER created → .exists() == false.
+        let ghost_root = tmp.path().join("ghost-project");
+        assert!(!ghost_root.exists());
+
+        let (svc, _user_mcp_path, project_mcp_path) =
+            build_svc_with_root(&tmp, Some(&ghost_root));
+        let project_mcp_path = project_mcp_path.unwrap();
+        assert!(!project_mcp_path.exists(), "precondition: target absent");
+
+        // add must fail with Io error and NOT create ghost_root.
+        let s = sample_stdio("ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb", "ghost");
+        let err = svc.add(s).unwrap_err();
+        assert!(
+            matches!(err, McpError::Io(_)),
+            "expected McpError::Io, got {:?}",
+            err
+        );
+
+        // SAFETY BOUNDARY: nothing was created. ghost_root still absent,
+        // and project_mcp_path still absent.
+        assert!(
+            !ghost_root.exists(),
+            "ghost_root must NOT be auto-mkdir'd (CLAUDE.md §7)"
+        );
+        assert!(
+            !project_mcp_path.exists(),
+            "project mcp.json must NOT be created"
+        );
     }
 
     // ----- server_to_value -----
