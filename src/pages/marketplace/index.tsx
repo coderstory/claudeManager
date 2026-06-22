@@ -463,7 +463,7 @@ export default function MarketplacePage(): ReactElement {
             }}
           >
             {cloning ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={14} data-app-spin="true" />
             ) : (
               <Download size={14} />
             )}
@@ -488,7 +488,7 @@ export default function MarketplacePage(): ReactElement {
             gap: 10,
           }}
         >
-          <Loader2 size={16} className="animate-spin" />
+          <Loader2 size={16} data-app-spin="true" />
           正在处理(克隆 / npx / CLI 安装,可能需要数秒)...
         </div>
       )}
@@ -800,7 +800,7 @@ function RepoCard({
           }}
         >
           {loading ? (
-            <Loader2 size={12} className="animate-spin" />
+            <Loader2 size={12} data-app-spin="true" />
           ) : (
             <Download size={12} />
           )}
@@ -1006,7 +1006,7 @@ function ResourceInstallRow({
             }}
           >
             {loading ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 size={12} data-app-spin="true" />
             ) : (
               <Download size={12} />
             )}

@@ -1,6 +1,5 @@
 /* === Claude 配置管理器 — 设计系统基线（CLAUDE.md §4） ===
- * 所有 UI 必须从这里读 token，禁止硬编码颜色 / 字号 / 间距。
- * Tailwind 在 tailwind.config.ts 里把这些 var() 映射到 utility class。 */
+ * 所有 UI 必须从这里读 token，禁止硬编码颜色 / 字号 / 间距。 */
 
 /* === Reset — keep window scrollbars out of desktop app shell ===
  * 副作用：M1.9 重构时把 src/index.css 的 reset 弄丢了（M1.3-fix 在那条规则上写的）。
