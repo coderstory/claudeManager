@@ -28,7 +28,8 @@ body,
   box-sizing: border-box;
 }
 
-:root {
+/* ── 极简 light (默认, 与 v3.0 前等价) ── */
+:root, [data-theme="light"] {
   /* --- Backgrounds (§4.2) --- */
   --bg-primary:  #FAFAF7;             /* 瓷白基底 */
   --bg-elevated: #FFFFFF;
@@ -40,14 +41,17 @@ body,
   --text-muted:     #8B949E;
 
   /* --- Accent / status (§4.2 + §4.5) --- */
-  --accent:  #0969DA;
-  --success: #388E3C;
-  --warning: #F57C00;
-  --danger:  #D32F2F;
-  --disabled: rgba(0, 0, 0, 0.4);
+  --accent:        #0969DA;
+  --accent-soft:   #DDF4FF;
+  --accent-strong: #0860C7;
+  --success:       #388E3C;
+  --warning:       #F57C00;
+  --danger:        #D32F2F;
+  --disabled:      rgba(0, 0, 0, 0.4);
 
   /* --- Border / shadow (§4.2) --- */
-  --border:    #E1E4E8;
+  --border:      #E1E4E8;
+  --border-soft: #E1E4E8;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 
@@ -81,9 +85,10 @@ body,
   --space-12: 48px;
 
   /* --- Radius (§4.4) --- */
-  --radius-card:   8px;
-  --radius-button: 4px;
-  --radius-modal:  12px;
+  --card-radius:        8px;
+  --button-radius:      6px;
+  /* 卡片描边宽度: anime 主题在 §4.8 中固定 3px, light 默认 1px */
+  --card-border-width:  1px;
 
   /* --- Font size (§4.4) --- */
   --fs-heading: 18px;
@@ -124,6 +129,82 @@ body,
   --detail-page-max-width: 720px;
 }
 
+/* ── 二次元 anime (薄荷汽水) ──
+ * v3.0 起,主题通过 [data-theme="xxx"] 块切换;ThemeProvider 写
+ * document.documentElement.dataset.theme。:root 块作为 light 默认档,
+ * 此处只覆盖需要差异化的 token,未列出的 token 走 light 继承(注: CSS
+ * 自定义属性不会跨块继承,实际两个块必须各自写完整集合 — 这是 v3.0
+ * 主题机制的硬约束,见 docs/superpowers/specs/2026-06-22-v3-theme-redesign.md §4.6)。 */
+[data-theme="anime"] {
+  /* --- Backgrounds (§4.2) --- */
+  --bg-primary:  #F0FDFA;             /* 薄荷汽水基底 */
+  --bg-elevated: #FFFFFF;
+  --bg-overlay:  rgba(255, 255, 255, 0.7);
+
+  /* --- Text (§4.2) --- */
+  --text-primary:   #134E4A;          /* 深薄荷 */
+  --text-secondary: #5B7B7A;
+  --text-muted:     #8FA8A6;
+
+  /* --- Accent / status (§4.2 + §4.5) --- */
+  --accent:        #06B6D4;           /* 青色主调 */
+  --accent-soft:   #CFFAFE;
+  --accent-strong: #0891B2;
+  --success:       #10B981;
+  --warning:       #F59E0B;
+  --danger:        #FB7185;           /* 偏粉红,适配二次元柔和观感 */
+  --disabled:      rgba(0, 0, 0, 0.4);
+
+  /* --- Border / shadow (§4.2 + §4.8) ---
+   * anime 主题强调厚描边 + 双层柔和阴影(spec §4.8)。 */
+  --border:        #CCFBF1;
+  --border-soft:   #E6FFFA;
+  --shadow-sm: 0 2px 6px rgba(6, 182, 212, 0.12), 0 4px 16px rgba(6, 182, 212, 0.08);
+  --shadow-md: 0 4px 12px rgba(6, 182, 212, 0.16), 0 12px 32px rgba(6, 182, 212, 0.10);
+
+  /* anime 主题不用磨砂 token, 但保留值以防未来混搭 */
+  --blur-sm:  10px;
+  --blur-md:  20px;
+  --blur-lg:  30px;
+  --glass-bg:        rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.75);
+  --glass-border:    rgba(255, 255, 255, 0.18);
+  --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.08);
+
+  /* --- Spacing (§4.4 — 4px 网格) --- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+
+  /* --- Radius (§4.4 + §4.8 — anime 大圆角 + 厚描边) --- */
+  --card-radius:       20px;
+  --button-radius:     14px;
+  --card-border-width: 3px;            /* spec §4.8: anime 卡片固定 3px */
+
+  /* --- Font size (§4.4) --- */
+  --fs-heading: 18px;
+  --fs-body:    14px;
+  --fs-caption: 12px;
+
+  /* --- Font families (§4.3)
+   * anime 主题前置 Nunito(圆润)+ JetBrains Mono。Nunito 不在本地,
+   * 退化到系统字体栈 — 视觉效果接近但不是真正的 Nunito,后续 M3.x
+   * 可考虑接入 web font(spec §4.6 列出但未强制)。 */
+  --font-ui:   'Nunito', -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+  /* --- Layout dimensions (§4.4 — anime 略宽,呼应厚描边) --- */
+  --header-height: 56px;
+  --sidebar-width: 240px;
+
+  /* --- View transition (§4.4) --- */
+  --view-transition-duration: 150ms;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -134,12 +215,6 @@ body,
   height: 100%;
   animation: fadeIn var(--view-transition-duration) ease-out;
 }
-
-/* --- 主题 (§4.1 — M2.16 theme-trim) ---
- * 砍到单档 light (瓷白 #FAFAF7)。原 glass-clear / glass-tinted 两档
- * 因 Win11 Mica 不生效(3 档视觉无区别)已移除,后期再加新主题时
- * 在这里加 [data-theme="xxx"] 块即可。:root 即 light,无需额外
- * [data-theme="light"] 选择器。 */
 
 /* --- 全局基线：让 body / 等宽走 token --- */
 body {

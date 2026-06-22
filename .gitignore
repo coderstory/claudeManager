@@ -37,3 +37,4 @@ test-results/
 .claude/*
 !.claude/settings.local.json
 updater-private.key
+src/design-system/*.bak
