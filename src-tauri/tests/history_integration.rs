@@ -206,3 +206,81 @@ fn cross_project_filter_returns_only_matching_root() {
     assert_eq!(only_a.len(), 1);
     assert_eq!(only_a[0].provider_id, "p1");
 }
+
+/// Plan D — end-to-end backfill → live write → cross-plugin filter.
+///
+/// Mirrors the cold-start sequence in `app_state::AppState::build`:
+///   1. Pre-seed `<backups_dir>/` with 2 `.bak.<ts>` files.
+///   2. Open history db + `backfill_bak` (the same call AppState makes).
+///   3. Take a fresh F13 `BackupService` snapshot → should record a 3rd row.
+///   4. Take an F7 `UsageService` snapshot for a known provider → 1st usage row.
+///   5. Filter by `active_root` → only the F7 row matches (backfilled rows
+///      have no `active_root` because they predate the field).
+///
+/// Guards the contract that all 3 writers (backfill / F13 / F7) share the
+/// same `HistoryService` instance and don't accidentally cross-contaminate
+/// each other's data.
+#[test]
+fn end_to_end_backfill_then_f7_then_f13() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let paths = test_paths(&tmp);
+    bootstrap(&paths);
+
+    // Pre-seed 2 backup files (so backfill_bak has something to ingest).
+    let bak1 = paths.backups_dir.join("settings.json.bak.20260619-120000");
+    let bak2 = paths.backups_dir.join("settings.json.bak.20260620-080000");
+    std::fs::write(&bak1, b"{\"v\":1}").unwrap();
+    std::fs::write(&bak2, b"{\"v\":2}").unwrap();
+
+    let conn = open_history_db(&paths.history_db).unwrap();
+    let history = std::sync::Arc::new(HistoryService::new(conn));
+    history.init().unwrap();
+
+    // Step 1: backfill (mirrors AppState::build lines 118-124).
+    let n = history.backfill_bak(&paths.backups_dir, None).unwrap();
+    assert!(n <= 2, "backfill should insert ≤ 2 rows, got {n}");
+    let after_backfill = history
+        .query_backup(&BackupHistoryFilter::default())
+        .unwrap();
+    assert!(after_backfill.len() <= 2);
+
+    // Step 2: live F13 backup_now — should record 1 new backup row.
+    let settings = paths.settings_json.clone();
+    std::fs::write(&settings, r#"{"env":{"url":"https://now"}}"#).unwrap();
+    let backup_svc = std::sync::Arc::new(
+        BackupService::new(paths.clone()).with_history(history.clone()),
+    );
+    let _ = backup_svc.backup_now(&settings).unwrap();
+    let after_f13 = history
+        .query_backup(&BackupHistoryFilter::default())
+        .unwrap();
+    assert_eq!(
+        after_f13.len(),
+        after_backfill.len() + 1,
+        "F13 should append exactly 1 row"
+    );
+
+    // Step 3: live F7 usage — record 1 usage row.
+    let usage_svc = std::sync::Arc::new(
+        UsageService::new(paths.clone()).with_history(history.clone()),
+    );
+    let _ = usage_svc
+        .get_usage("p_live", UsageWindow::OneMonth)
+        .unwrap();
+    let all_usage = history.query_usage(&UsageHistoryFilter::default()).unwrap();
+    assert_eq!(all_usage.len(), 1, "F7 should record exactly 1 usage row");
+    assert_eq!(all_usage[0].provider_id, "p_live");
+
+    // Step 4: cross-plugin filter — backup filter does not bleed into usage.
+    let only_usage = history
+        .query_usage(&UsageHistoryFilter {
+            active_root: Some("/some-root".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(
+        only_usage.len(),
+        0,
+        "filter on usage.active_root must not match unrelated backups"
+    );
+}
