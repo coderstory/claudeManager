@@ -24,13 +24,13 @@ stopped_at: Phase 18 complete (3/3) — ready to discuss Phase 19
 
 ## Current Position
 
-Phase: 19
+Phase: 21
 Plan: Not started
-Status: Ready to plan
+Status: Awaiting user decision on 3 gates (crate / 存储位置 / 启用时机)
 Last activity: 2026-06-22
-Next: v3.0 round 2 启动（Phase 19 云备份 + Phase 20 updater UI + Phase 21 M4.6 长尾项）
+Next: Phase 21 SQLite research 已 ship (21-RESEARCH.md + 21-CONTEXT.md, commit `0ca4c5f`),L-M2.02 已 ship (commit `f94e27d`),等用户拍板后另派 gsd-plan-phase
 
-**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）。
+**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）+ L-M2.02 详情页 max-width 统一（9 页 ship, smoke 7/7）+ Phase 21 SQLite research 完成（21-RESEARCH.md + 21-CONTEXT.md, 3 待拍板）。
 
 ## Recent Work
 
