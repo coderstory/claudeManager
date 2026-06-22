@@ -49,6 +49,11 @@
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "process:default",
-    "process:allow-exit"
+    "process:allow-exit",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "updater:allow-download-and-install"
   ]
 }

@@ -35,3 +35,4 @@ test-results/
 
 # local claude memory symlinks (project-irrelevant)
 .claude/
+updater-private.key

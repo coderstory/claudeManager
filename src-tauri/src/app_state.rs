@@ -64,6 +64,12 @@ pub struct AppState {
     ///
     /// 单值 + take 语义(读后清空),避免重复触发同一文件。
     pub pending_sql_file: Mutex<Option<String>>,
+    /// M4.3 — updater public key (from tauri.conf.json plugins.updater.pubkey).
+    /// Read by the updater commands and the frontend for update config display.
+    pub updater_pubkey: String,
+    /// M4.3 — updater endpoints (from tauri.conf.json plugins.updater.endpoints).
+    /// JSON endpoint(s) that serve the latest.json manifest for auto-update.
+    pub updater_endpoints: Vec<String>,
 }
 
 impl AppState {
@@ -137,6 +143,10 @@ impl AppState {
             project_service,
             // M2.16 — F20 冷启动 .sql 路径缓存,初始 None。
             pending_sql_file: Mutex::new(None),
+            // M4.3 — updater pubkey from tauri.conf.json (set during build).
+            updater_pubkey: "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM4Q0I3RjAwREFDRDFFODEKUldTQkhzM2FBSC9MeVBJRU9Yam53cXpEUE1UVGN0RFE5Y0R6SnZidkpWYlhiRzkvUXR4ZVU2VisK".to_string(),
+            // M4.3 — updater endpoints: GitHub Releases JSON manifest.
+            updater_endpoints: vec!["https://github.com/loonghao/claude-config-manager/releases/latest/download/latest.json".to_string()],
         }
     }
 }

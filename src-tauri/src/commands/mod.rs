@@ -28,3 +28,5 @@ pub mod resource;
 pub mod usage;
 // M3.7 — 清单 18: 关于页 command(about.rs 复用 app::AppMetadata)。
 pub mod about;
+// M4.3 — updater commands (pubkey + endpoint config + check stub).
+pub mod updater;
