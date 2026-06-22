@@ -5,6 +5,9 @@ progress:
   phases_complete: 11/11
   completed: [M2.17, M3.1, M3.2, M3.3, M3.4, M3.5, M3.6, M3.7, M3.8, M3.9, M3.10]
 last_updated: 2026-06-22
+v3.0_round1_commits: [ed5a3e5, f375bf1, 2e4e75b, afd090e, 8a2650f, a9bd4b5, f145d38, e2d5e06, 4f5df37, 3eadae2, 7efb0f8, da6ba67]
+v3.0_round1_completed: [A1 12/13 plugin 接入, B3#10 Tailwind 移除, B2#1 usage 测试, A3 备份增强 Phase 1, L-M2.08 WindowChrome 统一, M4.3 updater Phase 1]
+v3.0_round1_pending: [#9 F18 scan_optimizations, #14 e2e (402), 备份 Phase 2, updater Phase 2-3, M4.6 其余]
 ---
 
 <!--
@@ -13,15 +16,17 @@ last_updated: 2026-06-22
   本顶部段为 gsd chain + 主 session 决策 + 当前状态的总览入口。
 -->
 
-# Claude 配置管理器 — STATE.md (v2.0 milestone 闭环)
+# Claude 配置管理器 — STATE.md (v2.0 milestone 闭环 + v3.0 round 1 进展)
 
 ## Current Position
 
-Phase: Milestone v2.0 complete (11/11 phases shipped)
+Phase: Milestone v2.0 complete (11/11 phases shipped) + **v3.0 round 1（2026-06-22）已 ship 12 commits**
 Plan: —
-Status: Awaiting next milestone (v3.0)
-Last activity: 2026-06-22 — Milestone v2.0 completed and archived (gsd-tools milestone complete + MILESTONES.md hand-curated)
-Next: /gsd-new-milestone 启动 v3.0 (M4.x 公证发布), 或 M3.10-adapter backlog (M3.11~M3.15)
+Status: **v3.0 round 1 收尾 / 等待 round 2 启动**
+Last activity: 2026-06-22 — v3.0 round 1 完成 (A1 12/13 接入 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1)
+Next: v3.0 round 2 启动（#9 F18 scan_optimizations + #14 e2e 余额恢复 + 备份 Phase 2 + updater Phase 2-3）
+
+**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1。#14 e2e 待余额恢复。
 
 ## Recent Work
 
@@ -30,17 +35,32 @@ Next: /gsd-new-milestone 启动 v3.0 (M4.x 公证发布), 或 M3.10-adapter back
 - M3.9 SQL 导入 (Phase 10): 命名 "SQL导入配置" + sql-validator 5 场景 — commit 3ed3ff3 + e3af4c3, ship 7/7
 - M3.8 usage (Phase 9): cc-switch JSONL 读法 (D 选) — 5 天估时压缩
 - M3.10 双模式 (Phase 11): 用户/项目 — commit 98429b5
+- **v3.0 round 1 (2026-06-22) — 12 commits**:
+  - A1 plugin 适配 12/13: `f375bf1` F5 / `2e4e75b` F18 apply / `afd090e` F1+F3 / `8a2650f` F6 / `a9bd4b5` F13+F19 / `f145d38` F16+F17+F7
+  - B3#10 Tailwind 移除: `ed5a3e5`
+  - B2#1 usage fixture 8 子任务测试: `4f5df37`
+  - A3 备份增强 Phase 1 增量: `3eadae2`
+  - L-M2.08 MacWindowChrome 架构统一: `7efb0f8`
+  - M4.3 updater Phase 1 (pubkey+endpoint): `da6ba67`
+  - F6 cargo check 报告校正 (零代码改动): `e2d5e06`
 
 ## Decisions
 
 - D14 (2026-06-22): M3.8 用量查询走 cc-switch-main JSONL 读法 (D 选, 5 天估时)
+- D15 (2026-06-22, v3.0 round 1): B3#10 Tailwind 选 B 移除（commit `ed5a3e5`）
+- D16 (2026-06-22, v3.0 round 1): v3.0 milestone goal = "功能完善 + updater 基础 + 备份增强"（公证发布主线因 M4.1 取消暂缓；Mac 验证 D6 仍待决）
 
-## Known Issues (Remaining, post-v2.0)
+## Known Issues (Remaining, post-v2.0 + v3.0 round 1)
 
 - M4.1 证书 (代码签名) — 已拍板：都不买（2026-06-22 用户口头确认）→ M4.2/M4.4 暂缓
 - M4.5 应用商店上架 — 已拍板：不上架（2026-06-22 用户口头确认）→ M4.5 取消
 - D6 Mac 真机验证 — 暂缓, M4 启动前再问
 - 17 MEDIUM/LOW M2.16 限制已逐条评估 (D10), v2.0 关闭期归档
+- **#14 Playwright e2e 本机实跑** — v3.0 round 1 派单，**API 402 余额不足中止（0 token 消耗）**，待重派
+- **#9 F18 scan_optimizations active_root_dir 接入** — v3.0 round 1 跳过，#10 apply 已 ship（commit `2e4e75b`），scan 仍读用户级，进 round 2
+- **M4.3 updater Phase 2/3** — Phase 1 pubkey+endpoint 已 ship（commit `da6ba67`），前端 UI + E2E 灰度回滚未做
+- **A3 备份增强 Phase 2 云备份** — Phase 1 增量已 ship（commit `3eadae2`），云备份未做
+- **M4.6 其余 (i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02)** — v3.0 round 1 未启动
 
 ---
 
@@ -1184,3 +1204,96 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 | D11 | A（4 槽全开 + 首批全选） | 主 session | 2026-06-21 |
 | D12 | B（挂入 M3 启动门） | 主 session | 2026-06-21 |
 | D13 | B（M3.5 排期） | 主 session | 2026-06-21 |
+
+---
+
+# === v3.0 round 1 实际进度（2026-06-22 追加） ===
+
+> 上一节「附录：主 session 拍板决策日志（D6~D13）」记录到 M2.17 暂停点；v3.0 round 1（2026-06-22）由 12 commits 完成 6 项主 backlog 收尾。本节补全 v3.0 round 1 全部状态。
+>
+> 数据来源：`git log --oneline 01f555c..HEAD`（13 commits，其中 12 个是 v3.0 round 1 本轮 + 1 个 `e50d370 1` 是空标记）+ `git show --stat` 核实改动文件范围。
+
+## v3.0 round 1 起止时间
+
+- **起**：2026-06-22 ~14:00（M2.17 / M3.x 业务期启动后）
+- **止**：2026-06-22 ~19:30（v3.0 round 1 收尾，本文档落盘）
+
+## v3.0 round 1 12 commits 一览
+
+| # | SHA | 标题 | Backlog 编号 | 关键文件 |
+|---|---|---|---|---|
+| 1 | `ed5a3e5` | chore(M2): remove Tailwind dead deps + cleanup dead className | B3#10 | `package.json` / `package-lock.json` / `src/lib/utils.ts` / `src/__tests__/lib/cn.test.ts` / `src/design-system/tokens.css` / `src/pages/marketplace/index.tsx` |
+| 2 | `f375bf1` | feat(M3.11): F5 json-editor resolve_claude_path 接入 | A1#5 | `src-tauri/src/commands/fs.rs` |
+| 3 | `2e4e75b` | feat(M3.11): F18 optimizer apply_optimizations 接入 | A1#10 | `src-tauri/src/commands/optimizer.rs` / `src-tauri/src/services/optimizer_service.rs` / `src-tauri/tests/optimizer_fix.rs` |
+| 4 | `afd090e` | feat(M3.12): F1 list_providers + F3 import_sql 接入 | A1#1 + A1#3 | `src-tauri/src/commands/providers.rs` / `src-tauri/src/services/provider_service.rs` |
+| 5 | `8a2650f` | feat(M3.12): F6 mcp-management 接入 | A1#4 | `src-tauri/src/commands/mcp.rs` / `src-tauri/src/services/mcp_service.rs` |
+| 6 | `a9bd4b5` | feat(M3.12): F13 list_backups + F19 restore_backup 接入 | A1#6 + A1#8 | `src-tauri/src/commands/backup.rs` / `src-tauri/src/services/backup_service.rs` |
+| 7 | `f145d38` | feat(M3.12): F16+F17+F7 services 接入 | A1#11+12+13 | `src-tauri/src/commands/{marketplace,resource,usage}.rs` / `src-tauri/src/services/{marketplace,resource,usage}_service.rs` |
+| 8 | `e2d5e06` | docs(M3.12): verify + correct F6 cargo check report (no code change) | — | 仅 review docs（零代码改动） |
+| 9 | `4f5df37` | test(M3.8): 补齐 usage fixture 8 子任务功能测试 | B2#1 | `src-tauri/tests/m3_8_usage_ccswitch.rs` |
+| 10 | `3eadae2` | feat(M4.6): F13 incremental backup (diff-based, skip no-change) | A3 备份 Phase 1 | `src-tauri/src/commands/backup.rs` / `src-tauri/src/lib.rs` / `src-tauri/src/services/backup_service.rs` |
+| 11 | `7efb0f8` | refactor(M4.6): lib.rs 走 IPlatformWindowChrome trait dispatch, Mac impl = apply_vibrancy | A3 + L-M2.08 | `src-tauri/src/lib.rs` / `src-tauri/src/platform/{macos/window_chrome.rs,mod.rs}` |
+| 12 | `da6ba67` | feat(M4.3): updater pubkey + endpoint config (Phase 1, no EV cert needed) | A2 M4.3 Phase 1 | `.gitignore` / `src-tauri/Cargo.{toml,lock}` / `src-tauri/capabilities/default.json` / `src-tauri/src/app_state.rs` / `src-tauri/src/commands/{mod.rs,updater.rs}` / `src-tauri/tauri.conf.json` / `updater-private.key.pub` |
+
+## v3.0 round 1 完成项 vs 仍 pending
+
+### ✅ 本轮完成（6 项主 backlog）
+
+| 类别 | 详情 | 关键 commit |
+|---|---|---|
+| **A1 M3.10-adapter** | 12/13 plugin 接入 active_root_dir（仅 #9 F18 scan_optimizations 仍 pending） | 6 commits (#2-7) |
+| **A3 备份增强 Phase 1** | F13 增量备份（diff-based, skip no-change） | #10 (`3eadae2`) |
+| **A3 L-M2.08 WindowChrome** | lib.rs 走 `IPlatformWindowChrome` trait dispatch，Mac impl = `apply_vibrancy`（架构债关闭） | #11 (`7efb0f8`) |
+| **B2#1 usage 测试** | M3.8 usage fixture 8 子任务功能测试补齐 | #9 (`4f5df37`) |
+| **B3#10 Tailwind** | 选 B 移除：6 个 Tailwind 生态包 + `cn` util + dead className + `tokens.css` 误导性注释 | #1 (`ed5a3e5`) |
+| **A2 M4.3 updater Phase 1** | pubkey 替换 + endpoint config + commands + tauri.conf + capabilities（**无 EV 证书不强制需要**） | #12 (`da6ba67`) |
+
+### ⏳ 仍 pending（4 项）
+
+| 类别 | 详情 | 阻塞 / 触发 |
+|---|---|---|
+| **#9 F18 scan_optimizations** | A1 M3.10-adapter 唯一未接入的 1 个，scan 仍读用户级 `~/.claude/`（#10 apply 已 ship） | 进 v3.0 round 2 |
+| **#14 Playwright e2e 本机实跑** | API 402 余额不足中止（0 token 消耗） | 等用户充余额后重派 |
+| **M4.3 updater Phase 2/3** | Phase 1 pubkey+endpoint 已 ship，前端 UI + E2E 灰度回滚未做 | 未签名 update 触发 SmartScreen 警告但功能可用 |
+| **A3 备份 Phase 2 云备份** | Phase 1 增量已 ship，云备份未做 | — |
+| **M4.6 其余** | i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02 | 按需启动 |
+
+## v3.0 round 1 关键设计决策
+
+| 决策 | 选项 | 拍板 | 备注 |
+|---|---|---|---|
+| B3#10 Tailwind 接入 vs 移除 | A 接入 / **B 移除** | **B 移除** ✅ | 拖了 M1→M2→M3 三个 milestone，M2.15 已 inline 化，移除成本低 |
+| M4.3 updater Phase 1 范围 | A 全套 (pubkey+endpoint+UI+E2E) / **B 最小（pubkey+endpoint）** / C 跳过 | **B 最小** ✅ | 拿 EV 证书才能正式上 UI，未签名 update 仍可用但 SmartScreen 警告 |
+| F6 cargo check race 报告 | A 重跑 subagent / **B verify 现状 + 校正报告** / C 忽略 | **B verify 现状** ✅ | 实际 0 错误，subagent 报告是 race condition 假象（commit `e2d5e06`） |
+
+## v3.0 round 1 ship exe 状态
+
+按 M2 桌面策略（仅保留最近 2 个 ship），本轮 ship exe 在桌面保留情况：
+- 本轮 12 commits 中，11 个有 src 改动（commit `e2d5e06` 仅 review docs 无 src 改动） → 应 ship 11 个 exe
+- 实际 ship 状态（待主 session 抽查时核实）：M2 桌面策略继承到 v3.0
+- 抽查纪律（D8）：用户抽查建议至少 1-2 个 v3.0 round 1 关键 ship（如 `m3.12-f13-f19-backup` + `m4.3-updater-pubkey` 或 `m4.6-backup-incremental`）
+
+## v3.0 round 2 候选启动（用户返回后必看）
+
+| 槽 | 任务 | 类型 | 估时 | 备注 |
+|---|---|---|---|---|
+| 1 | #9 F18 scan_optimizations active_root_dir 接入 | Bug fix + 接入 | 半天 | 收尾 A1 最后一个接入点 |
+| 2 | #14 Playwright e2e 本机实跑（基建 + 1-2 spec 实跑） | E2E 验证 | 1-2 天 | 等用户充 API 余额 |
+| 3 | M4.3 updater Phase 2 前端 UI | UI | 1-2 天 | 依赖 Phase 1 已有 pubkey/endpoint config |
+| 4 | M4.3 updater Phase 3 E2E 灰度回滚 | E2E | 1 天 | 验证未签名 update 完整链路 |
+
+## v3.0 round 1 已知限制
+
+- **#14 e2e 中止**：Playwright e2e 派单 subagent 因 API 402 余额不足 0 token 消耗中止，**没有产生 commit 也没破坏现有状态**（仅消耗 subagent 启动 token）
+- **#9 F18 scan_optimizations 仍读用户级**：optimizer `scan_optimizations` 未走 `active_root_dir`，与 `apply_optimizations` 不一致 → v3.0 round 2 必修
+- **M4.3 未签名 update 触发 SmartScreen**：Phase 1 已有 pubkey/endpoint，但 update 包未 EV 证书签名 → Windows SmartScreen 警告用户。用户首次点击"仍要运行"后可用
+
+## 完整文档落盘（v3.0 round 1 收尾动作）
+
+本节为 v3.0 round 1 收尾动作的落盘，**纯文档任务不写代码**：
+- `.planning/milestones/v2.0-BACKLOG.md`：A1/A2/A3/B2/B3/B5 段加 v3.0 round 1 状态标记 + §C 加 round 1 状态列
+- `.planning/MILESTONES.md`：加 v3.0 round 1 进展段
+- `.planning/STATE.md`：Current Position / Recent Work / Decisions / Known Issues 加 v3.0 round 1 段（本节为新增）
+- `tmp/white-list-v3.0-round1-acceptance.md`：本轮改动的 3 个文件白名单
+- `tmp/reviews/v3.0-round1-acceptance-self.md`：自审报告
+- `git commit`：v3.0 round 1 文档落盘（无 push）
