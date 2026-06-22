@@ -82,6 +82,8 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   marketplace: '资源市场',
   optimizer: '配置优化',
   'backup-restore': '备份与恢复',
+  // M4.6 / Phase 21-C — F21 history query page.
+  history: '历史查询',
   about: '关于',
 };
 

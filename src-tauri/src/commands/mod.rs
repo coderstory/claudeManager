@@ -30,3 +30,5 @@ pub mod usage;
 pub mod about;
 // M4.3 — updater commands (pubkey + endpoint config + check stub).
 pub mod updater;
+// M4.6 / Phase 21 — history page commands (query / stats / export / purge).
+pub mod history;

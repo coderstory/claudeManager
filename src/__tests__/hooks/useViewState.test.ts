@@ -43,8 +43,9 @@ describe('useViewState', () => {
     // and 'home' is the welcome tile the user lands on after the first
     // launch (before any localStorage value exists).
     // M3.7: +1 utility view 'about' (清单 18). Total now 14.
+    // M4.6 / Phase 21-C: +1 view 'history' (F21). Total now 15.
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(14);
+    expect(ALL_VIEWS.length).toBe(15);
   });
 
   it('defaults to "home" when localStorage is empty', () => {

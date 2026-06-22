@@ -31,6 +31,7 @@ import {
   Database,
   FileSearch,
   Gauge,
+  History,
   Home,
   Info,
   KeyRound,
@@ -104,6 +105,11 @@ const VIEW_META: Record<
   'backup-restore': {
     icon: <Archive size={18} aria-hidden="true" />,
     short: '备份与恢复',
+  },
+  // M4.6 / Phase 21-C — F21 history query page (SQLite).
+  history: {
+    icon: <History size={18} aria-hidden="true" />,
+    short: '历史查询',
   },
   // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢)。
   // 加在 ALL_VIEWS 末尾,不替换 D-槽1 sidebar 顶部 project switcher。

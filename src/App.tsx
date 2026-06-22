@@ -65,6 +65,8 @@ import SingleFileDeployPage from './pages/single-file-deploy';
 import ResourceBrowserPage from './pages/resource-browser';
 import MarketplacePage from './pages/marketplace';
 import BackupRestorePage from './pages/backup-restore';
+// M4.6 / Phase 21-C — F21 history query page (SQLite-backed).
+import HistoryPage from './pages/history';
 import AboutPage from './pages/about';
 import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -136,6 +138,11 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
   'backup-restore': {
     title: '备份与恢复',
     description: '最近 N 个 settings.json 版本时间线 + 字段级 diff + 一键回滚。',
+  },
+  // M4.6 / Phase 21-C — F21 history query page.
+  history: {
+    title: '历史查询',
+    description: '按时间 / 项目 / 类型筛选 F7 用量 + F13 备份的历史记录,支持导出 JSON / CSV。',
   },
   // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢 / 技术栈)。
   about: {
@@ -590,6 +597,9 @@ export default function App(): ReactElement {
               <OptimizerPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
+            ) : view === 'history' ? (
+              // M4.6 / Phase 21-C — F21 history query page.
+              <HistoryPage />
             ) : view === 'about' ? (
               <AboutPage />
             ) : (

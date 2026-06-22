@@ -174,6 +174,12 @@ pub fn run() {
             commands::updater::get_updater_pubkey,
             commands::updater::get_updater_endpoints,
             commands::updater::check_update,
+            // M4.6 / Phase 21 — history page commands (Plan B).
+            commands::history::get_usage_history_rows,
+            commands::history::get_backup_history,
+            commands::history::get_history_stats,
+            commands::history::export_history,
+            commands::history::purge_history,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or

@@ -1,0 +1,190 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty initial render 1`] = `
+<div
+  data-testid="history-page"
+  style="padding: var(--space-6); max-width: 720px; margin: 0px auto;"
+>
+  <h1
+    style="font-size: var(--fs-heading); font-weight: 600; color: var(--text-primary); margin-bottom: var(--space-3); display: flex; align-items: center; gap: 8px;"
+  >
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-database"
+      fill="none"
+      height="18"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="18"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <ellipse
+        cx="12"
+        cy="5"
+        rx="9"
+        ry="3"
+      />
+      <path
+        d="M3 5V19A9 3 0 0 0 21 19V5"
+      />
+      <path
+        d="M3 12A9 3 0 0 0 21 12"
+      />
+    </svg>
+    历史查询
+  </h1>
+  <p
+    style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;"
+  >
+    浏览 F7 用量快照 + F13 备份的 SQLite 持久化历史。 切换 / 备份 / 编辑 settings.json 时自动写入,可按项目、时间、类型筛选后导出。
+  </p>
+  <div
+    aria-label="历史类型"
+    data-testid="history-tabs"
+    role="tablist"
+    style="display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border);"
+  >
+    <button
+      aria-selected="true"
+      data-testid="tab-usage"
+      role="tab"
+      style="padding: 10px 16px; border-bottom: 2px solid var(--accent); margin-bottom: -1px; background: transparent; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;"
+      type="button"
+    >
+      用量历史 (
+      0
+      )
+    </button>
+    <button
+      aria-selected="false"
+      data-testid="tab-backup"
+      role="tab"
+      style="padding: 10px 16px; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: var(--text-secondary); font-size: 14px; font-weight: 400; cursor: pointer; font-family: inherit;"
+      type="button"
+    >
+      备份历史 (
+      0
+      )
+    </button>
+  </div>
+  <div
+    data-testid="history-filter-bar"
+    style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated);"
+  >
+    <label
+      data-testid="history-filter-from"
+      style="color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px;"
+    >
+      <span>
+        起始日期
+      </span>
+      <input
+        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
+        type="date"
+        value=""
+      />
+    </label>
+    <label
+      data-testid="history-filter-to"
+      style="color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px;"
+    >
+      <span>
+        结束日期
+      </span>
+      <input
+        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
+        type="date"
+        value=""
+      />
+    </label>
+    <label
+      data-testid="history-filter-project"
+      style="color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px;"
+    >
+      <span>
+        项目
+      </span>
+      <select
+        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
+      >
+        <option
+          value=""
+        >
+          全部
+        </option>
+      </select>
+    </label>
+    <label
+      data-testid="history-filter-provider"
+      style="color: var(--text-muted); font-size: 12px; display: flex; flex-direction: column; gap: 4px;"
+    >
+      <span>
+        Provider
+      </span>
+      <select
+        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
+      >
+        <option
+          value=""
+        >
+          全部
+        </option>
+      </select>
+    </label>
+    <button
+      data-testid="history-filter-reset"
+      style="padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-secondary); font-size: 13px; font-family: inherit; cursor: pointer;"
+      type="button"
+    >
+      重置
+    </button>
+  </div>
+  <div
+    data-testid="usage-history-loading"
+    style="padding: 32px; color: var(--text-muted); font-size: 13px; text-align: center;"
+  >
+    加载中…
+  </div>
+  <div
+    style="margin-top: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"
+  >
+    <label
+      style="color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 6px;"
+    >
+      导出格式:
+      <select
+        data-testid="export-format"
+        style="padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 12px; font-family: inherit;"
+      >
+        <option
+          value="json"
+        >
+          JSON
+        </option>
+        <option
+          value="csv"
+        >
+          CSV
+        </option>
+      </select>
+    </label>
+    <button
+      data-testid="export-btn"
+      style="padding: 6px 14px; border-radius: var(--radius-button); background: var(--accent); color: rgb(255, 255, 255); font-size: 13px; cursor: pointer; font-family: inherit;"
+      type="button"
+    >
+      导出当前视图
+    </button>
+    <span
+      data-testid="history-stats"
+      style="margin-left: auto; color: var(--text-muted); font-size: 11px;"
+      title=""
+    >
+      加载中…
+    </span>
+  </div>
+</div>
+`;

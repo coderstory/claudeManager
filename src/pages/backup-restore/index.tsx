@@ -64,6 +64,7 @@ import {
   sourceLabel,
 } from '../../types/backup';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { useViewState } from '../../hooks/useViewState';
 
 // ---------------------------------------------------------------------------
 // Page state
@@ -100,6 +101,8 @@ const INITIAL_STATE: PageState = {
 
 export default function BackupRestorePage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M4.6 / Phase 21-C — F21 history link-out.
+  const { setView } = useViewState();
 
   // Initial load.
   const refresh = useCallback(async (): Promise<void> => {
@@ -421,6 +424,17 @@ export default function BackupRestorePage(): ReactElement {
           style={toolbarBtn()}
         >
           刷新
+        </button>
+        {/* M4.6 / Phase 21-C — F21 history link: 当前页是 F13 即时
+            时间线,跳转 F21 看 SQLite 持久化的历史(可筛选 / 导出). */}
+        <button
+          onClick={() => {
+            setView('history');
+          }}
+          data-testid="goto-history"
+          style={toolbarBtn()}
+        >
+          查看历史 →
         </button>
         <span
           style={{

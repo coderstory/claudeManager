@@ -47,6 +47,7 @@ import type {
   UsageWindow,
 } from '../../types/usage';
 import { WINDOW_LABELS } from '../../types/usage';
+import { useViewState } from '../../hooks/useViewState';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -79,6 +80,8 @@ const INITIAL_STATE: PageState = {
 
 export default function UsageQueryPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M4.6 / Phase 21-C — F21 history link-out (jump to history tab).
+  const { setView } = useViewState();
 
   // Initial load (5h) — snapshot + history in parallel.
   useEffect(() => {
@@ -262,6 +265,34 @@ export default function UsageQueryPage(): ReactElement {
             最后更新: {lastFetchedLabel}
           </span>
         )}
+        {/* M4.6 / Phase 21-C — F21 link: jump to history page
+            (用量 tab 自动激活). 保持 F7 主流程独立,只是 "长期记录"
+            入口, 不替换 F7 自己的 5 分钟内存缓存 chart. */}
+        <button
+          type="button"
+          onClick={() => setView('history')}
+          data-testid="goto-history"
+          aria-label="查看用量历史"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            borderRadius: 4,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-elevated)',
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 6,
+            paddingBottom: 6,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            marginLeft: 'auto',
+          }}
+        >
+          查看用量历史 →
+        </button>
       </div>
 
       {/* Localised error banner */}

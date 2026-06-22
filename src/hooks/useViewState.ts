@@ -82,6 +82,8 @@ export type ViewId =
   | 'marketplace'
   | 'optimizer'
   | 'backup-restore'
+  // M4.6 / Phase 21-C — F21 history query page (SQLite).
+  | 'history'
   | 'about';
 
 /**
@@ -108,6 +110,8 @@ export const ALL_VIEWS: readonly ViewId[] = [
   'marketplace',
   'optimizer',
   'backup-restore',
+  // M4.6 / Phase 21-C — F21 history page (right before 'about').
+  'history',
   'about',
 ] as const;
 

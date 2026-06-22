@@ -281,6 +281,8 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'marketplace', realTestId: 'marketplace-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },
     { view: 'optimizer', realTestId: 'optimizer-page' },
+    // M4.6 / Phase 21-C — F21 history query page.
+    { view: 'history', realTestId: 'history-page' },
     { view: 'about', realTestId: 'about-page' },
   ] as const;
 
