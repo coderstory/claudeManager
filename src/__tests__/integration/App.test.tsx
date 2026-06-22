@@ -158,14 +158,14 @@ describe('App — view routing integration', () => {
     ).not.toBeNull();
   });
 
-  it('theme toggle button is NOT rendered (M2.16 theme-trim — single light theme)', () => {
-    // M2.16 theme-trim: 主题砍到单档 light,切换按钮已删。此用例
-    // 是回归 guard — 防止后期误把按钮加回(单档无意义切换)。
-    // 如后期重新加多档主题,先在此处恢复 cycleTheme + 按钮,再更新
-    // 本断言。
+  it('theme toggle button IS rendered (v3.0 plugin themes)', () => {
+    // v3.0 主题重构: 主题从单档 light 改为插件式 light + anime,
+    // 切换按钮恢复, 走 ThemeRegistry 的 listThemes() 循环到下一个
+    // 主题(见 AppHeader.tsx 第 ~65 行 themeToggleDisabled 分支)。
+    // 本用例是回归 guard — 防止后期误把按钮删掉(2 套主题无按钮无法切换)。
     renderApp();
     const toggle = screen.queryByTestId('app-header-theme-toggle');
-    expect(toggle).toBeNull();
+    expect(toggle).not.toBeNull();
   });
 
   it('clicking the same sidebar item twice does not push duplicates to localStorage', () => {
