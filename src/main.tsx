@@ -4,6 +4,9 @@ import "./design-system/tokens.css";
 // HomeView, QuickSearchModal, UsageQueryPage, SingleFileDeployPage.
 // See src/design-system/utilities.css for the full rationale.
 import "./design-system/utilities.css";
+// v3.0 主题专属 CSS (静态 import, 不走 glob — CSS 必须 eager)
+import "./design-system/themes/light.css";
+import "./design-system/themes/anime.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";

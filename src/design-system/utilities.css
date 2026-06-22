@@ -1,3 +1,11 @@
+/* === prefers-reduced-motion (v3.0) === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* === M2.x inline-Tailwind utility classes — shared style block ===
  *
  * Why this file exists

@@ -1,0 +1,139 @@
+/* 二次元主题专属规则 — 全部用 [data-theme="anime"] 前缀, 0 通用污染 */
+
+/* ── 卡片 ── */
+[data-theme="anime"] .card {
+  border-width: var(--card-border-width);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="anime"] .card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: #99F6E4;
+  transition: transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 200ms ease, border-color 200ms ease;
+}
+
+/* ── 按钮 ── */
+[data-theme="anime"] .btn {
+  border-width: 2px;
+  border-radius: var(--button-radius);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(6, 182, 212, 0.10);
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 150ms ease, background-color 150ms ease;
+}
+[data-theme="anime"] .btn:hover { transform: translateY(-2px); }
+[data-theme="anime"] .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="anime"] .btn-primary:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+/* ── 列表行 ── */
+[data-theme="anime"] .list-row {
+  padding: 14px 18px;
+}
+[data-theme="anime"] .list-row:hover {
+  transform: translateY(-3px) rotate(-0.3deg);
+  box-shadow: var(--shadow-md);
+  border-color: #99F6E4;
+}
+[data-theme="anime"] .list-row.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ── badge ── */
+[data-theme="anime"] .badge {
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 2px solid;
+  height: 22px;
+  box-sizing: border-box;
+}
+[data-theme="anime"] .badge-active {
+  border-color: #fff;
+}
+
+/* ── 标题栏 ── */
+[data-theme="anime"] .titlebar {
+  background: var(--accent);
+  border-bottom: 2px solid #fff;
+}
+[data-theme="anime"] .titlebar h1 {
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+/* ── 侧边栏 ── */
+[data-theme="anime"] .sidebar .nav-item {
+  padding: 10px 14px;
+  border-radius: 16px;
+  border-left: none;
+  margin: 0 8px 4px;
+}
+[data-theme="anime"] .sidebar .nav-item:hover {
+  background: rgba(34, 211, 238, 0.15);
+  transform: translateX(2px);
+}
+[data-theme="anime"] .sidebar .nav-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+[data-theme="anime"] .sidebar .nav-item.active svg {
+  color: #fff;
+}
+
+/* ── Provider avatar ── */
+[data-theme="anime"] .provider-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── h1/h2 ── */
+[data-theme="anime"] h1, [data-theme="anime"] h2 {
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-weight: 600;
+}
+[data-theme="anime"] h2 { color: var(--accent); }
+
+/* ── KPI ── */
+[data-theme="anime"] .kpi { padding: 18px 20px; }
+[data-theme="anime"] .kpi .kpi-label { font-weight: 700; }
+[data-theme="anime"] .kpi .kpi-value {
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-weight: 600;
+}
+
+/* ── bar ── */
+[data-theme="anime"] .bar {
+  height: 10px;
+  background: var(--accent-soft);
+  border-radius: 5px;
+}
+[data-theme="anime"] .bar > span {
+  border-radius: 5px;
+  transition: width 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Page transition ── */
+@keyframes bounceIn {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.98); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+[data-theme="anime"] .page {
+  animation: bounceIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
