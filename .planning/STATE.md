@@ -37,8 +37,8 @@ Next: /gsd-new-milestone 启动 v3.0 (M4.x 公证发布), 或 M3.10-adapter back
 
 ## Known Issues (Remaining, post-v2.0)
 
-- M4.1 证书 (代码签名) — 需用户拍板采购
-- M4.5 应用商店上架 — 用户拍板 (Microsoft Store / Mac App Store)
+- M4.1 证书 (代码签名) — 已拍板：都不买（2026-06-22 用户口头确认）→ M4.2/M4.4 暂缓
+- M4.5 应用商店上架 — 已拍板：不上架（2026-06-22 用户口头确认）→ M4.5 取消
 - D6 Mac 真机验证 — 暂缓, M4 启动前再问
 - 17 MEDIUM/LOW M2.16 限制已逐条评估 (D10), v2.0 关闭期归档
 
