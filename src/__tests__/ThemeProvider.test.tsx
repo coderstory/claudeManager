@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, renderHook } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, useTheme } from '../design-system/ThemeProvider';
 import type { ReactElement } from 'react';
@@ -80,5 +80,13 @@ describe('ThemeProvider', () => {
     localStorage.setItem('ccm.theme', 'anime');
     render(<ThemeProvider><Consumer /></ThemeProvider>);
     expect(screen.getByTestId('current-id').textContent).toBe('anime');
+  });
+
+  it('useTheme() throws when used outside ThemeProvider', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => renderHook(() => useTheme())).toThrow(
+      /useTheme must be used inside <ThemeProvider>/,
+    );
+    errSpy.mockRestore();
   });
 });
