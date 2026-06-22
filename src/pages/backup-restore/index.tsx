@@ -449,9 +449,9 @@ export default function BackupRestorePage(): ReactElement {
                     background: isSelected
                       ? 'rgba(9, 105, 218, 0.08)'
                       : 'transparent',
-                    borderLeft: isSelected
-                      ? '3px solid var(--accent)'
-                      : '3px solid transparent',
+                    border: 'var(--card-border-width) solid transparent',
+                    borderLeft: 'var(--card-border-width) solid var(--accent)',
+                    borderColor: isSelected ? 'var(--accent)' : 'transparent',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
@@ -748,7 +748,8 @@ function DiffView({ entries }: { entries: DiffEntry[] }): ReactElement {
                   : e.op === 'remove'
                     ? 'rgba(211, 47, 47, 0.08)'
                     : 'rgba(245, 124, 0, 0.06)',
-              borderLeft: `3px solid ${
+              border: 'var(--card-border-width) solid transparent',
+              borderLeft: `var(--card-border-width) solid ${
                 e.op === 'add'
                   ? 'var(--success)'
                   : e.op === 'remove'
