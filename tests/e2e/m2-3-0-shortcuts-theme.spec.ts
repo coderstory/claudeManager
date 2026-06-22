@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { execSync } from 'child_process'
 
 // NOTE: do NOT kill app in afterAll — playwright test 1..4 share the

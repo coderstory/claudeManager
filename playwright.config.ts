@@ -14,7 +14,24 @@ import { defineConfig, devices } from '@playwright/test';
  *   a Node server — it's a native process started by tauri-driver. CI
  *   launches the app explicitly before running Playwright (see
  *   .github/workflows/ci.yml).
+ *
+ * ## Dev-box mode (PLAYWRIGHT_BASE_URL env var)
+ *
+ * Tauri's official WebDriver path needs tauri-driver + msedgedriver +
+ * WebDriverIO (Playwright cannot natively speak WebDriver — only CDP).
+ * On a dev box without that full stack, the e2e specs can still run
+ * against the Vite dev server (`npm run dev` at http://localhost:1420)
+ * by setting `PLAYWRIGHT_BASE_URL=http://localhost:1420`. This covers
+ * the DOM/layout/React-mount dimensions of every spec; specs that poke
+ * `window.__TAURI_INTERNALS__.invoke(...)` will skip themselves with a
+ * clear message because the IPC bridge is only present in the Tauri
+ * WebView, not in a bare Chromium.
+ *
+ * The tauri://localhost default is preserved so the CI path stays
+ * unchanged when the env var is absent.
  */
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'tauri://localhost';
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -22,7 +39,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'tauri://localhost',
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
   },
   projects: [

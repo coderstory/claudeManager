@@ -11,7 +11,7 @@
  * (Tauri release build has CDP disabled, so dev mode is the canonical
  * "what the webview shows" path).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 const DIAG_DIR = '.planning/diagnostics/m1-9-2-layout';
 

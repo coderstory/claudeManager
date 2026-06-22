@@ -12,7 +12,7 @@
  * 严禁 page.screenshot (本 subagent 模型 text-only, 不能读 PNG)。
  * 只用 DOM probe (page.evaluate) + getBoundingClientRect。
  */
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { execSync } from 'child_process'
 
 test.afterAll(() => {
