@@ -56,6 +56,12 @@ pub enum BackupError {
 
     #[error("atomic write failed: {0}")]
     AtomicWrite(String),
+
+    /// M3.12 — `active_root_dir` 接入。`restore_backup` 在
+    /// `Some(root)` + root 不存在时拒绝还原(避免 mkdir 未知路径,
+    /// 与 F18 apply_optimizations 安全边界对齐)。
+    #[error("active root 目录不存在: {0} (拒绝还原,避免写入未知路径)")]
+    ActiveRootMissing(PathBuf),
 }
 
 // ---------------------------------------------------------------------------
@@ -92,9 +98,27 @@ impl BackupService {
     ///
     /// Each directory is scanned independently. A missing directory
     /// is not an error — we just skip it.
-    pub fn list_backups(&self) -> Vec<BackupEntry> {
+    ///
+    /// ## M3.12 (A1#6) — `active_root_dir` 接入
+    ///
+    /// - `None` = user-level / system project; scans the same set
+    ///   as M2.6 (backups + `~/.claude/`).
+    /// - `Some(root)` = project mode; also scans `<root>/.claude/`
+    ///   (the active project's `.claude/` directory). The project's
+    ///   `.bak.<ts>` snapshots — taken by F18 apply_optimizations
+    ///   when in project mode — surface in the F13 timeline.
+    ///
+    /// The user's intent is "show me every backup that could belong
+    /// to this scope" — so the project dir is ADDED to the scan list
+    /// rather than REPLACING the user-level scan (the user may have
+    /// both project and user-level backups; both belong to the
+    /// timeline of the active scope).
+    pub fn list_backups(
+        &self,
+        active_root_dir: Option<&Path>,
+    ) -> Vec<BackupEntry> {
         let mut all: Vec<BackupEntry> = Vec::new();
-        for dir in self.allowed_directories() {
+        for dir in self.allowed_directories_for_active_root(active_root_dir) {
             match backup_scanner::scan_backups_in(&dir) {
                 Ok(entries) => all.extend(entries),
                 Err(e) => {
@@ -122,8 +146,17 @@ impl BackupService {
 
     /// Read a single backup file's content. The path is validated
     /// against the allow-list first.
-    pub fn read_backup_content(&self, path: &Path) -> Result<String, BackupError> {
-        let safe = self.resolve_safe_path(path)?;
+    ///
+    /// ## M3.12 (A1#6) — `active_root_dir` 接入
+    /// `active_root_dir = Some(root)` 扩展 allow-list 到
+    /// `<root>/.claude/`,允许读项目级 `.bak.<ts>` 文件。
+    /// `None` 保持 M2.6 行为。
+    pub fn read_backup_content(
+        &self,
+        path: &Path,
+        active_root_dir: Option<&Path>,
+    ) -> Result<String, BackupError> {
+        let safe = self.resolve_safe_path_for_active_root(path, active_root_dir)?;
         let content = std::fs::read_to_string(&safe)?;
         Ok(content)
     }
@@ -136,13 +169,18 @@ impl BackupService {
     /// valid — `diff_backups(a, b)` is the same entries as
     /// `diff_backups(b, a)` with `Add` ↔ `Remove` and `Change`
     /// preserved (we don't swap — caller decides which is "old").
+    ///
+    /// ## M3.12 (A1#6) — `active_root_dir` 接入
+    /// `active_root_dir = Some(root)` 扩展 allow-list 到
+    /// `<root>/.claude/`,允许 diff 项目级 `.bak.<ts>`。
     pub fn diff_backups(
         &self,
         path1: &Path,
         path2: &Path,
+        active_root_dir: Option<&Path>,
     ) -> Result<Vec<DiffEntry>, BackupError> {
-        let p1 = self.resolve_safe_path(path1)?;
-        let p2 = self.resolve_safe_path(path2)?;
+        let p1 = self.resolve_safe_path_for_active_root(path1, active_root_dir)?;
+        let p2 = self.resolve_safe_path_for_active_root(path2, active_root_dir)?;
         let a = std::fs::read_to_string(&p1)?;
         let b = std::fs::read_to_string(&p2)?;
         // If either file is not valid JSON, return an empty diff
@@ -162,7 +200,8 @@ impl BackupService {
     ///
     /// # Algorithm (CLAUDE.md §7 "回滚操作也要先备份当前文件")
     ///
-    /// 1. Validate the backup path is inside an allowed dir.
+    /// 1. Validate the backup path is inside an allowed dir
+    ///    (with active_root expansion, see M3.12 notes).
     /// 2. Reconstruct the original file path (strip `.bak.<ts>`).
     /// 3. Read the backup content.
     /// 4. If the original file exists, copy it to
@@ -171,8 +210,39 @@ impl BackupService {
     /// 5. Atomic write the backup content to the original location
     ///    via `fs_atomic::write_with_backup` (which itself takes a
     ///    `.bak.<ts>` first — so we end up with two safety nets).
-    pub fn restore_backup(&self, backup_path: &Path) -> Result<(), BackupError> {
-        let safe = self.resolve_safe_path(backup_path)?;
+    ///
+    /// ## M3.12 (A1#8) — `active_root_dir` 接入
+    ///
+    /// The active project mode may route the restored file to
+    /// `<active_root>/.claude/settings.json` instead of
+    /// `<home>/.claude/settings.json`:
+    ///
+    /// - `None` = user-level; restore to M2.6 location (cached
+    ///   `paths.settings_json` parent).
+    /// - `Some(root)` = project mode; restore target lives under
+    ///   `<root>/.claude/`. The `<root>/.claude/` dir is added to
+    ///   the allow-list so the `.bak.<ts>` file there is readable.
+    ///
+    /// **Safety boundary** (CLAUDE.md §7, mirrors F18
+    /// apply_optimizations): when `active_root_dir = Some(root)`
+    /// and `root` does not exist on disk, the restore is REJECTED
+    /// with `BackupError::ActiveRootMissing`. We do NOT auto-mkdir
+    /// the unknown root — that would let a stale UI state silently
+    /// materialize an unwanted directory tree.
+    pub fn restore_backup(
+        &self,
+        backup_path: &Path,
+        active_root_dir: Option<&Path>,
+    ) -> Result<(), BackupError> {
+        // Safety boundary: refuse to write into a root that
+        // doesn't exist (拒绝 mkdir). Mirrors F18
+        // apply_optimizations:165-191 safety block.
+        if let Some(root) = active_root_dir {
+            if !root.exists() {
+                return Err(BackupError::ActiveRootMissing(root.to_path_buf()));
+            }
+        }
+        let safe = self.resolve_safe_path_for_active_root(backup_path, active_root_dir)?;
         let original = reconstruct_original(&safe).ok_or_else(|| {
             BackupError::CannotReconstruct(safe.clone())
         })?;
@@ -285,13 +355,29 @@ impl BackupService {
     /// Confirm `path` lives under one of the allowed directories.
     /// Rejects `..` traversal and absolute paths to other drives.
     fn resolve_safe_path(&self, path: &Path) -> Result<PathBuf, BackupError> {
+        self.resolve_safe_path_for_active_root(path, None)
+    }
+
+    /// M3.12 (A1#6+A1#8) — `active_root_dir` aware allow-list check.
+    ///
+    /// When `active_root_dir = Some(root)`, the allow-list is
+    /// expanded to include `<root>/.claude/`, so project-level
+    /// `.bak.<ts>` files (taken by F18 apply_optimizations in
+    /// project mode) are readable. The safety check itself is
+    /// identical to `resolve_safe_path` — same canonicalize +
+    /// `starts_with` walk.
+    fn resolve_safe_path_for_active_root(
+        &self,
+        path: &Path,
+        active_root_dir: Option<&Path>,
+    ) -> Result<PathBuf, BackupError> {
         // Canonicalize when possible so we catch `..` and symlink
         // games. If the file doesn't exist, fall back to lexical
         // comparison on the parent.
         let candidate = std::fs::canonicalize(path)
             .unwrap_or_else(|_| path.to_path_buf());
 
-        for allowed in self.allowed_directories() {
+        for allowed in self.allowed_directories_for_active_root(active_root_dir) {
             // If `allowed` exists, canonicalize it; otherwise use
             // the lex form.
             let allowed_root = std::fs::canonicalize(&allowed)
@@ -444,7 +530,7 @@ mod tests {
         let (s_old, s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
-        let list = svc.list_backups();
+        let list = svc.list_backups(None);
         assert!(list.len() >= 3, "got {} entries: {list:?}", list.len());
         // Newest first: 14:00:00 > 13:00:00 > 12:00:00
         let ts: Vec<_> = list.iter().map(|e| e.timestamp_unix).collect();
@@ -465,7 +551,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let settings = tmp.path().join("settings.json");
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
-        let list = svc.list_backups();
+        let list = svc.list_backups(None);
         assert!(list.is_empty());
     }
 
@@ -479,7 +565,7 @@ mod tests {
         let (_s_old, s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
-        let content = svc.read_backup_content(&s_new).unwrap();
+        let content = svc.read_backup_content(&s_new, None).unwrap();
         assert!(content.contains("https://mid"));
     }
 
@@ -491,7 +577,7 @@ mod tests {
         // A random temp file outside both allowed dirs.
         let outside = tmp.path().join("not-a-backup.txt");
         fs::write(&outside, b"hi").unwrap();
-        let err = svc.read_backup_content(&outside).unwrap_err();
+        let err = svc.read_backup_content(&outside, None).unwrap_err();
         assert!(matches!(err, BackupError::PathNotAllowed(_)));
     }
 
@@ -505,7 +591,7 @@ mod tests {
         let (s_old, s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
-        let d = svc.diff_backups(&s_old, &s_new).unwrap();
+        let d = svc.diff_backups(&s_old, &s_new, None).unwrap();
         assert_eq!(d.len(), 1);
         assert_eq!(d[0].path, "env.ANTHROPIC_BASE_URL");
         assert_eq!(d[0].old.as_ref().unwrap(), &serde_json::json!("https://old"));
@@ -521,7 +607,7 @@ mod tests {
         // Corrupt the new file.
         fs::write(&s_new, b"not json").unwrap();
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
-        let d = svc.diff_backups(&s_old, &s_new).unwrap();
+        let d = svc.diff_backups(&s_old, &s_new, None).unwrap();
         assert!(d.is_empty(), "non-JSON diff returns empty: {d:?}");
     }
 
@@ -535,7 +621,7 @@ mod tests {
         let (s_old, _s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
-        svc.restore_backup(&s_old).unwrap();
+        svc.restore_backup(&s_old, None).unwrap();
 
         // The live file is now the OLD content (from s_old backup).
         let live = fs::read_to_string(&settings).unwrap();
@@ -564,7 +650,7 @@ mod tests {
         let (s_old, _s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
-        svc.restore_backup(&s_old).unwrap();
+        svc.restore_backup(&s_old, None).unwrap();
 
         // fs_atomic's own `.bak.<ts>` should also exist.
         let mut count = 0;
@@ -585,7 +671,7 @@ mod tests {
 
         let outside = tmp.path().join("not-a-backup.txt");
         fs::write(&outside, b"hi").unwrap();
-        let err = svc.restore_backup(&outside).unwrap_err();
+        let err = svc.restore_backup(&outside, None).unwrap_err();
         assert!(matches!(err, BackupError::PathNotAllowed(_)));
     }
 
@@ -598,7 +684,7 @@ mod tests {
         let svc = BackupService::new(test_paths(tmp.path(), &settings));
 
         let missing = claude_dir.join("settings.json.bak.20990101-000000");
-        let err = svc.restore_backup(&missing).unwrap_err();
+        let err = svc.restore_backup(&missing, None).unwrap_err();
         assert!(matches!(err, BackupError::NotFound(_)));
     }
 
@@ -670,5 +756,171 @@ mod tests {
         let ghost = PathBuf::from("/this/does/not/exist");
         let got = svc.claude_dir_for_active_root(Some(&ghost));
         assert_eq!(got, PathBuf::from("/this/does/not/exist/.claude"));
+    }
+
+    // ----- M3.12 adapter (A1#6+A1#8) — F13 list_backups + F19 restore_backup -----
+
+    /// F13 list_backups 场景 1: `active_root = None` (用户级 / system project)。
+    /// 扫描 `<backups_dir>` + `<user_claude_dir>`,与 M2.6 行为一致。
+    #[test]
+    fn list_backups_with_active_root_none_scans_user_level() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (_s_old, s_new, archived) = seed_backups(tmp.path(), &claude_dir);
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let list = svc.list_backups(None);
+
+        // 三个 seed_backup 写入的 backup 都应出现(用户级扫描)。
+        assert!(list.iter().any(|e| e.path == s_new));
+        assert!(list.iter().any(|e| e.path == archived));
+    }
+
+    /// F13 list_backups 场景 2: `active_root = Some(<root>)` (项目模式)。
+    /// 扫描 `<backups_dir>` + `<user_claude_dir>` + `<root>/.claude/`。
+    /// 项目级 `.claude/` 下的 `.bak.<ts>` 必须出现在时间线里。
+    #[test]
+    fn list_backups_with_active_root_some_includes_project_backups() {
+        let tmp = TempDir::new().unwrap();
+        let user_claude_dir = tmp.path().join("claude");
+        let user_settings = user_claude_dir.join("settings.json");
+        let (_s_old, _s_new, _archived) = seed_backups(tmp.path(), &user_claude_dir);
+
+        // 创建项目级 .claude/ 并放一个 .bak.<ts>。
+        let project_root = tmp.path().join("myproj");
+        let project_claude = project_root.join(".claude");
+        std::fs::create_dir_all(&project_claude).unwrap();
+        let project_live = project_claude.join("settings.json");
+        fs::write(&project_live, br#"{"env":{"ANTHROPIC_BASE_URL":"https://proj-now"}}"#).unwrap();
+        let project_bak = project_claude.join("settings.json.bak.20260619-150000");
+        fs::write(&project_bak, br#"{"env":{"ANTHROPIC_BASE_URL":"https://proj-past"}}"#).unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &user_settings));
+        let list = svc.list_backups(Some(&project_root));
+
+        // 项目级 backup 必须出现在时间线里。
+        assert!(
+            list.iter().any(|e| e.path == project_bak),
+            "project-level .bak.<ts> must appear in scan with active_root=Some, list: {list:?}"
+        );
+        // 用户级 backup 仍然可见 (list 是 ADD 语义,不是 REPLACE)。
+        assert!(list.iter().any(|e| e.path == _s_new));
+    }
+
+    /// F19 restore_backup 场景 3: `active_root = None` (用户级 / 向后兼容)。
+    /// 还原到 `<home>/.claude/settings.json` (用户级),与 M2.6 行为一致。
+    #[test]
+    fn restore_backup_with_active_root_none_restores_to_user_level() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (s_old, _s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        svc.restore_backup(&s_old, None).unwrap();
+
+        // 用户级 settings.json 现在是 s_old 的内容。
+        let live = fs::read_to_string(&settings).unwrap();
+        assert!(
+            live.contains("https://old"),
+            "user-level settings.json must contain restored content, got: {live}"
+        );
+    }
+
+    /// F19 restore_backup 场景 4: `active_root = Some(<root>)` (项目模式)。
+    /// 还原到 `<root>/.claude/settings.json`,用户级文件**不**被改写。
+    /// 还要保留 double-backup (pre-restore + fs_atomic .bak.<ts>)。
+    #[test]
+    fn restore_backup_with_active_root_some_restores_to_project_level() {
+        let tmp = TempDir::new().unwrap();
+        let user_claude_dir = tmp.path().join("claude");
+        let user_settings = user_claude_dir.join("settings.json");
+        let (_s_old, _s_new, _archived) = seed_backups(tmp.path(), &user_claude_dir);
+
+        // 创建项目级 .claude/,有 settings.json 和一个 .bak.<ts>。
+        let project_root = tmp.path().join("myproj");
+        let project_claude = project_root.join(".claude");
+        std::fs::create_dir_all(&project_claude).unwrap();
+        let project_live = project_claude.join("settings.json");
+        fs::write(&project_live, br#"{"env":{"ANTHROPIC_BASE_URL":"https://proj-new"}}"#).unwrap();
+        let project_bak = project_claude.join("settings.json.bak.20260619-150000");
+        fs::write(
+            &project_bak,
+            br#"{"env":{"ANTHROPIC_BASE_URL":"https://proj-old"}}"#,
+        )
+        .unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &user_settings));
+        svc.restore_backup(&project_bak, Some(&project_root)).unwrap();
+
+        // 项目级 settings.json 现在是 backup 的内容 (proj-old)。
+        let live = fs::read_to_string(&project_live).unwrap();
+        assert!(
+            live.contains("https://proj-old"),
+            "project-level settings.json must contain restored content, got: {live}"
+        );
+        // 用户级 settings.json **不**被改写 (仍是 seed_backups 写入的 "new")。
+        let user_live = fs::read_to_string(&user_settings).unwrap();
+        assert!(
+            user_live.contains("https://new"),
+            "user-level settings.json must NOT be touched by project-mode restore, got: {user_live}"
+        );
+        // pre-restore double-backup 存在(里面是 proj-new)。
+        let mut found_pre = false;
+        for entry in fs::read_dir(&project_claude).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name().into_string().unwrap();
+            if name.contains(".bak.pre-restore.") {
+                found_pre = true;
+                let body = fs::read_to_string(entry.path()).unwrap();
+                assert!(
+                    body.contains("https://proj-new"),
+                    "pre-restore backup must hold pre-restore content (proj-new), got: {body}"
+                );
+            }
+        }
+        assert!(found_pre, "pre-restore backup must exist for project-mode restore");
+    }
+
+    /// F19 restore_backup 场景 5: `active_root = Some(<ghost>)` + root 不存在。
+    /// 拒绝还原 + 返回 `ActiveRootMissing` + **不**mkdir 未知 root。
+    /// (与 F18 apply_optimizations 安全边界对齐,见 `optimizer_service.rs:178-191`)。
+    #[test]
+    fn restore_backup_with_active_root_missing_dir_rejects_and_does_not_mkdir() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (s_old, _s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
+
+        // ghost root 不存在
+        let ghost = tmp.path().join("does_not_exist_yet");
+        assert!(!ghost.exists(), "ghost root must not exist before call");
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let err = svc
+            .restore_backup(&s_old, Some(&ghost))
+            .expect_err("restore into nonexistent root must be rejected");
+
+        // 错误类型必须是 ActiveRootMissing (新增 variant)。
+        match err {
+            BackupError::ActiveRootMissing(p) => {
+                assert_eq!(p, ghost, "error path must point at the missing root");
+            }
+            other => panic!("expected ActiveRootMissing, got: {other:?}"),
+        }
+
+        // ghost root 仍然不存在 — service 不能 mkdir 未知路径。
+        assert!(
+            !ghost.exists(),
+            "service must NOT auto-mkdir the unknown active root"
+        );
+
+        // 用户级 settings.json 也**不**被改写 (还原被拒绝)。
+        let user_live = fs::read_to_string(&settings).unwrap();
+        assert!(
+            user_live.contains("https://new"),
+            "user-level settings.json must be untouched after rejected restore, got: {user_live}"
+        );
     }
 }

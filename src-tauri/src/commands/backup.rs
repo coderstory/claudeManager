@@ -17,21 +17,36 @@ type CmdResult<T> = Result<T, String>;
 
 /// F13 — list all backups across all allowed directories, newest
 /// first. An empty list is not an error.
+///
+/// M3.12 (A1#6) — when a project is active, also include the
+/// project's `.claude/` directory in the scan list (project-level
+/// `.bak.<ts>` snapshots taken by F18 apply_optimizations in
+/// project mode show up here).
 #[tauri::command]
 pub async fn list_backups(state: State<'_, AppState>) -> CmdResult<Vec<BackupEntry>> {
-    Ok(state.backup_service.list_backups())
+    // M3.12 — read live active root (state.paths is a startup
+    // snapshot; active_root can change at runtime).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    Ok(state.backup_service.list_backups(active_root.as_deref()))
 }
 
 /// F13 — read the full text content of a single backup file.
 /// The path is validated against the allow-list before any read.
+///
+/// M3.12 (A1#6) — allow-list is expanded with the active project's
+/// `.claude/` when a project is active.
 #[tauri::command]
 pub async fn read_backup_content(
     state: State<'_, AppState>,
     path: String,
 ) -> CmdResult<String> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .backup_service
-        .read_backup_content(std::path::Path::new(&path))
+        .read_backup_content(
+            std::path::Path::new(&path),
+            active_root.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
@@ -42,22 +57,38 @@ pub async fn diff_backups(
     path1: String,
     path2: String,
 ) -> CmdResult<Vec<DiffEntry>> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .backup_service
-        .diff_backups(std::path::Path::new(&path1), std::path::Path::new(&path2))
+        .diff_backups(
+            std::path::Path::new(&path1),
+            std::path::Path::new(&path2),
+            active_root.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
 /// F13 — restore a backup to its original location. Takes a
 /// double-backup of the current file first (CLAUDE.md §7).
+///
+/// M3.12 (A1#8) — when a project is active, the restore target is
+/// routed to `<active_root>/.claude/settings.json` (user-level file
+/// is left untouched). If `<active_root>` does not exist on disk the
+/// restore is REJECTED with `BackupError::ActiveRootMissing` (the
+/// service does NOT auto-mkdir the unknown root, mirroring F18
+/// apply_optimizations safety boundary).
 #[tauri::command]
 pub async fn restore_backup(
     state: State<'_, AppState>,
     backup_path: String,
 ) -> CmdResult<()> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .backup_service
-        .restore_backup(std::path::Path::new(&backup_path))
+        .restore_backup(
+            std::path::Path::new(&backup_path),
+            active_root.as_deref(),
+        )
         .map_err(|e| e.to_string())
 }
 
