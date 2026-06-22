@@ -1,0 +1,18 @@
+# Milestones Archive Index
+
+| Version | Name | Shipped | Phases | Tag | Notes |
+|---|---|---|---|---|---|
+| v1.0 | 架构期 (M1.1~M1.12) | 2026-06-19 | 12 | - | Tauri v2 scaffold + OS 抽象 + plugin host + TDD |
+| v1.5 | 业务期 (M2.1~M2.16) | 2026-06-21 | 16 | - | F1~F16 全功能 ship |
+| **v2.0** | **用户反馈修复 + 双模式 (M2.17 + M3.1~M3.10)** | **2026-06-22** | **11** | **v2.0** | **27 条清单全修复 + M3.10 双模式架构 + D14 cc-switch JSONL** |
+
+## v2.0 关键产物
+- 12 个 ship exe (~30 MB each) 在 `~/Desktop/ClaudeConfigManager-M3/`
+- 11 phase SUMMARY 在 `.planning/phases/`
+- v2.0-MILESTONE-AUDIT.md (status=passed, D8 user OK)
+- 3 个 session 沉淀 (feedback/gsd-planning-fits / pattern/ship-and-commit-stall-recovery / feedback/tauri-cargo-test-status-entrypoint)
+
+## v2.0 → v3.0 backlog
+- M3.10-adapter 8 medium + 2 low 适配点 (M3.11~M3.15)
+- macOS 真实环境验证 (D6, M4 启动前再问)
+- M4.5 应用商店上架 (D14-2, M4 启动前再问)

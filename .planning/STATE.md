@@ -17,9 +17,11 @@ last_updated: 2026-06-22
 
 ## Current Position
 
-Phase: 11/11 complete
-Last ship: M3.8 usage query (D14 = D 选 cc-switch JSONL)
-Next: v2.0 milestone complete (audit → cleanup) or v3.0 公证 (M4.x) 启动
+Phase: Milestone v2.0 complete (11/11 phases shipped)
+Plan: —
+Status: Awaiting next milestone (v3.0)
+Last activity: 2026-06-22 — Milestone v2.0 completed and archived (gsd-tools milestone complete + MILESTONES.md hand-curated)
+Next: /gsd-new-milestone 启动 v3.0 (M4.x 公证发布), 或 M3.10-adapter backlog (M3.11~M3.15)
 
 ## Recent Work
 
