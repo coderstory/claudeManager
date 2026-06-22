@@ -46,3 +46,19 @@ export function backupNow(target?: string): Promise<ManualBackupResult> {
   const args = target === undefined ? {} : { target };
   return invoke<ManualBackupResult>('backup_now', args);
 }
+
+/**
+ * M4.6.13 — permanently delete a single backup file.
+ *
+ * Backend `commands::backup::delete_backup` validates the path is
+ * inside an allow-list dir (`<app_data>/backups/` or
+ * `~/.claude/`, with active_root expansion) before any FS change,
+ * then moves the file into a sibling `.trash/` dir (renamed with
+ * a unique suffix) and removes the trash entry.
+ *
+ * `path` is the absolute path of the backup file — the same
+ * string returned in `BackupEntry.path` by `listBackups`.
+ */
+export function deleteBackup(path: string): Promise<void> {
+  return invoke<void>('delete_backup', { path });
+}

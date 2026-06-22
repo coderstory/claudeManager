@@ -122,6 +122,9 @@ pub fn run() {
             // M2.16 — F20 冷启动 .sql 路径取走(setup 阶段 webview 未挂,
             // emit 会丢,改用 state 缓存 + 前端 mount 后主动拉取)。
             commands::fs::take_pending_sql_file,
+            // M3.11 (A4#12) — F5 JSON 编辑器文件目录树(白名单扫描
+            // ~/.claude/ + active project 的 .claude/)。
+            commands::fs::list_editable_jsons,
             commands::mcp::list_mcp_servers,
             commands::mcp::list_mcp_servers_with_warnings,
             commands::mcp::toggle_mcp_server,
@@ -135,6 +138,8 @@ pub fn run() {
             commands::backup::restore_backup,
             commands::backup::backup_now,
             commands::backup::backup_incremental,
+            // M4.6.13 — delete single backup (trash + rm, allow-list checked)
+            commands::backup::delete_backup,
             commands::usage::get_current_usage,
             commands::usage::refresh_usage,
             // M3.8 — usage history (per-day per-model) for chart

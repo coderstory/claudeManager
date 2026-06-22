@@ -32,7 +32,7 @@
  * - **Diff visual**: green-50 background for Add, red-50 for
  *   Remove, amber-50 for Change — matches the SPEC §5.8 palette.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   Archive,
@@ -43,6 +43,7 @@ import {
   Minimize2,
   RotateCcw,
   Save,
+  Trash2,
 } from 'lucide-react';
 import type {
   BackupEntry,
@@ -51,6 +52,7 @@ import type {
 } from '../../types/backup';
 import {
   backupNow,
+  deleteBackup,
   diffBackups,
   listBackups,
   readBackupContent,
@@ -239,9 +241,67 @@ export default function BackupRestorePage(): ReactElement {
     }
   }, [refresh]);
 
+  // ---- delete ----
+  //
+  // M4.6.13: 用户要求备份页支持删除。两次确认：
+  //   1. window.confirm — 防误删（CLAUDE.md §7 destructive ops
+  //      必须经用户明确同意）。
+  //   2. 后端 trash + rm（保留可恢复性）。
+  //
+  // 删除后:乐观更新 entries(把已删的 path 过滤掉),也再调一次
+  // refresh 确保与磁盘一致(用户可能手动 mv/cp,等等)。
+
+  const handleDelete = useCallback(
+    async (path: string): Promise<void> => {
+      const ok = window.confirm(
+        '删除备份将永久移入回收目录(同目录下的 .trash/)并从列表移除。\n\n此操作无法撤销,确认继续?',
+      );
+      if (!ok) return;
+      try {
+        await deleteBackup(path);
+        setState((prev) => ({
+          ...prev,
+          // 乐观更新:立刻把已删的 path 从 entries / selected /
+          // detail 里抹掉,UI 不会短暂"看起来还在"。
+          entries: prev.entries.filter((e) => e.path !== path),
+          selected: prev.selected.filter((p) => p !== path),
+          detail:
+            prev.detail && prev.detail.path === path ? null : prev.detail,
+          message: { kind: 'success', text: '已删除' },
+        }));
+        // 二次校验:与磁盘对齐(用户若在外部也删了,状态要一致)。
+        await refresh();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setState((prev) => ({
+          ...prev,
+          message: { kind: 'error', text: `删除失败: ${msg}` },
+        }));
+      }
+    },
+    [refresh],
+  );
+
+  // ---- M4.6.13 — frontend dedupe safeguard ----
+  //
+  // 后端 `list_backups` 在 M4.6.13 已经按 canonical path 去重
+  // （同一 inode 只出现一次）。但 React strict mode 会双调用某些
+  // 副作用,未来若后端 dedupe 出 bug,前端也兜底一次,避免 UI 上
+  // 出现重复行。用 useMemo 缓存,只在 entries 引用变化时重算。
+  const dedupedEntries = useMemo<BackupEntry[]>(() => {
+    const seen = new Set<string>();
+    const out: BackupEntry[] = [];
+    for (const e of state.entries) {
+      if (seen.has(e.path)) continue;
+      seen.add(e.path);
+      out.push(e);
+    }
+    return out;
+  }, [state.entries]);
+
   // ---- render ----
 
-  const isEmpty = !state.loading && state.entries.length === 0;
+  const isEmpty = !state.loading && dedupedEntries.length === 0;
 
   return (
     <div
@@ -318,6 +378,17 @@ export default function BackupRestorePage(): ReactElement {
             ...toolbarBtn(),
             opacity: state.detail || state.diff ? 1 : 0.5,
             cursor: state.detail || state.diff ? 'pointer' : 'not-allowed',
+            // M4.6.13 — active 全屏状态用 accent 边框 + bg 标记,
+            // 让用户能看到"当前在全屏模式"而不是按钮变灰。
+            borderColor: state.detailFullscreen
+              ? 'var(--accent)'
+              : undefined,
+            background: state.detailFullscreen
+              ? 'rgba(9, 105, 218, 0.08)'
+              : undefined,
+            color: state.detailFullscreen
+              ? 'var(--accent)'
+              : undefined,
           }}
         >
           {state.detailFullscreen ? (
@@ -372,7 +443,7 @@ export default function BackupRestorePage(): ReactElement {
             '  • ~/.claude/  (settings.json 同目录 .bak.<ts>)'
           }
         >
-          {state.entries.length} 个备份 · 已选 {state.selected.length} / 2
+          {dedupedEntries.length} 个备份 · 已选 {state.selected.length} / 2
         </span>
       </div>
 
@@ -432,7 +503,12 @@ export default function BackupRestorePage(): ReactElement {
               </div>
             </div>
           ) : (
-            state.entries.map((e) => {
+            dedupedEntries.map((e) => {
+              // M4.6.13 — `dedupedEntries` is a useMemo that
+              // collapses `state.entries` by `path` (defense in
+              // depth on top of the backend's canonical-path
+              // dedupe). The first occurrence of each path wins;
+              // subsequent duplicates are dropped silently.
               const isSelected = state.selected.includes(e.path);
               return (
                 <div
@@ -522,6 +598,19 @@ export default function BackupRestorePage(): ReactElement {
                       title="回滚到此版本"
                     >
                       <RotateCcw size={12} />
+                    </button>
+                    <button
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        void handleDelete(e.path);
+                      }}
+                      data-testid="backup-delete-btn"
+                      data-backup-path={e.path}
+                      style={{ ...iconBtn(), color: 'var(--danger)' }}
+                      title="删除此备份"
+                      aria-label="删除此备份"
+                    >
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
