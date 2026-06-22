@@ -77,7 +77,7 @@ export default function SingleFileDeployPage(): ReactElement {
         marginLeft: 'auto',
         marginRight: 'auto',
         width: '100%',
-        maxWidth: 896,
+        maxWidth: 720,
         padding: 24,
       }}
       data-testid="single-file-deploy-page"

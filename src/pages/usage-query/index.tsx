@@ -139,7 +139,7 @@ export default function UsageQueryPage(): ReactElement {
         marginLeft: 'auto',
         marginRight: 'auto',
         width: '100%',
-        maxWidth: 1024,
+        maxWidth: 720,
         padding: 24,
       }}
       data-testid="usage-query-page"

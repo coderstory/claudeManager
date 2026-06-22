@@ -312,7 +312,7 @@ export default function JsonEditorPage(): ReactElement {
     <div
       style={{
         padding: 'var(--space-6)',
-        maxWidth: 960,
+        maxWidth: 720,
         margin: '0 auto',
         height: '100%',
         display: 'flex',

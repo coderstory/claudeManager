@@ -165,7 +165,7 @@ export default function AboutPage(): ReactElement {
         marginLeft: 'auto',
         marginRight: 'auto',
         width: '100%',
-        maxWidth: 896,
+        maxWidth: 720,
         padding: 24,
       }}
       data-testid="about-page"

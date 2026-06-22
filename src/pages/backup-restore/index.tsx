@@ -248,7 +248,7 @@ export default function BackupRestorePage(): ReactElement {
       data-testid="backup-restore-page"
       style={{
         padding: 'var(--space-6)',
-        maxWidth: 1280,
+        maxWidth: 720,
         margin: '0 auto',
       }}
     >

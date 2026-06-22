@@ -300,7 +300,7 @@ export default function MarketplacePage(): ReactElement {
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
-        maxWidth: 1100,
+        maxWidth: 720,
         margin: '0 auto',
       }}
     >

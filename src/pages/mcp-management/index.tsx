@@ -283,7 +283,7 @@ export default function McpManagementPage(): ReactElement {
     <div
       style={{
         padding: 'var(--space-6)',
-        maxWidth: 1080,
+        maxWidth: 720,
         margin: '0 auto',
       }}
       data-testid="mcp-management-page"
