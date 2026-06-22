@@ -262,6 +262,7 @@ mod tests {
                     backups_dir: PathBuf::from("/"),
                     marketplaces_dir: PathBuf::from("/"),
                     logs_dir: PathBuf::from("/"),
+                    history_db: PathBuf::from("/"),
                 }
             }
             fn ensure_dirs(&self) -> Result<(), PlatformError> {

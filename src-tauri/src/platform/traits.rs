@@ -46,6 +46,13 @@ pub struct AppPaths {
     pub marketplaces_dir: PathBuf,
     /// `<app_data>/logs/` — app log output.
     pub logs_dir: PathBuf,
+    /// M4.6 (Phase 21) — `<app_data>/history.db` — SQLite database
+    /// for F7 usage_history + F13 backup_history + schema_version
+    /// (plan 21-01-PLAN-A). Bundled SQLite, opened in WAL mode
+    /// by `infrastructure::sqlite::history_db::open_history_db`.
+    /// Lives next to `backups_dir` so the user sees a single
+    /// app-managed directory tree in `<app_data>/`.
+    pub history_db: PathBuf,
 }
 
 impl AppPaths {
@@ -483,6 +490,7 @@ mod tests {
             backups_dir: PathBuf::from("/home/mock/.config/CCM/backups"),
             marketplaces_dir: PathBuf::from("/home/mock/.config/CCM/marketplaces"),
             logs_dir: PathBuf::from("/home/mock/.config/CCM/logs"),
+            history_db: PathBuf::from("/home/mock/.config/CCM/history.db"),
         };
         let mut m = MockPathsShim::new();
         m.expect_resolve().times(1).return_once(move || want.clone());
@@ -528,6 +536,7 @@ mod tests {
                     backups_dir: PathBuf::from("/h/.config/CCM/backups"),
                     marketplaces_dir: PathBuf::from("/h/.config/CCM/marketplaces"),
                     logs_dir: PathBuf::from("/h/.config/CCM/logs"),
+                    history_db: PathBuf::from("/h/.config/CCM/history.db"),
                 }
             }
             fn ensure_dirs(&self) -> Result<(), PlatformError> {
@@ -702,6 +711,7 @@ mod tests {
                 "/home/foo/.config/ClaudeConfigManager/marketplaces",
             ),
             logs_dir: PathBuf::from("/home/foo/.config/ClaudeConfigManager/logs"),
+            history_db: PathBuf::from("/home/foo/.config/ClaudeConfigManager/history.db"),
         };
         assert_eq!(p.claude_dir(), Some(Path::new("/home/foo/.claude")));
     }

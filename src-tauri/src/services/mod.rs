@@ -8,6 +8,7 @@
 //! `crate::infrastructure::*` for any I/O.
 
 pub mod backup_service;
+pub mod history_service;
 pub mod marketplace_service;
 pub mod mcp_service;
 pub mod optimizer_service;

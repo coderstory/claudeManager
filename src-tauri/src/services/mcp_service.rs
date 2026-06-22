@@ -473,6 +473,7 @@ mod tests {
             backups_dir: home.join("AppData").join("backups"),
             marketplaces_dir: home.join("AppData").join("marketplaces"),
             logs_dir: home.join("AppData").join("logs"),
+            history_db: home.join("AppData").join("history.db"),
         }
     }
 
@@ -891,6 +892,7 @@ mod tests {
             backups_dir: tmp.path().join("user").join("AppData").join("backups"),
             marketplaces_dir: tmp.path().join("user").join("AppData").join("marketplaces"),
             logs_dir: tmp.path().join("user").join("AppData").join("logs"),
+            history_db: tmp.path().join("user").join("AppData").join("history.db"),
         };
         let svc = McpService::new_with_active_root(paths, active_root);
         (svc, user_mcp_path, project_mcp_path)

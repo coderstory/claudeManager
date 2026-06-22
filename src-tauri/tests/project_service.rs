@@ -34,6 +34,7 @@ fn test_paths(tmp: &tempfile::TempDir) -> AppPaths {
         backups_dir: tmp.path().join("app_data/backups"),
         marketplaces_dir: tmp.path().join("app_data/marketplaces"),
         logs_dir: tmp.path().join("app_data/logs"),
+        history_db: tmp.path().join("app_data/history.db"),
     }
 }
 

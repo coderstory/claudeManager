@@ -29,7 +29,9 @@
 
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
+use serde::Serialize;
 use tauri::State;
 
 use crate::app_state::AppState;
@@ -230,6 +232,219 @@ pub fn take_pending_sql_file(
         .lock()
         .map_err(|e| format!("pending_sql_file lock poisoned: {e}"))?;
     Ok(guard.take())
+}
+
+// ---------------------------------------------------------------------------
+// M3.11 (A4#12) — F5 JSON 编辑器文件目录树
+// ---------------------------------------------------------------------------
+//
+// 用户在 JSON 编辑器页需要一个文件目录树,展示"允许编辑的范围"内
+// 的所有 .json 文件(替代或补充原生的 `<input type="file">` 选择器)。
+//
+// 安全模型:严格白名单 root 列表(只暴露 F5 既定的安全作用域),不
+// 暴露系统其他目录。具体 scope:
+//
+//   - `user`   = `<home>/.claude/`                (用户级)
+//   - `project` = `<active_root>/.claude/`        (项目级,如果 active_root 存在)
+//
+// 这与 F5 read_file / write_file_atomic 的安全作用域 1:1 对应 —
+// 列表里能看到的每个文件,点开后 read_file 都允许。超出范围的
+// `.json`(如 `~/.codex/*.json`、`~/.gemini/*.json`)**故意不列**:
+// 现在不在 F5 的安全作用域内,纳入会误导用户以为能编辑。
+
+/// F5 — JSON 编辑器文件目录树的一个条目。
+///
+/// 与 F5 read_file / write_file_atomic 1:1 对应:`path` 必须能
+/// 通过 [`resolve_claude_path`],否则前端点击会立刻被拒。
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct JsonFileEntry {
+    /// 绝对路径,直接喂给 `read_file` / `write_file_atomic`。
+    pub path: String,
+    /// 相对 scope root 的展示路径(去掉 root 前缀)。
+    /// 例: 用户级 `~/.claude/settings.json` → `settings.json`;
+    ///      项目级 `<root>/.claude/projects/foo/settings.json` →
+    ///      `projects/foo/settings.json`(不显示 `.claude/` 前缀)。
+    pub relative_path: String,
+    /// Scope 分类,前端按这个分组(用户 / 项目 / Codex / ...)。
+    /// 当前只会有 `"user"` 或 `"project"`;留 String 是为未来扩展
+    /// (Codex/Gemini/OpenCode)预留。
+    pub scope: String,
+    /// Scope 的人类可读中文标签,前端直接渲染。
+    pub scope_label: String,
+    /// 文件字节数。
+    pub size: u64,
+    /// 最后修改时间(unix 秒)。前端可排序 + 提示"刚改过"。
+    pub last_modified: u64,
+}
+
+/// F5 — 列出允许编辑范围内的所有 `.json` 文件。
+///
+/// 严格白名单:只扫 `user` (用户级 `~/.claude/`) + `project`
+/// (项目级 `<active_root>/.claude/`,如有)两个 root。每个 root 内
+/// 递归扫描(最大深度 5,防 symlink 环 + 巨型目录),返回前 200 个
+/// 文件(防 UI 卡死)。失败容错:单文件读失败 → 跳过 + log warning。
+///
+/// ## 安全
+///   - 绝不扫 `~/.codex/` / `~/.gemini/` / `~/.opencode/` 等其他
+///     provider 目录(CLAUDE.md §10 严格白名单纪律)。
+///   - 绝不暴露"白名单 root 列表之外"的目录 — 哪怕文件名碰巧
+///     叫 `.json` 也不暴露。
+///   - 返回的 `path` 必须能被 [`resolve_claude_path`] 接受,所以
+///     前端可直接拿它去 read_file。
+#[tauri::command]
+pub async fn list_editable_jsons(
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<JsonFileEntry>> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let mut roots: Vec<(&str, &str, PathBuf)> = Vec::new();
+
+    // 用户级 root — 总是扫。
+    if let Some(claude_dir) = state.paths.claude_dir() {
+        roots.push(("user", "用户级", claude_dir.to_path_buf()));
+    }
+
+    // 项目级 root — 只有 active_root 存在才扫(M3.10 双模式)。
+    if let Some(root) = active_root.as_ref() {
+        roots.push(("project", "项目级", root.join(".claude")));
+    }
+
+    let mut out: Vec<JsonFileEntry> = Vec::new();
+    for (scope, scope_label, root) in roots {
+        scan_root_for_jsons(&root, scope, scope_label, &mut out);
+        if out.len() >= MAX_JSON_TREE_ENTRIES {
+            out.truncate(MAX_JSON_TREE_ENTRIES);
+            break;
+        }
+    }
+
+    // 按 scope → relative_path 排序,前端渲染稳定。
+    out.sort_by(|a, b| {
+        a.scope
+            .cmp(&b.scope)
+            .then(a.relative_path.cmp(&b.relative_path))
+    });
+    Ok(out)
+}
+
+/// 单 root 扫描的硬上限 — 防止 UI 一次渲染 10k 个文件卡死。
+const MAX_JSON_TREE_ENTRIES: usize = 200;
+
+/// 单目录递归深度上限 — 防止 symlink 环 / 巨型目录栈溢出。
+const MAX_JSON_TREE_DEPTH: usize = 5;
+
+/// 递归扫描 `root` 下的所有 `.json` 文件,写入 `out`。
+///
+/// 失败容错:目录读不了 → 跳过 + log warning(不打断整体扫描)。
+/// 文件 metadata 读不了 → 跳过 + log warning。
+///
+/// 对称性:这是 `list_editable_jsons` 的内层 helper;抽出来便于
+/// 单元测试,不需要 mock Tauri 的 `State<AppState>`。
+fn scan_root_for_jsons(root: &Path, scope: &str, scope_label: &str, out: &mut Vec<JsonFileEntry>) {
+    if !root.exists() {
+        // 用户没建 ~/.claude/ 是合法状态,静默返回即可。
+        return;
+    }
+    walk_json_tree(root, root, scope, scope_label, 0, out);
+}
+
+/// DFS 递归,深度由 `depth` 参数限制。`root` 是展示根(用于计算
+/// `relative_path`),`current` 是当前正在扫描的目录。
+fn walk_json_tree(
+    root: &Path,
+    current: &Path,
+    scope: &str,
+    scope_label: &str,
+    depth: usize,
+    out: &mut Vec<JsonFileEntry>,
+) {
+    if depth > MAX_JSON_TREE_DEPTH {
+        return;
+    }
+    if out.len() >= MAX_JSON_TREE_ENTRIES {
+        return;
+    }
+    let entries = match std::fs::read_dir(current) {
+        Ok(it) => it,
+        Err(e) => {
+            eprintln!(
+                "[list_editable_jsons] read_dir 失败 {}: {}",
+                current.display(),
+                e
+            );
+            return;
+        }
+    };
+
+    // 排序:目录在前 + 名字字典序,让 UI 渲染稳定 + 友好。
+    let mut items: Vec<_> = entries.flatten().collect();
+    items.sort_by_key(|e| {
+        let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        // 反转 bool:目录 (true=1) 想排前面 → 排序时用 !is_dir
+        (!is_dir, e.file_name().to_string_lossy().to_string())
+    });
+
+    for entry in items {
+        if out.len() >= MAX_JSON_TREE_ENTRIES {
+            break;
+        }
+        let path = entry.path();
+        let file_type = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue, // 单 entry 的 file_type 失败 → 跳过
+        };
+
+        // 跳过 symlink(防止 symlink 环 / 逃逸出白名单)。
+        // symlink 可能在 FileType 里既不是 dir 也不是 file,这里
+        // 一律 `file_type().is_symlink()` 拦掉。
+        if file_type.is_symlink() {
+            continue;
+        }
+
+        if file_type.is_dir() {
+            walk_json_tree(root, &path, scope, scope_label, depth + 1, out);
+        } else if file_type.is_file() {
+            // 只收 .json(大小写不敏感)。
+            let is_json = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("json"))
+                .unwrap_or(false);
+            if !is_json {
+                continue;
+            }
+            let meta = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let last_modified = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let relative_path = path
+                .strip_prefix(root)
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_else(|_| path.to_string_lossy().to_string());
+            // relative_path 必须以文件名结尾(不是目录本身)。
+            // 如果 strip_prefix 给了空字符串(根目录同名),用 basename。
+            let relative_path = if relative_path.is_empty() {
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.to_string_lossy().to_string())
+            } else {
+                relative_path
+            };
+            out.push(JsonFileEntry {
+                path: path.to_string_lossy().to_string(),
+                relative_path,
+                scope: scope.to_string(),
+                scope_label: scope_label.to_string(),
+                size: meta.len(),
+                last_modified,
+            });
+        }
+    }
 }
 
 /// Resolve a user-supplied path against the security scope.
@@ -617,6 +832,7 @@ mod tests {
             backups_dir: home.join("app_data/backups"),
             marketplaces_dir: home.join("app_data/marketplaces"),
             logs_dir: home.join("app_data/logs"),
+            history_db: home.join("app_data/history.db"),
         }
     }
 
@@ -717,5 +933,199 @@ mod tests {
             err.contains("超出允许范围"),
             "error must mention scope violation, got: {err}"
         );
+    }
+
+    // -----------------------------------------------------------------
+    // M3.11 (A4#12) — F5 json-editor `list_editable_jsons`
+    // 白名单扫描器单元测试。覆盖 7 个关键行为:
+    //   1. 扫到直接子目录的 .json
+    //   2. 扫到嵌套子目录的 .json
+    //   3. 只收 .json(过滤 .md / .txt / 无扩展)
+    //   4. depth 上限生效(>5 层的目录跳过)
+    //   5. 严格白名单:scope 之外的 root(其他 provider 目录)不扫
+    //   6. 空目录不报错,返回空 Vec
+    //   7. relative_path 前缀正确(去掉 root 前缀,统一用 '/')
+    // -----------------------------------------------------------------
+
+    /// 辅助:在一个 root 下建一棵指定 tree,标记 `'d'` = dir,`'f'` = file。
+    /// 返回 root 路径。
+    fn build_test_tree(root: &Path, tree: &[(&str, bool)]) {
+        for (rel, is_file) in tree {
+            let p = root.join(rel);
+            if *is_file {
+                if let Some(parent) = p.parent() {
+                    std::fs::create_dir_all(parent).unwrap();
+                }
+                std::fs::write(&p, b"{}").unwrap();
+            } else {
+                std::fs::create_dir_all(&p).unwrap();
+            }
+        }
+    }
+
+    /// 1. 直接子目录的 .json 被扫到,scope / scope_label 正确。
+    #[test]
+    fn scan_root_picks_up_top_level_json() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        build_test_tree(tmp.path(), &[("settings.json", true)]);
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        assert_eq!(out.len(), 1, "got: {:?}", out);
+        assert_eq!(out[0].scope, "user");
+        assert_eq!(out[0].scope_label, "用户级");
+        assert_eq!(out[0].relative_path, "settings.json");
+        assert!(out[0].path.ends_with("settings.json"));
+        assert_eq!(out[0].size, 2); // "{}"
+    }
+
+    /// 2. 嵌套子目录的 .json 被扫到,relative_path 用 '/' 分隔。
+    #[test]
+    fn scan_root_picks_up_nested_json() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        build_test_tree(
+            tmp.path(),
+            &[
+                ("commands/a.json", true),
+                ("commands/sub/b.json", true),
+                ("agents/c.json", true),
+            ],
+        );
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        assert_eq!(out.len(), 3, "got: {:?}", out);
+        let rels: Vec<&str> = out.iter().map(|e| e.relative_path.as_str()).collect();
+        assert!(rels.contains(&"commands/a.json"));
+        assert!(rels.contains(&"commands/sub/b.json"));
+        assert!(rels.contains(&"agents/c.json"));
+    }
+
+    /// 3. 只收 .json: .md / .txt / 无扩展都被过滤。
+    #[test]
+    fn scan_root_filters_non_json_extensions() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        build_test_tree(
+            tmp.path(),
+            &[
+                ("keep.json", true),
+                ("skip.md", true),
+                ("skip.txt", true),
+                ("noext", true),
+                ("ALSO.JSON", true), // 大写扩展名也算
+            ],
+        );
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        let names: Vec<&str> = out.iter().map(|e| e.relative_path.as_str()).collect();
+        assert!(names.contains(&"keep.json"), "got: {:?}", names);
+        assert!(names.contains(&"ALSO.JSON"), "got: {:?}", names);
+        assert_eq!(out.len(), 2, "got: {:?}", out);
+    }
+
+    /// 4. depth 上限生效:超过 MAX_JSON_TREE_DEPTH (5) 层的目录跳过。
+    #[test]
+    fn scan_root_respects_depth_limit() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // 6 层深: a/b/c/d/e/f.json  (f 在第 6 层)
+        let deep = "a/b/c/d/e/deep.json";
+        build_test_tree(tmp.path(), &[(deep, true)]);
+        // 也放一个浅的,确认浅的不被误杀。
+        build_test_tree(tmp.path(), &[("shallow.json", true)]);
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        let rels: Vec<&str> = out.iter().map(|e| e.relative_path.as_str()).collect();
+        assert!(
+            rels.contains(&"shallow.json"),
+            "shallow must still be picked up, got: {:?}",
+            rels
+        );
+        assert!(
+            !rels.iter().any(|r| r.contains("deep.json")),
+            "deep entry must be filtered out by depth, got: {:?}",
+            rels
+        );
+    }
+
+    /// 5. 严格白名单:传入的 root 之外的目录,根本不会被扫到。
+    ///    这是 list_editable_jsons 的契约 — 不会主动去探 ~/.codex/。
+    #[test]
+    fn scan_root_does_not_escape_root() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        // 在 tmp 之外建一个 .json。tmp 同级目录。
+        let sibling = tmp.path().parent().unwrap().join("__sibling_test_escape.json");
+        std::fs::write(&sibling, b"{}").unwrap();
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        assert!(
+            !out.iter().any(|e| e.path.contains("__sibling_test_escape")),
+            "scanner must NOT escape root, got: {:?}",
+            out
+        );
+
+        // 清理
+        let _ = std::fs::remove_file(&sibling);
+    }
+
+    /// 6. 空目录 + 不存在的 root:不报错,返回空 Vec。
+    #[test]
+    fn scan_root_handles_missing_or_empty_root() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        // 不存在
+        let nonexistent = tmp.path().join("does-not-exist");
+        let mut out = Vec::new();
+        scan_root_for_jsons(&nonexistent, "user", "用户级", &mut out);
+        assert!(out.is_empty());
+
+        // 空目录
+        let empty_dir = tmp.path().join("empty");
+        std::fs::create_dir_all(&empty_dir).unwrap();
+        scan_root_for_jsons(&empty_dir, "user", "用户级", &mut out);
+        assert!(out.is_empty(), "empty dir should yield no entries");
+    }
+
+    /// 7. last_modified 是 unix 秒,大于 2020-01-01 (1577836800)。
+    #[test]
+    fn scan_root_last_modified_is_unix_seconds() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        build_test_tree(tmp.path(), &[("settings.json", true)]);
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        assert_eq!(out.len(), 1);
+        // 2020-01-01 = 1577836800. 文件刚刚写的肯定大于这个。
+        assert!(
+            out[0].last_modified > 1577836800,
+            "last_modified must be unix seconds, got: {}",
+            out[0].last_modified
+        );
+    }
+
+    /// 8. MAX_JSON_TREE_ENTRIES 上限:即使 tree 里塞了 250 个文件,
+    ///    也只返回 200 个。
+    #[test]
+    fn scan_root_caps_at_max_entries() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut tree: Vec<(String, bool)> = Vec::with_capacity(250);
+        for i in 0..250 {
+            tree.push((format!("f{i:04}.json"), true));
+        }
+        let tree_refs: Vec<(&str, bool)> = tree.iter().map(|(s, b)| (s.as_str(), *b)).collect();
+        build_test_tree(tmp.path(), &tree_refs);
+
+        let mut out = Vec::new();
+        scan_root_for_jsons(tmp.path(), "user", "用户级", &mut out);
+
+        assert_eq!(out.len(), MAX_JSON_TREE_ENTRIES);
     }
 }

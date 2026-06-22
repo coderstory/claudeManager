@@ -60,6 +60,10 @@ impl IPlatformPaths for WindowsPaths {
         let backups_dir = app_data.join("backups");
         let marketplaces_dir = app_data.join("marketplaces");
         let logs_dir = app_data.join("logs");
+        // M4.6 (Phase 21) — SQLite history DB sits at the same level
+        // as `backups_dir`. Per CLAUDE.md §3.2 we never hard-code the
+        // path; the consumer reads `AppPaths::history_db`.
+        let history_db = app_data.join("history.db");
 
         AppPaths {
             home,
@@ -69,6 +73,7 @@ impl IPlatformPaths for WindowsPaths {
             backups_dir,
             marketplaces_dir,
             logs_dir,
+            history_db,
         }
     }
 

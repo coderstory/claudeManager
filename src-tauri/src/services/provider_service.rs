@@ -938,6 +938,7 @@ mod tests {
             backups_dir: app_data.join("backups"),
             marketplaces_dir: app_data.join("marketplaces"),
             logs_dir: app_data.join("logs"),
+            history_db: app_data.join("history.db"),
         }
     }
 

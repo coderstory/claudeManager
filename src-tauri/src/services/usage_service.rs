@@ -50,7 +50,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use thiserror::Error;
@@ -118,6 +118,11 @@ pub struct UsageService {
     /// Cache TTL. M3.8 default = 5 minutes. Tests can construct
     /// with a smaller TTL via [`UsageService::with_ttl`].
     ttl: Duration,
+    /// M4.6 (Phase 21) — optional SQLite history sink. When set,
+    /// every successful `compute_usage_for_window` call appends a
+    /// row to `usage_history` (idempotent via UNIQUE snapshot_id).
+    /// `None` = logging-only mode (M2.x behavior).
+    history: Option<Arc<crate::services::history_service::HistoryService>>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,7 +138,20 @@ impl UsageService {
             paths,
             cache: Mutex::new(HashMap::new()),
             ttl: Duration::from_secs(300),
+            history: None,
         }
+    }
+
+    /// M4.6 (Phase 21) — attach the SQLite history sink. Called
+    /// from `AppState::build` after the history db is opened. Once
+    /// attached, every fresh snapshot computed by this service
+    /// appends one row to `usage_history` (idempotent).
+    pub fn with_history(
+        mut self,
+        history: Arc<crate::services::history_service::HistoryService>,
+    ) -> Self {
+        self.history = Some(history);
+        self
     }
 
     /// Constructor with a custom TTL — used by tests to exercise the
@@ -218,6 +236,17 @@ impl UsageService {
                 stored_at: Instant::now(),
             },
         );
+        // M4.6 (Phase 21) — append the freshly-computed snapshot
+        // to `usage_history`. Best-effort: history I/O must not
+        // block or fail the main usage path (CLAUDE.md §7: never
+        // silent, so we log + swallow on error).
+        if let Some(history_svc) = &self.history {
+            let active_root_str = active_root_dir
+                .map(|p| p.to_string_lossy().into_owned());
+            if let Err(e) = history_svc.record_usage(&snap, active_root_str.as_deref()) {
+                eprintln!("[usage] history insert failed: {e}");
+            }
+        }
         Ok((snap, history))
     }
 
@@ -386,6 +415,7 @@ mod tests {
             backups_dir: claude_dir.join("appdata/backups"),
             marketplaces_dir: claude_dir.join("appdata/marketplaces"),
             logs_dir: claude_dir.join("appdata/logs"),
+            history_db: claude_dir.join("appdata/history.db"),
         }
     }
 

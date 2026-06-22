@@ -54,6 +54,13 @@ pub struct AppState {
     /// `IPlatformPaths::active_root_dir()` (Windows impl reads the
     /// same file).
     pub project_service: Arc<crate::services::project_service::ProjectService>,
+    /// M4.6 (Phase 21) — SQLite-backed history persistence. Owns
+    /// the `<app_data>/history.db` connection. The same instance
+    /// is shared with F7 (UsageService) and F13 (BackupService) so
+    /// every fresh snapshot / new backup appends one row to the
+    /// corresponding history table. Plan B Tauri commands will
+    /// dispatch into this service for query / stats / purge.
+    pub history_service: Arc<crate::services::history_service::HistoryService>,
     /// M2.16 — F20 冷启动 .sql 文件关联:
     ///
     /// setup 阶段(`lib.rs::run`)扫描 argv 时拿到 `.sql` 路径,但此时
@@ -85,17 +92,67 @@ impl AppState {
         // the user has bigger problems and the first command will surface
         // the I/O error with a clear path.
         let _ = paths_impl.ensure_dirs();
+        // M4.6 (Phase 21) — open the SQLite history db FIRST so we
+        // can attach it to BackupService and UsageService below.
+        // Best-effort: if the db is corrupt or unopenable we LOG
+        // the error and proceed with a no-op in-memory service
+        // stub so the main app starts cleanly. Plan A never
+        // blocks startup on history.
+        let history_service = match crate::infrastructure::sqlite::history_db::open_history_db(
+            &paths.history_db,
+        ) {
+            Ok(conn) => {
+                let svc = crate::services::history_service::HistoryService::new(conn);
+                if let Err(e) = svc.init() {
+                    eprintln!("[app_state] history.init() failed: {e}");
+                }
+                // First-launch backfill — scan the existing
+                // `.bak.<ts>` files in `<backups_dir>` and
+                // `<claude_dir>` so a returning user sees their
+                // old backups in the F13 timeline. Failure here
+                // is also best-effort.
+                let claude_dir = paths
+                    .claude_dir()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| paths.home.join(".claude"));
+                match svc.backfill_bak(&paths.backups_dir, Some(&claude_dir)) {
+                    Ok(n) if n > 0 => {
+                        eprintln!("[app_state] backfilled {n} backups into history")
+                    }
+                    Ok(_) => {}
+                    Err(e) => eprintln!("[app_state] backfill_bak failed: {e}"),
+                }
+                Arc::new(svc)
+            }
+            Err(e) => {
+                eprintln!(
+                    "[app_state] history.db open failed: {e} — continuing without history"
+                );
+                use std::sync::{Arc, Mutex};
+                let conn = rusqlite::Connection::open_in_memory()
+                    .expect("in-memory sqlite must always open");
+                Arc::new(crate::services::history_service::HistoryService::new(
+                    Arc::new(Mutex::new(conn)),
+                ))
+            }
+        };
         let provider_service = Arc::new(
             crate::services::provider_service::ProviderService::new(paths.clone()),
         );
         let mcp_service = Arc::new(
             crate::services::mcp_service::McpService::new(paths.clone()),
         );
+        // M4.6 — attach the history sink to F13 so every new
+        // `.bak.<ts>` writes a row to `backup_history`.
         let backup_service = Arc::new(
-            crate::services::backup_service::BackupService::new(paths.clone()),
+            crate::services::backup_service::BackupService::new(paths.clone())
+                .with_history(history_service.clone()),
         );
+        // M4.6 — attach the history sink to F7 so every fresh
+        // snapshot writes a row to `usage_history`.
         let usage_service = Arc::new(
-            crate::services::usage_service::UsageService::new(paths.clone()),
+            crate::services::usage_service::UsageService::new(paths.clone())
+                .with_history(history_service.clone()),
         );
         let optimizer_service = Arc::new(
             crate::services::optimizer_service::OptimizerService::new(paths.clone()),
@@ -141,6 +198,7 @@ impl AppState {
             resource_service,
             marketplace_service,
             project_service,
+            history_service,
             // M2.16 — F20 冷启动 .sql 路径缓存,初始 None。
             pending_sql_file: Mutex::new(None),
             // M4.3 — updater pubkey from tauri.conf.json (set during build).

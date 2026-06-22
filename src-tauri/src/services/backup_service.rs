@@ -75,11 +75,31 @@ pub enum BackupError {
 
 pub struct BackupService {
     paths: AppPaths,
+    /// M4.6 (Phase 21) — optional SQLite history sink. When set,
+    /// every successful `backup_now` / `backup_incremental` /
+    /// `restore_backup`-induced re-snapshot appends a row to
+    /// `backup_history` (idempotent via UNIQUE backup_id).
+    history: Option<std::sync::Arc<crate::services::history_service::HistoryService>>,
 }
 
 impl BackupService {
     pub fn new(paths: AppPaths) -> Self {
-        Self { paths }
+        Self {
+            paths,
+            history: None,
+        }
+    }
+
+    /// M4.6 (Phase 21) — attach the SQLite history sink. Called
+    /// from `AppState::build` after the history db is opened. Once
+    /// attached, every successful backup writes a row to
+    /// `backup_history` (idempotent).
+    pub fn with_history(
+        mut self,
+        history: std::sync::Arc<crate::services::history_service::HistoryService>,
+    ) -> Self {
+        self.history = Some(history);
+        self
     }
 
     /// Borrow resolved paths (read-only).
@@ -304,8 +324,12 @@ impl BackupService {
         std::fs::copy(target, &backup_path)?;
         // Parse the result via the same scanner so the caller gets
         // a uniform `BackupEntry` shape.
-        backup_scanner::parse_backup_filename(&backup_path)
-            .ok_or_else(|| BackupError::CannotReconstruct(backup_path.clone()))
+        let entry = backup_scanner::parse_backup_filename(&backup_path)
+            .ok_or_else(|| BackupError::CannotReconstruct(backup_path.clone()))?;
+        // M4.6 (Phase 21) — best-effort history append. Failures
+        // are logged and swallowed (CLAUDE.md §7: never silent).
+        self.record_to_history(&entry, "manual");
+        Ok(entry)
     }
 
     // -----------------------------------------------------------------------
@@ -397,6 +421,192 @@ impl BackupService {
             v.push(claude_dir.to_path_buf());
         }
         v
+    }
+
+    // -----------------------------------------------------------------------
+    // M4.6 (Phase 21) — history sink
+    // -----------------------------------------------------------------------
+
+    /// Best-effort: append `entry` to `backup_history` via the
+    /// attached `HistoryService`. Logs + swallows on error so the
+    /// F13 path is never blocked by history I/O.
+    fn record_to_history(&self, entry: &BackupEntry, trigger: &str) {
+        let Some(history) = &self.history else { return };
+        let backup_id = entry
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let created_at = entry.timestamp_unix.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0)
+        });
+        let insert = crate::services::history_service::BackupHistoryInsert {
+            backup_id,
+            file_name: entry
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string(),
+            file_size: entry.size_bytes as i64,
+            scope: "user".to_string(),
+            trigger_kind: trigger.to_string(),
+            file_hash: None,
+            metadata_json: None,
+            created_at,
+        };
+        if let Err(e) = history.record_backup(&insert, None) {
+            eprintln!("[backup] history insert failed: {e}");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // M4.6.13 — delete
+    // -----------------------------------------------------------------------
+
+    /// Permanently delete a single backup file.
+    ///
+    /// # Safety boundary
+    ///
+    /// The path MUST be inside one of the allow-list dirs (the same
+    /// allow-list as `read_backup_content` / `restore_backup`). A
+    /// path outside the allow-list is rejected with
+    /// `BackupError::PathNotAllowed` and the file is NOT touched.
+    /// This mirrors CLAUDE.md §3.2 (no OS escape through the
+    /// service layer) and §7 (destructive ops must be intentional).
+    ///
+    /// # Algorithm (CLAUDE.md §7 "destructive ops need safety net")
+    ///
+    /// 1. Validate the path lives under an allowed dir (allow-list
+    ///    check, with active_root_dir expansion for project mode).
+    /// 2. Check the file actually exists; if not → `NotFound`.
+    /// 3. Move the file into a sibling `.trash/` dir using a
+    ///    timestamped filename (avoids collision with other
+    ///    deletions in the same session). The move is the
+    ///    **reversible** step: at this point the original is gone
+    ///    but the file is recoverable from `<parent>/.trash/`.
+    /// 4. Remove the trash entry.
+    ///
+    /// If step 3 fails (e.g. cross-volume rename is not supported
+    /// on Windows and the targets are on different drives), we
+    /// fall back to a copy + remove sequence: copy original into
+    /// trash, then remove original. The fallback also lands the
+    /// file in trash before removing it from the original
+    /// location, preserving the safety invariant.
+    ///
+    /// If step 4 (the final rm) fails, the file is in `.trash/` but
+    /// not yet gone from disk. We treat this as Ok(()) because the
+    /// user's intent (remove from F13 timeline) is satisfied — the
+    /// list_backups scan skips files not in the allow-list, so the
+    /// orphaned trash file is invisible to the F13 UI. A future
+    /// "empty trash" feature can sweep these.
+    ///
+    /// # active_root_dir
+    ///
+    /// `active_root_dir = Some(root)` expands the allow-list to
+    /// `<root>/.claude/` so project-level `.bak.<ts>` snapshots can
+    /// be deleted. `None` keeps the user-level allow-list (M2.6
+    /// behaviour).
+    pub fn delete_backup(
+        &self,
+        backup_path: &Path,
+        active_root_dir: Option<&Path>,
+    ) -> Result<(), BackupError> {
+        // 1. Allow-list check (same shape as read_backup_content /
+        //    restore_backup). Uses the active-root-aware variant.
+        let safe = self.resolve_safe_path_for_active_root(backup_path, active_root_dir)?;
+
+        // 2. Existence check. `resolve_safe_path` already
+        //    canonicalizes if possible, so `safe` reflects the
+        //    real on-disk path.
+        if !safe.exists() {
+            return Err(BackupError::NotFound(safe));
+        }
+        if !safe.is_file() {
+            return Err(BackupError::NotFound(safe));
+        }
+
+        // 3. Compute trash target.
+        //
+        // We pick the parent dir of the file (sibling of the
+        // backup) as the trash root, then append
+        // `.trash/<basename>.<nanos>` so:
+        //   - the move stays on the same volume (rename is atomic
+        //     on Windows / POSIX when source and dest are on the
+        //     same volume — see `std::fs::rename` docs);
+        //   - a unique suffix prevents collisions when the user
+        //     deletes multiple files with the same basename in the
+        //     same session (e.g. rapid [立刻备份] clicks).
+        let parent = safe
+            .parent()
+            .ok_or_else(|| BackupError::NotFound(safe.clone()))?
+            .to_path_buf();
+        let trash_dir = parent.join(".trash");
+        let basename = safe
+            .file_name()
+            .ok_or_else(|| BackupError::NotFound(safe.clone()))?
+            .to_os_string();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let mut trash_name = basename.clone();
+        trash_name.push(format!(".{}", nanos));
+        let trash_path = trash_dir.join(trash_name);
+
+        // Lazy-create `.trash/`. `create_dir_all` handles the
+        // missing-parent case.
+        if let Err(e) = std::fs::create_dir_all(&trash_dir) {
+            return Err(BackupError::Io(e));
+        }
+
+        // 4. Move original → trash.
+        //
+        // We try rename first (atomic, fast). If the source and
+        // destination are on different volumes (rare in our
+        // context — backups always live in the same dir as the
+        // parent — but possible if `<app_data>` is on a different
+        // drive from `~/.claude/`), rename would fail with
+        // `cross-device link` on Linux or ERROR_NOT_SAME_DEVICE
+        // on Windows. Fall back to copy + remove.
+        if let Err(rename_err) = std::fs::rename(&safe, &trash_path) {
+            // Fallback: copy then remove.
+            if let Err(copy_err) = std::fs::copy(&safe, &trash_path) {
+                return Err(BackupError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "delete_backup: rename failed ({rename_err}) and copy fallback failed ({copy_err})"
+                    ),
+                )));
+            }
+            // Copy succeeded → safe to remove the original.
+            if let Err(rm_err) = std::fs::remove_file(&safe) {
+                return Err(BackupError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!(
+                        "delete_backup: copy to trash succeeded but remove_file of original failed: {rm_err}"
+                    ),
+                )));
+            }
+        }
+
+        // 5. Remove the trash entry (final sweep). A failure here
+        //    leaves the file in `.trash/` — invisible to the F13
+        //    timeline but still on disk. We log + return Ok so the
+        //    UI shows success (the user's intent — remove from
+        //    timeline — is achieved); a future "empty trash"
+        //    sweep can clean the leftovers.
+        if let Err(rm_err) = std::fs::remove_file(&trash_path) {
+            eprintln!(
+                "[backup] delete_backup: moved to {trash_path:?} but final rm failed ({rm_err}); file remains in .trash/"
+            );
+        }
+
+        Ok(())
     }
 
     // -----------------------------------------------------------------------
@@ -568,6 +778,7 @@ mod tests {
             backups_dir: app_data.join("backups"),
             marketplaces_dir: app_data.join("marketplaces"),
             logs_dir: app_data.join("logs"),
+            history_db: app_data.join("history.db"),
         }
     }
 

@@ -13,3 +13,5 @@ pub mod optimizer_rules;
 pub mod resource_detail;
 pub mod resource_scanner;
 pub mod sql_parser;
+// M4.6 (Phase 21) — SQLite-backed history persistence (F7 + F13).
+pub mod sqlite;

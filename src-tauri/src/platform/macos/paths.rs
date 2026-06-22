@@ -56,6 +56,9 @@ impl IPlatformPaths for MacPaths {
         let backups_dir = app_data.join("backups");
         let marketplaces_dir = app_data.join("marketplaces");
         let logs_dir = app_data.join("logs");
+        // M4.6 (Phase 21) — SQLite history DB lives next to backups_dir
+        // (mirrors WindowsPaths). See `infrastructure::sqlite::history_db`.
+        let history_db = app_data.join("history.db");
 
         AppPaths {
             home,
@@ -65,6 +68,7 @@ impl IPlatformPaths for MacPaths {
             backups_dir,
             marketplaces_dir,
             logs_dir,
+            history_db,
         }
     }
 

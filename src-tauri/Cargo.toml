@@ -70,6 +70,20 @@ window-vibrancy = "=0.6.0"
 # 也能写入日志文件。log 0.4.32 已在 Cargo.lock 传递依赖中，直接声明不引入新下载。
 log = "0.4"
 
+# M4.6 — Phase 21 SQLite 历史持久层。
+#   - rusqlite         同步 API,bundled feature 自带 SQLite C 库(无需系统安装)
+#   - rusqlite_migration 同步 migration runner,基于 `user_version` PRAGMA
+# 版本锁到 =X.Y.Z(CLAUDE.md §2.3),不写 ^/~。
+# 启用时机 B(按需启动,P3 backlog)— 字段已就位,实际不读不写;
+# v3.0 主线不调用 HistoryService。
+#
+# 注意: 1.0.0 用 `rusqlite::NO_PARAMS`(已在 0.32 移除,0.40+ 不兼容);
+# 1.x 还硬锁 `rusqlite = ^0.32`,会与 =0.40.1 拉两份 rusqlite → libsqlite3-sys
+# 链接冲突。2.x 解绑这两个限制,API 兼容(`M::up`/`to_latest` 都不变)。
+# 详见 memory/feedback/rusqlite-migration-1.0.0-no-params-broken-with-rusqlite-0.40.md
+rusqlite = { version = "=0.40.1", features = ["bundled"] }
+rusqlite_migration = "=2.6.0"
+
 [dev-dependencies]
 tempfile = "3"
 mockall = "0.13"
