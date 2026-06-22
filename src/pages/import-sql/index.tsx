@@ -531,8 +531,8 @@ function SummaryCard({
       data-testid={testId}
       style={{
         background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
-        borderLeft: `3px solid ${color}`,
+        border: 'var(--card-border-width) solid var(--border)',
+        borderColor: color,
         borderRadius: 'var(--radius-card)',
         padding: 'var(--space-3) var(--space-4)',
         boxShadow: 'var(--shadow-sm)',
