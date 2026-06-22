@@ -307,30 +307,46 @@ export default function App(): ReactElement {
     return () => window.clearTimeout(t);
   }, [dropRejectionMsg]);
 
-  // M3.1 — splash hide trigger switched from fixed setTimeout to
-  // Tauri `tauri://ready` event. The cold-start chain is:
+  // M3.13.2 — splash hide trigger: React-first-paint, NOT
+  // tauri://ready.
   //
-  //   Tauri setup → window show → webview create → first paint
-  //                → webview "ready" event (Rust emits via lib.rs)
-  //                → App.tsx useEffect hides splash
+  // Cold-start chain (Win WebView2 / macOS WKWebView):
+  //   Tauri setup → window show → WebView2 surface ready
+  //                → index.html parses (splash visible from frame 1)
+  //                → JS bundle eval → React mount → React first paint
+  //                → App.tsx top-level useEffect runs after commit
+  //                → requestAnimationFrame fires after browser paint
+  //                → splash.hide() — React content already on screen
   //
-  // Why event-driven (vs. fixed 2200ms):
-  //   - On a fast machine, React can mount in 500ms; the OLD 2200ms
-  //     wait made users stare at a still-loading screen long after
-  //     the main UI was ready (perceived as "白屏 → 全透明 → loading
-  //     闪烁" — 清单 1 P0).
-  //   - On a slow machine, 2200ms may not be enough; the user would
-  //     see content flash before splash finished its fade animation.
-  //   - A ready event from the Tauri runtime is the only signal that
-  //     the webview has actually finished first paint + IPC bridge
-  //     init. Aligned with Tauri's documented lifecycle.
+  // Why NOT rely on tauri://ready:
+  //   Tauri v2 does NOT reliably dispatch tauri://ready on Windows
+  //   WebView2 (verified empirically against the M3.13.1 binary).
+  //   With the old logic, the splash stayed for the full 8s failsafe
+  //   on every cold start, which the user reported as "loading 界面
+  //   显示的时间有点长". The event-driven path was effectively dead
+  //   on the most common platform.
   //
-  // Failsafe (8s): if the ready event NEVER fires (e.g. event
-  // channel broken, webview crashed mid-load), the index.html inline
-  // <script> at 4500ms is the backstop. App's own 8000ms is the
-  // React-side failsafe: ensures that even if index.html's inline
-  // script is somehow stripped (e.g. dev-mode HMR not loading
-  // index.html fresh), the user is never stuck staring at loading.
+  // Why React-first-paint works:
+  //   React's useEffect (empty deps) fires AFTER the DOM commit, which
+  //   is AFTER React has painted the first frame. We then schedule
+  //   hide() inside requestAnimationFrame so it runs in the same
+  //   paint cycle as the React content — splash fades out while the
+  //   AppHeader / sidebar / main pane are already on screen, no
+  //   visual gap. The 300ms CSS opacity transition + display:none
+  //   overlap with React's normal animation, so the user sees a
+  //   smooth handoff instead of flash → splash → flash.
+  //
+  // Failsafe (8s): pure non-React / pure index.html safety net.
+  //   If React never mounts (bundle 404 / eval fail), the inline
+  //   <script> in index.html hides the splash at 4500ms as a
+  //   backstop. App's own 8s is the last-resort failsafe for
+  //   environments without index.html (jsdom tests, some embedded
+  //   webview modes). Both are unchanged from M3.13.1.
+  //
+  // tauri://ready is still listed as an OPTIONAL early-hide signal —
+  //   if Tauri ever does dispatch it, hide() is idempotent so the
+  //   React path wins either way (it fires first on every modern
+  //   machine).
   useEffect(() => {
     const splash = document.getElementById('ccm-splash');
     if (!splash) return;
@@ -345,25 +361,29 @@ export default function App(): ReactElement {
       }, 300);
     };
 
-    // Path 1: Tauri webview ready event (Rust emits from lib.rs
-    // after the webview is attached and the first IPC handshake is
-    // complete). On non-Tauri environments (jsdom, browser) this
-    // listener never fires, so the failsafe path below takes over.
+    // Primary path: React has just mounted and committed. Wait one
+    // animation frame so the React tree is on screen, THEN hide the
+    // splash. The 300ms CSS opacity transition overlaps with React's
+    // own .view-transition fadeIn (also ~300ms) so the handoff is
+    // visually continuous — no flash, no gap.
+    const rafId = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(hide);
+    });
+
+    // Optional early-hide signal. On Tauri v2 Win WebView2 this is
+    // effectively never fired (see note above); kept for robustness
+    // on platforms where Tauri does dispatch it (e.g. some macOS
+    // builds). hide() is idempotent so the React path still wins
+    // when both fire.
     const onReady = (): void => hide();
     window.addEventListener('tauri://ready', onReady);
-    // Tauri v2 also dispatches 'tauri://created' slightly earlier;
-    // we keep both for robustness, hide() is idempotent.
     window.addEventListener('tauri://created', onReady);
 
-    // Path 2: React-side failsafe — 8s hard timeout. If neither
-    // ready event fires by then, hide anyway so the user is never
-    // stuck. 8s > index.html inline 4.5s failsafe, so under normal
-    // path the index.html failsafe hides first; this is the
-    // backstop for environments without index.html (jsdom tests,
-    // some embedded webview modes).
+    // Failsafe — see block comment above. Unchanged from M3.13.1.
     const failsafe = window.setTimeout(hide, 8000);
 
     return (): void => {
+      window.cancelAnimationFrame(rafId);
       window.removeEventListener('tauri://ready', onReady);
       window.removeEventListener('tauri://created', onReady);
       window.clearTimeout(failsafe);

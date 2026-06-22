@@ -221,7 +221,9 @@ export function AppSidebar({
           aria-hidden="true"
           style={{ verticalAlign: 'middle', marginRight: 4 }}
         />
-        钱云飞作品
+        {/* M3.13.2 — 用户要求:侧边栏底部 brand 从 "钱云飞作品" 改为
+            "©CoderStory 2026"。 */}
+        ©CoderStory 2026
       </div>
     </nav>
   );
