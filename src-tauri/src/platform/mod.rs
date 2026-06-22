@@ -132,14 +132,20 @@ pub mod runtime {
     }
 
     /// Window-chrome (Mica / vibrancy / transparent title bar) for the host OS.
-    pub fn window_chrome() -> Box<dyn IPlatformWindowChrome> {
+    ///
+    /// M4.6 — factory now accepts `&tauri::WebviewWindow` so the macOS impl
+    /// can inject the window handle into `MacWindowChrome` for real
+    /// `apply_vibrancy` calls. The Windows impl ignores the window parameter
+    /// (it resolves HWND via `current_main_hwnd()` internally).
+    pub fn window_chrome(window: &tauri::WebviewWindow) -> Box<dyn IPlatformWindowChrome> {
         #[cfg(windows)]
         {
+            let _ = window;
             Box::new(windows::WindowsWindowChrome)
         }
         #[cfg(target_os = "macos")]
         {
-            Box::new(macos::MacWindowChrome)
+            Box::new(macos::MacWindowChrome::new(window.clone()))
         }
     }
 

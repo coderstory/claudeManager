@@ -165,6 +165,10 @@ pub fn run() {
             commands::project::remove_project,
             commands::project::switch_project,
             commands::project::current_project,
+            // M4.3 — updater commands (pubkey + endpoint config + check stub).
+            commands::updater::get_updater_pubkey,
+            commands::updater::get_updater_endpoints,
+            commands::updater::check_update,
         ])
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
