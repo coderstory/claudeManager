@@ -212,18 +212,8 @@ export function splitStatements(content: string): SqlStatement[] {
   let i = 0;
   let inSingle = false;
   let inDouble = false;
-  // 累计已处理的换行符数,得到"当前字节 i 处的行号" = lineOf(i) + 1。
+  // 累计已处理的换行符数,用于"start 处的行号"。
   let linesBeforeStart = 0;
-  let linesBeforeI = 0;
-  const lineOf = (offset: number): number => {
-    // 数 content[..offset] 内的换行符 + 1。
-    let n = 0;
-    for (let k = 0; k < offset; k++) {
-      if (content.charCodeAt(k) === 0x0a) n++;
-    }
-    return n + 1;
-  };
-  void lineOf;
   // 把 start 推进时,记录 start 处的行号。
   const advanceStart = (newStart: number) => {
     if (newStart > start) {
@@ -233,11 +223,6 @@ export function splitStatements(content: string): SqlStatement[] {
       }
     }
     start = newStart;
-  };
-  // 当前 i 处的行号。
-  const currentLine = (): number => {
-    // linesBeforeI 是 [0, i) 中的换行符数;行号 = linesBeforeI + 1。
-    return linesBeforeI + 1;
   };
 
   const pushStatement = (end: number) => {
@@ -256,8 +241,8 @@ export function splitStatements(content: string): SqlStatement[] {
   while (i < bytes.length) {
     const b = bytes[i];
     if (b === 0x0a) {
-      // '\n'
-      linesBeforeI++;
+      // '\n' — 由 advanceStart 在 start 越过此处时把换行累加到
+      // linesBeforeStart,此处不需要再维护独立计数器。
       i++;
       continue;
     }
