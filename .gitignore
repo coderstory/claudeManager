@@ -34,5 +34,6 @@ installers
 test-results/
 
 # local claude memory symlinks (project-irrelevant)
-.claude/
+.claude/*
+!.claude/settings.local.json
 updater-private.key
