@@ -122,3 +122,39 @@ pub async fn backup_now(
         source: entry.source,
     })
 }
+
+/// M4.6 — incremental backup (diff-based, skip no-change).
+///
+/// Only creates a new `.bak.<ts>` snapshot when the current file
+/// content differs from the most recent backup for the same original
+/// file. When the content is unchanged, returns a `"no-change"` marker
+/// with the previous backup path so the UI can display a "no changes
+/// since previous backup" message.
+///
+/// `target` 为可选参数：
+/// - `Some(path)` → 增量备份指定文件。
+/// - `None` → 增量备份默认 `settings.json`。
+#[tauri::command]
+pub async fn backup_incremental(
+    state: State<'_, AppState>,
+    target: Option<String>,
+) -> CmdResult<ManualBackupResult> {
+    let target_path = match target {
+        Some(t) => std::path::PathBuf::from(t),
+        None => state.paths.settings_json.clone(),
+    };
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    match state
+        .backup_service
+        .backup_incremental(&target_path, active_root.as_deref())
+    {
+        Ok(entry) => Ok(ManualBackupResult {
+            path: entry.path,
+            original_path: entry.original_path,
+            original_name: entry.original_name,
+            size_bytes: entry.size_bytes,
+            source: entry.source,
+        }),
+        Err(e) => Err(e.to_string()),
+    }
+}

@@ -62,6 +62,11 @@ pub enum BackupError {
     /// 与 F18 apply_optimizations 安全边界对齐)。
     #[error("active root 目录不存在: {0} (拒绝还原,避免写入未知路径)")]
     ActiveRootMissing(PathBuf),
+
+    /// M4.6 — 增量备份发现无变更时返回此错误,表示跳过创建新备份。
+    /// 这不是硬失败;调用方(commands/backup)应映射为特定响应。
+    #[error("no changes since previous backup at {0}")]
+    NoChange(PathBuf),
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +306,87 @@ impl BackupService {
         // a uniform `BackupEntry` shape.
         backup_scanner::parse_backup_filename(&backup_path)
             .ok_or_else(|| BackupError::CannotReconstruct(backup_path.clone()))
+    }
+
+    // -----------------------------------------------------------------------
+    // M4.6 — incremental backup
+    // -----------------------------------------------------------------------
+
+    /// Incremental backup: diff-based, skip no-change.
+    ///
+    /// Only creates a new `.bak.<ts>` snapshot when the current file
+    /// content differs from the most recent backup for the same file.
+    /// When the content is unchanged, returns `BackupError::NoChange`
+    /// instead of creating a duplicate snapshot — this keeps the backup
+    /// timeline clean and avoids disk waste.
+    ///
+    /// ## Algorithm
+    ///
+    /// 1. Validate `target` exists and is in an allowed directory.
+    /// 2. Scan for the most recent backup of the same original file
+    ///    (same `original_name` as `target`) via
+    ///    [`list_backups`].
+    /// 3. If a previous backup exists AND its content matches the
+    ///    current live file byte-for-byte → return
+    ///    `BackupError::NoChange`.
+    /// 4. Otherwise, delegate to [`backup_now`] to create a new
+    ///    full snapshot.
+    ///
+    /// ## active_root_dir
+    ///
+    /// Uses `active_root_dir` to scope the previous-backup search to
+    /// the correct project / user-level context (mirrors
+    /// `list_backups` semantics).
+    ///
+    /// ## Note: this is NOT byte-delta storage
+    ///
+    /// The "incremental" part is the *decision to skip* identical
+    /// snapshots — not storing diffs on disk. JSON config files are
+    /// small enough (< 100 KB) that full snapshots are cheaper than
+    /// diff reconstruction at restore time, and the user-facing
+    /// timeline is easier to reason about when each entry is a
+    /// self-contained snapshot.
+    pub fn backup_incremental(
+        &self,
+        target: &Path,
+        active_root_dir: Option<&Path>,
+    ) -> Result<BackupEntry, BackupError> {
+        if !target.exists() {
+            return Err(BackupError::NotFound(target.to_path_buf()));
+        }
+        let _safe = self.resolve_safe_path_for_active_root(target, active_root_dir)?;
+
+        // Get the original basename this backup would be for.
+        let original_name = target
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("settings.json");
+
+        // Scan all known backup dirs (with active_root expansion).
+        let all_backups = self.list_backups(active_root_dir);
+
+        // Find the most recent backup for the SAME original file.
+        // list_backups is already sorted newest-first.
+        let prev = all_backups
+            .iter()
+            .find(|e| e.original_name == original_name);
+
+        // If a previous backup exists, compare content byte-for-byte.
+        if let Some(prev_entry) = prev {
+            if prev_entry.path.exists() {
+                let prev_content = std::fs::read_to_string(&prev_entry.path)
+                    .map_err(BackupError::Io)?;
+                let current_content = std::fs::read_to_string(target)
+                    .map_err(BackupError::Io)?;
+                if prev_content == current_content {
+                    return Err(BackupError::NoChange(prev_entry.path.clone()));
+                }
+            }
+        }
+
+        // Content differs (or no previous backup exists) — create a
+        // new full snapshot via the existing full-copy path.
+        self.backup_now(target)
     }
 
     /// Directories the frontend is allowed to read backups from.
@@ -922,5 +1008,82 @@ mod tests {
             user_live.contains("https://new"),
             "user-level settings.json must be untouched after rejected restore, got: {user_live}"
         );
+    }
+
+    // ----- M4.6 incremental backup -----
+
+    /// 场景 1: 首次备份 → 等于全量 (无前备参考, 必定创建新备份)。
+    #[test]
+    fn backup_incremental_first_time_creates_new_backup() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.json");
+        fs::write(&settings, r#"{"env":{"url":"https://first"}}"#).unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let entry = svc.backup_incremental(&settings, None).unwrap();
+
+        // 应该创建了一个 .bak.<ts> 文件。
+        assert!(entry.path.exists());
+        assert!(entry.path.file_name().unwrap().to_str().unwrap().contains(".bak."));
+        assert_eq!(entry.original_name, "settings.json");
+
+        // 内容与 live 文件一致。
+        let bak_content = fs::read_to_string(&entry.path).unwrap();
+        assert!(bak_content.contains("https://first"));
+    }
+
+    /// 场景 2: 前备存在 + 只改 1 文件 → 创建新的增量备份。
+    #[test]
+    fn backup_incremental_when_changed_creates_backup() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.json");
+        fs::write(&settings, r#"{"env":{"url":"https://old"}}"#).unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        // 先做一次全量备份 (模拟前备)。
+        let first = svc.backup_now(&settings).unwrap();
+        assert!(first.path.exists());
+
+        // 修改 live 文件。
+        fs::write(&settings, r#"{"env":{"url":"https://new"}}"#).unwrap();
+
+        // 增量备份应该创建新文件。
+        let second = svc.backup_incremental(&settings, None).unwrap();
+        assert!(second.path.exists());
+        assert_ne!(first.path, second.path, "new backup must have different path from old one");
+
+        let bak_content = fs::read_to_string(&second.path).unwrap();
+        assert!(bak_content.contains("https://new"), "backup must contain updated content: {bak_content}");
+    }
+
+    /// 场景 3: 前备存在 + 未改动 → 不备份 (返回 NoChange)。
+    #[test]
+    fn backup_incremental_unchanged_returns_no_change() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.json");
+        fs::write(&settings, r#"{"env":{"url":"https://same"}}"#).unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        // 先做一次全量备份。
+        let first = svc.backup_now(&settings).unwrap();
+        assert!(first.path.exists());
+
+        // 不修改 live 文件 → 增量备份应返回 NoChange。
+        let result = svc.backup_incremental(&settings, None);
+        match result {
+            Err(BackupError::NoChange(p)) => {
+                assert_eq!(p, first.path, "NoChange must reference the previous backup path");
+            }
+            Ok(entry) => panic!("expected NoChange but got new backup: {entry:?}"),
+            Err(other) => panic!("expected NoChange but got: {other:?}"),
+        }
     }
 }
