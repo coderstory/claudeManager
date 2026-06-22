@@ -28,6 +28,7 @@ const sampleEntry = (
 ): BackupEntry => ({
   path,
   original_path: 'C:\\Users\\test\\.claude\\settings.json',
+  original_name: 'settings.json',
   timestamp_unix: ts,
   size_bytes: size,
   source,
