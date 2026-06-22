@@ -243,6 +243,45 @@ impl BackupService {
         v
     }
 
+    // -----------------------------------------------------------------------
+    // M3.10 adapter — active_root_dir aware paths (3-high F13)
+    // -----------------------------------------------------------------------
+
+    /// M3.10 adapter — return the Claude dir for the **active** root.
+    ///
+    /// - `Some(root)` = active project; return `<root>/.claude/`.
+    /// - `None` = user-level; return `paths.claude_dir()`.
+    ///
+    /// This is the 3-high F13 adaptation point (M3.10-dataflow §5).
+    /// Plugin callers (commands::backup, future F13 commands) MUST
+    /// call this rather than reading `paths.claude_dir()` directly so
+    /// that user/project mode switches transparently.
+    pub fn claude_dir_for_active_root(&self, active_root: Option<&Path>) -> PathBuf {
+        match active_root {
+            Some(root) => root.join(".claude"),
+            None => self
+                .paths
+                .claude_dir()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| self.paths.home.join(".claude")),
+        }
+    }
+
+    /// M3.10 adapter — full allow-list for backup scans, expanded with
+    /// the active project's `.claude/` if any. Same semantics as
+    /// [`allowed_directories`] but consults `active_root` for the
+    /// project-mode case.
+    pub fn allowed_directories_for_active_root(
+        &self,
+        active_root: Option<&Path>,
+    ) -> Vec<PathBuf> {
+        let mut v = self.allowed_directories();
+        if let Some(root) = active_root {
+            v.push(self.claude_dir_for_active_root(Some(root)));
+        }
+        v
+    }
+
     /// Confirm `path` lives under one of the allowed directories.
     /// Rejects `..` traversal and absolute paths to other drives.
     fn resolve_safe_path(&self, path: &Path) -> Result<PathBuf, BackupError> {
@@ -577,5 +616,59 @@ mod tests {
         assert!(entry.path.exists());
         let body = fs::read_to_string(&entry.path).unwrap();
         assert!(body.contains("https://new"));
+    }
+
+    // ----- M3.10 adapter (3-high F13) -----
+
+    /// 用户级(None) → 返回 `paths.claude_dir()`(原 `~/.claude/`)。
+    #[test]
+    fn claude_dir_for_active_root_none_returns_user_level() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let got = svc.claude_dir_for_active_root(None);
+        assert_eq!(got, claude_dir);
+    }
+
+    /// 项目级(Some) → 返回 `<active_root>/.claude/`。
+    #[test]
+    fn claude_dir_for_active_root_some_returns_project_claude() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let project_root = PathBuf::from("/proj-x");
+        let got = svc.claude_dir_for_active_root(Some(&project_root));
+        assert_eq!(got, PathBuf::from("/proj-x/.claude"));
+    }
+
+    /// 切换(None → Some) → 返回路径会变,但 allowed_directories 同时扩展。
+    #[test]
+    fn allowed_directories_expand_with_active_project() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        let user_dirs = svc.allowed_directories();
+        assert_eq!(user_dirs.len(), 2, "user-level = backups + ~/.claude");
+
+        let project_root = PathBuf::from("/proj-y");
+        let project_dirs = svc.allowed_directories_for_active_root(Some(&project_root));
+        assert_eq!(project_dirs.len(), 3, "project-mode = backups + ~/.claude + <root>/.claude");
+        assert!(project_dirs.contains(&PathBuf::from("/proj-y/.claude")));
+    }
+
+    /// 失败/边界:活跃项目根不存在 → 不报错,只是路径在磁盘上不存在
+    /// (allow-list 是路径级校验,不要求目标文件存在)。
+    #[test]
+    fn claude_dir_for_active_root_nonexistent_path_is_accepted() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let ghost = PathBuf::from("/this/does/not/exist");
+        let got = svc.claude_dir_for_active_root(Some(&ghost));
+        assert_eq!(got, PathBuf::from("/this/does/not/exist/.claude"));
     }
 }

@@ -1,4 +1,4 @@
-//! Tauri commands for F7 — 用量查询 (M2.7).
+//! Tauri commands for F7 — 用量查询 (M3.8).
 //!
 //! Each `#[tauri::command]` is a thin wrapper around the
 //! corresponding `UsageService` method. The split exists so that:
@@ -16,16 +16,18 @@
 //! Rust `serde(rename_all = "snake_case")` on `UsageSnapshot` — the
 //! TS mirror `src/types/usage.ts` declares the same shape.
 //!
-//! ## Error semantics
+//! ## M3.8 commands
 //!
-//! On any failure, the command returns `Err(msg)` where `msg` is a
-//! user-readable string (SPEC §6.5: "不允许静默吞错"). Frontend
-//! surfaces it via the page InfoBar.
+//! - `get_current_usage(window)` — returns just the snapshot
+//!   (no history; cheaper IPC payload for quick re-renders).
+//! - `get_usage_history(provider_id, window)` — returns the
+//!   per-day per-model history array for the chart.
+//! - `refresh_usage(window)` — drops cache + re-scans JSONL.
 
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::domain::{UsageSnapshot, UsageWindow};
+use crate::domain::{UsageHistoryEntry, UsageSnapshot, UsageWindow};
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
 /// is the user-visible message (SPEC §6.5).
@@ -77,7 +79,7 @@ fn resolve_active_provider_id(state: &AppState) -> String {
 
 /// F7 — return the cached usage snapshot for the active provider
 /// in the requested window (`"5h"` / `"1w"` / `"1m"`). Cache TTL is
-/// 5 minutes; the page can call `refreshUsage` to force a re-read.
+/// 5 minutes; the page can call `refresh_usage` to force a re-scan.
 #[tauri::command]
 pub async fn get_current_usage(
     state: State<'_, AppState>,
@@ -88,12 +90,30 @@ pub async fn get_current_usage(
     let provider_id = resolve_active_provider_id(&state);
     state
         .usage_service
-        .get_usage(&provider_id, w)
+        .get_snapshot_only(&provider_id, w)
+        .map_err(|e| e.to_string())
+}
+
+/// F7 — return per-day per-model history for the active provider
+/// in the requested window. Cache TTL is shared with
+/// `get_current_usage` — same `(provider_id, window)` key.
+#[tauri::command]
+pub async fn get_usage_history(
+    state: State<'_, AppState>,
+    window: String,
+) -> CmdResult<Vec<UsageHistoryEntry>> {
+    let w = UsageWindow::from_str(&window)
+        .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
+    let provider_id = resolve_active_provider_id(&state);
+    state
+        .usage_service
+        .get_history_only(&provider_id, w)
         .map_err(|e| e.to_string())
 }
 
 /// F7 — drop the cache entry for `(active_provider, window)` and
-/// re-read `~/.claude/usage.json`. Returns the fresh snapshot.
+/// re-scan `~/.claude/projects/**/*.jsonl`. Returns the fresh
+/// snapshot.
 #[tauri::command]
 pub async fn refresh_usage(
     state: State<'_, AppState>,
@@ -102,10 +122,11 @@ pub async fn refresh_usage(
     let w = UsageWindow::from_str(&window)
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
-    state
+    let (snap, _history) = state
         .usage_service
         .refresh(&provider_id, w)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(snap)
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +155,16 @@ mod tests {
         s: State<'_, AppState>,
         window: String,
     ) -> CmdResult<UsageSnapshot> {
+        let _ = (s, window);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `get_usage_history` signature.
+    #[allow(dead_code)]
+    fn _get_usage_history_signature(
+        s: State<'_, AppState>,
+        window: String,
+    ) -> CmdResult<Vec<UsageHistoryEntry>> {
         let _ = (s, window);
         unimplemented!()
     }

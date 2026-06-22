@@ -14,4 +14,5 @@ pub mod optimizer_service;
 pub mod project_service;
 pub mod provider_service;
 pub mod resource_service;
+pub mod usage_provider_ccswitch;
 pub mod usage_service;

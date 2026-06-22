@@ -136,6 +136,8 @@ pub fn run() {
             commands::backup::backup_now,
             commands::usage::get_current_usage,
             commands::usage::refresh_usage,
+            // M3.8 — usage history (per-day per-model) for chart
+            commands::usage::get_usage_history,
             commands::app::get_app_metadata,
             // M3.7 — 清单 18: 关于页 command(about.rs 复用 app::AppMetadata)。
             commands::about::get_app_info,

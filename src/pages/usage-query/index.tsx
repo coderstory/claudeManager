@@ -1,58 +1,30 @@
 /**
- * F7 — 用量查询 (M2.7 real implementation).
+ * F7 — 用量查询 (M3.8 cc-switch JSONL 集成).
  *
- * User flow (per docs/design/M2.7-dataflow.md):
- *   1. User clicks the sidebar "用量查询" tile.
- *   2. The page mounts and calls `getCurrentUsage` for the default
- *      window (`5h`).
- *   3. The page renders a large number for `tokens_used`, plus
- *      `cost_usd` (if present), `balance_usd` (if present), and a
- *      small "最后刷新" timestamp.
- *   4. A 3-button toggle group lets the user switch between
- *      `5h` / `1w` / `1m` windows. Switching re-invokes the command
- *      (the Rust-side cache may hit if the same window was queried
- *      within 5 minutes — the timestamp updates only on a fresh
- *      read).
- *   5. The "刷新" button calls `refreshUsage`, which bypasses the
- *      cache and re-reads `~/.claude/usage.json`.
+ * ## 数据流 (M3.8 重构)
  *
- * ## Design choices (CLAUDE.md §5 + SPEC §5.7)
+ *   1. 用户点 sidebar "用量查询"。
+ *   2. Page mount → 并发 invoke `getCurrentUsage(window)` + `getUsageHistory(window)`
+ *      (共享同一 `(provider_id, window)` cache key,后端只扫一次 JSONL)。
+ *   3. Snapshot 渲染 3 大数字卡片 (tokens / cost / balance)。
+ *   4. Breakdown 表格:每行 = 一个 model,展示 input/output/cache_read/cache_creation +
+ *      费用 (内置价格表查不到 → 显示 "—")。
+ *   5. History 图表:手绘 SVG,per-day stacked bar (per-model color)。
+ *   6. 错误 → 4 类本地化 banner (PermissionDenied / EncodingError / PathUnresolved / IO/JSON)。
+ *   7. "刷新" 按钮 → `refreshUsage(window)` → drop cache + 重扫 JSONL。
  *
- * - **Window toggle is a 3-button group**, not a dropdown — quota
- *   windows are the page's primary control.
- * - **Sparkline**: M2.7 ships a placeholder sparkline built from
- *   the single current snapshot (constant value, shown as a flat
- *   line). Real trend (last 24 queries) lands in M2.8+. This is
- *   intentionally visible — a single-point sparkline tells the
- *   user "no history yet" without a confusing empty state.
- * - **Error state**: any IPC error surfaces via InfoBar. Missing
- *   `usage.json` or empty snapshot is NOT an error — the page
- *   shows "暂无数据" instead.
- * - **No external libraries**: sparkline is hand-rolled SVG
- *   (~10 lines). State is plain `useState`.
+ * ## 设计取舍 (CLAUDE.md §5 + SPEC §5.7)
  *
- * ## Security
+ * - **Breakdown 表格 + history chart 替代 sparkline**:sparkline 是单点,
+ *   breakdown 是 M3.8 ship 的核心价值(让用户看到哪个 model 在烧钱)。
+ * - **4 类错误本地化**:UI 不显示原始 Rust 错误,统一映射成 `USAGE_ERROR_MESSAGES`。
+ * - **无外部图表库**:history 仍然手绘 SVG stacked bar (~30 行),保持零依赖。
+ * - **breakdown 永远不显示空数组**:空 = 显示 "暂无数据" 占位行,不渲染 0 行。
  *
- * All IPC calls go through Tauri's `invoke`. The backend scopes
- * reads to `~/.claude/usage.json` (via `UsageService` deriving
- * the path from `AppPaths::claude_dir()`). The page cannot ask
- * the backend to read arbitrary paths.
+ * ## M2.x-inline (保留 — 无 Tailwind pipeline)
  *
- * ## M2.x-inline
- *
- * Previously this page composed ~25 Tailwind utility classes
- * (`mx-auto w-full max-w-4xl p-6`, `mb-4 inline-flex rounded-md
- * border border-border bg-bg-elevated p-1`, `inline-flex items-center
- * gap-1.5 ... hover:bg-bg-overlay disabled:opacity-60`,
- * `animate-spin`, `grid grid-cols-1 gap-4 md:grid-cols-3`,
- * `text-3xl font-semibold tabular-nums text-text-primary`,
- * `h-9 w-24 animate-pulse rounded bg-bg-overlay`, etc). The
- * project has no Tailwind pipeline, so all those classes silently
- * noop'd on the real Tauri WebView2 release exe. Every utility
- * class is now inlined as `style={{}}` properties; hover/active/
- * animation rules live in src/design-system/utilities.css under
- * `[data-app-toggle]` / `[data-app-refresh-btn]` / `[data-app-spin]`
- * / `[data-app-pulse]`.
+ * Project 无 Tailwind pipeline,所有 utility class 改成内联 style 或
+ * `[data-app-*]` attribute + shared `@keyframes` (utilities.css)。
  */
 import {
   useCallback,
@@ -63,8 +35,17 @@ import {
 import type { ReactElement } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-import { getCurrentUsage, refreshUsage } from '../../lib/api/usage';
-import type { UsageSnapshot, UsageWindow } from '../../types/usage';
+import { getCurrentUsage, getUsageHistory, refreshUsage } from '../../lib/api/usage';
+import {
+  classifyUsageError,
+  USAGE_ERROR_MESSAGES,
+} from '../../types/usage';
+import type {
+  UsageBreakdownEntry,
+  UsageHistoryEntry,
+  UsageSnapshot,
+  UsageWindow,
+} from '../../types/usage';
 import { WINDOW_LABELS } from '../../types/usage';
 
 // ---------------------------------------------------------------------------
@@ -77,14 +58,16 @@ const WINDOWS: UsageWindow[] = ['5h', '1w', '1m'];
 interface PageState {
   window: UsageWindow;
   snapshot: UsageSnapshot | null;
+  history: UsageHistoryEntry[];
   loading: boolean;
   refreshing: boolean;
-  error: string | null;
+  error: { kind: string; message: string } | null;
 }
 
 const INITIAL_STATE: PageState = {
   window: DEFAULT_WINDOW,
   snapshot: null,
+  history: [],
   loading: true,
   refreshing: false,
   error: null,
@@ -97,10 +80,10 @@ const INITIAL_STATE: PageState = {
 export default function UsageQueryPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
 
-  // Initial load (5h).
+  // Initial load (5h) — snapshot + history in parallel.
   useEffect(() => {
     let cancelled = false;
-    void loadSnapshot(DEFAULT_WINDOW, false).then((patch) => {
+    void loadAll(DEFAULT_WINDOW, false).then((patch) => {
       if (!cancelled) setState((prev) => ({ ...prev, ...patch }));
     });
     return () => {
@@ -108,19 +91,16 @@ export default function UsageQueryPage(): ReactElement {
     };
   }, []);
 
-  // Re-query when the user toggles the window. Each toggle is its
-  // own IPC call — the Rust cache may hit if we re-select the
-  // current window within 5 minutes.
   const handleWindowChange = useCallback((next: UsageWindow) => {
     setState((prev) => ({ ...prev, window: next, loading: true, error: null }));
-    void loadSnapshot(next, false).then((patch) => {
+    void loadAll(next, false).then((patch) => {
       setState((prev) => ({ ...prev, ...patch }));
     });
   }, []);
 
   const handleRefresh = useCallback(() => {
     setState((prev) => ({ ...prev, refreshing: true, error: null }));
-    void loadSnapshot(state.window, true).then((patch) => {
+    void loadAll(state.window, true).then((patch) => {
       setState((prev) => ({ ...prev, ...patch }));
     });
   }, [state.window]);
@@ -149,6 +129,7 @@ export default function UsageQueryPage(): ReactElement {
     return `$${state.snapshot.balance_usd.toFixed(2)}`;
   }, [state.snapshot]);
 
+  const breakdown: UsageBreakdownEntry[] = state.snapshot?.breakdown ?? [];
   const isEmpty =
     !!state.snapshot && state.snapshot.tokens_used === 0 && !state.error;
 
@@ -158,7 +139,7 @@ export default function UsageQueryPage(): ReactElement {
         marginLeft: 'auto',
         marginRight: 'auto',
         width: '100%',
-        maxWidth: 896,
+        maxWidth: 1024,
         padding: 24,
       }}
       data-testid="usage-query-page"
@@ -181,7 +162,8 @@ export default function UsageQueryPage(): ReactElement {
             marginTop: 4,
           }}
         >
-          查看当前 active provider 的 token 用量、费用与余额。5 分钟内存缓存。
+          读取 ~/.claude/projects/&lt;encoded-path&gt;/*.jsonl,聚合 token 用量与费用。
+          5 分钟内存缓存。
         </p>
       </header>
 
@@ -208,8 +190,6 @@ export default function UsageQueryPage(): ReactElement {
               onClick={() => handleWindowChange(w)}
               aria-pressed={active}
               data-testid={`usage-window-${w}`}
-              // M2.x-inline: hover/active rule lives in
-              // src/design-system/utilities.css under [data-app-toggle].
               data-app-toggle="true"
               data-app-toggle-active={active ? 'true' : 'false'}
               style={{
@@ -246,8 +226,6 @@ export default function UsageQueryPage(): ReactElement {
           type="button"
           onClick={handleRefresh}
           disabled={state.refreshing}
-          // M2.x-inline: hover/disabled rules live in
-          // src/design-system/utilities.css under [data-app-refresh-btn].
           data-app-refresh-btn="true"
           data-testid="usage-refresh-btn"
           style={{
@@ -268,8 +246,6 @@ export default function UsageQueryPage(): ReactElement {
           }}
         >
           <RefreshCw
-            // M2.x-inline: animate-spin → data-app-spin attribute +
-            // shared @keyframes ccm-spin in utilities.css.
             data-app-spin={state.refreshing ? 'true' : undefined}
             style={{ height: 16, width: 16 }}
           />
@@ -288,19 +264,18 @@ export default function UsageQueryPage(): ReactElement {
         )}
       </div>
 
-      {/* Error InfoBar */}
+      {/* Localised error banner */}
       {state.error && (
         <div
           data-testid="usage-error"
           role="alert"
+          data-usage-error-kind={state.error.kind}
           style={{
             display: 'flex',
             alignItems: 'flex-start',
             gap: 8,
             borderRadius: 6,
-            // --danger at 30% alpha (was `border-danger/30`).
             border: '1px solid rgba(211, 47, 47, 0.3)',
-            // --danger at 5% alpha (was `bg-danger/5`).
             background: 'rgba(211, 47, 47, 0.05)',
             padding: 12,
             fontSize: 14,
@@ -317,15 +292,11 @@ export default function UsageQueryPage(): ReactElement {
               flexShrink: 0,
             }}
           />
-          <span>{state.error}</span>
+          <span>{state.error.message}</span>
         </div>
       )}
 
-      {/* Main cards — was `grid grid-cols-1 gap-4 md:grid-cols-3`. Project has
-          no Tailwind pipeline, so md: breakpoint was a silent noop on real
-          exe (cards always rendered as 1 column). We pick a sensible
-          3-column layout directly here — on narrow viewports the parent
-          <main> overflow:auto lets the user scroll horizontally. */}
+      {/* Main cards */}
       <div
         style={{
           display: 'grid',
@@ -386,8 +357,8 @@ export default function UsageQueryPage(): ReactElement {
         </Card>
       </div>
 
-      {/* Sparkline (M2.7 placeholder — single-point; M2.8+ adds history) */}
-      <div
+      {/* Per-model breakdown table */}
+      <section
         style={{
           marginTop: 24,
           borderRadius: 8,
@@ -395,13 +366,101 @@ export default function UsageQueryPage(): ReactElement {
           background: 'var(--bg-elevated)',
           padding: 16,
         }}
+        data-testid="usage-breakdown-section"
+      >
+        <h2
+          style={{
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            fontWeight: 500,
+            margin: 0,
+            marginBottom: 12,
+          }}
+        >
+          按 Model 拆分
+        </h2>
+        {breakdown.length === 0 ? (
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: 13,
+              textAlign: 'center',
+              padding: 16,
+              margin: 0,
+            }}
+            data-testid="usage-breakdown-empty"
+          >
+            暂无数据
+          </p>
+        ) : (
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 13,
+              fontFamily: 'var(--font-mono)',
+            }}
+            data-testid="usage-breakdown-table"
+          >
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <Th>Model</Th>
+                <Th align="right">Input</Th>
+                <Th align="right">Output</Th>
+                <Th align="right">Cache Read</Th>
+                <Th align="right">Cache Create</Th>
+                <Th align="right">Total</Th>
+                <Th align="right">Cost (USD)</Th>
+                <Th align="right"># Msgs</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {breakdown.map((row) => (
+                <tr
+                  key={row.model}
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                  data-testid={`usage-breakdown-row-${row.model}`}
+                >
+                  <Td>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>
+                      {row.model}
+                    </span>
+                  </Td>
+                  <Td align="right">{row.input_tokens.toLocaleString()}</Td>
+                  <Td align="right">{row.output_tokens.toLocaleString()}</Td>
+                  <Td align="right">{row.cache_read_tokens.toLocaleString()}</Td>
+                  <Td align="right">{row.cache_creation_tokens.toLocaleString()}</Td>
+                  <Td align="right">
+                    <strong>{row.total_tokens.toLocaleString()}</strong>
+                  </Td>
+                  <Td align="right">
+                    {row.cost_usd != null ? `$${row.cost_usd.toFixed(4)}` : '—'}
+                  </Td>
+                  <Td align="right">{row.message_count}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* History chart */}
+      <section
+        style={{
+          marginTop: 24,
+          borderRadius: 8,
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          padding: 16,
+        }}
+        data-testid="usage-history-section"
       >
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: 8,
+            marginBottom: 12,
           }}
         >
           <h2
@@ -412,7 +471,7 @@ export default function UsageQueryPage(): ReactElement {
               margin: 0,
             }}
           >
-            用量趋势
+            用量趋势 (按天)
           </h2>
           <span
             style={{
@@ -420,11 +479,11 @@ export default function UsageQueryPage(): ReactElement {
               fontSize: 12,
             }}
           >
-            M2.7 占位 — 历史趋势 M2.8+
+            {state.history.length} 条记录
           </span>
         </div>
-        <Sparkline value={state.snapshot?.tokens_used ?? 0} />
-      </div>
+        <HistoryChart history={state.history} loading={state.loading && state.history.length === 0} />
+      </section>
 
       {/* Empty state hint */}
       {isEmpty && (
@@ -450,7 +509,7 @@ export default function UsageQueryPage(): ReactElement {
               fontFamily: 'var(--font-mono)',
             }}
           >
-            ~/.claude/usage.json
+            ~/.claude/projects/&lt;encoded&gt;/*.jsonl
           </code>
         </p>
       )}
@@ -492,8 +551,6 @@ function Card({ title, testId, loading, children }: CardProps): ReactElement {
         {title}
       </div>
       {loading ? (
-        // M2.x-inline: animate-pulse → data-app-pulse attribute +
-        // shared @keyframes ccm-pulse in utilities.css.
         <div
           data-app-pulse="true"
           style={{
@@ -510,43 +567,209 @@ function Card({ title, testId, loading, children }: CardProps): ReactElement {
   );
 }
 
-/**
- * Tiny SVG sparkline. M2.7 renders a single-point line because the
- * cache only holds the current snapshot. M2.8+ will accept a
- * `points: number[]` prop and render the real history.
- */
-function Sparkline({ value }: { value: number }): ReactElement {
-  const W = 600;
-  const H = 60;
-  const y = value === 0 ? H / 2 : H / 2;
-  const x1 = 0;
-  const x2 = W;
+function Th({ children, align }: { children: React.ReactNode; align?: 'left' | 'right' }): ReactElement {
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      style={{ height: 64, width: '100%', display: 'block' }}
-      data-testid="usage-sparkline"
-      preserveAspectRatio="none"
+    <th
+      style={{
+        textAlign: align ?? 'left',
+        color: 'var(--text-muted)',
+        fontWeight: 500,
+        padding: '6px 8px',
+        fontSize: 12,
+        textTransform: 'uppercase',
+        letterSpacing: '0.025em',
+      }}
     >
-      <line
-        x1={x1}
-        y1={y}
-        x2={x2}
-        y2={y}
-        stroke="currentColor"
-        style={{ color: 'var(--accent)' }}
-        strokeWidth={2}
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, align }: { children: React.ReactNode; align?: 'left' | 'right' }): ReactElement {
+  return (
+    <td
+      style={{
+        textAlign: align ?? 'left',
+        padding: '8px 8px',
+        color: 'var(--text-primary)',
+      }}
+    >
+      {children}
+    </td>
+  );
+}
+
+/**
+ * Per-day stacked bar chart. One column per day, stacked by model.
+ * Hand-rolled SVG (~50 lines) — no chart lib.
+ */
+function HistoryChart({ history, loading }: { history: UsageHistoryEntry[]; loading: boolean }): ReactElement {
+  const W = 800;
+  const H = 200;
+  const PAD = 24;
+
+  // Aggregate by date — one bar per date, stacked per model.
+  const buckets = useMemo(() => {
+    const byDate = new Map<string, Map<string, number>>();
+    const models = new Set<string>();
+    for (const h of history) {
+      let m = byDate.get(h.date);
+      if (!m) {
+        m = new Map();
+        byDate.set(h.date, m);
+      }
+      m.set(h.model, (m.get(h.model) ?? 0) + h.tokens);
+      models.add(h.model);
+    }
+    const sortedDates = Array.from(byDate.keys()).sort();
+    const sortedModels = Array.from(models).sort();
+    return { byDate, sortedDates, sortedModels };
+  }, [history]);
+
+  const maxTotal = useMemo(() => {
+    let max = 0;
+    for (const [, m] of buckets.byDate) {
+      let sum = 0;
+      for (const v of m.values()) sum += v;
+      if (sum > max) max = sum;
+    }
+    return Math.max(max, 1);
+  }, [buckets]);
+
+  if (loading) {
+    return (
+      <div
+        data-app-pulse="true"
+        style={{
+          height: H,
+          borderRadius: 4,
+          background: 'var(--bg-overlay)',
+        }}
       />
-      <text
-        x={W / 2}
-        y={y - 6}
-        textAnchor="middle"
-        style={{ fill: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-        fontSize={11}
+    );
+  }
+  if (history.length === 0) {
+    return (
+      <p
+        style={{
+          color: 'var(--text-muted)',
+          fontSize: 13,
+          textAlign: 'center',
+          padding: 16,
+          margin: 0,
+        }}
+        data-testid="usage-history-empty"
       >
-        当前值: {value.toLocaleString()}
-      </text>
-    </svg>
+        暂无趋势数据
+      </p>
+    );
+  }
+
+  const colCount = buckets.sortedDates.length;
+  const colWidth = colCount > 0 ? (W - PAD * 2) / colCount : 0;
+  const innerH = H - PAD * 2;
+
+  // Color palette per model (deterministic hash → hue).
+  function colorFor(model: string): string {
+    let h = 0;
+    for (let i = 0; i < model.length; i++) h = (h * 31 + model.charCodeAt(i)) | 0;
+    const hue = Math.abs(h) % 360;
+    return `hsl(${hue}, 65%, 55%)`;
+  }
+
+  return (
+    <div data-testid="usage-history-chart">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ height: H, width: '100%', display: 'block' }}
+        preserveAspectRatio="none"
+      >
+        {buckets.sortedDates.map((date, i) => {
+          const m = buckets.byDate.get(date)!;
+          const x = PAD + i * colWidth;
+          let yCursor = PAD;
+          const total = Array.from(m.values()).reduce((a, b) => a + b, 0);
+          return (
+            <g key={date}>
+              {buckets.sortedModels.map((model) => {
+                const v = m.get(model) ?? 0;
+                if (v === 0) return null;
+                const segH = (v / maxTotal) * innerH;
+                const segY = PAD + innerH - (yCursor - PAD + segH);
+                yCursor += segH;
+                return (
+                  <rect
+                    key={model}
+                    x={x}
+                    y={segY}
+                    width={Math.max(colWidth - 2, 1)}
+                    height={segH}
+                    fill={colorFor(model)}
+                    opacity={0.85}
+                  />
+                );
+              })}
+              {/* X-axis label */}
+              <text
+                x={x + colWidth / 2}
+                y={H - 4}
+                textAnchor="middle"
+                style={{
+                  fill: 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                }}
+              >
+                {date.slice(5)}
+              </text>
+              {/* Total above bar */}
+              {total > 0 && (
+                <text
+                  x={x + colWidth / 2}
+                  y={PAD - 4}
+                  textAnchor="middle"
+                  style={{
+                    fill: 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                  }}
+                >
+                  {total.toLocaleString()}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {/* Legend */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginTop: 8,
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+        data-testid="usage-history-legend"
+      >
+        {buckets.sortedModels.map((model) => (
+          <span key={model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                background: colorFor(model),
+                borderRadius: 2,
+                display: 'inline-block',
+              }}
+            />
+            {model}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -554,26 +777,29 @@ function Sparkline({ value }: { value: number }): ReactElement {
 // Async helper
 // ---------------------------------------------------------------------------
 
-async function loadSnapshot(
+async function loadAll(
   window: UsageWindow,
   forceRefresh: boolean,
 ): Promise<Partial<PageState>> {
   try {
-    const snap = forceRefresh
-      ? await refreshUsage(window)
-      : await getCurrentUsage(window);
-    return {
-      snapshot: snap,
-      loading: false,
-      refreshing: false,
-      error: null,
-    };
+    if (forceRefresh) {
+      // Refresh drops the snapshot cache; history shares the same
+      // key so we re-fetch it too.
+      const snap = await refreshUsage(window);
+      const history = await getUsageHistory(window);
+      return { snapshot: snap, history, loading: false, refreshing: false, error: null };
+    }
+    // Concurrent — they hit the same (provider_id, window) cache
+    // key on the Rust side; only one JSONL scan happens.
+    const [snap, history] = await Promise.all([
+      getCurrentUsage(window),
+      getUsageHistory(window),
+    ]);
+    return { snapshot: snap, history, loading: false, refreshing: false, error: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      loading: false,
-      refreshing: false,
-      error: `查询失败: ${msg}`,
-    };
+    const raw = err instanceof Error ? err.message : String(err);
+    const kind = classifyUsageError(raw);
+    const message = USAGE_ERROR_MESSAGES[kind] ?? `查询失败: ${raw}`;
+    return { loading: false, refreshing: false, error: { kind, message } };
   }
 }

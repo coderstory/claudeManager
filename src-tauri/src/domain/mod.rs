@@ -23,7 +23,7 @@ pub use optimization::{ApplyResult, OptimizationFinding, Severity};
 pub use project::{Project, ProjectError, ProjectsFile, SYSTEM_PROJECT_ID};
 pub use provider::{is_valid_id, Provider, ProviderError, ProviderInput};
 pub use resource::{ResourceDetail, ResourceItem, ResourceKind};
-pub use usage::{UsageSnapshot, UsageWindow};
+pub use usage::{builtin_pricing, lookup_pricing, ModelPricing, UsageBreakdownEntry, UsageHistoryEntry, UsageSnapshot, UsageWindow};
 
 // F3 SQL-import shape: `infrastructure::sql_parser::ParsedMcpServer`.
 // Re-exported here so the rest of the crate can `use crate::domain::ParsedMcpServer;`

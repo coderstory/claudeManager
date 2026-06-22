@@ -1,10 +1,10 @@
-//! UsageSnapshot — domain model for F7 (M2.7).
+//! UsageSnapshot — domain model for F7 (M2.7 → M3.8).
 //!
 //! Represents one snapshot of the *active provider's* token usage
-//! for a given time window (5h / 1w / 1m). The data source today
-//! (M2.7) is local-only: `~/.claude/usage.json` written by Claude
-//! Code itself. External provider APIs (Anthropic / OpenAI / etc)
-//! are M2.8+.
+//! for a given time window (5h / 1w / 1m). The data source as of
+//! M3.8 is `~/.claude/projects/<encoded-path>/*.jsonl` (cc-switch
+//! JSONL pattern), aggregated in-memory by the service. Older
+//! M2.7 behaviour (read `~/.claude/usage.json`) is gone.
 //!
 //! ## Field semantics
 //!
@@ -15,16 +15,27 @@
 //!   between 5h / 1w / 1m invalidate the cache entry for that key.
 //! - `tokens_used` — cumulative tokens for the window (u64; if
 //!   missing on disk, defaults to 0).
-//! - `cost_usd` — optional. Not all providers report cost.
-//! - `balance_usd` — optional. Only paid providers report a balance.
-//! - `timestamp` — Unix seconds the snapshot was taken (server clock,
-//!   not provider clock).
+//! - `cost_usd` — optional. Computed from builtin pricing table
+//!   against model names found in JSONL.
+//! - `balance_usd` — always None in M3.8 (Admin API excluded by D14).
+//! - `timestamp` — Unix seconds the snapshot was taken (server clock).
+//! - `breakdown` — per-model token breakdown for the window
+//!   (M3.8, was a flat number in M2.7).
+//!
+//! ## Pricing
+//!
+//! M3.8 ships a hardcoded `builtin_pricing()` table covering the
+//! Claude family (Sonnet 4 / Opus 4 / Haiku 4 / Sonnet 3.5 etc).
+//! Unknown models → cost_usd=None but tokens_used is still counted.
+//! The table is NOT user-editable in M3.8 (deferred to M4+).
 //!
 //! ## Frontend mirror
 //!
 //! The TS mirror lives at `src/types/usage.ts`. Field naming is
 //! snake_case to match this struct's serde rule
-//! (`#[serde(rename_all = "snake_case")]`).
+//! (`#[serde(rename_all = "snake_case")`).
+
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +76,121 @@ impl UsageWindow {
             UsageWindow::OneMonth => "1m",
         }
     }
+
+    /// Window length in seconds. Used by the JSONL filter
+    /// (M3.8) to decide which parsed lines fall inside.
+    pub fn secs(&self) -> i64 {
+        match self {
+            UsageWindow::FiveHours => 5 * 3600,
+            UsageWindow::OneWeek => 7 * 86400,
+            UsageWindow::OneMonth => 30 * 86400,
+        }
+    }
+}
+
+/// Pricing for one model, expressed in USD per 1M tokens.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelPricing {
+    pub input_per_million: f64,
+    pub output_per_million: f64,
+    pub cache_read_per_million: f64,
+    pub cache_creation_per_million: f64,
+}
+
+impl ModelPricing {
+    /// Cost (USD) for the given token counts under this pricing row.
+    pub fn cost(
+        &self,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_creation: u64,
+    ) -> f64 {
+        let m = 1_000_000.0_f64;
+        (input as f64 / m) * self.input_per_million
+            + (output as f64 / m) * self.output_per_million
+            + (cache_read as f64 / m) * self.cache_read_per_million
+            + (cache_creation as f64 / m) * self.cache_creation_per_million
+    }
+}
+
+/// Built-in pricing table (M3.8).
+///
+/// Values are USD per 1M tokens, derived from Claude's published
+/// 2025-05 pricing. Used by the JSONL aggregator to compute
+/// `cost_usd`; unknown models → cost=None, tokens still counted.
+///
+/// **NOT user-editable in M3.8.** Locked as `const` so M3 ship is
+/// deterministic. M4+ may add a `PricingConfigPanel` (cc-switch
+/// parity).
+pub fn builtin_pricing() -> HashMap<&'static str, ModelPricing> {
+    let mut m = HashMap::new();
+    // Claude 4 family
+    m.insert(
+        "claude-sonnet-4-20250514",
+        ModelPricing {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+            cache_read_per_million: 0.30,
+            cache_creation_per_million: 3.75,
+        },
+    );
+    m.insert(
+        "claude-opus-4-20250514",
+        ModelPricing {
+            input_per_million: 15.0,
+            output_per_million: 75.0,
+            cache_read_per_million: 1.50,
+            cache_creation_per_million: 18.75,
+        },
+    );
+    m.insert(
+        "claude-haiku-4-20250514",
+        ModelPricing {
+            input_per_million: 1.0,
+            output_per_million: 5.0,
+            cache_read_per_million: 0.10,
+            cache_creation_per_million: 1.25,
+        },
+    );
+    // Claude 3.5
+    m.insert(
+        "claude-3-5-sonnet-20241022",
+        ModelPricing {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+            cache_read_per_million: 0.30,
+            cache_creation_per_million: 3.75,
+        },
+    );
+    m.insert(
+        "claude-3-5-haiku-20241022",
+        ModelPricing {
+            input_per_million: 0.80,
+            output_per_million: 4.0,
+            cache_read_per_million: 0.08,
+            cache_creation_per_million: 1.0,
+        },
+    );
+    // DeepSeek family (per cc-switch usage data, accessed via Anthropic-compatible)
+    m.insert(
+        "deepseek-v4-pro",
+        ModelPricing {
+            input_per_million: 0.27,
+            output_per_million: 1.10,
+            cache_read_per_million: 0.07,
+            cache_creation_per_million: 0.27,
+        },
+    );
+    m
+}
+
+/// Lookup pricing for a model name. Returns `None` for unknown
+/// models — the caller should set `cost_usd=None` but still
+/// display `tokens_used`.
+pub fn lookup_pricing(model: &str) -> Option<ModelPricing> {
+    builtin_pricing().get(model).copied()
 }
 
 /// One usage snapshot for the *active* provider.
@@ -82,16 +208,60 @@ pub struct UsageSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_usd: Option<f64>,
     /// Optional remaining balance in USD. Paid providers only.
+    /// M3.8 always None (Admin API excluded by D14).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub balance_usd: Option<f64>,
     /// Unix seconds when the snapshot was taken.
     pub timestamp: i64,
+    /// Per-model token breakdown (M3.8). Sorted by tokens desc
+    /// in the wire payload so the UI can render a stable table
+    /// without re-sorting.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub breakdown: Vec<UsageBreakdownEntry>,
+    /// M3.8 — distinct models that contributed to the snapshot.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub model_count: u32,
+}
+
+fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+/// One row in the per-model breakdown table (M3.8).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct UsageBreakdownEntry {
+    /// Model name as written in the JSONL `message.model` field
+    /// (e.g. `claude-sonnet-4-20250514`).
+    pub model: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_creation_tokens: u64,
+    pub total_tokens: u64,
+    /// Per-model cost (USD). None if model not in pricing table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
+    /// Number of distinct message IDs aggregated into this row.
+    pub message_count: u32,
+}
+
+/// History entry — one row per JSONL file (M3.8 ship simplification).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct UsageHistoryEntry {
+    /// ISO date (YYYY-MM-DD) the file's last assistant message
+    /// was timestamped. Used for the per-day bucket in the chart.
+    pub date: String,
+    pub model: String,
+    pub tokens: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
 }
 
 impl UsageSnapshot {
     /// Default empty snapshot for the given provider + window.
-    /// Used when `~/.claude/usage.json` is missing or the active
-    /// window field is absent — the UI still renders with zeros.
+    /// Used when no JSONL data exists or no usage in window.
     pub fn empty(provider_id: impl Into<String>, window: UsageWindow) -> Self {
         Self {
             provider_id: provider_id.into(),
@@ -100,6 +270,8 @@ impl UsageSnapshot {
             cost_usd: None,
             balance_usd: None,
             timestamp: now_unix_secs(),
+            breakdown: Vec::new(),
+            model_count: 0,
         }
     }
 }
@@ -114,12 +286,59 @@ fn now_unix_secs() -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Tests — pin the serde shape + window parser.
+// Tests — pin the serde shape + window parser + pricing helpers.
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn window_secs_matches_documented_values() {
+        assert_eq!(UsageWindow::FiveHours.secs(), 5 * 3600);
+        assert_eq!(UsageWindow::OneWeek.secs(), 7 * 86400);
+        assert_eq!(UsageWindow::OneMonth.secs(), 30 * 86400);
+    }
+
+    #[test]
+    fn builtin_pricing_covers_documented_models() {
+        let p = builtin_pricing();
+        assert!(p.contains_key("claude-sonnet-4-20250514"));
+        assert!(p.contains_key("claude-opus-4-20250514"));
+        assert!(p.contains_key("claude-haiku-4-20250514"));
+        assert!(p.contains_key("claude-3-5-sonnet-20241022"));
+        assert!(p.contains_key("claude-3-5-haiku-20241022"));
+        assert!(p.contains_key("deepseek-v4-pro"));
+    }
+
+    #[test]
+    fn lookup_pricing_returns_some_for_known_model() {
+        let p = lookup_pricing("claude-sonnet-4-20250514").unwrap();
+        assert_eq!(p.input_per_million, 3.0);
+        assert_eq!(p.output_per_million, 15.0);
+    }
+
+    #[test]
+    fn lookup_pricing_returns_none_for_unknown_model() {
+        assert!(lookup_pricing("some-future-model-2099").is_none());
+        assert!(lookup_pricing("").is_none());
+    }
+
+    #[test]
+    fn model_pricing_cost_uses_per_million_divisor() {
+        let p = ModelPricing {
+            input_per_million: 3.0,
+            output_per_million: 15.0,
+            cache_read_per_million: 0.30,
+            cache_creation_per_million: 3.75,
+        };
+        // 1M input tokens @ $3 / M = $3.00
+        // 1M output tokens @ $15 / M = $15.00
+        // 1M cache_read @ $0.30 / M = $0.30
+        // 1M cache_creation @ $3.75 / M = $3.75
+        let cost = p.cost(1_000_000, 1_000_000, 1_000_000, 1_000_000);
+        assert!((cost - 22.05).abs() < 1e-6);
+    }
 
     #[test]
     fn serialize_window_lowercase() {
@@ -167,6 +386,17 @@ mod tests {
             cost_usd: Some(12.34),
             balance_usd: Some(987.66),
             timestamp: 1_700_000_000,
+            breakdown: vec![UsageBreakdownEntry {
+                model: "claude-sonnet-4-20250514".into(),
+                input_tokens: 100_000,
+                output_tokens: 23_456,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 0,
+                total_tokens: 123_456,
+                cost_usd: Some(12.34),
+                message_count: 17,
+            }],
+            model_count: 1,
         };
         let json = serde_json::to_string(&snap).unwrap();
         let back: UsageSnapshot = serde_json::from_str(&json).unwrap();
@@ -184,10 +414,14 @@ mod tests {
             cost_usd: None,
             balance_usd: None,
             timestamp: 1,
+            breakdown: Vec::new(),
+            model_count: 0,
         };
         let v = serde_json::to_value(&snap).unwrap();
         assert!(v.get("cost_usd").is_none());
         assert!(v.get("balance_usd").is_none());
+        assert!(v.get("breakdown").is_none());
+        assert!(v.get("model_count").is_none());
         assert_eq!(v["tokens_used"], 0);
         assert_eq!(v["timestamp"], 1);
     }
@@ -202,6 +436,8 @@ mod tests {
             cost_usd: None,
             balance_usd: None,
             timestamp: 1,
+            breakdown: Vec::new(),
+            model_count: 0,
         };
         let b = UsageSnapshot {
             provider_id: "b".into(),
@@ -220,6 +456,8 @@ mod tests {
         assert_eq!(snap.tokens_used, 0);
         assert!(snap.cost_usd.is_none());
         assert!(snap.balance_usd.is_none());
+        assert!(snap.breakdown.is_empty());
+        assert_eq!(snap.model_count, 0);
         // timestamp is now-ish (within the last few seconds).
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

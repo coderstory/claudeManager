@@ -184,6 +184,53 @@ impl ProviderService {
         self.paths.app_data.join("providers")
     }
 
+    /// M3.10 adapter (3-high F2) — switch_provider with active-root awareness.
+    ///
+    /// - `active_root = None` → legacy behaviour, writes
+    ///   `paths.settings_json` (user-level). Used by the original
+    ///   `switch_provider` callers that don't care about project mode.
+    /// - `active_root = Some(p)` → writes `<p>/.claude/settings.json`,
+    ///   taking a backup in the same directory via fs_atomic (the
+    ///   standard `.bak.<ts>` file). Library file (`<id>.json`) stays
+    ///   in `<app_data>/providers/` regardless of mode (the library is
+    ///   a user-level resource).
+    pub fn switch_provider_with_active_root(
+        &self,
+        provider_id: &str,
+        active_root: Option<&Path>,
+    ) -> Result<Provider, ProviderError> {
+        let provider_path = self.provider_path(provider_id);
+        let provider = Provider::from_json_file(&provider_path)?;
+
+        // M3.10 — pick the settings.json path based on active root.
+        let settings_path = self.settings_json_for_active_root(active_root);
+        let mut settings = load_settings(&settings_path)?;
+
+        let env_obj = ensure_object(&mut settings, "env");
+        env_obj["ANTHROPIC_BASE_URL"] = Value::String(provider.api_base.clone());
+        env_obj["ANTHROPIC_AUTH_TOKEN"] = Value::String(provider.api_key.clone());
+        if let Some(first_model) = provider.models.first() {
+            if !first_model.is_empty() {
+                env_obj["ANTHROPIC_MODEL"] = Value::String(first_model.clone());
+            }
+        }
+
+        let json = serde_json::to_string_pretty(&settings)
+            .map_err(|e| ProviderError::Json(e))?;
+
+        fs_atomic::write_with_backup(&settings_path, &json)
+            .map_err(map_fs_atomic_to_provider)?;
+
+        let mut updated = provider.clone();
+        updated.last_used_at = Some(now_unix_secs());
+        updated.is_active = true;
+        updated
+            .to_json_file(&provider_path)
+            .map_err(|e| ProviderError::Io(std::io::Error::other(format!("{e}"))))?;
+
+        Ok(updated)
+    }
+
     // -----------------------------------------------------------------------
     // F14 — get_provider (导出单 provider, M2.16)
     // -----------------------------------------------------------------------
@@ -251,6 +298,31 @@ impl ProviderService {
     // -----------------------------------------------------------------------
     // M3.6 — CRUD (清单 22)
     // -----------------------------------------------------------------------
+
+    /// M3.10 adapter — resolve settings.json path for the active root.
+    ///
+    /// - `Some(root)` = active project; return `<root>/.claude/settings.json`.
+    /// - `None` = user-level; return cached `paths.settings_json`.
+    ///
+    /// This is the 3-high F1/F2 adaptation point (M3.10-dataflow §5).
+    /// Plugin callers (commands::providers::switch_provider) MUST
+    /// route through this helper so user/project mode switches
+    /// transparently without rewriting AppPaths.
+    pub fn settings_json_for_active_root(&self, active_root: Option<&Path>) -> PathBuf {
+        match active_root {
+            Some(root) => root.join(".claude").join("settings.json"),
+            None => self.paths.settings_json.clone(),
+        }
+    }
+
+    /// M3.10 adapter — providers dir for the active root. Library
+    /// files follow the same convention as settings.json.
+    pub fn providers_dir_for_active_root(&self, active_root: Option<&Path>) -> PathBuf {
+        match active_root {
+            Some(root) => root.join(".claude").join("providers"),
+            None => self.paths.app_data.join("providers"),
+        }
+    }
 
     /// M3.6 — Create。新增一个 provider。
     ///
@@ -1486,5 +1558,135 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
 
         let err = svc.delete_provider("ghost").unwrap_err();
         assert!(matches!(err, ProviderError::NotFound(id) if id == "ghost"));
+    }
+
+    // ----- M3.10 adapter (3-high F1 + F2) -----
+
+    /// 用户级(None) → 返回 cached `paths.settings_json`(用户级)。
+    #[test]
+    fn settings_json_for_active_root_none_returns_user_level() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+        let got = svc.settings_json_for_active_root(None);
+        assert_eq!(got, settings);
+    }
+
+    /// 项目级(Some) → 返回 `<active_root>/.claude/settings.json`。
+    #[test]
+    fn settings_json_for_active_root_some_returns_project_settings() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+        let project_root = PathBuf::from("/proj-a");
+        let got = svc.settings_json_for_active_root(Some(&project_root));
+        assert_eq!(got, PathBuf::from("/proj-a/.claude/settings.json"));
+    }
+
+    /// providers 目录同源逻辑:None → `<app_data>/providers/`,
+    /// Some → `<active_root>/.claude/providers/`。
+    #[test]
+    fn providers_dir_for_active_root_resolves_per_mode() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let user = svc.providers_dir_for_active_root(None);
+        assert_eq!(user, tmp.path().join("providers"));
+
+        let proj = svc.providers_dir_for_active_root(Some(Path::new("/proj-b")));
+        assert_eq!(proj, PathBuf::from("/proj-b/.claude/providers"));
+    }
+
+    /// F2 切换 + 活跃项目模式 → settings.json 写到项目根的 .claude/。
+    /// 这是 3-high F2 适配点的端到端验证。
+    #[test]
+    fn switch_provider_with_active_root_writes_to_project_claude_dir() {
+        let tmp = TempDir::new().unwrap();
+        // 项目根(模拟)— 完全独立于 app_data。
+        let project_root = tmp.path().join("proj-x");
+        std::fs::create_dir_all(&project_root).unwrap();
+        // 用户级 settings.json 永远不会被这个测试触碰。
+        let user_settings = tmp.path().join("user-settings.json");
+        write_settings(&user_settings, "https://user.example", "user-key");
+
+        let p_dir = tmp.path().join("providers");
+        write_provider(
+            &p_dir,
+            &sample_provider("glm-46", "GLM-4.6", "https://api.anthropic.com"),
+        );
+
+        let svc = ProviderService::new(test_paths(tmp.path(), &user_settings));
+        let activated = svc
+            .switch_provider_with_active_root("glm-46", Some(&project_root))
+            .unwrap();
+        assert_eq!(activated.id, "glm-46");
+
+        // 项目级 settings.json 被写入,用户级 settings.json 未被改。
+        let project_settings = project_root.join(".claude").join("settings.json");
+        assert!(project_settings.exists(), "project settings.json must be created");
+        let raw = std::fs::read_to_string(&project_settings).unwrap();
+        let v: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            v.get("env")
+                .unwrap()
+                .get("ANTHROPIC_BASE_URL")
+                .unwrap()
+                .as_str(),
+            Some("https://api.anthropic.com")
+        );
+
+        let user_raw = std::fs::read_to_string(&user_settings).unwrap();
+        assert!(user_raw.contains("user-key"));
+        assert!(!user_raw.contains("api.anthropic.com"));
+    }
+
+    /// F2 切换 + 用户级(None)= 走原路径,完全向后兼容。
+    #[test]
+    fn switch_provider_with_active_root_none_matches_legacy() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_settings(&settings, "https://old.example", "old-key");
+        write_provider(
+            &p_dir,
+            &sample_provider("deepseek", "DeepSeek", "https://api.deepseek.com"),
+        );
+
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+        let activated = svc
+            .switch_provider_with_active_root("deepseek", None)
+            .unwrap();
+        assert_eq!(activated.id, "deepseek");
+
+        let raw = std::fs::read_to_string(&settings).unwrap();
+        let v: Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            v.get("env")
+                .unwrap()
+                .get("ANTHROPIC_BASE_URL")
+                .unwrap()
+                .as_str(),
+            Some("https://api.deepseek.com")
+        );
+    }
+
+    /// 失败/边界:不存在的项目根 → 调用方负责创建;.claude/ 父目录不存
+    /// 在则 fs_atomic::write_with_backup 自己报错(写盘失败不属于此函数
+    /// 范围)。这里验证:函数正确把目标路径解析到项目根下的 settings.json。
+    #[test]
+    fn switch_provider_with_active_root_resolves_to_correct_target() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_provider(&p_dir, &sample_provider("a", "A", "https://a.example"));
+
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+        let ghost = PathBuf::from("/never/created/proj-z");
+        // 写盘会因父目录不存在失败 → 我们只关心错误是 Io 类(原路径找不到)。
+        let err = svc
+            .switch_provider_with_active_root("a", Some(&ghost))
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::Io(_)));
     }
 }

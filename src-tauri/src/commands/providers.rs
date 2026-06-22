@@ -80,14 +80,25 @@ pub struct ListProvidersResult {
 /// stamped). The frontend can use this to update its row immediately
 /// without a follow-up `list_providers` call — but a `list_providers`
 /// is recommended to re-sync other rows' `is_active` flags.
+///
+/// M3.10 adapter (3-high F2) — consults `IPlatformPaths::active_root_dir()`
+/// and routes the settings.json write through the resolved active root
+/// (project mode = `<active_root>/.claude/settings.json`, user mode =
+/// cached `paths.settings_json`). The library `providers/<id>.json` file
+/// itself stays in `<app_data>/providers/` (the library is global; only
+/// the "active provider" state lives under the project root).
 #[tauri::command]
 pub async fn switch_provider(
     state: State<'_, AppState>,
     provider_id: String,
 ) -> CmdResult<Provider> {
+    // M3.10 — query the live active root via the platform shim (not
+    // `state.paths` — those are resolved once at startup).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let active_root_ref = active_root.as_deref();
     state
         .provider_service
-        .switch_provider(&provider_id)
+        .switch_provider_with_active_root(&provider_id, active_root_ref)
         .map_err(|e| e.to_string())
 }
 
