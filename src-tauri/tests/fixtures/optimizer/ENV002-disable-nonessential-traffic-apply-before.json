@@ -1,0 +1,7 @@
+{
+  "settings_json": {},
+  "_expected_added": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "_expected_backup_pattern": ".bak."
+}

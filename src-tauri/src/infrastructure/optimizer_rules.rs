@@ -907,12 +907,240 @@ fn backup_path_for(target: &Path) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Rule 14 — ENV001 (auto-applies)
+// 禁用 Claude Code 内置 attribution header。
+//
+// 官方 env:CLAUDE_CODE_ATTRIBUTION_HEADER=0 → 关掉 Claude Code 自动
+// 加在响应里的 attribution 文本(纯偏好,无功能影响)。
+//
+// 见 docs/rules/builtin-rules.md §ENV001。
+// ---------------------------------------------------------------------------
+
+pub struct AttributionHeaderEnvRule;
+
+impl AttributionHeaderEnvRule {
+    const ENV_KEY: &'static str = "CLAUDE_CODE_ATTRIBUTION_HEADER";
+    const EXPECTED: &'static str = "0";
+}
+
+impl OptimizerRule for AttributionHeaderEnvRule {
+    fn id(&self) -> &'static str {
+        "ENV001"
+    }
+
+    fn check(&self, ctx: &OptimizerContext) -> Vec<OptimizationFinding> {
+        let current = settings_env_str(&ctx.settings_json, Self::ENV_KEY).unwrap_or("");
+        if current == Self::EXPECTED {
+            return Vec::new();
+        }
+        vec![OptimizationFinding {
+            id: finding_id(),
+            rule_id: self.id().into(),
+            severity: Severity::Info,
+            title: "未设置 CLAUDE_CODE_ATTRIBUTION_HEADER=0".into(),
+            description: format!(
+                "settings.env.{} 当前为 {:?};推荐设为 \"{}\" 关闭 Claude Code 内置 attribution。",
+                Self::ENV_KEY,
+                current,
+                Self::EXPECTED
+            ),
+            affected_path: format!("~/.claude/settings.json:env.{}", Self::ENV_KEY),
+            suggested_action: format!(
+                "自动写入 env.{} = \"{}\"(已自动备份)。",
+                Self::ENV_KEY,
+                Self::EXPECTED
+            ),
+            auto_apply: true,
+        }]
+    }
+
+    fn apply(
+        &self,
+        finding: &OptimizationFinding,
+        ctx: &OptimizerContext,
+    ) -> Result<ApplyResult, OptimizerRuleError> {
+        write_env_kv(finding, ctx, Self::ENV_KEY, Self::EXPECTED)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rule 15 — ENV002 (auto-applies)
+// 禁用 Claude Code 非必要流量(telemetry / 错误上报),节省 token。
+//
+// 官方 env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1。
+//
+// 见 docs/rules/builtin-rules.md §ENV002。
+// ---------------------------------------------------------------------------
+
+pub struct DisableNonessentialTrafficEnvRule;
+
+impl DisableNonessentialTrafficEnvRule {
+    const ENV_KEY: &'static str = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC";
+    const EXPECTED: &'static str = "1";
+}
+
+impl OptimizerRule for DisableNonessentialTrafficEnvRule {
+    fn id(&self) -> &'static str {
+        "ENV002"
+    }
+
+    fn check(&self, ctx: &OptimizerContext) -> Vec<OptimizationFinding> {
+        let current = settings_env_str(&ctx.settings_json, Self::ENV_KEY).unwrap_or("");
+        if current == Self::EXPECTED {
+            return Vec::new();
+        }
+        vec![OptimizationFinding {
+            id: finding_id(),
+            rule_id: self.id().into(),
+            severity: Severity::Info,
+            title: "未设置 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1".into(),
+            description: format!(
+                "settings.env.{} 当前为 {:?};推荐设为 \"{}\" 禁用 Claude Code 非必要网络流量以节省 token。",
+                Self::ENV_KEY,
+                current,
+                Self::EXPECTED
+            ),
+            affected_path: format!("~/.claude/settings.json:env.{}", Self::ENV_KEY),
+            suggested_action: format!(
+                "自动写入 env.{} = \"{}\"(已自动备份)。",
+                Self::ENV_KEY,
+                Self::EXPECTED
+            ),
+            auto_apply: true,
+        }]
+    }
+
+    fn apply(
+        &self,
+        finding: &OptimizationFinding,
+        ctx: &OptimizerContext,
+    ) -> Result<ApplyResult, OptimizerRuleError> {
+        write_env_kv(finding, ctx, Self::ENV_KEY, Self::EXPECTED)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rule 16 — ENV003 (auto-applies)
+// 默认 effort level 调到 max,让 Claude Code 默认做更深推理。
+//
+// 官方 env:CLAUDE_CODE_EFFORT_LEVEL=max。
+//
+// 见 docs/rules/builtin-rules.md §ENV003。
+// ---------------------------------------------------------------------------
+
+pub struct EffortLevelMaxEnvRule;
+
+impl EffortLevelMaxEnvRule {
+    const ENV_KEY: &'static str = "CLAUDE_CODE_EFFORT_LEVEL";
+    const EXPECTED: &'static str = "max";
+}
+
+impl OptimizerRule for EffortLevelMaxEnvRule {
+    fn id(&self) -> &'static str {
+        "ENV003"
+    }
+
+    fn check(&self, ctx: &OptimizerContext) -> Vec<OptimizationFinding> {
+        let current = settings_env_str(&ctx.settings_json, Self::ENV_KEY).unwrap_or("");
+        if current == Self::EXPECTED {
+            return Vec::new();
+        }
+        vec![OptimizationFinding {
+            id: finding_id(),
+            rule_id: self.id().into(),
+            severity: Severity::Info,
+            title: "未设置 CLAUDE_CODE_EFFORT_LEVEL=max".into(),
+            description: format!(
+                "settings.env.{} 当前为 {:?};推荐设为 \"{}\" 让 Claude Code 默认做更深推理。",
+                Self::ENV_KEY,
+                current,
+                Self::EXPECTED
+            ),
+            affected_path: format!("~/.claude/settings.json:env.{}", Self::ENV_KEY),
+            suggested_action: format!(
+                "自动写入 env.{} = \"{}\"(已自动备份)。",
+                Self::ENV_KEY,
+                Self::EXPECTED
+            ),
+            auto_apply: true,
+        }]
+    }
+
+    fn apply(
+        &self,
+        finding: &OptimizationFinding,
+        ctx: &OptimizerContext,
+    ) -> Result<ApplyResult, OptimizerRuleError> {
+        write_env_kv(finding, ctx, Self::ENV_KEY, Self::EXPECTED)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper — ENV00x 规则的 apply 共用逻辑(写入 env.K=V,F13 备份原子写盘)。
+// ---------------------------------------------------------------------------
+
+/// 通用 "在 settings.env 里写一个 KV" 的 apply 实现。
+///
+/// 流程:
+///  1. 重新读 settings.json(避免 stale ctx),`env` 字段若不存在则新建;
+///  2. 写入 KV;若值已经等于 expected,返回 manual(finding_id, "已是 X");
+///  3. fs_atomic::write_with_backup 原子写盘,返回 backup_path 供 UI 展示。
+fn write_env_kv(
+    finding: &OptimizationFinding,
+    ctx: &OptimizerContext,
+    env_key: &str,
+    expected: &str,
+) -> Result<ApplyResult, OptimizerRuleError> {
+    let mut current: Value = match std::fs::read_to_string(&ctx.settings_path) {
+        Ok(s) if !s.trim().is_empty() => serde_json::from_str(&s)?,
+        _ => {
+            return Ok(ApplyResult::manual(
+                &finding.id,
+                "settings.json 不存在或为空(无法写 env)。",
+            ));
+        }
+    };
+    let root = match current.as_object_mut() {
+        Some(o) => o,
+        None => {
+            return Ok(ApplyResult::manual(
+                &finding.id,
+                "settings.json 顶层不是对象(无法写 env)。",
+            ));
+        }
+    };
+    if !root.contains_key("env") {
+        root.insert("env".to_string(), Value::Object(Default::default()));
+    }
+    let env = root
+        .get_mut("env")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| {
+            OptimizerRuleError::Manual("settings.env 不是对象".into())
+        })?;
+    let existing = env.get(env_key).and_then(|v| v.as_str()).unwrap_or("");
+    if existing == expected {
+        return Ok(ApplyResult::manual(
+            &finding.id,
+            &format!("env.{} 已是 \"{}\"。", env_key, expected),
+        ));
+    }
+    env.insert(env_key.to_string(), Value::String(expected.to_string()));
+    let backup = backup_path_for(&ctx.settings_path);
+    let json = serde_json::to_string_pretty(&current)?;
+    fs_atomic::write_with_backup(&ctx.settings_path, &json)?;
+    Ok(ApplyResult::ok(&finding.id, Some(backup)))
+}
+
+// ---------------------------------------------------------------------------
 // All rules — enumerator helper for the service.
 // ---------------------------------------------------------------------------
 
-/// Construct all 13 rules in their canonical order. Used by
-/// `OptimizerService::new`; tests use it too so the count stays
-/// in sync.
+/// Construct all 16 rules (13 文件规则 + 3 env 规则) in their canonical
+/// order. Used by `OptimizerService::new`; tests use it too so the count
+/// stays in sync.
+///
+/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003。
 pub fn all_rules() -> Vec<Box<dyn OptimizerRule>> {
     vec![
         Box::new(OrphanProviderRule),
@@ -928,6 +1156,10 @@ pub fn all_rules() -> Vec<Box<dyn OptimizerRule>> {
         Box::new(MissingActiveProviderRule),
         Box::new(DanglingActiveProviderRule),
         Box::new(InconsistentProviderTypeRule),
+        // M3.3 — 3 个 env 规则
+        Box::new(AttributionHeaderEnvRule),
+        Box::new(DisableNonessentialTrafficEnvRule),
+        Box::new(EffortLevelMaxEnvRule),
     ]
 }
 
@@ -1432,12 +1664,166 @@ mod tests {
     // ----- all_rules() registry sanity -----
 
     #[test]
-    fn all_rules_returns_thirteen_unique_ids() {
+    fn all_rules_returns_sixteen_unique_ids() {
+        // M3.3 — 13 文件规则 + 3 env 规则 = 16。
         let rules = all_rules();
-        assert_eq!(rules.len(), 13);
+        assert_eq!(rules.len(), 16);
         let mut ids: Vec<&str> = rules.iter().map(|r| r.id()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 13, "rule ids must be unique");
+        assert_eq!(ids.len(), 16, "rule ids must be unique");
+    }
+
+    // ----- Rule 14 — ENV001 (CLAUDE_CODE_ATTRIBUTION_HEADER=0) -----
+
+    #[test]
+    fn env001_hits_when_attr_header_missing_or_wrong() {
+        let tmp = TempDir::new().unwrap();
+        // Case A: env 缺这个 key
+        let ctx = ctx_with(&tmp, serde_json::json!({"env": {}}), vec![], vec![]);
+        let f = AttributionHeaderEnvRule.check(&ctx);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule_id, "ENV001");
+        assert!(f[0].auto_apply);
+
+        // Case B: 值是 "1" 而非 "0"
+        let ctx2 = ctx_with(
+            &tmp,
+            serde_json::json!({"env": {"CLAUDE_CODE_ATTRIBUTION_HEADER": "1"}}),
+            vec![],
+            vec![],
+        );
+        let f2 = AttributionHeaderEnvRule.check(&ctx2);
+        assert_eq!(f2.len(), 1);
+
+        // Case C: 已经是 "0" → 不触发
+        let ctx3 = ctx_with(
+            &tmp,
+            serde_json::json!({"env": {"CLAUDE_CODE_ATTRIBUTION_HEADER": "0"}}),
+            vec![],
+            vec![],
+        );
+        assert!(AttributionHeaderEnvRule.check(&ctx3).is_empty());
+    }
+
+    #[test]
+    fn env001_apply_writes_zero_with_backup() {
+        let tmp = TempDir::new().unwrap();
+        let settings = serde_json::json!({"env": {"ANTHROPIC_BASE_URL": "https://x"}});
+        let ctx = ctx_with(&tmp, settings, vec![], vec![]);
+        let findings = AttributionHeaderEnvRule.check(&ctx);
+        assert_eq!(findings.len(), 1);
+        let result = AttributionHeaderEnvRule.apply(&findings[0], &ctx).unwrap();
+        assert!(result.applied);
+        assert!(result.backup_path.is_some());
+
+        let raw = std::fs::read_to_string(&ctx.settings_path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            v.pointer("/env/CLAUDE_CODE_ATTRIBUTION_HEADER").unwrap().as_str(),
+            Some("0")
+        );
+        // 原有字段不破坏
+        assert_eq!(
+            v.pointer("/env/ANTHROPIC_BASE_URL").unwrap().as_str(),
+            Some("https://x")
+        );
+    }
+
+    // ----- Rule 15 — ENV002 (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1) -----
+
+    #[test]
+    fn env002_hits_when_traffic_var_missing() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ctx_with(&tmp, serde_json::json!({}), vec![], vec![]);
+        let f = DisableNonessentialTrafficEnvRule.check(&ctx);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule_id, "ENV002");
+
+        // 已是 "1" → 不触发
+        let ctx2 = ctx_with(
+            &tmp,
+            serde_json::json!({"env": {"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}}),
+            vec![],
+            vec![],
+        );
+        assert!(DisableNonessentialTrafficEnvRule.check(&ctx2).is_empty());
+    }
+
+    #[test]
+    fn env002_apply_creates_env_section_and_writes_one() {
+        let tmp = TempDir::new().unwrap();
+        // settings.json 完全空对象 → apply 必须先建 env 对象
+        let ctx = ctx_with(&tmp, serde_json::json!({}), vec![], vec![]);
+        let findings = DisableNonessentialTrafficEnvRule.check(&ctx);
+        assert_eq!(findings.len(), 1);
+        let result = DisableNonessentialTrafficEnvRule.apply(&findings[0], &ctx).unwrap();
+        assert!(result.applied);
+        assert!(result.backup_path.is_some());
+
+        let raw = std::fs::read_to_string(&ctx.settings_path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            v.pointer("/env/CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")
+                .unwrap()
+                .as_str(),
+            Some("1")
+        );
+    }
+
+    // ----- Rule 16 — ENV003 (CLAUDE_CODE_EFFORT_LEVEL=max) -----
+
+    #[test]
+    fn env003_hits_when_effort_wrong() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ctx_with(
+            &tmp,
+            serde_json::json!({"env": {"CLAUDE_CODE_EFFORT_LEVEL": "low"}}),
+            vec![],
+            vec![],
+        );
+        let f = EffortLevelMaxEnvRule.check(&ctx);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].rule_id, "ENV003");
+
+        // 已是 "max" → 不触发
+        let ctx2 = ctx_with(
+            &tmp,
+            serde_json::json!({"env": {"CLAUDE_CODE_EFFORT_LEVEL": "max"}}),
+            vec![],
+            vec![],
+        );
+        assert!(EffortLevelMaxEnvRule.check(&ctx2).is_empty());
+    }
+
+    #[test]
+    fn env003_apply_writes_max_with_backup() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ctx_with(&tmp, serde_json::json!({}), vec![], vec![]);
+        let findings = EffortLevelMaxEnvRule.check(&ctx);
+        let result = EffortLevelMaxEnvRule.apply(&findings[0], &ctx).unwrap();
+        assert!(result.applied);
+        assert!(result.backup_path.is_some());
+
+        let raw = std::fs::read_to_string(&ctx.settings_path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(
+            v.pointer("/env/CLAUDE_CODE_EFFORT_LEVEL").unwrap().as_str(),
+            Some("max")
+        );
+    }
+
+    /// ENV00x 的幂等性:连续 apply 两次,第二次返回 manual 不再写盘。
+    #[test]
+    fn env_rules_are_idempotent_on_second_apply() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ctx_with(&tmp, serde_json::json!({}), vec![], vec![]);
+        let findings = AttributionHeaderEnvRule.check(&ctx);
+        let first = AttributionHeaderEnvRule.apply(&findings[0], &ctx).unwrap();
+        assert!(first.applied);
+        let findings2 = AttributionHeaderEnvRule.check(&ctx);
+        let second = AttributionHeaderEnvRule.apply(&findings2[0], &ctx).unwrap();
+        assert!(!second.applied);
+        assert!(second.error.is_some());
     }
 }

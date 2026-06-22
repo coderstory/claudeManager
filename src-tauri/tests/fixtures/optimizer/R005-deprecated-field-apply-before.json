@@ -1,0 +1,13 @@
+{
+  "settings_json": {
+    "claude_api_url": "https://old.example",
+    "env": {
+      "ANTHROPIC_BASE_URL": "https://new.example"
+    }
+  },
+  "_expected_env_preserved": {
+    "ANTHROPIC_BASE_URL": "https://new.example"
+  },
+  "_expected_removed": ["claude_api_url"],
+  "_expected_backup_pattern": ".bak."
+}

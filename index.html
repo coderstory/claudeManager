@@ -185,10 +185,15 @@
     <script>
       // FAILSAFE — if React never mounts (JS eval error, bundle 404,
       // etc.) we cannot leave the user staring at a loading screen
-      // forever. After 6s, hide the splash unconditionally. The
-      // normal path (React mounts + App.tsx useEffect) hides it at
-      // 2200ms + 300ms transition = 2500ms, so 6s failsafe 只在
-      // React 挂载失败的异常路径触发。
+      // forever. M3.1: tightened from 6000ms → 4500ms because the
+      // primary path now hides the splash via the `tauri://ready`
+      // event (driven by lib.rs after webview first-paint handshake),
+      // which lands well under 1s on warm machines. 4.5s is the
+      // React-mount sanity backstop (covers slow machines + dev HMR
+      // scenarios where the event listener may not be wired up by
+      // the time the event fires). App.tsx has its own 8s hard
+      // failsafe as the last resort (jsdom tests + some embedded
+      // webview modes without index.html).
       (function () {
         setTimeout(function () {
           var s = document.getElementById("ccm-splash");
@@ -198,7 +203,7 @@
               s.style.display = "none";
             }, 300);
           }
-        }, 6000);
+        }, 4500);
       })();
     </script>
     <div id="root"></div>

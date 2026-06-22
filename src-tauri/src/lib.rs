@@ -137,6 +137,8 @@ pub fn run() {
             commands::usage::get_current_usage,
             commands::usage::refresh_usage,
             commands::app::get_app_metadata,
+            // M3.7 — 清单 18: 关于页 command(about.rs 复用 app::AppMetadata)。
+            commands::about::get_app_info,
             commands::optimizer::scan_optimizations,
             commands::optimizer::apply_optimizations,
             // M2.16 — F23 优化建议导出 markdown（Rust 侧生成 + 弹保存框 + 原子写盘）

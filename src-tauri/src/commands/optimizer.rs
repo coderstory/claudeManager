@@ -342,9 +342,11 @@ pub(crate) fn build_markdown_report(
     out
 }
 
-/// 13 条优化规则的静态参考表（与 `optimizer_rules::all_rules` 对齐)。
+/// 16 条优化规则的静态参考表（与 `optimizer_rules::all_rules` 对齐)。
 /// 用于报告附录,让接收方不看代码也能理解每条规则的语义。
-const RULE_REFERENCE: [(&str, Severity, bool, &str); 13] = [
+///
+/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003 三条 env 规则。
+const RULE_REFERENCE: [(&str, Severity, bool, &str); 16] = [
     ("ORPHAN_PROVIDER", Severity::Warning, false, "settings.json 引用了不存在的 provider"),
     ("UNREFERENCED_PROVIDER", Severity::Info, false, "provider 从未被使用,可考虑删除"),
     ("DUPLICATE_MCP", Severity::Warning, false, "MCP server 重复（同 command/url)"),
@@ -358,6 +360,10 @@ const RULE_REFERENCE: [(&str, Severity, bool, &str); 13] = [
     ("MISSING_ACTIVE_PROVIDER", Severity::Warning, false, "env.ANTHROPIC_BASE_URL 缺失,无法使用"),
     ("DANGLING_ACTIVE_PROVIDER", Severity::Error, false, "活动 provider 指向不存在的目标"),
     ("INCONSISTENT_PROVIDER_TYPE", Severity::Info, true, "provider_type 大小写不一致,统一 lowercase"),
+    // M3.3 — 3 个 env 规则
+    ("ENV001", Severity::Info, true, "CLAUDE_CODE_ATTRIBUTION_HEADER=0,关闭内置 attribution"),
+    ("ENV002", Severity::Info, true, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1,禁用非必要流量"),
+    ("ENV003", Severity::Info, true, "CLAUDE_CODE_EFFORT_LEVEL=max,默认更深推理"),
 ];
 
 /// 严重度 → 中文标签（与前端 `severityLabel` 对齐)。
@@ -495,19 +501,19 @@ mod tests {
         assert!(md.contains("未发现需优化的项"));
     }
 
-    /// 附录含 13 行规则参考表。
+    /// 附录含 16 行规则参考表(M3.3:13 文件规则 + 3 env 规则)。
     #[test]
-    fn appendix_has_13_rule_rows() {
+    fn appendix_has_16_rule_rows() {
         let md = build_markdown_report(&[], None, Some("2026-06-21 10:00:00"));
-        // 表头 + 分隔行 + 13 数据行 = 15 行含 `|` 的行。粗略数 `|---|`
-        // 后的 13 个 `|` 开头行。
+        // 表头 + 分隔行 + 16 数据行 = 18 行含 `|` 的行。粗略数 `|---|`
+        // 后的 16 个 `|` 开头行。
         let data_rows = md
             .lines()
             .skip_while(|l| !l.contains("| 规则 ID |"))
             .skip(2) // 表头 + 分隔
             .take_while(|l| l.starts_with("| `"))
             .count();
-        assert_eq!(data_rows, 13);
+        assert_eq!(data_rows, 16);
     }
 
     /// 确定性:同输入 → 同输出（便于 diff 归档)。

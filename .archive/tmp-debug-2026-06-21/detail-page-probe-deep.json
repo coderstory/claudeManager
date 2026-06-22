@@ -1,0 +1,584 @@
+{
+  "provider-switch": {
+    "h1List": [],
+    "tree": [
+      {
+        "tag": "DIV",
+        "depth": 0,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 1,
+        "padding": "24px",
+        "paddingTop": "24px",
+        "paddingLeft": "24px",
+        "maxWidth": "none",
+        "styleAttr": "padding: var(--space-6); color: var(--text-secondary); font-size: var(--fs-body);"
+      }
+    ]
+  },
+  "optimizer": {
+    "h1List": [
+      {
+        "tag": "H2",
+        "text": "配置优化检查",
+        "fontSize": "18px",
+        "fontWeight": "600",
+        "marginTop": "0px",
+        "marginBottom": "0px"
+      }
+    ],
+    "tree": [
+      {
+        "tag": "DIV",
+        "depth": 0,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 1,
+        "padding": "24px",
+        "paddingTop": "24px",
+        "paddingLeft": "24px",
+        "maxWidth": "1100px",
+        "styleAttr": "padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1100px; margin: 0px auto;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "H2",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0px;"
+      },
+      {
+        "tag": "P",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 12px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0px;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "margin-left: 8px;"
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "6px 14px",
+        "paddingTop": "6px",
+        "paddingLeft": "14px",
+        "maxWidth": "none",
+        "styleAttr": "display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px"
+      },
+      {
+        "tag": "svg",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "32px",
+        "paddingTop": "32px",
+        "paddingLeft": "32px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 32px; text-align: center; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); color: var(--text-secondary);"
+      },
+      {
+        "tag": "svg",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "margin-bottom: 8px;"
+      },
+      {
+        "tag": "circle",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 14px; color: var(--text-primary);"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 12px; margin-top: 4px;"
+      }
+    ]
+  },
+  "resource-browser": {
+    "h1List": [
+      {
+        "tag": "H2",
+        "text": "资源浏览",
+        "fontSize": "18px",
+        "fontWeight": "600",
+        "marginTop": "0px",
+        "marginBottom": "0px"
+      }
+    ],
+    "tree": [
+      {
+        "tag": "DIV",
+        "depth": 0,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 1,
+        "padding": "24px",
+        "paddingTop": "24px",
+        "paddingLeft": "24px",
+        "maxWidth": "1100px",
+        "styleAttr": "padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1100px; margin: 0px auto;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "H2",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0px;"
+      },
+      {
+        "tag": "P",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 12px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0px;"
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "6px 14px",
+        "paddingTop": "6px",
+        "paddingLeft": "14px",
+        "maxWidth": "none",
+        "styleAttr": "display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px"
+      },
+      {
+        "tag": "svg",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "path",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "display: flex; gap: 4px; border-bottom: 1px solid var(--border);"
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "8px 16px",
+        "paddingTop": "8px",
+        "paddingLeft": "16px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 8px 16px; font-size: 13px; font-weight: 600; color: var(--accent); background: transparent; border-top-width: medium; border-right-width: medium; border-bottom: 2px solid var(--accent); borde"
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "8px 16px",
+        "paddingTop": "8px",
+        "paddingLeft": "16px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 8px 16px; font-size: 13px; font-weight: 400; color: var(--text-secondary); background: transparent; border-width: medium medium 2px; border-style: none none solid; border-color: currentcolor "
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "8px 16px",
+        "paddingTop": "8px",
+        "paddingLeft": "16px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 8px 16px; font-size: 13px; font-weight: 400; color: var(--text-secondary); background: transparent; border-width: medium medium 2px; border-style: none none solid; border-color: currentcolor "
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "8px 16px",
+        "paddingTop": "8px",
+        "paddingLeft": "16px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 8px 16px; font-size: 13px; font-weight: 400; color: var(--text-secondary); background: transparent; border-width: medium medium 2px; border-style: none none solid; border-color: currentcolor "
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 3,
+        "padding": "8px 16px",
+        "paddingTop": "8px",
+        "paddingLeft": "16px",
+        "maxWidth": "none",
+        "styleAttr": "padding: 8px 16px; font-size: 13px; font-weight: 400; color: var(--text-secondary); background: transparent; border-width: medium medium 2px; border-style: none none solid; border-color: currentcolor "
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 12px; color: var(--text-muted); font-family: var(--font-mono, monospace);"
+      },
+      {
+        "tag": "svg",
+        "depth": 3,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "vertical-align: middle; margin-right: 4px;"
+      },
+      {
+        "tag": "path",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 2,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); overflow: hidden;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "10px 14px",
+        "paddingTop": "10px",
+        "paddingLeft": "14px",
+        "maxWidth": "none",
+        "styleAttr": "display: grid; grid-template-columns: 1fr 100px 80px 80px; gap: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.02); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; co"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": ""
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: right;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: center;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: right;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "10px 14px",
+        "paddingTop": "10px",
+        "paddingLeft": "14px",
+        "maxWidth": "none",
+        "styleAttr": "display: grid; grid-template-columns: 1fr 100px 80px 80px; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; align-items: center; opacity: 1;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "min-width: 0px; display: flex; flex-direction: column; gap: 2px;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: center;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "2px 6px",
+        "paddingTop": "2px",
+        "paddingLeft": "6px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(56, 142, 60, 0.12); color: var(--success);"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "text-align: right;"
+      },
+      {
+        "tag": "BUTTON",
+        "depth": 5,
+        "padding": "4px 10px",
+        "paddingTop": "4px",
+        "paddingLeft": "10px",
+        "maxWidth": "none",
+        "styleAttr": "display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elevated); color: var(--text-primary)"
+      },
+      {
+        "tag": "DIV",
+        "depth": 3,
+        "padding": "10px 14px",
+        "paddingTop": "10px",
+        "paddingLeft": "14px",
+        "maxWidth": "none",
+        "styleAttr": "display: grid; grid-template-columns: 1fr 100px 80px 80px; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; align-items: center; opacity: 1;"
+      },
+      {
+        "tag": "DIV",
+        "depth": 4,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "min-width: 0px; display: flex; flex-direction: column; gap: 2px;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      },
+      {
+        "tag": "SPAN",
+        "depth": 5,
+        "padding": "0px",
+        "paddingTop": "0px",
+        "paddingLeft": "0px",
+        "maxWidth": "none",
+        "styleAttr": "font-size: 11px; color: var(--text-muted); font-family: var(--font-mono, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+      }
+    ]
+  }
+}

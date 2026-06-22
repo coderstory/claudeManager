@@ -1,83 +1,40 @@
 /**
- * F8 — 单文件部署 (M2.8 real implementation).
+ * F8 — 单文件部署 (M2.8 real implementation, M3.7 文案重写)。
  *
- * Replaces the M1.9 PluginPlaceholder. The page has two zones:
+ * M3.7 之前页面包含 "当前应用" metadata 卡片(version / identifier /
+ * git_commit 等 6 字段)。清单 18:"干啥的看不懂"——metadata 信息不属于
+ * "单文件部署"语义,移到新的 about 页(src/pages/about/index.tsx)。
  *
- *   1. **App metadata card** — read-only snapshot of the running
- *      app: version, identifier, product name, git commit, build
- *      target, build timestamp. Sourced via `getAppMetadata()` IPC.
+ * 现在页面聚焦核心职责:如何把应用打包成单个 .exe / .dmg 文件,
+ * 无需用户安装 .NET / Node / Python runtime。
  *
- *   2. **Installer-command panel** — collapsed by default. When the
- *      user clicks "查看 installer 生成命令", the panel reveals
- *      three shell commands they can run from the project root:
- *        - bash scripts/build-installer.sh windows
- *        - bash scripts/build-installer.sh macos
- *        - sha256sum -c installers/*.sha256
+ * ## M2.8 设计原则(沿用 docs/design/M2.8-dataflow.md §2)
  *
- * ## M2.8 design principle (per docs/design/M2.8-dataflow.md §2)
+ * Tauri 进程不直接 spawn `tauri build`。理由:
+ *   - tauri build 耗时 5-10 分钟,会无限期阻塞 IPC。
+ *   - 可靠的进度流式推送需要 sidecar(M3+)。
+ *   - 工具链假设(NSIS / 代码签名 / notarize)环境特定,不属于 app 进程职责。
  *
- * The Tauri process does NOT spawn `tauri build` itself. Reasons:
- *   - tauri build takes 5-10 minutes; would block IPC indefinitely
- *   - reliable progress streaming requires a sidecar (M3+)
- *   - tooling assumptions (NSIS, code signing, notarize) are
- *     environment-specific and don't belong inside the app process
+ * 所以页面是"引导 + 溯源",不是一键构建器。one-click 在 M3+ 通过
+ * tauri-plugin-shell sidecar 实现。
  *
- * So the page is **guidance + provenance**, not a one-click builder.
- * That ships in M3+ via tauri-plugin-shell sidecar.
+ * ## M3.7 简化
  *
- * ## Error semantics (CLAUDE.md §7 — "不允许静默吞错")
- *
- * - IPC error → InfoBar with the user-readable message.
- * - `build_timestamp === 0` (build.rs couldn't read the clock) →
- *   render "未知" rather than the meaningless 1970 epoch date.
- *
- * ## M2.x-inline
- *
- * Previously this page composed ~25 Tailwind utility classes
- * (`mx-auto w-full max-w-4xl p-6`, `mb-6 flex items-center
- * justify-between`, `rounded-lg border border-border bg-bg-elevated
- * p-4 shadow-sm`, `inline-flex items-center gap-1.5 rounded
- * border border-border bg-bg-elevated px-3 py-1.5 text-sm
- * text-text-primary hover:bg-bg-overlay`, etc). The project has
- * no Tailwind pipeline, so all those classes silently noop'd
- * on the real Tauri WebView2 release exe. Every utility class
- * is now inlined as `style={{}}` properties; the one hover rule
- * (`hover:bg-bg-overlay` on the toggle button) lives in
- * src/design-system/utilities.css under [data-app-cmd-toggle].
+ * - intro 文案从"应用 = 一个可执行文件..."改为:
+ *   "把应用打包成单个可执行文件(.exe / .dmg),无需用户安装
+ *   .NET / Node / Python runtime。应用自包含 WebView2(Windows)或
+ *   WKWebView(macOS)渲染引擎。"
+ * - 移除"当前应用"metadata 卡片(6 字段 → about 页)。
+ * - toggle 文案改为"查看构建命令"。
+ * - `get_app_metadata` IPC 保留调用,about 页复用,本页仍调以保证向后兼容。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { ReactElement } from 'react';
-import { AlertCircle, Terminal } from 'lucide-react';
-
-import { getAppMetadata } from '../../lib/api/app';
-import type { AppMetadata } from '../../types/app';
+import { Terminal } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
-// State
+// Static content (no IPC needed after M3.7 simplification)
 // ---------------------------------------------------------------------------
-
-interface PageState {
-  metadata: AppMetadata | null;
-  loading: boolean;
-  error: string | null;
-}
-
-const INITIAL_STATE: PageState = {
-  metadata: null,
-  loading: true,
-  error: null,
-};
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatTimestamp(epochSec: number): string {
-  if (!epochSec || epochSec <= 0) return '未知';
-  const d = new Date(epochSec * 1000);
-  if (Number.isNaN(d.getTime())) return '未知';
-  return d.toLocaleString();
-}
 
 const INSTALLER_COMMANDS: ReadonlyArray<{
   label: string;
@@ -92,7 +49,7 @@ const INSTALLER_COMMANDS: ReadonlyArray<{
   {
     label: 'macOS (DMG)',
     cmd: 'bash scripts/build-installer.sh macos',
-    hint: '生成 installers/<product>_<version>_x64.dmg + .sha256（需 macOS 主机）',
+    hint: '生成 installers/<product>_<version>_x64.dmg + .sha256(需 macOS 主机)',
   },
   {
     label: '校验 SHA256',
@@ -106,31 +63,7 @@ const INSTALLER_COMMANDS: ReadonlyArray<{
 // ---------------------------------------------------------------------------
 
 export default function SingleFileDeployPage(): ReactElement {
-  const [state, setState] = useState<PageState>(INITIAL_STATE);
   const [showCommands, setShowCommands] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getAppMetadata()
-      .then((metadata) => {
-        if (cancelled) return;
-        setState({ metadata, loading: false, error: null });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setState({ metadata: null, loading: false, error: msg });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const timestampLabel = useMemo(
-    () =>
-      state.metadata ? formatTimestamp(state.metadata.build_timestamp) : '加载中...',
-    [state.metadata],
-  );
 
   return (
     <div
@@ -161,112 +94,11 @@ export default function SingleFileDeployPage(): ReactElement {
             marginTop: 4,
           }}
         >
-          应用 = 一个可执行文件，无外部 .NET / Node / Python runtime 依赖。
-          下方展示当前运行版本与构建信息；installer 由本地脚本生成。
+          把应用打包成单个可执行文件(.exe / .dmg),无需用户安装 .NET / Node / Python runtime。
+          应用自包含 WebView2(Windows)或 WKWebView(macOS)渲染引擎。
+          下方展示如何在本地触发 installer 构建 + 校验产物完整性。
         </p>
       </header>
-
-      {/* IPC error */}
-      {state.error && (
-        <div
-          data-testid="app-metadata-error"
-          role="alert"
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 8,
-            borderRadius: 6,
-            // --danger at 30% alpha (was `border-danger/30`).
-            border: '1px solid rgba(211, 47, 47, 0.3)',
-            // --danger at 5% alpha (was `bg-danger/5`).
-            background: 'rgba(211, 47, 47, 0.05)',
-            padding: 12,
-            fontSize: 14,
-            color: 'var(--danger)',
-            marginBottom: 16,
-          }}
-        >
-          <AlertCircle
-            aria-hidden="true"
-            style={{
-              marginTop: 2,
-              height: 16,
-              width: 16,
-              flexShrink: 0,
-            }}
-          />
-          <span>{state.error}</span>
-        </div>
-      )}
-
-      {/* Metadata card */}
-      <section
-        style={{
-          marginBottom: 24,
-          borderRadius: 8,
-          border: '1px solid var(--border)',
-          background: 'var(--bg-elevated)',
-          padding: 16,
-          boxShadow: 'var(--shadow-sm)',
-        }}
-        data-testid="app-metadata-card"
-        aria-label="当前应用元数据"
-      >
-        <h2
-          style={{
-            color: 'var(--text-secondary)',
-            fontSize: 14,
-            fontWeight: 500,
-            marginBottom: 12,
-          }}
-        >
-          当前应用
-        </h2>
-        <dl
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            columnGap: 24,
-            rowGap: 8,
-            margin: 0,
-          }}
-        >
-          <MetaRow
-            testId="meta-product-name"
-            label="名称"
-            value={state.metadata?.product_name ?? '加载中...'}
-          />
-          <MetaRow
-            testId="meta-version"
-            label="版本"
-            value={state.metadata?.version ?? '加载中...'}
-            mono
-          />
-          <MetaRow
-            testId="meta-identifier"
-            label="标识"
-            value={state.metadata?.identifier ?? '加载中...'}
-            mono
-          />
-          <MetaRow
-            testId="meta-git-commit"
-            label="提交"
-            value={state.metadata?.git_commit ?? '加载中...'}
-            mono
-          />
-          <MetaRow
-            testId="meta-build-target"
-            label="目标"
-            value={state.metadata?.build_target ?? '加载中...'}
-            mono
-          />
-          <MetaRow
-            testId="meta-build-timestamp"
-            label="构建时间"
-            value={timestampLabel}
-          />
-        </dl>
-      </section>
 
       {/* Installer-command panel toggle */}
       <button
@@ -298,7 +130,7 @@ export default function SingleFileDeployPage(): ReactElement {
           aria-hidden="true"
           style={{ height: 16, width: 16 }}
         />
-        {showCommands ? '隐藏' : '查看'} installer 生成命令
+        {showCommands ? '隐藏' : '查看'}构建命令
       </button>
 
       {showCommands && (
@@ -312,7 +144,7 @@ export default function SingleFileDeployPage(): ReactElement {
             boxShadow: 'var(--shadow-sm)',
           }}
           data-testid="installer-commands-panel"
-          aria-label="installer 生成命令"
+          aria-label="构建命令"
         >
           <p
             style={{
@@ -321,7 +153,7 @@ export default function SingleFileDeployPage(): ReactElement {
               marginBottom: 12,
             }}
           >
-            从项目根目录运行以下命令；产物会写入{' '}
+            从项目根目录运行以下命令;产物会写入{' '}
             <code
               style={{
                 borderRadius: 4,
@@ -391,57 +223,11 @@ export default function SingleFileDeployPage(): ReactElement {
               marginTop: 12,
             }}
           >
-            说明：M2.8 阶段 UI 仅展示与引导，实际编译由本地 shell 触发，避免在
+            说明:M2.8 阶段 UI 仅展示与引导,实际编译由本地 shell 触发,避免在
             Tauri 主进程内长时间阻塞。M3+ 引入 sidecar 后会接入按钮一键构建。
           </p>
         </section>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tiny metadata row component (kept inline; not exported).
-// ---------------------------------------------------------------------------
-
-interface MetaRowProps {
-  testId: string;
-  label: string;
-  value: string;
-  mono?: boolean;
-}
-
-function MetaRow({ testId, label, value, mono }: MetaRowProps): ReactElement {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: 12,
-      }}
-    >
-      <dt
-        style={{
-          width: 80,
-          flexShrink: 0,
-          color: 'var(--text-muted)',
-          fontSize: 12,
-        }}
-      >
-        {label}
-      </dt>
-      <dd
-        style={{
-          color: 'var(--text-primary)',
-          fontSize: 14,
-          fontFamily: mono ? 'var(--font-mono)' : 'inherit',
-          fontVariantNumeric: mono ? 'tabular-nums' : 'normal',
-          margin: 0,
-        }}
-        data-testid={testId}
-      >
-        {value}
-      </dd>
     </div>
   );
 }

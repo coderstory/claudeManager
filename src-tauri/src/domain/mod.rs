@@ -21,7 +21,7 @@ pub mod usage;
 pub use mcp_server::{McpError, McpServer, McpTransport};
 pub use optimization::{ApplyResult, OptimizationFinding, Severity};
 pub use project::{Project, ProjectError, ProjectsFile, SYSTEM_PROJECT_ID};
-pub use provider::{is_valid_id, Provider, ProviderError};
+pub use provider::{is_valid_id, Provider, ProviderError, ProviderInput};
 pub use resource::{ResourceDetail, ResourceItem, ResourceKind};
 pub use usage::{UsageSnapshot, UsageWindow};
 

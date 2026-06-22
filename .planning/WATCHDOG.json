@@ -1,0 +1,85 @@
+{
+  "active_subagents": [],
+  "completed_subagents_24h": [
+    {
+      "task_id": "a2c8591dfc0570c44",
+      "slot": 3,
+      "task": "M2.17 3.3 docs (README/ARCHITECTURE/AGENTS/REVIEWS)",
+      "started_at": "2026-06-21T15:50:00+08:00",
+      "completed_at": "2026-06-21T16:23:00+08:00",
+      "duration_hours": 0.55,
+      "status": "completed",
+      "commits": ["21de78c", "0f9ee2e", "1009426", "42a4131", "e8a56ab"]
+    },
+    {
+      "task_id": "a0d4cb40ff56c87f8",
+      "slot": "temp",
+      "task": "M3 roadmap md 落盘",
+      "started_at": "2026-06-21T15:55:00+08:00",
+      "completed_at": "2026-06-21T16:50:00+08:00",
+      "duration_hours": 0.92,
+      "status": "completed",
+      "commits": ["d62ba75"]
+    },
+    {
+      "task_id": "ae8ea638e9d8c3842",
+      "slot": "temp2",
+      "task": "STATE.md 同步补丁",
+      "started_at": "2026-06-21T16:00:00+08:00",
+      "completed_at": "2026-06-21T16:25:00+08:00",
+      "duration_hours": 0.42,
+      "status": "completed",
+      "commits": ["8df7a3e"]
+    },
+    {
+      "task_id": "a3aadb2fc1e1f8092",
+      "slot": 4,
+      "task": "M2.17 F15 batch3 ErrorBanner",
+      "started_at": "2026-06-21T15:50:00+08:00",
+      "completed_at": "2026-06-21T17:35:00+08:00",
+      "duration_hours": 1.75,
+      "status": "completed",
+      "commits": ["b771041", "02e5b14"],
+      "note": "ship exe: M2.17-f15-batch3.exe, smoke 7/7, vitest 346/346"
+    },
+    {
+      "task_id": "a93711329415d0514",
+      "slot": 2,
+      "task": "M2.17 3.2 ci 收尾 + tsconfig strict",
+      "started_at": "2026-06-21T15:50:00+08:00",
+      "completed_at": "2026-06-21T18:00:00+08:00",
+      "duration_hours": 2.17,
+      "status": "completed",
+      "commits": ["a980eeb", "8ef961d", "cc07178"],
+      "note": "ship exe: M2.17-ci-strict.exe, smoke 7/7"
+    },
+    {
+      "task_id": "aa23bda1d3e9d4eb3",
+      "slot": 1,
+      "task": "M2.17 3.1 PluginHost wiring + HANDOFF",
+      "started_at": "2026-06-21T15:50:00+08:00",
+      "stopped_at": "2026-06-21T17:30:00+08:00",
+      "duration_hours": 1.67,
+      "status": "user_stopped",
+      "commits": ["18d4b29", "a980eeb", "8ef961d", "cc07178"],
+      "note": "User TaskStop — subagent 超出 3.1 范围接管了 3.2 任务。3.1 完成 (18d4b29) + 3.2 部分 (a980eeb/8ef961d/cc07178 由槽 2 subagent 在后续 ship 复用)"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-06-21T15:55:00+08:00",
+    "finalized_at": "2026-06-21T18:30:00+08:00",
+    "session_status": "paused_for_computer_shutdown",
+    "schema_version": "1.0",
+    "purpose": "Watchdog v2 dynamic subagent registry — finalized at session pause"
+  },
+  "session_resume_protocol": {
+    "trigger": "新会话启动时主 session 读此文件",
+    "action": "1. 验证 active_subagents 是否为空 (空 = 上次无未完成 subagent); 2. 清空 completed_subagents_24h (跨会话 ID 失效); 3. 读 STATE.md 暂停点章节",
+    "next_action": "M3 启动门 4 槽并发: 槽 1 双模式架构 / 槽 2 F17 marketplace 重构 / 槽 3 JSON 编辑器路径 / 槽 4 M3.8 用量查询 (D14 待问)"
+  },
+  "protocol_notes": {
+    "4_slot_limit": "Main session must read this file before dispatching new subagent; active_subagents.length must be < 4",
+    "派单协议": "派单后追加到 active_subagents; 收到通知时移到 completed_subagents_24h",
+    "新会话": "新会话开始时清空 active_subagents + completed_subagents_24h (跨会话 ID 失效)"
+  }
+}

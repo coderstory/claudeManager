@@ -65,6 +65,7 @@ import SingleFileDeployPage from './pages/single-file-deploy';
 import ResourceBrowserPage from './pages/resource-browser';
 import MarketplacePage from './pages/marketplace';
 import BackupRestorePage from './pages/backup-restore';
+import AboutPage from './pages/about';
 import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -133,6 +134,11 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
   'backup-restore': {
     title: '备份与恢复',
     description: '最近 N 个 settings.json 版本时间线 + 字段级 diff + 一键回滚。',
+  },
+  // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢 / 技术栈)。
+  about: {
+    title: '关于',
+    description: '查看应用版本、build hash、许可证、致谢与技术栈。',
   },
 };
 
@@ -299,27 +305,67 @@ export default function App(): ReactElement {
     return () => window.clearTimeout(t);
   }, [dropRejectionMsg]);
 
-  // M2.16+ splash — 淡出 index.html 里的内联加载屏。
-  // 用户明确要求 splash 至少展示 2s，并配好看的动画效果。
+  // M3.1 — splash hide trigger switched from fixed setTimeout to
+  // Tauri `tauri://ready` event. The cold-start chain is:
   //
-  // 时序设计：
-  //   - 2200ms 延迟：splash 至少存在 2s（用户要求）+ 200ms 余量
-  //     让进度条 2s 动画跑完再开始淡出。
-  //   - .ccm-splash-hidden 触发 index.html 内联 CSS 的 300ms opacity
-  //     transition（原 200ms，改 300ms 更柔和）。
-  //   - 300ms 后 display:none，让 splash 完全退出布局。
-  //   - index.html 有独立 6s failsafe，防 React 永不挂载（本 effect
-  //     是正常路径）。6s > 2200+300，不会误触发。
+  //   Tauri setup → window show → webview create → first paint
+  //                → webview "ready" event (Rust emits via lib.rs)
+  //                → App.tsx useEffect hides splash
+  //
+  // Why event-driven (vs. fixed 2200ms):
+  //   - On a fast machine, React can mount in 500ms; the OLD 2200ms
+  //     wait made users stare at a still-loading screen long after
+  //     the main UI was ready (perceived as "白屏 → 全透明 → loading
+  //     闪烁" — 清单 1 P0).
+  //   - On a slow machine, 2200ms may not be enough; the user would
+  //     see content flash before splash finished its fade animation.
+  //   - A ready event from the Tauri runtime is the only signal that
+  //     the webview has actually finished first paint + IPC bridge
+  //     init. Aligned with Tauri's documented lifecycle.
+  //
+  // Failsafe (8s): if the ready event NEVER fires (e.g. event
+  // channel broken, webview crashed mid-load), the index.html inline
+  // <script> at 4500ms is the backstop. App's own 8000ms is the
+  // React-side failsafe: ensures that even if index.html's inline
+  // script is somehow stripped (e.g. dev-mode HMR not loading
+  // index.html fresh), the user is never stuck staring at loading.
   useEffect(() => {
     const splash = document.getElementById('ccm-splash');
     if (!splash) return;
-    const hideTimer = window.setTimeout(() => {
+
+    let hidden = false;
+    const hide = (): void => {
+      if (hidden) return;
+      hidden = true;
       splash.classList.add('ccm-splash-hidden');
       window.setTimeout(() => {
         splash.style.display = 'none';
       }, 300);
-    }, 2200);
-    return () => window.clearTimeout(hideTimer);
+    };
+
+    // Path 1: Tauri webview ready event (Rust emits from lib.rs
+    // after the webview is attached and the first IPC handshake is
+    // complete). On non-Tauri environments (jsdom, browser) this
+    // listener never fires, so the failsafe path below takes over.
+    const onReady = (): void => hide();
+    window.addEventListener('tauri://ready', onReady);
+    // Tauri v2 also dispatches 'tauri://created' slightly earlier;
+    // we keep both for robustness, hide() is idempotent.
+    window.addEventListener('tauri://created', onReady);
+
+    // Path 2: React-side failsafe — 8s hard timeout. If neither
+    // ready event fires by then, hide anyway so the user is never
+    // stuck. 8s > index.html inline 4.5s failsafe, so under normal
+    // path the index.html failsafe hides first; this is the
+    // backstop for environments without index.html (jsdom tests,
+    // some embedded webview modes).
+    const failsafe = window.setTimeout(hide, 8000);
+
+    return (): void => {
+      window.removeEventListener('tauri://ready', onReady);
+      window.removeEventListener('tauri://created', onReady);
+      window.clearTimeout(failsafe);
+    };
   }, []);
 
   // useMemo keeps the pageTitle reference stable across renders so
@@ -522,6 +568,8 @@ export default function App(): ReactElement {
               <OptimizerPage />
             ) : view === 'backup-restore' ? (
               <BackupRestorePage />
+            ) : view === 'about' ? (
+              <AboutPage />
             ) : (
               <PluginPlaceholder
                 pluginId={view}

@@ -82,6 +82,7 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   marketplace: '资源市场',
   optimizer: '配置优化',
   'backup-restore': '备份与恢复',
+  about: '关于',
 };
 
 /** A single entry the search modal can navigate to. */

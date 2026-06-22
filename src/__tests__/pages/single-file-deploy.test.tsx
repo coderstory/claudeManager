@@ -1,20 +1,22 @@
 /**
- * Vitest coverage for the F8 SingleFileDeployPage (M2.8).
+ * Vitest coverage for the F8 SingleFileDeployPage (M2.8 + M3.7 文案重写).
+ *
+ * M3.7 简化后页面不含 metadata 卡片 (移到 about 页):
+ *   - 不再调 `get_app_metadata` IPC (改由 about 页消费)。
+ *   - "当前应用"metadata 卡片移除。
+ *   - intro 文案改为"导出单 exe / 嵌入 WebView2"。
+ *   - toggle 文案改为"查看构建命令"。
  *
  * What this covers (TDD, CLAUDE.md §5.2):
- *   - Initial render: page-level testid, metadata card, command panel.
- *   - On mount: invokes `get_app_metadata`.
- *   - Renders the metadata fields (version, identifier, product_name,
- *     git_commit, build_target, build_timestamp).
- *   - Build-timestamp 0 renders "未知" rather than "1970-01-01".
+ *   - Initial render: page-level testid, command toggle button.
  *   - Toggle button reveals the installer-command panel; commands
  *     reference the script path (`scripts/build-installer.sh`).
- *   - IPC error: shows the InfoBar with the error message.
+ *   - Page does NOT call `get_app_metadata` (M3.7 simplification).
+ *   - No `app-metadata-card` / `meta-*` testids (regression guard).
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import SingleFileDeployPage from '../../pages/single-file-deploy';
-import type { AppMetadata } from '../../types/app';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -25,84 +27,39 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-const sampleMetadata = (overrides: Partial<AppMetadata> = {}): AppMetadata => ({
-  version: '0.1.0',
-  identifier: 'com.claudeconfigmanager.app',
-  product_name: 'ClaudeConfigManager',
-  git_commit: 'abc1234',
-  build_target: 'windows/x86_64',
-  build_timestamp: 1_700_000_000,
-  ...overrides,
-});
-
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockInvoke.mockImplementation(async (cmd: string) => {
-    if (cmd === 'get_app_metadata') return sampleMetadata();
-    return null;
-  });
 });
 
-describe('SingleFileDeployPage — F8 (M2.8)', () => {
-  it('renders the page title and intro', async () => {
+describe('SingleFileDeployPage — F8 (M2.8 + M3.7 文案重写)', () => {
+  it('renders the page title and the simplified intro', () => {
     render(<SingleFileDeployPage />);
     expect(screen.getByTestId('single-file-deploy-page')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /单文件部署/ })).toBeInTheDocument();
   });
 
-  it('fires get_app_metadata on mount', async () => {
+  it('does NOT call get_app_metadata anymore (M3.7 simplification)', () => {
     render(<SingleFileDeployPage />);
-    await waitFor(() => {
-      const calls = mockInvoke.mock.calls.filter(
-        (c) => c[0] === 'get_app_metadata',
-      );
-      expect(calls.length).toBeGreaterThanOrEqual(1);
-    });
+    const calls = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'get_app_metadata',
+    );
+    expect(calls.length).toBe(0);
   });
 
-  it('renders the metadata card with all six fields', async () => {
+  it('does NOT render the metadata card (regression guard)', () => {
     render(<SingleFileDeployPage />);
-    await waitFor(() => {
-      expect(screen.getByTestId('app-metadata-card')).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('meta-version').textContent).toContain('0.1.0');
-    expect(screen.getByTestId('meta-identifier').textContent).toContain(
-      'com.claudeconfigmanager.app',
-    );
-    expect(screen.getByTestId('meta-product-name').textContent).toContain(
-      'ClaudeConfigManager',
-    );
-    expect(screen.getByTestId('meta-git-commit').textContent).toContain('abc1234');
-    expect(screen.getByTestId('meta-build-target').textContent).toContain(
-      'windows/x86_64',
-    );
-    // Timestamp is rendered as a human-readable string (locale-dependent),
-    // so just assert it's not empty / not the literal "0".
-    const ts = screen.getByTestId('meta-build-timestamp').textContent ?? '';
-    expect(ts.length).toBeGreaterThan(0);
-    expect(ts).not.toBe('0');
+    expect(screen.queryByTestId('app-metadata-card')).toBeNull();
+    expect(screen.queryByTestId('meta-version')).toBeNull();
+    expect(screen.queryByTestId('meta-identifier')).toBeNull();
+    expect(screen.queryByTestId('meta-product-name')).toBeNull();
+    expect(screen.queryByTestId('meta-git-commit')).toBeNull();
+    expect(screen.queryByTestId('meta-build-target')).toBeNull();
+    expect(screen.queryByTestId('meta-build-timestamp')).toBeNull();
   });
 
-  it('renders "未知" when build_timestamp is 0', async () => {
-    mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'get_app_metadata') {
-        return sampleMetadata({ build_timestamp: 0 });
-      }
-      return null;
-    });
+  it('shows the installer-command panel when toggled', () => {
     render(<SingleFileDeployPage />);
-    await waitFor(() => {
-      expect(screen.getByTestId('meta-build-timestamp').textContent).toContain(
-        '未知',
-      );
-    });
-  });
-
-  it('shows the installer-command panel when toggled', async () => {
-    render(<SingleFileDeployPage />);
-    await waitFor(() => {
-      expect(screen.getByTestId('toggle-commands-btn')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('toggle-commands-btn')).toBeInTheDocument();
 
     // Panel should be hidden by default.
     expect(screen.queryByTestId('installer-commands-panel')).toBeNull();
@@ -122,19 +79,18 @@ describe('SingleFileDeployPage — F8 (M2.8)', () => {
     ).toContain('macos');
   });
 
-  it('renders the InfoBar when get_app_metadata rejects', async () => {
-    mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'get_app_metadata') {
-        throw new Error('IPC failed: process gone');
-      }
-      return null;
-    });
+  it('toggle button label uses "构建命令" (M3.7 文案)', () => {
     render(<SingleFileDeployPage />);
-    await waitFor(() => {
-      expect(screen.getByTestId('app-metadata-error')).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('app-metadata-error').textContent).toContain(
-      'IPC failed',
+    expect(screen.getByTestId('toggle-commands-btn').textContent).toContain(
+      '构建命令',
     );
+  });
+
+  it('intro mentions WebView2 / WKWebView (M3.7 功能解释)', () => {
+    render(<SingleFileDeployPage />);
+    const pageText =
+      screen.getByTestId('single-file-deploy-page').textContent ?? '';
+    expect(pageText).toContain('WebView2');
+    expect(pageText).toContain('WKWebView');
   });
 });

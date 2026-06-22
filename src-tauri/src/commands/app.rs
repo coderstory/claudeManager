@@ -74,9 +74,10 @@ pub struct AppMetadata {
 
 impl AppMetadata {
     /// Build the snapshot from compile-time `env!` constants. Pure;
-    /// no I/O. Exposed as `pub(crate)` so unit tests can call it
-    /// without constructing a Tauri `State`.
-    pub(crate) fn current() -> Self {
+    /// no I/O. Exposed as `pub` so the integration test in
+    /// `tests/about.rs` can call it without constructing a Tauri
+    /// `State` (it exercises the same kernel as `get_app_metadata`).
+    pub fn current() -> Self {
         let git_commit = env!("BUILD_GIT_COMMIT").to_string();
         let build_timestamp: i64 = env!("BUILD_TIMESTAMP").parse().unwrap_or(0);
         let build_target = format!(

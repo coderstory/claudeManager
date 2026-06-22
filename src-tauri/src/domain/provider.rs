@@ -79,6 +79,40 @@ pub enum ProviderError {
     /// M2.5+ will offer an overwrite path.
     #[error("provider '{0}' already exists")]
     AlreadyExists(String),
+
+    /// M3.6 (清单 22) — CRUD 操作的"id 不在库中"业务错。
+    /// 与 `Io(NotFound)` 区分:后者是磁盘层错(如权限),前者是
+    /// 业务层"id 不在库中"——前端可以据此显示"provider X 未找到"。
+    #[error("provider '{0}' not found")]
+    NotFound(String),
+
+    /// M3.6 — 删除当前激活的 provider 是被拒的(避免下次启动
+    /// 找不到对应 base_url);用户必须先切走。
+    #[error("cannot delete the currently active provider '{0}'; switch to another first")]
+    CannotDeleteActive(String),
+}
+
+/// M3.6 (清单 22) — 新增 / 修改 provider 的输入。
+///
+/// 字段语义对照 SPEC §2.1:
+/// - `id`: 唯一, kebab-case, 写盘文件名 stem
+/// - `name`: 显示名
+/// - `base_url`: ANTHROPIC_BASE_URL
+/// - `api_key`: ANTHROPIC_AUTH_TOKEN (本字段值, 写在 settings.json 中)
+/// - `model`: 主模型; 空 = 不写 ANTHROPIC_MODEL (跟 F2 switch 一致)
+/// - `notes`: 备注
+///
+/// 不包含 `is_active` / `created_at` / `last_used_at` —— 这 3 个由
+/// service 层管理(见 [`crate::services::provider_service`] 的 CRUD method)。
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ProviderInput {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub notes: Option<String>,
 }
 
 impl Provider {

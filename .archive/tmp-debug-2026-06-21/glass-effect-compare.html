@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>玻璃效果对比 — Claude 配置管理器</title>
+<style>
+  :root {
+    --accent: #0969DA;
+    --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-ui);
+    background: #0a0a0a;
+    color: #fff;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+
+  .variant {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .variant-label {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .variant-label small {
+    color: #888;
+    font-weight: 400;
+    margin-left: 8px;
+  }
+
+  /* === 模拟桌面壁纸（让玻璃效果有东西可透） === */
+  .desktop-bg {
+    /* 模拟 Win11 Bloom / macOS Sonoma 抽象壁纸 */
+    background:
+      radial-gradient(circle at 20% 30%, #ff6b9d 0%, transparent 40%),
+      radial-gradient(circle at 80% 20%, #4facfe 0%, transparent 45%),
+      radial-gradient(circle at 50% 80%, #43e97b 0%, transparent 40%),
+      radial-gradient(circle at 90% 70%, #fa709a 0%, transparent 40%),
+      linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 0;
+    height: 420px;
+    position: relative;
+  }
+
+  /* === 模拟 app 窗口 === */
+  .app-window {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* === 两种方案的区别只在 app-root 背景 === */
+
+  /* 方案 A：全透明 */
+  .variant-a .app-root {
+    background: transparent;
+  }
+
+  /* 方案 B：半透（保留色调） */
+  .variant-b .app-root {
+    background: rgba(250, 250, 247, 0.7);
+  }
+
+  .app-root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* === Header (glass-bg 0.55) === */
+  .app-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    color: #1F2328;
+    font-size: 14px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .header-right {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .chrome-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 4px;
+    background: transparent;
+    color: #1F2328;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+
+  /* === Content row === */
+  .app-content {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* === Sidebar (glass-bg 0.55) === */
+  .app-sidebar {
+    width: 220px;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-right: 1px solid rgba(255, 255, 255, 0.18);
+    color: #1F2328;
+    padding: 16px 12px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 2px;
+    color: #656D76;
+  }
+
+  .sidebar-item.active {
+    background: rgba(9, 105, 218, 0.1);
+    color: #0969DA;
+    font-weight: 600;
+  }
+
+  /* === Main === */
+  .app-main {
+    flex: 1;
+    padding: 24px;
+    overflow: auto;
+    /* 关键：main 也不透明 / 透明 取决于方案 */
+  }
+
+  .variant-a .app-main {
+    background: transparent;
+  }
+
+  .variant-b .app-main {
+    background: rgba(250, 250, 247, 0.7);
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    color: #1F2328;
+  }
+
+  .card h2 {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+
+  .card p {
+    font-size: 13px;
+    color: #656D76;
+    line-height: 1.5;
+  }
+
+  /* === Dark variant === */
+  .variant-dark .app-header {
+    background: rgba(31, 35, 40, 0.55);
+    color: #E6EDF3;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+  .variant-dark .chrome-btn {
+    border-color: rgba(255,255,255,0.1);
+    color: #E6EDF3;
+  }
+  .variant-dark .app-sidebar {
+    background: rgba(31, 35, 40, 0.55);
+    color: #E6EDF3;
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+  .variant-dark .sidebar-item { color: #8B949E; }
+  .variant-dark .sidebar-item.active { background: rgba(47, 129, 247, 0.15); color: #2F81F7; }
+  .variant-dark .card {
+    background: rgba(45, 51, 59, 0.75);
+    color: #E6EDF3;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .variant-dark .card p { color: #8B949E; }
+  .variant-dark.variant-a .app-root,
+  .variant-dark.variant-a .app-main { background: transparent; }
+  .variant-dark.variant-b .app-root,
+  .variant-dark.variant-b .app-main { background: rgba(31, 35, 40, 0.7); }
+
+  .note {
+    background: rgba(255,255,255,0.05);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    font-size: 12px;
+    color: #aaa;
+    line-height: 1.6;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>液态玻璃 / 亚克力效果对比 — 4 种组合</h1>
+
+<!-- ====== 浅色 ====== -->
+<h2 style="color:#ccc; font-size:15px; margin: 16px 0 12px;">☀️ 浅色主题 (瓷白 #FAFAF7)</h2>
+
+<div class="compare">
+  <!-- 方案 A 浅 -->
+  <div class="variant variant-a">
+    <div class="variant-label">A. 全透明 <small>app-root / main = transparent</small></div>
+    <div class="desktop-bg">
+      <div class="app-window">
+        <div class="app-root">
+          <div class="app-header">
+            <span>Claude 配置管理器</span>
+            <div class="header-right">
+              <button class="chrome-btn">─</button>
+              <button class="chrome-btn">▢</button>
+              <button class="chrome-btn">✕</button>
+            </div>
+          </div>
+          <div class="app-content">
+            <div class="app-sidebar">
+              <div class="sidebar-item">欢迎页</div>
+              <div class="sidebar-item active">Provider 列表</div>
+              <div class="sidebar-item">导入 .sql</div>
+              <div class="sidebar-item">MCP 管理</div>
+              <div class="sidebar-item">用量查询</div>
+            </div>
+            <div class="app-main">
+              <div class="card">
+                <h2>Provider 列表</h2>
+                <p>桌面壁纸色调直接透出，最像 macOS Tahoe 原生 vibrancy。</p>
+              </div>
+              <div class="card">
+                <h2>Anthropic Console</h2>
+                <p>url: https://api.anthropic.com · status: active</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 B 浅 -->
+  <div class="variant variant-b">
+    <div class="variant-label">B. 半透 <small>app-root / main = rgba(250,250,247,0.7)</small></div>
+    <div class="desktop-bg">
+      <div class="app-window">
+        <div class="app-root">
+          <div class="app-header">
+            <span>Claude 配置管理器</span>
+            <div class="header-right">
+              <button class="chrome-btn">─</button>
+              <button class="chrome-btn">▢</button>
+              <button class="chrome-btn">✕</button>
+            </div>
+          </div>
+          <div class="app-content">
+            <div class="app-sidebar">
+              <div class="sidebar-item">欢迎页</div>
+              <div class="sidebar-item active">Provider 列表</div>
+              <div class="sidebar-item">导入 .sql</div>
+              <div class="sidebar-item">MCP 管理</div>
+              <div class="sidebar-item">用量查询</div>
+            </div>
+            <div class="app-main">
+              <div class="card">
+                <h2>Provider 列表</h2>
+                <p>保留瓷白基调，Mica 部分透出但仍有色调。</p>
+              </div>
+              <div class="card">
+                <h2>Anthropic Console</h2>
+                <p>url: https://api.anthropic.com · status: active</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 深色 ====== -->
+<h2 style="color:#ccc; font-size:15px; margin: 16px 0 12px;">🌙 深色主题 (#1F2328)</h2>
+
+<div class="compare">
+  <!-- 方案 A 深 -->
+  <div class="variant variant-dark variant-a">
+    <div class="variant-label">A. 全透明 <small>app-root / main = transparent</small></div>
+    <div class="desktop-bg">
+      <div class="app-window">
+        <div class="app-root">
+          <div class="app-header">
+            <span>Claude 配置管理器</span>
+            <div class="header-right">
+              <button class="chrome-btn">─</button>
+              <button class="chrome-btn">▢</button>
+              <button class="chrome-btn">✕</button>
+            </div>
+          </div>
+          <div class="app-content">
+            <div class="app-sidebar">
+              <div class="sidebar-item">欢迎页</div>
+              <div class="sidebar-item active">Provider 列表</div>
+              <div class="sidebar-item">导入 .sql</div>
+              <div class="sidebar-item">MCP 管理</div>
+              <div class="sidebar-item">用量查询</div>
+            </div>
+            <div class="app-main">
+              <div class="card">
+                <h2>Provider 列表</h2>
+                <p>深色玻璃透出壁纸，macOS Tahoe Dark vibrancy。</p>
+              </div>
+              <div class="card">
+                <h2>Anthropic Console</h2>
+                <p>url: https://api.anthropic.com · status: active</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 方案 B 深 -->
+  <div class="variant variant-dark variant-b">
+    <div class="variant-label">B. 半透 <small>app-root / main = rgba(31,35,40,0.7)</small></div>
+    <div class="desktop-bg">
+      <div class="app-window">
+        <div class="app-root">
+          <div class="app-header">
+            <span>Claude 配置管理器</span>
+            <div class="header-right">
+              <button class="chrome-btn">─</button>
+              <button class="chrome-btn">▢</button>
+              <button class="chrome-btn">✕</button>
+            </div>
+          </div>
+          <div class="app-content">
+            <div class="app-sidebar">
+              <div class="sidebar-item">欢迎页</div>
+              <div class="sidebar-item active">Provider 列表</div>
+              <div class="sidebar-item">导入 .sql</div>
+              <div class="sidebar-item">MCP 管理</div>
+              <div class="sidebar-item">用量查询</div>
+            </div>
+            <div class="app-main">
+              <div class="card">
+                <h2>Provider 列表</h2>
+                <p>深色玻璃保留色调，Mica 隐约透出。</p>
+              </div>
+              <div class="card">
+                <h2>Anthropic Console</h2>
+                <p>url: https://api.anthropic.com · status: active</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>说明</strong>：背景的彩色渐变模拟 Win11 Bloom / macOS Sonoma 桌面壁纸。
+  左列 (A 全透明) 让壁纸色调直接透出，最接近 macOS Tahoe 原生 vibrancy；
+  右列 (B 半透) 保留主题瓷白/深色基调，Mica 只隐约透出。
+  真机 Mica 效果会比这个 HTML 模拟更柔和（OS 级材质 vs CSS blur）。
+</div>
+
+</body>
+</html>

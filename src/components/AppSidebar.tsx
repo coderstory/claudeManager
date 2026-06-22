@@ -32,6 +32,7 @@ import {
   FileSearch,
   Gauge,
   Home,
+  Info,
   KeyRound,
   Layers,
   Link2,
@@ -102,6 +103,12 @@ const VIEW_META: Record<
   'backup-restore': {
     icon: <Archive size={18} aria-hidden="true" />,
     short: '备份与恢复',
+  },
+  // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢)。
+  // 加在 ALL_VIEWS 末尾,不替换 D-槽1 sidebar 顶部 project switcher。
+  about: {
+    icon: <Info size={18} aria-hidden="true" />,
+    short: '关于',
   },
 };
 

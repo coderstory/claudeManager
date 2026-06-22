@@ -34,6 +34,13 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
     println!("cargo:rustc-env=BUILD_GIT_COMMIT={git_commit}");
 
+    // ---- 1b. M3.7 build_hash ----
+    // 清单 18 要求 about 页显示 build hash (= git short SHA)。
+    // 单独再 emit 一个 BUILD_HASH env var,以保持向后兼容(已有 F8
+    // get_app_metadata 仍读 BUILD_GIT_COMMIT),并为后续在 JSON /
+    // 标识符中嵌入 hash 留出独立字段。
+    println!("cargo:rustc-env=BUILD_HASH={git_commit}");
+
     // ---- 2. Build timestamp (Unix epoch seconds) ----
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

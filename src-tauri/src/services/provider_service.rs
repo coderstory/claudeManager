@@ -22,13 +22,15 @@
 //!   user-readable message. No silent failures.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::de::Error as _;
 use serde_json::{json, Value};
 
-use crate::domain::{Provider, ProviderError};
+use crate::domain::{is_valid_id, Provider, ProviderError, ProviderInput};
 use crate::infrastructure::fs_atomic;
 use crate::platform::AppPaths;
+use crate::services::backup_service::BackupService;
 
 // ---------------------------------------------------------------------------
 // ProviderService
@@ -38,11 +40,24 @@ use crate::platform::AppPaths;
 /// `AppPaths` snapshot it was constructed with.
 pub struct ProviderService {
     paths: AppPaths,
+    /// M3.6 (清单 22) — CRUD 写操作(update / delete)前调 `backup_now`
+    /// 在 `<app_data>/backups/providers/` 下生成 `<id>.bak.<ts>`。
+    /// `None` = 跳过备份(用于单测和未接 F13 的环境;M3.6 production
+    /// 路径必传 `Some`)。
+    backup_service: Option<Arc<BackupService>>,
 }
 
 impl ProviderService {
     pub fn new(paths: AppPaths) -> Self {
-        Self { paths }
+        Self { paths, backup_service: None }
+    }
+
+    /// M3.6 — 接 F13 备份。`AppState::build()` 调此方法把
+    /// `Arc<BackupService>` 注入,CRUD 写操作(update/delete)前自动
+    /// 备份前态。
+    pub fn with_backup_service(mut self, svc: Arc<BackupService>) -> Self {
+        self.backup_service = Some(svc);
+        self
     }
 
     /// Borrow the resolved paths (read-only — services don't mutate).
@@ -230,6 +245,177 @@ impl ProviderService {
         }
         let json = serde_json::to_string_pretty(&provider)?;
         fs_atomic::write_with_backup(&target, &json).map_err(map_fs_atomic_to_provider)?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // M3.6 — CRUD (清单 22)
+    // -----------------------------------------------------------------------
+
+    /// M3.6 — Create。新增一个 provider。
+    ///
+    /// 1. 验证 `input.id` 符合 `[a-z0-9-_]+` → 否则 `InvalidId`。
+    /// 2. 验证 `name` / `base_url` / `api_key` / `model` 都非空 →
+    ///    否则 `Json` 错(沿用 `Provider::validate` 语义)。
+    /// 3. 检查 `<providers_dir>/<id>.json` 不存在 → 已存在 `AlreadyExists`。
+    ///    注:add 是"首次写"路径,无前态可备;F13 备份仅 update / delete 触发。
+    /// 4. `fs_atomic::write_with_backup` 原子写(首次写不生成 .bak)。
+    /// 5. 返回新 `Provider`(`is_active=false`,`created_at=now`)。
+    pub fn add_provider(&self, input: ProviderInput) -> Result<Provider, ProviderError> {
+        // 业务字段非空校验(input 不走 Provider::validate,自己来)。
+        if input.id.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "id must not be empty",
+            )));
+        }
+        if !is_valid_id(&input.id) {
+            return Err(ProviderError::InvalidId(input.id.clone()));
+        }
+        if input.name.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "name must not be empty",
+            )));
+        }
+        if input.base_url.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "base_url must not be empty",
+            )));
+        }
+        if input.api_key.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "api_key must not be empty",
+            )));
+        }
+        if input.model.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "model must not be empty",
+            )));
+        }
+
+        let target = self.provider_path(&input.id);
+        if target.exists() {
+            return Err(ProviderError::AlreadyExists(input.id.clone()));
+        }
+
+        let now = now_unix_secs();
+        let provider = Provider {
+            id: input.id.clone(),
+            name: input.name,
+            provider_type: "anthropic".to_string(), // M3.6 范围单类型
+            api_base: input.base_url,
+            api_key: input.api_key,
+            models: vec![input.model],
+            is_active: false,
+            created_at: now,
+            last_used_at: None,
+            notes: input.notes,
+        };
+
+        let json = serde_json::to_string_pretty(&provider)?;
+        fs_atomic::write_with_backup(&target, &json).map_err(map_fs_atomic_to_provider)?;
+        Ok(provider)
+    }
+
+    /// M3.6 — Update。修改一个已存在 provider 的元数据。
+    ///
+    /// 1. 读旧 provider → 不存在 `NotFound(id)`。
+    /// 2. F13 备份(`backup_now` 把前态拷到 `<backups>/providers/<id>.bak.<ts>`)。
+    /// 3. 拼装新 `Provider`(保留 `created_at` / `last_used_at` /
+    ///    `is_active`;更新 name/api_base/api_key/models/notes)。
+    /// 4. `fs_atomic::write_with_backup` 原子写(可能再生成一份 .bak——
+    ///    这两层 backup 各司其职:F13 给"用户可见的备份时间线",
+    ///    fs_atomic 的 .bak 是"写盘失败兜底")。
+    /// 5. 不动 `~/.claude/settings.json`(F2 switch 行为);如新内容
+    ///    影响当前激活 provider 的 base_url,用户下次 [激活] 时同步。
+    pub fn update_provider(
+        &self,
+        id: &str,
+        input: ProviderInput,
+    ) -> Result<Provider, ProviderError> {
+        // 业务字段非空校验。
+        if input.name.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "name must not be empty",
+            )));
+        }
+        if input.base_url.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "base_url must not be empty",
+            )));
+        }
+        if input.api_key.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "api_key must not be empty",
+            )));
+        }
+        if input.model.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "model must not be empty",
+            )));
+        }
+
+        let target = self.provider_path(id);
+        // 读旧 — 不存在 = 业务 NotFound(与 F14 get_provider 一致:
+        // 文件层 Io(NotFound) 翻译为业务 NotFound(id) 给前端可读消息)。
+        let old = Provider::from_json_file(&target).map_err(|e| match e {
+            ProviderError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound => {
+                ProviderError::NotFound(id.to_string())
+            }
+            other => other,
+        })?;
+
+        // F13 备份前态(CLAUDE.md §7 + M3.6 任务交付物 3)。
+        if let Some(bs) = &self.backup_service {
+            let _ = bs.backup_now(&target); // 备份失败不阻塞 update
+        }
+
+        let new_provider = Provider {
+            id: old.id.clone(), // id 不可改(file stem)
+            name: input.name,
+            provider_type: old.provider_type, // 保留旧 type
+            api_base: input.base_url,
+            api_key: input.api_key,
+            models: vec![input.model],
+            is_active: old.is_active,    // 保留 is_active
+            created_at: old.created_at,  // 保留创建时间
+            last_used_at: old.last_used_at, // 保留最后使用时间
+            notes: input.notes.or(old.notes),
+        };
+
+        let json = serde_json::to_string_pretty(&new_provider)?;
+        fs_atomic::write_with_backup(&target, &json).map_err(map_fs_atomic_to_provider)?;
+        Ok(new_provider)
+    }
+
+    /// M3.6 — Delete。删除一个 provider 文件。
+    ///
+    /// 1. 读旧 → 不存在 `NotFound(id)`。
+    /// 2. 检查是否当前激活(查 settings.json 的 ANTHROPIC_BASE_URL
+    ///    是否匹配 provider.api_base)→ 激活中 `CannotDeleteActive(id)`。
+    ///    简化决策:不允许自动切走再删(避免破坏用户当前状态);
+    ///    M3.10+ 评估"自动切到下一个"。
+    /// 3. F13 备份前态。
+    /// 4. `std::fs::remove_file` 删原文件(删除操作无"原子写"概念)。
+    pub fn delete_provider(&self, id: &str) -> Result<(), ProviderError> {
+        let target = self.provider_path(id);
+        let old = Provider::from_json_file(&target).map_err(|e| match e {
+            ProviderError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound => {
+                ProviderError::NotFound(id.to_string())
+            }
+            other => other,
+        })?;
+
+        // 当前激活检查
+        if is_provider_active(&self.paths.settings_json, &old) {
+            return Err(ProviderError::CannotDeleteActive(id.to_string()));
+        }
+
+        // F13 备份前态
+        if let Some(bs) = &self.backup_service {
+            let _ = bs.backup_now(&target);
+        }
+
+        std::fs::remove_file(&target)?;
         Ok(())
     }
 
@@ -449,6 +635,32 @@ fn now_unix_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// M3.6 — `delete_provider` 用:读 settings.json 的
+/// `env.ANTHROPIC_BASE_URL` + `env.ANTHROPIC_AUTH_TOKEN`,判断
+/// `provider` 是否是当前激活的。settings.json 缺失/损坏 → 视作没人
+/// 激活(provider 不能"误删"激活态)。
+fn is_provider_active(settings_path: &Path, provider: &Provider) -> bool {
+    let raw = match std::fs::read_to_string(settings_path) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let v: Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let env = v.get("env").and_then(|e| e.as_object());
+    let base = env
+        .and_then(|m| m.get("ANTHROPIC_BASE_URL"))
+        .and_then(|v| v.as_str());
+    let key = env
+        .and_then(|m| m.get("ANTHROPIC_AUTH_TOKEN"))
+        .and_then(|v| v.as_str());
+    match (base, key) {
+        (Some(b), Some(k)) => b == provider.api_base && k == provider.api_key,
+        _ => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1072,5 +1284,207 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             assert!(!name.contains(".bak."), "unexpected backup: {name}");
         }
         assert!(!settings.exists(), "settings.json should be untouched by F4");
+    }
+
+    // ----- M3.6 (清单 22) — CRUD -----
+
+    /// 合法 input → 文件落盘 + 字段映射对得上
+    /// (id/name/api_base/api_key/models[0]=model/notes/created_at/!is_active)。
+    #[test]
+    fn add_provider_writes_new_file_with_input_fields() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "glm-46".into(),
+            name: "GLM-4.6 官方".into(),
+            base_url: "https://api.anthropic.com".into(),
+            api_key: "sk-ant-test".into(),
+            model: "claude-sonnet-4-6".into(),
+            notes: Some("官方默认".into()),
+        };
+        let p = svc.add_provider(input).unwrap();
+        assert_eq!(p.id, "glm-46");
+        assert_eq!(p.name, "GLM-4.6 官方");
+        assert_eq!(p.provider_type, "anthropic"); // M3.6 范围固定
+        assert_eq!(p.api_base, "https://api.anthropic.com");
+        assert_eq!(p.api_key, "sk-ant-test");
+        assert_eq!(p.models, vec!["claude-sonnet-4-6"]);
+        assert!(!p.is_active);
+        assert!(p.last_used_at.is_none());
+        assert_eq!(p.notes.as_deref(), Some("官方默认"));
+
+        // 文件落盘 + 内容可解析。
+        let path = tmp.path().join("providers").join("glm-46.json");
+        assert!(path.exists());
+        let reloaded = Provider::from_json_file(&path).unwrap();
+        assert_eq!(reloaded.id, "glm-46");
+    }
+
+    /// 重复 id → AlreadyExists 错,旧文件不动。
+    #[test]
+    fn add_provider_duplicate_id_errors() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_provider(&p_dir, &sample_provider("dup", "ORIGINAL", "https://orig.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "dup".into(),
+            name: "OVERWRITE".into(),
+            base_url: "https://other.example".into(),
+            api_key: "k2".into(),
+            model: "m2".into(),
+            notes: None,
+        };
+        let err = svc.add_provider(input).unwrap_err();
+        assert!(matches!(err, ProviderError::AlreadyExists(id) if id == "dup"));
+
+        // 旧文件不动
+        let raw = fs::read_to_string(p_dir.join("dup.json")).unwrap();
+        assert!(raw.contains("ORIGINAL"));
+        assert!(!raw.contains("OVERWRITE"));
+    }
+
+    /// input.id 不合规(大写/空格)→ InvalidId 错。
+    #[test]
+    fn add_provider_invalid_id_errors() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "Bad.ID".into(),
+            name: "x".into(),
+            base_url: "https://x".into(),
+            api_key: "k".into(),
+            model: "m".into(),
+            notes: None,
+        };
+        let err = svc.add_provider(input).unwrap_err();
+        assert!(matches!(err, ProviderError::InvalidId(_)));
+    }
+
+    /// 字段非空校验:base_url 空 → Json 错。
+    #[test]
+    fn add_provider_empty_base_url_errors() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "ok".into(),
+            name: "OK".into(),
+            base_url: "".into(),
+            api_key: "k".into(),
+            model: "m".into(),
+            notes: None,
+        };
+        let err = svc.add_provider(input).unwrap_err();
+        assert!(matches!(err, ProviderError::Json(_)));
+    }
+
+    /// 合法 update → 字段更新,id / created_at / is_active 保留。
+    #[test]
+    fn update_provider_modifies_fields_preserves_id_and_timestamps() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let mut p = sample_provider("a", "OLD", "https://old.example");
+        p.notes = Some("old note".into());
+        p.last_used_at = Some(1_700_000_000);
+        write_provider(&p_dir, &p);
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "a".into(), // 与原 id 一致(允许但不变更)
+            name: "NEW".into(),
+            base_url: "https://new.example".into(),
+            api_key: "new-key".into(),
+            model: "new-model".into(),
+            notes: Some("new note".into()),
+        };
+        let updated = svc.update_provider("a", input).unwrap();
+        assert_eq!(updated.id, "a"); // id 保留
+        assert_eq!(updated.name, "NEW");
+        assert_eq!(updated.api_base, "https://new.example");
+        assert_eq!(updated.api_key, "new-key");
+        assert_eq!(updated.models, vec!["new-model"]);
+        assert_eq!(updated.notes.as_deref(), Some("new note"));
+        // 时间戳保留
+        assert_eq!(updated.last_used_at, Some(1_700_000_000));
+        assert!(updated.created_at > 0);
+
+        // 磁盘已更新
+        let reloaded = Provider::from_json_file(&p_dir.join("a.json")).unwrap();
+        assert_eq!(reloaded.name, "NEW");
+    }
+
+    /// 不存在 id → NotFound 业务错(不是 Io NotFound)。
+    #[test]
+    fn update_provider_not_found_errors() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let input = ProviderInput {
+            id: "ghost".into(),
+            name: "X".into(),
+            base_url: "https://x".into(),
+            api_key: "k".into(),
+            model: "m".into(),
+            notes: None,
+        };
+        let err = svc.update_provider("ghost", input).unwrap_err();
+        assert!(matches!(err, ProviderError::NotFound(id) if id == "ghost"));
+    }
+
+    /// 当前激活的 provider 不能删 → CannotDeleteActive。
+    #[test]
+    fn delete_provider_active_errors() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // settings 写明激活的是 a(匹配 sample_provider 的 base/key)
+        write_settings(&settings, "https://a.example", "key-for-a");
+        write_provider(&p_dir, &sample_provider("a", "A", "https://a.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let err = svc.delete_provider("a").unwrap_err();
+        assert!(matches!(err, ProviderError::CannotDeleteActive(id) if id == "a"));
+
+        // 文件未删
+        assert!(p_dir.join("a.json").exists());
+    }
+
+    /// 非激活的 provider → 删除成功,文件消失。
+    #[test]
+    fn delete_provider_inactive_succeeds() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // settings 指向 b,a 不活跃
+        write_settings(&settings, "https://b.example", "key-for-b");
+        write_provider(&p_dir, &sample_provider("a", "A", "https://a.example"));
+        write_provider(&p_dir, &sample_provider("b", "B", "https://b.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        svc.delete_provider("a").unwrap();
+        assert!(!p_dir.join("a.json").exists());
+        // b 不动
+        assert!(p_dir.join("b.json").exists());
+    }
+
+    /// 不存在 id → NotFound 业务错。
+    #[test]
+    fn delete_provider_not_found_errors() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let err = svc.delete_provider("ghost").unwrap_err();
+        assert!(matches!(err, ProviderError::NotFound(id) if id == "ghost"));
     }
 }

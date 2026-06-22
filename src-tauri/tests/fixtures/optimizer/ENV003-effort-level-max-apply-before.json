@@ -1,0 +1,11 @@
+{
+  "settings_json": {
+    "env": {
+      "CLAUDE_CODE_EFFORT_LEVEL": "low"
+    }
+  },
+  "_expected_added": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max"
+  },
+  "_expected_backup_pattern": ".bak."
+}

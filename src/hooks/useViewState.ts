@@ -81,13 +81,15 @@ export type ViewId =
   | 'resource-browser'
   | 'marketplace'
   | 'optimizer'
-  | 'backup-restore';
+  | 'backup-restore'
+  | 'about';
 
 /**
  * ALL_VIEWS — runtime list of valid ViewIds.
  *
  * Order is the on-screen order in the sidebar:
- *   home first (landing), then the 12 plugin tiles in registry order.
+ *   home first (landing), then the 12 plugin tiles in registry order,
+ *   then the 1 utility view ('about', M3.7 — 清单 18).
  *
  * Exported so AppSidebar can iterate without hardcoding a parallel
  * list, and so the test can pin "every plugin id is reachable".
@@ -106,6 +108,7 @@ export const ALL_VIEWS: readonly ViewId[] = [
   'marketplace',
   'optimizer',
   'backup-restore',
+  'about',
 ] as const;
 
 function isValidView(v: string | null): v is ViewId {

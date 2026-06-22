@@ -1,0 +1,9 @@
+{
+  "settings_json": {
+    "env": {}
+  },
+  "_expected_added": {
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
+  },
+  "_expected_backup_pattern": ".bak."
+}
