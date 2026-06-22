@@ -23,6 +23,7 @@
  * (SPEC §6.5: "不允许静默吞错").
  */
 import { invoke } from '@tauri-apps/api/core';
+import type { JsonFileEntry } from '../../types/json';
 
 /**
  * F5 — read a `.json` file inside `~/.claude/`.
@@ -98,4 +99,27 @@ export function readSqlFile(path: string): Promise<string> {
  */
 export function takePendingSqlFile(): Promise<string | null> {
   return invoke<string | null>('take_pending_sql_file');
+}
+
+// ---------------------------------------------------------------------------
+// M3.11 (A4#12) — F5 JSON 编辑器文件目录树
+// ---------------------------------------------------------------------------
+
+/**
+ * F5 — 列出允许编辑范围内的所有 `.json` 文件。
+ *
+ * 后端 `list_editable_jsons` 命令严格按 F5 安全作用域扫描:
+ * 只返回 `user` (用户级 `~/.claude/`) 和 `project` (项目级
+ * `<active_root>/.claude/`) 两个 scope 下的 `.json` 文件。其
+ * 他 provider 目录(`~/.codex/` 等)**故意不列**。
+ *
+ * 返回的每条 `JsonFileEntry.path` 都可以直接喂给
+ * `readFile` / `writeFileAtomic`,因为它们都在 read_file 的
+ * 安全作用域内。
+ *
+ * @throws Tauri IPC error:扫描过程本身的失败(罕见 — 通常是
+ *         OS 拒绝访问某个目录)。
+ */
+export function listEditableJsons(): Promise<JsonFileEntry[]> {
+  return invoke<JsonFileEntry[]>('list_editable_jsons');
 }

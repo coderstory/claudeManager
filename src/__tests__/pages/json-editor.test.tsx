@@ -374,4 +374,143 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
       expect(msg.textContent).toContain('编码错误');
     });
   });
+
+  // -----------------------------------------------------------------
+  // M3.11 (A4#12) — F5 json-editor 侧边文件目录树集成测试
+  // -----------------------------------------------------------------
+
+  const TREE_ENTRIES = [
+    {
+      path: '/home/u/.claude/settings.json',
+      relative_path: 'settings.json',
+      scope: 'user',
+      scope_label: '用户级',
+      size: 100,
+      last_modified: 1700000000,
+    },
+    {
+      path: '/home/u/.claude/commands/a.json',
+      relative_path: 'commands/a.json',
+      scope: 'user',
+      scope_label: '用户级',
+      size: 50,
+      last_modified: 1700000100,
+    },
+    {
+      path: '/proj/.claude/agents/coder.json',
+      relative_path: 'agents/coder.json',
+      scope: 'project',
+      scope_label: '项目级',
+      size: 200,
+      last_modified: 1700000300,
+    },
+  ];
+
+  it('树集成:挂载时调 list_editable_jsons 并渲染文件树', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_editable_jsons') return TREE_ENTRIES;
+      if (cmd === 'read_file') return SAMPLE_JSON;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('json-file-tree')).toBeTruthy();
+    });
+    await waitFor(() => {
+      const entries = screen.getAllByTestId('json-file-tree-entry');
+      expect(entries.length).toBe(3);
+    });
+  });
+
+  it('树集成:点击 tree entry 加载文件', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
+      if (cmd === 'list_editable_jsons') return TREE_ENTRIES;
+      if (cmd === 'read_file') {
+        const path = (args as { path: string }).path;
+        if (path.includes('settings.json')) return '{"k":"settings"}';
+        if (path.includes('a.json')) return '{"k":"a"}';
+        return '{}';
+      }
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('json-file-tree-entry').length).toBe(3);
+    });
+
+    const entries = screen.getAllByTestId('json-file-tree-entry');
+    const target = entries.find((e) => e.getAttribute('data-path') === '/home/u/.claude/settings.json')!;
+    await act(async () => {
+      fireEvent.click(target);
+    });
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith(
+        'read_file',
+        expect.objectContaining({ path: '/home/u/.claude/settings.json' }),
+      );
+    });
+    await waitFor(() => {
+      const selected = screen.getAllByTestId('json-file-tree-entry')
+        .find((e) => e.getAttribute('data-selected') === 'true');
+      expect(selected).toBeTruthy();
+      expect(selected!.getAttribute('data-path')).toBe('/home/u/.claude/settings.json');
+    });
+  });
+
+  it('树集成:list_editable_jsons 错误 → 显示错误 banner', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_editable_jsons') throw new Error('扫描失败:权限拒绝');
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => {
+      const banner = screen.getByTestId('json-file-tree-error');
+      expect(banner).toBeTruthy();
+      expect(banner.textContent).toContain('扫描失败');
+    });
+  });
+
+  it('树集成:scope badge 在 toolbar 中显示', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_editable_jsons') return TREE_ENTRIES;
+      if (cmd === 'read_file') return SAMPLE_JSON;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    await waitFor(() => screen.getByTestId('json-file-tree'));
+
+    // 没加载文件 → 没 badge
+    expect(screen.queryByTestId('json-editor-scope-badge')).toBeNull();
+
+    // 加载文件 → badge 出现,scope=user
+    const entries = screen.getAllByTestId('json-file-tree-entry');
+    const target = entries.find((e) => e.getAttribute('data-path') === '/home/u/.claude/settings.json')!;
+    await act(async () => {
+      fireEvent.click(target);
+    });
+    await waitFor(() => {
+      const badge = screen.getByTestId('json-editor-scope-badge');
+      expect(badge.getAttribute('data-scope')).toBe('user');
+      expect(badge.textContent).toContain('用户级');
+    });
+
+    // 切到 project scope 的文件
+    const projEntry = entries.find((e) => e.getAttribute('data-path') === '/proj/.claude/agents/coder.json')!;
+    await act(async () => {
+      fireEvent.click(projEntry);
+    });
+    await waitFor(() => {
+      const badge = screen.getByTestId('json-editor-scope-badge');
+      expect(badge.getAttribute('data-scope')).toBe('project');
+      expect(badge.textContent).toContain('项目级');
+    });
+  });
 });

@@ -64,12 +64,14 @@ import {
   Save,
   Sparkles,
 } from 'lucide-react';
-import { readFile, writeFileAtomic } from '../../lib/api/fs';
+import { readFile, writeFileAtomic, listEditableJsons } from '../../lib/api/fs';
 import {
   formatJson,
   maskTokens,
   validateJson,
 } from '../../lib/json-editor';
+import { JsonFileTree } from '../../components/JsonFileTree';
+import type { JsonFileEntry } from '../../types/json';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -114,8 +116,35 @@ const INITIAL_STATE: PageState = {
 
 export default function JsonEditorPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M3.11 (A4#12) — 侧边文件树数据 + loading / error 状态。
+  const [treeEntries, setTreeEntries] = useState<JsonFileEntry[]>([]);
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [treeError, setTreeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // M3.11 (A4#12) — 页面 mount 时拉一次文件树(后端 list_editable_jsons)。
+  // 拉到的 entries 是当前 active project 下的所有可编辑 .json。
+  const refreshTree = useCallback(async (): Promise<void> => {
+    setTreeLoading(true);
+    setTreeError(null);
+    try {
+      const entries = await listEditableJsons();
+      // 后端契约:返回 Vec<JsonFileEntry>,但 mock 测试环境可能返回 null。
+      // 严格空值保护,避免 .map 崩。
+      setTreeEntries(Array.isArray(entries) ? entries : []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTreeError(`扫描失败: ${msg}`);
+      setTreeEntries([]);
+    } finally {
+      setTreeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshTree();
+  }, [refreshTree]);
 
   // Debounced JSON validation (200ms) — matches SPEC §5.4.
   // We re-derive `error` whenever `raw` changes.
@@ -182,6 +211,55 @@ export default function JsonEditorPage(): ReactElement {
       }
     },
     [],
+  );
+
+  // M3.11 (A4#12) — 用绝对路径加载一个文件(侧边树点击触发)。
+  // 与 handleFileChosen 共享同一份 "init PageState from content" 逻辑,
+  // 但跳过 file picker input 的 reset。
+  const loadFileByPath = useCallback(
+    async (path: string): Promise<void> => {
+      try {
+        const content = await readFile(path);
+        const initial: PageState = {
+          ...INITIAL_STATE,
+          filePath: path,
+          original: content,
+          raw: content,
+          history: [content],
+          historyIndex: 0,
+          error: (() => {
+            const r = validateJson(content);
+            return r.valid ? null : r.error;
+          })(),
+        };
+        setState(initial);
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err);
+        setState((prev) => ({
+          ...prev,
+          message: { kind: 'error', text: `读取失败: ${mapBackendError(raw)}` },
+        }));
+      }
+    },
+    [],
+  );
+
+  // M3.11 (A4#12) — 点击侧边文件树。如果当前是 dirty,先 confirm。
+  const handleTreeSelect = useCallback(
+    (entry: JsonFileEntry): void => {
+      if (state.filePath === entry.path) {
+        // 同一文件,无需重读 + 无需 confirm。
+        return;
+      }
+      if (isDirty) {
+        const ok = window.confirm(
+          `当前文件有未保存的修改,切换到「${entry.relative_path}」将丢失这些改动。继续吗?`,
+        );
+        if (!ok) return;
+      }
+      void loadFileByPath(entry.path);
+    },
+    [state.filePath, isDirty, loadFileByPath],
   );
 
   const pushHistory = useCallback((next: string): void => {
@@ -312,8 +390,8 @@ export default function JsonEditorPage(): ReactElement {
     <div
       style={{
         padding: 'var(--space-6)',
-        maxWidth: 720,
-        margin: '0 auto',
+        // M3.11 (A4#12) — 取消 maxWidth:720,改成两栏自适应。
+        // 整页高度撑满,内部分左右两列。
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -347,6 +425,49 @@ export default function JsonEditorPage(): ReactElement {
         <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>.json</code>
         文件,实时校验 + 格式化 + token 遮罩 + 原子保存。
       </p>
+
+      {/* M3.11 (A4#12) — 两栏布局:左 FileTree 240px,右 编辑器主区。 */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          flex: 1,
+          minHeight: 0, // 让子项能正确收缩
+        }}
+        data-testid="json-editor-two-col"
+      >
+        {/* 左:文件目录树 */}
+        <div
+          style={{
+            width: 240,
+            flexShrink: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          data-testid="json-editor-tree-col"
+        >
+          <JsonFileTree
+            entries={treeEntries}
+            selectedPath={state.filePath}
+            onSelect={handleTreeSelect}
+            onRefresh={() => void refreshTree()}
+            loading={treeLoading}
+            errorMessage={treeError}
+          />
+        </div>
+
+        {/* 右:编辑器主区(toolbar + textarea + status) */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+          }}
+          data-testid="json-editor-main-col"
+        >
 
       {/* Toolbar */}
       <div
@@ -451,6 +572,32 @@ export default function JsonEditorPage(): ReactElement {
             )}
           </span>
         )}
+        {state.filePath && (() => {
+          // M3.11 (A4#12) — scope 标签(从 treeEntries 查匹配 entry,
+          // 找不到就是从 native file picker 加载的,显示 "用户级" 兜底)。
+          const entry = treeEntries.find((e) => e.path === state.filePath);
+          const label = entry?.scope_label ?? '用户级';
+          return (
+            <span
+              data-testid="json-editor-scope-badge"
+              data-scope={entry?.scope ?? 'user'}
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '2px 6px',
+                borderRadius: 4,
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+                marginLeft: 6,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              {label}
+            </span>
+          );
+        })()}
       </div>
 
       <input
@@ -565,6 +712,10 @@ export default function JsonEditorPage(): ReactElement {
         </span>
         <span>Ctrl+Shift+F 格式化 · Ctrl+Z/Y 撤销重做 · Ctrl+S 保存</span>
       </div>
+        </div>
+        {/* 右栏结束 */}
+      </div>
+      {/* 两栏布局结束 */}
     </div>
   );
 }
