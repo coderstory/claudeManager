@@ -1,4 +1,4 @@
-//! F3 — 导入 .sql (stub).
+//! F3 — SQL导入配置 (stub).
 
 use super::super::traits::*;
 
@@ -9,13 +9,13 @@ impl IPlugin for ImportSqlPlugin {
         "import-sql"
     }
     fn name(&self) -> &'static str {
-        "导入 .sql"
+        "SQL导入配置"
     }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/import".to_string(),
             plugin_id: "import-sql",
-            display_name: "导入 .sql".to_string(),
+            display_name: "SQL导入配置".to_string(),
         }]
     }
 }

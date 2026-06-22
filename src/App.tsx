@@ -96,8 +96,10 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
     description: '选择 provider → 备份原 settings.json → 原子写入新值。F2 动作而非独立页。',
   },
   'import-sql': {
-    title: '导入 .sql',
-    description: '解析 cc-switch 备份的 .sql(SQLite dump) → 预览 → 批量导入 provider + MCP。',
+    // M3.9 — 清单 2: 页面标题 P1 修复: "导入 .sql" → "SQL导入配置"
+    title: 'SQL导入配置',
+    // M3.9 — 清单 21: 描述补 "schema 校验" 环节
+    description: '校验 .sql(SQLite dump) schema → 预览将导入的 provider/MCP → 批量导入。',
   },
   'deeplink-import': {
     title: 'Deeplink 导入',

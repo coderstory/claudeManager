@@ -127,8 +127,9 @@ describe('ImportSqlPage — F3 idle state', () => {
     render(<ImportSqlPage />);
     expect(screen.getByTestId('import-sql-idle')).toBeInTheDocument();
     expect(screen.getByTestId('import-sql-pick-file')).toBeInTheDocument();
+    // M3.9 — 清单 2: 页面 H1 改名 "导入 .sql" → "SQL导入配置"
     expect(
-      screen.getByRole('heading', { name: '导入 .sql' }),
+      screen.getByRole('heading', { name: 'SQL导入配置' }),
     ).toBeInTheDocument();
   });
 });

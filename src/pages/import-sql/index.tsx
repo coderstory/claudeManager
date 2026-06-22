@@ -38,6 +38,10 @@ import {
   parseSqlPreview,
 } from '../../lib/api/providers';
 import { readSqlFile } from '../../lib/api/fs';
+// M3.9 — 清单 21: 前端 SQL schema 预校验 (5 场景)
+// 在调用后端 parseSqlPreview 之前先做轻量分类,空文件 / 编码错误
+// 等场景直接 ErrorBanner,不浪费 IPC 往返。
+import { validateSql } from '../../lib/sql-validator';
 import type {
   ImportResult,
   ImportSkip,
@@ -110,6 +114,20 @@ export function ImportSqlPage({
       try {
         const content = await readSqlFile(initialFilePath);
         if (cancelled) return;
+        // M3.9 — 清单 21: F20 文件关联双击 .sql 走相同预校验。
+        const validation = validateSql(content);
+        if (
+          validation.scenario === 'empty' ||
+          validation.scenario === 'encoding_error'
+        ) {
+          handleConfirmRef.current = null;
+          setState({
+            kind: 'error',
+            message:
+              validation.errors[0]?.message ?? 'SQL 文件校验失败',
+          });
+          return;
+        }
         const preview = await parseSqlPreview(content);
         if (cancelled) return;
         handleConfirmRef.current = { content, fileName, preview };
@@ -138,6 +156,23 @@ export function ImportSqlPage({
       setState({ kind: 'parsing', fileName: file.name });
       try {
         const content = await file.text();
+        // M3.9 — 清单 21: 前端预校验。仅对"空文件 / 编码错误" 2 个
+        // 不可恢复场景阻断 + ErrorBanner,其余场景 (illegal / partially_valid)
+        // 仍调后端,把诊断信息交由后端 parse_sql_preview 统一处理。
+        // (现有 import-sql 流程已能展示"无 importable" / 跳过行 等。)
+        const validation = validateSql(content);
+        if (
+          validation.scenario === 'empty' ||
+          validation.scenario === 'encoding_error'
+        ) {
+          handleConfirmRef.current = null;
+          setState({
+            kind: 'error',
+            message:
+              validation.errors[0]?.message ?? 'SQL 文件校验失败',
+          });
+          return;
+        }
         const preview = await parseSqlPreview(content);
         // Mirror the preview payload into a ref so handleConfirm can
         // read it without a setState callback (which StrictMode
@@ -262,7 +297,8 @@ function HeaderBar({ onReset }: HeaderBarProps): ReactElement {
           margin: 0,
         }}
       >
-        导入 .sql
+        {/* M3.9 — 清单 2: 页面 H1 命名 P1 修复: "导入 .sql" → "SQL导入配置" */}
+        SQL导入配置
       </h1>
       <button
         type="button"

@@ -66,7 +66,8 @@ const VIEW_META: Record<
   },
   'import-sql': {
     icon: <Database size={18} aria-hidden="true" />,
-    short: '.sql 导入',
+    // M3.9 — 清单 2: 菜单/页面命名 P1 修复: ".sql 导入" → "SQL导入配置"
+    short: 'SQL导入配置',
   },
   'deeplink-import': {
     icon: <Link2 size={18} aria-hidden="true" />,
