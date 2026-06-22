@@ -50,16 +50,31 @@ export const test = base.extend<{ page: Page }>({
       const context = browser.contexts()[0];
       const page: Page = context.pages()[0] || (await context.newPage());
 
-      // In CDP mode `page.goto('/')` fails because the CDP endpoint
-      // doesn't resolve relative URLs. The WebView2 does understand
-      // `tauri://localhost`, so we navigate to the full URL once so
-      // the page fixture is in a known state (the Tauri custom-
-      // protocol base). This is a no-op overlay — the page was
-      // already loaded at this URL by the Tauri runtime.
-      const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'tauri://localhost';
-      await page.goto(baseUrl + '/', { waitUntil: 'load' });
+      // The WebView2 is already on the Tauri app's URL (tauri://localhost)
+      // when tauri-driver finishes the session handshake. We must NOT call
+      // page.goto() here — WebView2's custom-protocol handler aborts any
+      // in-flight navigation request that didn't originate from user
+      // interaction, and CDP-driven goto is treated as such (ERR_ABORTED).
+      // The page is already loaded (title + heading visible).
+      //
+      // To keep specs portable across CDP / dev-server modes, we wrap the
+      // page in a Proxy that intercepts `goto` and turns it into a no-op
+      // in CDP mode. Specs that call `page.goto('/')` see "page is already
+      // at the right URL" without actually triggering a navigation. All
+      // other Page methods pass through unchanged.
+      const proxiedPage = new Proxy(page, {
+        get(target, prop, receiver) {
+          if (prop === 'goto') {
+            return async () => {
+              // No-op in CDP mode — page is already on tauri://localhost.
+            };
+          }
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as Page;
 
-      await use(page);
+      await use(proxiedPage);
 
       // Do NOT close browser/context — tauri-driver owns the
       // WebView2 process lifetime. Disconnect cleanly instead.

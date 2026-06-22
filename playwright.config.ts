@@ -48,10 +48,20 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'echo "Tauri app must be launched separately — see CI workflow"',
-    url: 'http://localhost:1420',
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  // webServer is only needed in dev-server mode (PLAYWRIGHT_BASE_URL set).
+  // In real WebView2 mode (CDP_ENDPOINT set by run-e2e.sh), tauri-driver
+  // already launched the app and Playwright connects to it via CDP, so
+  // there is no Node-managed dev server to start. Skipping the block
+  // prevents Playwright from failing on the placeholder `echo` command
+  // exiting immediately when localhost:1420 is not listening.
+  ...(process.env.PLAYWRIGHT_BASE_URL
+    ? {
+        webServer: {
+          command: 'echo "Tauri app must be launched separately — see CI workflow"',
+          url: 'http://localhost:1420',
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+      }
+    : {}),
 });
