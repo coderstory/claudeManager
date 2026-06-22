@@ -294,6 +294,24 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // M3.2 polish — left-double-click on tray icon restores
+            // the main window. We hook the icon's click handler via
+            // a TrayIconEvent listener (Tauri v2 doesn't expose
+            // `on_double_click` as a builder method; instead we
+            // listen for `DoubleClick` events on the tray).
+            let tray_handle = app.tray_by_id("main-tray");
+            if let Some(t) = tray_handle {
+                t.on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.unminimize();
+                        }
+                    }
+                });
+            }
+
             // Minimize-to-tray: intercept close
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();

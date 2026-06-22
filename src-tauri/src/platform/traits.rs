@@ -250,6 +250,33 @@ pub trait IPlatformPaths: Send + Sync {
     fn active_root_dir(&self) -> Option<PathBuf> {
         None
     }
+
+    /// M3.2 polish — confirm `path` lives under one of the
+    /// app-managed directories (`backups_dir`, `claude_dir`).
+    ///
+    /// Returns `Ok(canonicalized_path)` when the path is allowed,
+    /// `Err(PlatformError::Path)` otherwise. This is a trait-level
+    /// helper so the business code in `BackupService` doesn't need
+    /// to know the concrete allow-list — each platform keeps its
+    /// own list (`backups_dir` for Win/Mac is straightforward,
+    /// `claude_dir` may shift with project mode in future).
+    ///
+    /// Default implementation accepts any path under
+    /// `<app_data>/backups/`. Concrete impls on Win/Mac extend the
+    /// allow-list with the active project's `.claude/` directory.
+    fn validate_backup_path(&self, path: &Path) -> Result<PathBuf, PlatformError> {
+        let resolved = self.resolve();
+        let candidate = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let backups_root =
+            std::fs::canonicalize(&resolved.backups_dir).unwrap_or(resolved.backups_dir);
+        if candidate.starts_with(&backups_root) {
+            return Ok(candidate);
+        }
+        Err(PlatformError::Path(format!(
+            "path {} is outside allowed backup directories",
+            path.display()
+        )))
+    }
 }
 
 /// Acquire a per-user single-instance lock. Returns `Err` if another instance

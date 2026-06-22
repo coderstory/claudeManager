@@ -15,7 +15,7 @@
 //! file is never silently dropped, we just degrade to user-level
 //! for this read.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use uuid::Uuid;
@@ -109,6 +109,44 @@ impl IPlatformPaths for WindowsPaths {
             .into_iter()
             .find(|p| p.id == id)
             .map(|p| p.root_dir)
+    }
+
+    /// M3.2 polish — Windows allow-list = `<app_data>/backups/` +
+    /// `~/.claude/` (user-level) OR `<active_project>/.claude/`
+    /// when a project is active (M3.10).
+    fn validate_backup_path(&self, path: &Path) -> Result<PathBuf, PlatformError> {
+        let resolved = self.resolve();
+        let candidate = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        // 1) Backups dir is always allowed.
+        let backups_root = std::fs::canonicalize(&resolved.backups_dir)
+            .unwrap_or_else(|_| resolved.backups_dir.clone());
+        if candidate.starts_with(&backups_root) {
+            return Ok(candidate);
+        }
+
+        // 2) Claude dir (user-level).
+        if let Some(claude_dir) = resolved.claude_dir() {
+            let root = std::fs::canonicalize(claude_dir).unwrap_or_else(|_| claude_dir.to_path_buf());
+            if candidate.starts_with(&root) {
+                return Ok(candidate);
+            }
+        }
+
+        // 3) Active project (M3.10) — its `.claude/` dir if set.
+        if let Some(active) = self.active_root_dir() {
+            let project_claude = active.join(".claude");
+            let root = std::fs::canonicalize(&project_claude)
+                .unwrap_or(project_claude);
+            if candidate.starts_with(&root) {
+                return Ok(candidate);
+            }
+        }
+
+        Err(PlatformError::Path(format!(
+            "path {} is outside allowed backup directories",
+            path.display()
+        )))
     }
 }
 

@@ -19,7 +19,7 @@
 //! 实现只用跨平台 `dirs` + `std::fs`，不引入 NSFileManager 等 macOS
 //! 专属 API——路径只是字符串拼接 + `create_dir_all`，无需系统框架。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::platform::traits::{AppPaths, IPlatformPaths, PlatformError};
 
@@ -108,6 +108,34 @@ impl IPlatformPaths for MacPaths {
     #[allow(dead_code)]
     fn active_root_dir(&self) -> Option<std::path::PathBuf> {
         None
+    }
+
+    /// M3.2 polish — macOS allow-list mirrors Windows: backups_dir
+    /// + claude_dir (D6: Mac 真机验证暂缓,active_root_dir 永远
+    /// None,所以不会有 project-mode 分支)。
+    fn validate_backup_path(&self, path: &Path) -> Result<PathBuf, PlatformError> {
+        let resolved = self.resolve();
+        let candidate = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        let backups_root = std::fs::canonicalize(&resolved.backups_dir)
+            .unwrap_or_else(|_| resolved.backups_dir.clone());
+        if candidate.starts_with(&backups_root) {
+            return Ok(candidate);
+        }
+
+        if let Some(claude_dir) = resolved.claude_dir() {
+            let claude_dir_buf = claude_dir.to_path_buf();
+            let root = std::fs::canonicalize(claude_dir)
+                .unwrap_or_else(|_| claude_dir_buf.clone());
+            if candidate.starts_with(&root) {
+                return Ok(candidate);
+            }
+        }
+
+        Err(PlatformError::Path(format!(
+            "path {} is outside allowed backup directories",
+            path.display()
+        )))
     }
 }
 

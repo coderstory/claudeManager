@@ -220,7 +220,7 @@ export function AppSidebar({
           aria-hidden="true"
           style={{ verticalAlign: 'middle', marginRight: 4 }}
         />
-        M1.9 · 架构期
+        钱云飞作品
       </div>
     </nav>
   );

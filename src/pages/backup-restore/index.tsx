@@ -39,6 +39,8 @@ import {
   ArrowLeftRight,
   FileWarning,
   History,
+  Maximize2,
+  Minimize2,
   RotateCcw,
   Save,
 } from 'lucide-react';
@@ -73,6 +75,10 @@ interface PageState {
   diff: DiffEntry[] | null;
   diffing: boolean;
   message: { kind: 'success' | 'error'; text: string } | null;
+  /** M3.2 polish — F19 toggle: fullscreen on/off for the right
+   *  detail panel. Persists only for the current view (re-renders
+   *  reset it). */
+  detailFullscreen: boolean;
 }
 
 const INITIAL_STATE: PageState = {
@@ -83,6 +89,7 @@ const INITIAL_STATE: PageState = {
   diff: null,
   diffing: false,
   message: null,
+  detailFullscreen: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -296,6 +303,32 @@ export default function BackupRestorePage(): ReactElement {
         </button>
         <button
           onClick={() => {
+            setState((prev) => ({
+              ...prev,
+              detailFullscreen: !prev.detailFullscreen,
+            }));
+          }}
+          data-testid="backup-fullscreen-toggle"
+          aria-pressed={state.detailFullscreen}
+          disabled={!state.detail && !state.diff}
+          title={
+            state.detailFullscreen ? '退出全屏 (F19)' : '全屏查看 (F19)'
+          }
+          style={{
+            ...toolbarBtn(),
+            opacity: state.detail || state.diff ? 1 : 0.5,
+            cursor: state.detail || state.diff ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {state.detailFullscreen ? (
+            <Minimize2 size={14} />
+          ) : (
+            <Maximize2 size={14} />
+          )}
+          {state.detailFullscreen ? '退出全屏' : '全屏'}
+        </button>
+        <button
+          onClick={() => {
             void handleCompare();
           }}
           disabled={state.selected.length !== 2 || state.diffing}
@@ -323,8 +356,21 @@ export default function BackupRestorePage(): ReactElement {
             marginLeft: 'auto',
             fontSize: 12,
             color: 'var(--text-muted)',
+            cursor: 'help',
           }}
           data-testid="backup-count"
+          title={
+            // M3.2 polish — tooltip describing where backups live so
+            // the user can copy the path and `ls` / open it manually.
+            // Two sources are scanned (F13 SPEC §5.12):
+            //   1) <APPDATA>/ClaudeConfigManager/backups/  (Windows)
+            //   2) %USERPROFILE%/.claude/                  (Windows)
+            // On macOS the equivalents are ~/Library/Application
+            // Support/ClaudeConfigManager/backups and ~/.claude.
+            '备份路径:\n' +
+            '  • <APPDATA>/ClaudeConfigManager/backups/\n' +
+            '  • ~/.claude/  (settings.json 同目录 .bak.<ts>)'
+          }
         >
           {state.entries.length} 个备份 · 已选 {state.selected.length} / 2
         </span>
@@ -530,6 +576,103 @@ export default function BackupRestorePage(): ReactElement {
           )}
         </div>
       </div>
+
+      {/* M3.2 polish — F19 fullscreen toggle overlay. Renders
+          only when `detailFullscreen` is on; covers the entire
+          viewport (fixed, top:0) so the user can focus on the
+          backup content without distractions. Esc-to-exit is
+          handled below. */}
+      {state.detailFullscreen && (
+        <div
+          data-testid="backup-fullscreen-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="备份内容全屏查看"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Escape') {
+              setState((prev) => ({ ...prev, detailFullscreen: false }));
+            }
+          }}
+          tabIndex={-1}
+          ref={(el) => {
+            // Auto-focus so Escape key handler above fires without
+            // a prior click inside the overlay.
+            if (el) el.focus();
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'var(--bg-primary)',
+            zIndex: 1000,
+            padding: 24,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: 12,
+              gap: 8,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                flex: 1,
+              }}
+            >
+              全屏查看 · 按 Esc 或点 [退出全屏] 关闭
+            </h3>
+            <button
+              onClick={() => {
+                setState((prev) => ({ ...prev, detailFullscreen: false }));
+              }}
+              data-testid="backup-fullscreen-exit"
+              style={toolbarBtn()}
+            >
+              <Minimize2 size={14} />
+              退出全屏
+            </button>
+          </div>
+          <div
+            style={{
+              flex: 1,
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              background: 'var(--bg-elevated)',
+              padding: 16,
+              overflow: 'auto',
+            }}
+          >
+            {state.diff && state.diff.length > 0 ? (
+              <DiffView entries={state.diff} />
+            ) : state.diff && state.diff.length === 0 ? (
+              <div
+                data-testid="backup-diff-empty"
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: 13,
+                  textAlign: 'center',
+                  padding: 32,
+                }}
+              >
+                两个备份完全相同,无差异
+              </div>
+            ) : state.detail ? (
+              <ContentView path={state.detail.path} content={state.detail.content} />
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

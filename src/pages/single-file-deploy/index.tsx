@@ -31,6 +31,7 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Terminal } from 'lucide-react';
+import { ErrorBanner } from '../../components/ErrorBanner';
 
 // ---------------------------------------------------------------------------
 // Static content (no IPC needed after M3.7 simplification)
@@ -64,6 +65,11 @@ const INSTALLER_COMMANDS: ReadonlyArray<{
 
 export default function SingleFileDeployPage(): ReactElement {
   const [showCommands, setShowCommands] = useState(false);
+  // M3.2 polish — F15 ErrorBanner full rollout: persist an info
+  // banner reminding users this page is read-only until M3+ sidecar
+  // lands. Renders once on mount and clears when the user
+  // dismisses it (no autoDismiss — these are stable semantics).
+  const [showInfoBanner, setShowInfoBanner] = useState(true);
 
   return (
     <div
@@ -76,6 +82,15 @@ export default function SingleFileDeployPage(): ReactElement {
       }}
       data-testid="single-file-deploy-page"
     >
+      {/* M3.2 — F15 ErrorBanner full rollout. */}
+      {showInfoBanner && (
+        <ErrorBanner
+          kind="info"
+          message="本页只展示构建命令,真正的 one-click installer 打包需等 M3+ sidecar 落地。"
+          testId="single-file-deploy-info"
+          onDismiss={() => setShowInfoBanner(false)}
+        />
+      )}
       <header style={{ marginBottom: 'var(--space-4)' }}>
         <h1
           style={{

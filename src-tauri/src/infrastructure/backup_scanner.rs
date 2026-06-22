@@ -56,7 +56,16 @@ pub struct BackupEntry {
     pub path: PathBuf,
     /// The original file path the backup was taken from
     /// (e.g. `~/.claude/settings.json`).
+    #[serde(alias = "original_file")]
     pub original_path: PathBuf,
+    /// M3.2 polish — alias of `original_path` exposing just the
+    /// basename (e.g. `settings.json`). Easier for the F13 UI to
+    /// group-by / sort-by without re-parsing the full path. Kept
+    /// as a separate field rather than a derived property so it
+    /// round-trips through JSON and external tooling (e.g. cc-switch
+    /// importers) can rely on it.
+    #[serde(alias = "original_filename")]
+    pub original_name: String,
     /// Unix seconds the backup was created (parsed from filename).
     /// `None` if the filename timestamp was malformed — we still
     /// surface the entry but UI may demote it to a "unknown date" row.
@@ -150,7 +159,8 @@ pub fn parse_backup_filename(path: &Path) -> Option<BackupEntry> {
 
     Some(BackupEntry {
         path: path.to_path_buf(),
-        original_path,
+        original_path: original_path.clone(),
+        original_name: original_name.to_string(),
         timestamp_unix,
         size_bytes,
         source,

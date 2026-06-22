@@ -233,10 +233,6 @@ impl BackupService {
             .ok_or_else(|| BackupError::CannotReconstruct(backup_path.clone()))
     }
 
-    // -----------------------------------------------------------------------
-    // path safety
-    // -----------------------------------------------------------------------
-
     /// Directories the frontend is allowed to read backups from.
     pub fn allowed_directories(&self) -> Vec<PathBuf> {
         let mut v = Vec::new();
@@ -279,6 +275,9 @@ impl BackupService {
 pub struct ManualBackupResult {
     pub path: PathBuf,
     pub original_path: PathBuf,
+    /// M3.2 polish — basename alias (see BackupEntry::original_name).
+    #[serde(alias = "original_filename")]
+    pub original_name: String,
     pub size_bytes: u64,
     pub source: BackupSource,
 }

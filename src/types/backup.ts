@@ -16,6 +16,8 @@ export type BackupSource = 'settings' | 'claude' | 'provider' | 'manual' | 'unkn
 export interface BackupEntry {
   path: string;
   original_path: string;
+  /** M3.2 polish — basename of `original_path` (alias: `original_filename`). */
+  original_name: string;
   timestamp_unix: number | null;
   size_bytes: number;
   source: BackupSource;
@@ -33,6 +35,8 @@ export interface DiffEntry {
 export interface ManualBackupResult {
   path: string;
   original_path: string;
+  /** M3.2 polish — basename alias (see BackupEntry). */
+  original_name: string;
   size_bytes: number;
   source: BackupSource;
 }

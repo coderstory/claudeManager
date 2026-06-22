@@ -86,6 +86,7 @@ pub async fn backup_now(
     Ok(ManualBackupResult {
         path: entry.path,
         original_path: entry.original_path,
+        original_name: entry.original_name,
         size_bytes: entry.size_bytes,
         source: entry.source,
     })

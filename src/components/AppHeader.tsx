@@ -189,7 +189,14 @@ export function AppHeader({
           data-testid="app-header-settings"
           data-app-control-hover="true"
           aria-label="设置"
-          title="设置（M2+ 实现）"
+          title="设置（前往关于页查看应用信息）"
+          onClick={() => {
+            // M3.2 polish — wire the settings entry to navigate to
+            // the closest available view (about) until a dedicated
+            // settings page ships. M3.7 ship-status shows no
+            // settings plugin is in the registry yet.
+            onNavigate('about');
+          }}
           style={{
             width: 32,
             height: 32,
