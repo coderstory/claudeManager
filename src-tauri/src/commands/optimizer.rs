@@ -45,9 +45,13 @@ type CmdResult<T> = Result<T, String>;
 pub async fn scan_optimizations(
     state: State<'_, AppState>,
 ) -> CmdResult<Vec<OptimizationFinding>> {
+    // M3.11 (A1#10) — read live active root from the platform shim
+    // (state.paths is a one-shot startup snapshot; active_root can
+    // change at runtime via the project switcher).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .optimizer_service
-        .scan()
+        .scan_with_root(active_root.as_deref())
         .map_err(|e| format!("配置扫描失败: {e}"))
 }
 
@@ -60,14 +64,23 @@ pub async fn scan_optimizations(
 /// Each auto-apply rule writes via `fs_atomic::write_with_backup`
 /// (CLAUDE.md §7) and returns the (predicted) `.bak.<ts>` path so
 /// the UI can show "已自动备份"。
+///
+/// M3.11 (A1#10) — write target resolves from `active_root_dir`:
+/// `None` → `~/.claude/settings.json` (M2.9 default); `Some(root)` →
+/// `<root>/.claude/settings.json` (project mode). The service
+/// refuses to write into a root that does not exist (no auto-mkdir).
 #[tauri::command]
 pub async fn apply_optimizations(
     state: State<'_, AppState>,
     finding_ids: Vec<String>,
 ) -> CmdResult<Vec<ApplyResult>> {
+    // M3.11 (A1#10) — same live read as scan_optimizations. Snapshot
+    // is taken here (command boundary) so the service stays a pure
+    // `&self` method.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
     state
         .optimizer_service
-        .apply_findings(finding_ids)
+        .apply_findings(finding_ids, active_root.as_deref())
         .map_err(|e| format!("应用优化失败: {e}"))
 }
 

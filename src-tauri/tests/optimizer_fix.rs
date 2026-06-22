@@ -102,7 +102,12 @@ impl Harness {
     }
 
     fn apply(&self, ids: Vec<String>) -> Vec<claude_config_manager_lib::domain::ApplyResult> {
-        self.service.apply_findings(ids).expect("apply_findings")
+        // M3.11 (A1#10) — integration test fixture: user-level mode
+        // (active_root = None). Same as the production default in
+        // commands/optimizer.rs when no project is active.
+        self.service
+            .apply_findings(ids, None)
+            .expect("apply_findings")
     }
 }
 
