@@ -61,7 +61,7 @@ Next: Phase 21 SQLite research 已 ship (21-RESEARCH.md + 21-CONTEXT.md, commit 
 - D6 Mac 真机验证 — 暂缓, M4 启动前再问
 - 17 MEDIUM/LOW M2.16 限制已逐条评估 (D10), v2.0 关闭期归档
 - **#14 Playwright e2e 本机实跑** — ✅ resolved by Phase 18 (2026-06-22): 6/6 specs PASS on dev box (3 WebView2 via tauri-driver CDP + 3 vite dev). Wave 1 needed 1 atomic fixtures fix (commit `b8361ce` — CDP-mode `page.goto` Proxy no-op + `playwright.config.ts` webServer gating); Wave 2 needed zero fixes. See `.planning/phases/18-m1-l1-playwright-e2e-windows-only/18-03-SUMMARY.md`.
-- **#9 F18 scan_optimizations active_root_dir 接入** — v3.0 round 1 跳过，#10 apply 已 ship（commit `2e4e75b`），scan 仍读用户级，进 round 2
+- **#9 F18 scan_optimizations active_root_dir 接入** — ✅ resolved by commit `2e4e75b` (2026-06-22);`scan_with_root` 同步接入（与 #10 `apply_findings` 同 commit ship）;原 round 1 'pending' 标记是 commit `f5afe82` 文档漂移,已修
 - **M4.3 updater Phase 2/3** — Phase 1 pubkey+endpoint 已 ship（commit `da6ba67`），前端 UI + E2E 灰度回滚未做
 - **A3 备份增强 Phase 2 云备份** — Phase 1 增量已 ship（commit `3eadae2`），云备份未做
 - **M4.6 其余 (i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02)** — v3.0 round 1 未启动
@@ -1311,7 +1311,7 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 
 | 类别 | 详情 | 关键 commit |
 |---|---|---|
-| **A1 M3.10-adapter** | 12/13 plugin 接入 active_root_dir（仅 #9 F18 scan_optimizations 仍 pending） | 6 commits (#2-7) |
+| **A1 M3.10-adapter** | 13/13 plugin 接入 active_root_dir（#9 F18 scan_optimizations 已 ship by `scan_with_root`） | 6 commits (#2-7) |
 | **A3 备份增强 Phase 1** | F13 增量备份（diff-based, skip no-change） | #10 (`3eadae2`) |
 | **A3 L-M2.08 WindowChrome** | lib.rs 走 `IPlatformWindowChrome` trait dispatch，Mac impl = `apply_vibrancy`（架构债关闭） | #11 (`7efb0f8`) |
 | **B2#1 usage 测试** | M3.8 usage fixture 8 子任务功能测试补齐 | #9 (`4f5df37`) |
@@ -1322,8 +1322,7 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 
 | 类别 | 详情 | 阻塞 / 触发 |
 |---|---|---|
-| **#9 F18 scan_optimizations** | A1 M3.10-adapter 唯一未接入的 1 个，scan 仍读用户级 `~/.claude/`（#10 apply 已 ship） | 进 v3.0 round 2 |
-| **#14 Playwright e2e 本机实跑** | API 402 余额不足中止（0 token 消耗） | 等用户充余额后重派 |
+| **#14 Playwright e2e 本机实跑** | ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`) — Phase 18 6/6 spec PASS | 已关闭 (round 1 文档漂移已修) |
 | **M4.3 updater Phase 2/3** | Phase 1 pubkey+endpoint 已 ship，前端 UI + E2E 灰度回滚未做 | 未签名 update 触发 SmartScreen 警告但功能可用 |
 | **A3 备份 Phase 2 云备份** | Phase 1 增量已 ship，云备份未做 | — |
 | **M4.6 其余** | i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02 | 按需启动 |
@@ -1348,15 +1347,15 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 
 | 槽 | 任务 | 类型 | 估时 | 备注 |
 |---|---|---|---|---|
-| 1 | #9 F18 scan_optimizations active_root_dir 接入 | Bug fix + 接入 | 半天 | 收尾 A1 最后一个接入点 |
-| 2 | #14 Playwright e2e 本机实跑（基建 + 1-2 spec 实跑） | E2E 验证 | 1-2 天 | 等用户充 API 余额 |
+| 1 | ~~#9 F18 scan_optimizations active_root_dir 接入~~ (✅ ship `2e4e75b` `scan_with_root`) | — | — | 已 ship,本表保留作为审计痕迹 |
+| 2 | ~~#14 Playwright e2e 本机实跑~~ (✅ ship Phase 18 6/6 PASS) | — | — | 已 ship,本表保留作为审计痕迹 |
 | 3 | M4.3 updater Phase 2 前端 UI | UI | 1-2 天 | 依赖 Phase 1 已有 pubkey/endpoint config |
 | 4 | M4.3 updater Phase 3 E2E 灰度回滚 | E2E | 1 天 | 验证未签名 update 完整链路 |
 
 ## v3.0 round 1 已知限制
 
 - **#14 e2e 中止**：Playwright e2e 派单 subagent 因 API 402 余额不足 0 token 消耗中止，**没有产生 commit 也没破坏现有状态**（仅消耗 subagent 启动 token）
-- **#9 F18 scan_optimizations 仍读用户级**：optimizer `scan_optimizations` 未走 `active_root_dir`，与 `apply_optimizations` 不一致 → v3.0 round 2 必修
+- **#9 F18 scan_optimizations 仍读用户级 (round 1 文档漂移)**：optimizer `scan_optimizations` 实际已 ship `scan_with_root` (commit `2e4e75b`) 接入 `active_root_dir`,与 `apply_optimizations` 一致 → 已修 (本表保留作为 round 1 文档漂移审计痕迹)
 - **M4.3 未签名 update 触发 SmartScreen**：Phase 1 已有 pubkey/endpoint，但 update 包未 EV 证书签名 → Windows SmartScreen 警告用户。用户首次点击"仍要运行"后可用
 
 ## 完整文档落盘（v3.0 round 1 收尾动作）

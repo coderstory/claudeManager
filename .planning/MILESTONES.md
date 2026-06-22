@@ -16,7 +16,7 @@
 
 | 类别 | 总数 | 已完成 | 未完成 | 说明 |
 |---|---|---|---|---|
-| A1 M3.10-adapter plugin 适配 | 13 | 12 | 1 | F2 switch + F13 backup_now + 10 个 v3.0 round 1 接入；#9 F18 scan_optimizations 仍 pending |
+| A1 M3.10-adapter plugin 适配 | 13 | 13 | 0 | F2 switch + F13 backup_now + 11 个 v3.0 round 1 接入；#9 F18 scan_optimizations `scan_with_root` 已 ship (commit `2e4e75b`) |
 | A2 v3.0 公证发布 (M4.1~M4.6) | 6 | 0 | 6 | M4.1 证书取消 + M4.5 商店取消 → 主线需重新界定 |
 | A3 M4.6 长期 backlog 候选 | 9 | 2 | 7 | 备份 Phase 1 增量 + L-M2.08 MacWindowChrome 完成；其余按需启动 |
 | B1 平台/环境限制 | 5 | 1 | 4 | #4 MacWindowChrome 架构统一完成（commit `7efb0f8`）；其余 non-blocking 已记录 |
@@ -25,19 +25,19 @@
 | B4 待拍板决策 | 3 | 2 | 1 | M4.1/M4.5 已拍板；D6 Mac 真机仍待决 |
 | B5 已修复 | 3+5 | 3+5 | 0 | v2.0 3 项 + v3.0 round 1 5 项（Tailwind / L-M2.08 / A1 12/13 / M3.8 usage / 备份 Phase1 / M4.3 Phase1） |
 
-**关键**：M3.10 双模式 12/13 plugin 适配生效（#9 F18 scan_optimizations 仍 pending）；v3.0 round 1 完成 6 项主 backlog（详见下表）。
+**关键**：M3.10 双模式 13/13 plugin 适配生效（#9 F18 scan_optimizations `scan_with_root` 已 ship, commit `2e4e75b`);v3.0 round 1 完成 7 项主 backlog（详见下表）。
 
 ## v3.0 round 1 进行中（2026-06-22 启动）
 
 | 类别 | 本轮完成 | 仍 pending |
 |---|---|---|
-| A1 M3.10-adapter | 12/13 接入 | #9 F18 scan_optimizations（v3.0 round 2） |
+| A1 M3.10-adapter | ✅ 13/13 接入（含 #9 F18 scan_optimizations `scan_with_root`, commit `2e4e75b`） | — |
 | A2 M4.3 updater | Phase 1 (pubkey+endpoint) | Phase 2 前端 UI / Phase 3 E2E 灰度 |
 | A3 备份增强 | Phase 1 增量 (commit `3eadae2`) | Phase 2 云备份 |
 | A3 MacWindowChrome (L-M2.08) | ✅ 架构统一（commit `7efb0f8`） | — |
 | B2#1 usage 测试 | ✅ 8 子任务补齐（commit `4f5df37`） | — |
 | B3#10 Tailwind | ✅ 移除 6 包 + cn util + dead className（commit `ed5a3e5`） | — |
-| #14 Playwright e2e | — | 402 余额不足中止，待重派 |
+| #14 Playwright e2e | ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`) — Phase 18 6/6 spec PASS | — |
 | M4.6 其余 (i18n/SQLite/多窗口/Telemetry/L-M2.02) | — | 未启动 |
 
 **本轮 commits**（按时间顺序，2026-06-22）：

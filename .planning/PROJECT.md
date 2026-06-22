@@ -79,7 +79,7 @@
 
 > v3.0 进行中：A1 13/13 + updater Phase1 + 备份增量 + WindowChrome 统一已完成；e2e/云备份/updater UI/M4.6 长尾 pending。
 
-- [ ] **Phase 18: M1 L1 Playwright e2e (Windows only)** — 402 余额不足中止, 待重派
+- [x] **Phase 18: M1 L1 Playwright e2e (Windows only)** — ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`);6/6 spec PASS（3 WebView2 via tauri-driver CDP + 3 vite dev）;atomic fix `b8361ce`（playwright.config.ts webServer gating + fixtures.ts CDP-mode `page.goto` Proxy no-op）
 - [ ] **Phase 19: A3 备份增强 Phase 2 (云备份)** — 远程备份 (S3/OSS)
 - [ ] **Phase 20: M4.3 updater Phase 2/3** — 前端 updater UI + E2E 灰度回滚
 - [ ] **Phase 21: M4.6 长期 backlog** — i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02（按需启动）
