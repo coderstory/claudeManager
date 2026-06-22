@@ -34,6 +34,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::infrastructure::fs_atomic;
+use crate::platform::AppPaths;
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
 /// is the user-visible message (SPEC §6.5).
@@ -55,7 +56,11 @@ pub async fn read_file(
     state: State<'_, AppState>,
     path: String,
 ) -> CmdResult<String> {
-    let resolved = resolve_claude_path(&state, &path)?;
+    // M3.11 (A1#5) — read live active root from the platform shim
+    // (state.paths is a one-shot startup snapshot; active_root can
+    // change at runtime via the project switcher).
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let resolved = resolve_claude_path(&state.paths, active_root.as_deref(), &path)?;
     match std::fs::read_to_string(&resolved) {
         Ok(content) => Ok(content),
         Err(e) => Err(classify_io_error(&resolved, e)),
@@ -78,7 +83,9 @@ pub async fn write_file_atomic(
     path: String,
     content: String,
 ) -> CmdResult<()> {
-    let resolved = resolve_claude_path(&state, &path)?;
+    // M3.11 (A1#5) — read live active root, same as read_file.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let resolved = resolve_claude_path(&state.paths, active_root.as_deref(), &path)?;
     fs_atomic::write_with_backup(&resolved, &content)
         .map_err(|e| format!("写入失败 {}: {}", resolved.display(), e))
 }
@@ -227,42 +234,72 @@ pub fn take_pending_sql_file(
 
 /// Resolve a user-supplied path against the security scope.
 ///
+/// M3.11 (A1#5) — `active_root` selects the security scope root:
+///
+/// - `Some(root)` = project mode; the scope is `<root>/.claude/`
+///   (the active project's `.claude/`). User-level `~/.claude/`
+///   is rejected as out-of-scope.
+/// - `None` = user-level / system project; the scope is the legacy
+///   `<home>/.claude/` (preserves M2.4 behaviour for users who
+///   never switched to a project).
+///
 /// Rules:
-///   1. The path must be inside `<home>/.claude/` (case-insensitive).
+///   1. The path must be inside the resolved scope (case-insensitive).
 ///   2. `..` traversal is rejected — we canonicalise both sides
 ///      before comparing so a `..` that escapes `.claude/` is
 ///      caught even if the user tries `~/.claude/../claude.json`.
 ///   3. **Bare filenames (清单 20 fix)** — if the input is just a
 ///      basename with no directory part (e.g. `settings.json`),
 ///      it's a WebView2 `<input type="file">` leak of the user's
-///      pick inside `~/.claude/`. We join it with
-///      `<home>/.claude/` so the scope check passes. Otherwise the
-///      user picks a real `~/.claude/settings.json` and the backend
-///      silently rewrites it to `<home>/settings.json` (off-scope)
-///      and rejects with "路径超出允许范围".
+///      pick inside the active `.claude/`. We join it with
+///      `<scope_root>/<basename>` so the scope check passes.
 ///
 /// On success returns the absolute path the caller should read /
 /// write. On failure returns a user-readable error.
-fn resolve_claude_path(state: &State<'_, AppState>, path: &str) -> CmdResult<PathBuf> {
+fn resolve_claude_path(
+    paths: &AppPaths,
+    active_root: Option<&Path>,
+    user_path: &str,
+) -> CmdResult<PathBuf> {
+    let path = user_path;
+
     // Empty path is a frontend bug — reject loudly.
     if path.trim().is_empty() {
         return Err("路径为空".into());
     }
 
+    // Compute the security-scope root for this call. Project mode
+    // narrows the scope to the project's `.claude/`; user mode
+    // falls back to the cached `paths.claude_dir()` (= `<home>/.claude/`).
+    //
+    // We also need a `home`-equivalent for the `~` substitution
+    // and the `bare filename` join. In project mode the "home"
+    // for relative-path joining is the project root (so that a
+    // relative `settings.json` doesn't accidentally land in the
+    // user's CWD); in user mode it's `paths.home`.
+    let (scope_root, join_root) = match active_root {
+        Some(root) => (root.join(".claude"), root.to_path_buf()),
+        None => (
+            paths
+                .claude_dir()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| paths.home.join(".claude")),
+            paths.home.clone(),
+        ),
+    };
+
     // 清单 20 fix: bare filename from `<input type="file">` →
-    // scope into `<home>/.claude/<basename>` so the scope check
+    // scope into `<scope_root>/<basename>` so the scope check
     // passes. See `looks_like_bare_filename` for the detection
     // rules.
     if looks_like_bare_filename(path) {
-        let prefixed = state.paths.home.join(".claude").join(path);
+        let prefixed = scope_root.join(path);
         // We don't run canonicalise() here — the file might not
         // exist yet (write side) and the parent's permission
         // errors are surfaced by the actual read/write. But we DO
         // verify the prefixed path stays inside scope, which is
         // trivial since we just constructed it.
-        let allowed_prefix_raw = state.paths.home.join(".claude");
-        let allowed_prefix = std::fs::canonicalize(&allowed_prefix_raw)
-            .unwrap_or(allowed_prefix_raw);
+        let allowed_prefix = std::fs::canonicalize(&scope_root).unwrap_or(scope_root.clone());
         let allowed_str = path_to_lower_str(&allowed_prefix);
         let prefixed_str = path_to_lower_str(&prefixed);
         if !prefixed_str.starts_with(&allowed_str) {
@@ -275,10 +312,14 @@ fn resolve_claude_path(state: &State<'_, AppState>, path: &str) -> CmdResult<Pat
         return Ok(prefixed);
     }
 
-    // Normalise `~/.claude/` → `<home>/.claude/` for ergonomics
-    // (the path field on a Provider file uses `~`).
+    // Normalise `~/.claude/` → `<join_root>/.claude/<rest>` for
+    // ergonomics. In project mode the tilde-prefix branch is rare
+    // (the frontend would have to send a `~`-prefixed string
+    // targeting user-level), but we keep handling it: substitute
+    // the project root, so the canonicalise + scope check still
+    // routes it under `<root>/.claude/`.
     let substituted = if let Some(rest) = path.strip_prefix("~/") {
-        format!("{}{}", state.paths.home.display(), rest)
+        format!("{}{}", join_root.display(), rest)
     } else {
         path.to_string()
     };
@@ -286,21 +327,21 @@ fn resolve_claude_path(state: &State<'_, AppState>, path: &str) -> CmdResult<Pat
     // Reject `..` traversal BEFORE the canonicalise() round-trip.
     // We don't want canonicalise() to silently collapse a `..` that
     // escapes `.claude/`.
-    let user_path = PathBuf::from(&substituted);
-    for component in user_path.components() {
+    let candidate = PathBuf::from(&substituted);
+    for component in candidate.components() {
         if matches!(component, Component::ParentDir) {
             return Err(format!(
                 "路径含 '..',拒绝(安全策略): {}",
-                user_path.display()
+                candidate.display()
             ));
         }
     }
 
-    // Resolve absolute (against `home` if relative) + canonicalise.
-    let absolute = if user_path.is_absolute() {
-        user_path.clone()
+    // Resolve absolute (against `join_root` if relative) + canonicalise.
+    let absolute = if candidate.is_absolute() {
+        candidate.clone()
     } else {
-        state.paths.home.join(&user_path)
+        join_root.join(&candidate)
     };
 
     let canonical_user = std::fs::canonicalize(&absolute).map_err(|e| {
@@ -311,12 +352,10 @@ fn resolve_claude_path(state: &State<'_, AppState>, path: &str) -> CmdResult<Pat
         )
     })?;
 
-    // Canonicalise the allowed prefix too. If `home` doesn't exist
+    // Canonicalise the allowed scope root too. If it doesn't exist
     // (extremely rare, e.g. deleted mid-flight) fall back to the
     // uncanonicalised form — best effort.
-    let allowed_prefix_raw = state.paths.home.join(".claude");
-    let allowed_prefix = std::fs::canonicalize(&allowed_prefix_raw)
-        .unwrap_or(allowed_prefix_raw);
+    let allowed_prefix = std::fs::canonicalize(&scope_root).unwrap_or(scope_root);
 
     let allowed_str = path_to_lower_str(&allowed_prefix);
     let user_str = path_to_lower_str(&canonical_user);
@@ -556,5 +595,127 @@ mod tests {
         assert_ne!(old_path, new_path);
         assert!(old_path.to_string_lossy().contains("/settings.json"));
         assert!(new_path.to_string_lossy().contains("/.claude/settings.json"));
+    }
+
+    // -----------------------------------------------------------------
+    // M3.11 (A1#5) — F5 json-editor `resolve_claude_path` 接
+    // `active_root_dir`. 3 个 scenario,覆盖 3 种 active_root 行为。
+    // -----------------------------------------------------------------
+
+    /// Build a synthetic `AppPaths` whose `claude_dir` lives under
+    /// `tmp.path().join(".claude")`. We also create the dir on disk
+    /// so `canonicalize()` (inside `resolve_claude_path`) succeeds.
+    fn user_level_paths(tmp: &tempfile::TempDir) -> crate::platform::AppPaths {
+        let home = tmp.path().to_path_buf();
+        let claude = home.join(".claude");
+        std::fs::create_dir_all(&claude).unwrap();
+        crate::platform::AppPaths {
+            home: home.clone(),
+            app_data: home.join("app_data"),
+            settings_json: claude.join("settings.json"),
+            claude_json: home.join(".claude.json"),
+            backups_dir: home.join("app_data/backups"),
+            marketplaces_dir: home.join("app_data/marketplaces"),
+            logs_dir: home.join("app_data/logs"),
+        }
+    }
+
+    /// Scenario 1: `active_root = None` (用户级 / system project)。
+    /// 现有行为保持不变:`<home>/.claude/...`。
+    #[test]
+    fn resolve_claude_path_active_root_none_resolves_to_home_dotclaude() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let paths = user_level_paths(&tmp);
+
+        // 写一个真实文件,以便 canonicalize() 不需特殊处理。
+        let settings = paths.settings_json.clone();
+        std::fs::write(&settings, "{}").unwrap();
+
+        let resolved = resolve_claude_path(&paths, None, "~/.claude/settings.json")
+            .expect("active_root=None must succeed for in-scope path");
+
+        let expected = paths.home.join(".claude").join("settings.json");
+        // canonicalize() on the *expected* side so we compare apples
+        // to apples (Windows: 8.3 short paths etc.).
+        let expected_canon = std::fs::canonicalize(&expected).unwrap();
+        assert_eq!(resolved, expected_canon);
+    }
+
+    /// Scenario 2: `active_root = Some("/tmp/myproject")` (项目模式)。
+    /// 必须解析到 `<root>/.claude/...` 而非 `<home>/.claude/...`。
+    #[test]
+    fn resolve_claude_path_active_root_some_resolves_to_project_dotclaude() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let paths = user_level_paths(&tmp);
+        let project_root = tmp.path().join("myproject");
+        let project_claude = project_root.join(".claude");
+        std::fs::create_dir_all(&project_claude).unwrap();
+
+        // 用户级 / 项目级 claude 目录下都放一个 settings.json,
+        // 验证 resolver 走的是项目级那个。
+        let user_settings = paths.settings_json.clone();
+        let project_settings = project_claude.join("settings.json");
+        std::fs::write(&user_settings, r#"{"level":"user"}"#).unwrap();
+        std::fs::write(&project_settings, r#"{"level":"project"}"#).unwrap();
+
+        // 传项目根 + 绝对路径(在项目级 .claude/ 作用域内)。
+        let abs_in_project = project_claude.join("settings.json");
+        let abs_str = abs_in_project.to_string_lossy().to_string();
+        let resolved = resolve_claude_path(&paths, Some(&project_root), &abs_str)
+            .expect("active_root=Some must succeed for in-project path");
+
+        let expected = std::fs::canonicalize(&project_settings).unwrap();
+        assert_eq!(resolved, expected);
+        // 关键断言:绝对不能解析到用户级 .claude/。
+        assert!(!resolved.starts_with(&paths.home.join(".claude")));
+    }
+
+    /// Scenario 3: `active_root = Some(...)` + bare filename
+    /// (`settings.json`)。WebView2 `<input type="file">` 形式,只
+    /// 有 basename。Backend 必须把 bare 拼到项目级 `.claude/` 而
+    /// 不是用户级 `.claude/`。
+    #[test]
+    fn resolve_claude_path_active_root_some_bare_filename_routes_to_project() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let paths = user_level_paths(&tmp);
+        let project_root = tmp.path().join("myproject");
+        let project_claude = project_root.join(".claude");
+        std::fs::create_dir_all(&project_claude).unwrap();
+        // 用户级放一个同名文件,确认 resolver 不会路由到那里。
+        let user_settings = paths.settings_json.clone();
+        let project_settings = project_claude.join("settings.json");
+        std::fs::write(&user_settings, r#"{"level":"user"}"#).unwrap();
+        std::fs::write(&project_settings, r#"{"level":"project"}"#).unwrap();
+
+        let resolved = resolve_claude_path(&paths, Some(&project_root), "settings.json")
+            .expect("bare filename with active_root=Some must succeed");
+
+        let expected = std::fs::canonicalize(&project_settings).unwrap();
+        assert_eq!(resolved, expected);
+    }
+
+    /// 用户级、项目级安全策略: 用户级 claude/ 下的文件,在
+    /// active_root=Some 时,必须被拒绝(因为它不在项目级 .claude/
+    /// 作用域内)。这保证 M3.10 的"project 模式"真的把 scope
+    /// 切到项目根,不能"看到"用户级的兄弟文件。
+    #[test]
+    fn resolve_claude_path_active_root_some_rejects_user_level_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let paths = user_level_paths(&tmp);
+        let project_root = tmp.path().join("myproject");
+        let project_claude = project_root.join(".claude");
+        std::fs::create_dir_all(&project_claude).unwrap();
+
+        // 用户级文件存在,项目级 .claude/ 也存在。但用户级文件
+        // 在 active_root=Some 时应当被拒绝(out-of-scope)。
+        let user_settings = paths.settings_json.clone();
+        std::fs::write(&user_settings, r#"{"level":"user"}"#).unwrap();
+        let abs_user = user_settings.to_string_lossy().to_string();
+        let err = resolve_claude_path(&paths, Some(&project_root), &abs_user)
+            .expect_err("user-level path must be rejected when project is active");
+        assert!(
+            err.contains("超出允许范围"),
+            "error must mention scope violation, got: {err}"
+        );
     }
 }
