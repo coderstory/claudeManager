@@ -296,9 +296,9 @@ Plans:
 **Requirements**: none (validation/exec phase — verifies CLAUDE.md §5.3 M1 acceptance)
 
 Plans:
-- [ ] 18-01-PLAN.md — WebView2 specs (launch / tray / close-minimize) via tauri-driver + CDP
-- [ ] 18-02-PLAN.md — Dev-server specs (m1-9-2 / m2-3-0 / m2-3-2) via vite + PLAYWRIGHT_BASE_URL
-- [ ] 18-03-PLAN.md — Aggregate 18-{01,02} results → 18-03-SUMMARY.md + STATE.md v3.0 → 8/10 ship
+- [x] 18-01-PLAN.md — WebView2 specs (launch / tray / close-minimize) via tauri-driver + CDP
+- [x] 18-02-PLAN.md — Dev-server specs (m1-9-2 / m2-3-0 / m2-3-2) via vite + PLAYWRIGHT_BASE_URL
+- [x] 18-03-PLAN.md — Aggregate 18-{01,02} results → 18-03-SUMMARY.md + STATE.md v3.0 → 8/10 ship
 
 ### Phase 19: A3 备份增强 Phase 2 (云备份)
 **Status**: ⏳ pending
@@ -362,7 +362,7 @@ Round 2 pending: Phase 18 (e2e) → 19 (云备份) → 20 (updater UI) → 21 (M
 | 15. A3 备份增量 Phase 1 | v3.0 | 1 commit | Complete | 2026-06-22 |
 | 16. L-M2.08 WindowChrome 统一 | v3.0 | 1 commit | Complete | 2026-06-22 |
 | 17. M4.3 updater Phase 1 (pubkey+endpoint) | v3.0 | 1 commit | Complete | 2026-06-22 |
-| 18. M1 L1 Playwright e2e (Windows) | v3.0 | 0/3 | Planned | - |
+| 18. M1 L1 Playwright e2e (Windows) | v3.0 | 3/3 | Complete    | 2026-06-22 |
 | 19. A3 备份 Phase 2 (云备份) | v3.0 | 0/1 | Pending | - |
 | 20. M4.3 updater Phase 2/3 | v3.0 | 0/1 | Pending | - |
 | 21. M4.6 长期 backlog | v3.0 | 0/1 | Pending (按需) | - |
