@@ -5,8 +5,10 @@
  *
  *   1. The splash DOM node (#ccm-splash) exists in the document so
  *      App.tsx's useEffect has something to hide.
- *   2. After App mounts, the splash gets the .ccm-splash-hidden
- *      class within the 2200ms+tick window declared in App.tsx.
+ *   2. After App mounts + the Tauri `tauri://ready` event fires
+ *      (M3.1 — was: fixed 2200ms timeout; M3.1 swapped to event-driven
+ *      hide with 8s React-side failsafe), the splash gets the
+ *      .ccm-splash-hidden class.
  *   3. After the secondary 300ms timeout, splash.style.display === 'none'.
  *
  * ## Why jsdom + a synthetic splash
@@ -16,16 +18,14 @@
  *   synthesize the #ccm-splash div in beforeEach to mimic what
  *   Tauri's WebView2 would have on the real exe. The class-name
  *   and display contract we assert on is identical to the inline
- *   CSS declared in index.html.
+ *   CSS declared in index.html. We also dispatch `tauri://ready` to
+ *   simulate the Rust-side event App.tsx listens for (M3.1).
  *
  * ## Timing slack
  *
- *   The App.tsx useEffect fires at 2200ms + 300ms = 2500ms total
- *   (用户要求 splash 至少展示 2s + 进度条动画). We wait 2500ms before
- *   the class assertion and another 400ms before the display assertion
- *   to absorb jsdom timer jitter without flaking. vitest's fake timers
- *   are deliberately NOT used — we want to exercise the real setTimeout
- *   → classList path end-to-end.
+ *   M3.1: hide triggers on `tauri://ready` event (we dispatch it
+ *   immediately after mount) + 300ms display:none delay. We allow
+ *   400ms total for jsdom timer jitter without flaking.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
@@ -55,9 +55,11 @@ describe('M2.16 ccm-splash', () => {
     expect(beforeSplash).not.toBeNull();
     expect(beforeSplash?.classList.contains('ccm-splash-hidden')).toBe(false);
 
-    // App.tsx 在 2200ms 后加 hidden class（用户要求 splash 至少 2s）。
-    // 等 2500ms 确保超过 2200ms + 吸收 jsdom 定时器抖动。
-    await new Promise((r) => setTimeout(r, 2500));
+    // M3.1: dispatch `tauri://ready` event to simulate Rust-side
+    // webview ready signal. App.tsx listens for this and hides the
+    // splash. Allow 100ms for the listener to fire.
+    window.dispatchEvent(new Event('tauri://ready'));
+    await new Promise((r) => setTimeout(r, 100));
     const midSplash = document.getElementById('ccm-splash');
     expect(midSplash?.classList.contains('ccm-splash-hidden')).toBe(true);
 

@@ -44,21 +44,20 @@ function renderApp(): ReturnType<typeof render> {
 
 describe('App — view routing integration', () => {
   it('renders the home tile grid on first launch (no localStorage)', () => {
+    // M3.10-arch (清单 23): home view is now a project switcher,
+    // not a plugin tile grid. The 12-tile navigation lives in the
+    // sidebar instead. We assert the new landing content is present.
     renderApp();
-    // The home tile grid renders one button per plugin view (12).
-    // Each button has data-testid="home-tile-<id>".
-    for (const view of ALL_VIEWS) {
-      if (view === HOME_VIEW) continue;
-      expect(
-        screen.getByTestId(`home-tile-${view}`),
-        `home tile missing for ${view}`,
-      ).toBeInTheDocument();
-    }
+    expect(screen.getByTestId('refresh-projects')).toBeInTheDocument();
+    expect(screen.getByTestId('add-project-toggle')).toBeInTheDocument();
   });
 
-  it('renders all 12 sidebar nav items', () => {
+  it('renders all 13 sidebar nav items', () => {
+    // M3.7: +1 utility view 'about' (清单 18). Total now 13 sidebar items
+    // (12 plugins + about — home is excluded, it IS the landing page).
     renderApp();
     for (const view of ALL_VIEWS) {
+      if (view === HOME_VIEW) continue;
       expect(
         screen.getByTestId(`sidebar-item-${view}`),
         `sidebar item missing for ${view}`,
@@ -87,12 +86,12 @@ describe('App — view routing integration', () => {
   });
 
   it('clicking the home tile on the welcome page navigates to that plugin', () => {
+    // M3.10-arch: home page is a project switcher (no tile grid).
+    // Navigation to plugin pages happens via the sidebar, not the
+    // home tile grid. We assert sidebar → plugin page routing.
     renderApp();
-    // Click from welcome → resource-browser (M2.13: real page
-    // shipped, not the placeholder anymore). Assert the page mounts
-    // via its data-testid instead of the old PluginPlaceholder marker.
     act(() => {
-      screen.getByTestId('home-tile-resource-browser').click();
+      screen.getByTestId('sidebar-item-resource-browser').click();
     });
     expect(screen.getByTestId('resource-browser-page')).toBeInTheDocument();
   });
@@ -282,6 +281,7 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'marketplace', realTestId: 'marketplace-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },
     { view: 'optimizer', realTestId: 'optimizer-page' },
+    { view: 'about', realTestId: 'about-page' },
   ] as const;
 
   // Views still on PluginPlaceholder (no real page shipped yet).

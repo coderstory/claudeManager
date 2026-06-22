@@ -42,9 +42,9 @@ describe('useViewState', () => {
     // M1.9 spec: 12 plugin placeholders are reachable via the sidebar,
     // and 'home' is the welcome tile the user lands on after the first
     // launch (before any localStorage value exists).
+    // M3.7: +1 utility view 'about' (清单 18). Total now 14.
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    // 12 plugin ids per CLAUDE.md §3.3, plus 'home' = 13.
-    expect(ALL_VIEWS.length).toBe(13);
+    expect(ALL_VIEWS.length).toBe(14);
   });
 
   it('defaults to "home" when localStorage is empty', () => {

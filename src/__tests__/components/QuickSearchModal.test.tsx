@@ -110,9 +110,9 @@ describe('QuickSearchModal', () => {
 
   it('renders the 12 plugin entries when opened with no query', async () => {
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
-    // 12 plugin results (home is excluded by buildPluginResults).
+    // M3.7: was 12 plugins (home excluded); +1 utility 'about' → 13.
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(12);
+    expect(results.length).toBe(13);
   });
 
   it('typing filters the result list', async () => {
