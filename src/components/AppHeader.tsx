@@ -21,10 +21,11 @@
  *   — they don't render in the webview at all.
  */
 import type { ReactElement } from 'react';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, Sun, Sparkles, type LucideIcon } from 'lucide-react';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
 import { WindowControls } from './WindowControls';
+import { useTheme } from '../design-system/ThemeProvider';
 
 /**
  * dragRegionStyle — CSS that opts a node into "drag the OS window".
@@ -62,6 +63,13 @@ export function AppHeader({
   pageTitle,
 }: AppHeaderProps): ReactElement {
   const isHome = currentView === HOME_VIEW;
+
+  // v3.0 主题切换 — 循环到下一个主题
+  const { theme, themes, setTheme } = useTheme();
+  const themeIconMap: Record<string, LucideIcon> = { sun: Sun, sparkles: Sparkles };
+  const ThemeIcon = themeIconMap[theme.icon] ?? Sun;
+  const nextTheme = themes[(themes.findIndex((t) => t.id === theme.id) + 1) % themes.length];
+  const themeToggleDisabled = themes.length <= 1;
 
   return (
     <header
@@ -184,6 +192,32 @@ export function AppHeader({
           gap: 4,
         }}
       >
+        <button
+          type="button"
+          data-testid="app-header-theme-toggle"
+          data-app-control-hover="true"
+          aria-label="切换主题"
+          title={`切换到 ${nextTheme.name} 主题`}
+          disabled={themeToggleDisabled}
+          onClick={() => setTheme(nextTheme.id)}
+          style={{
+            ...noDragStyle,
+            width: 32,
+            height: 32,
+            borderRadius: 'var(--radius-button)',
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            cursor: themeToggleDisabled ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-primary)',
+            transition: 'background-color 120ms ease',
+            opacity: themeToggleDisabled ? 0.4 : 1,
+          }}
+        >
+          <ThemeIcon size={16} style={{ color: 'var(--text-primary)' }} />
+        </button>
         <button
           type="button"
           data-testid="app-header-settings"
