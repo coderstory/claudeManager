@@ -1,3 +1,49 @@
+---
+milestone_version: v2.0
+status: shipped
+progress:
+  phases_complete: 11/11
+  completed: [M2.17, M3.1, M3.2, M3.3, M3.4, M3.5, M3.6, M3.7, M3.8, M3.9, M3.10]
+last_updated: 2026-06-22
+---
+
+<!--
+  v2.0 milestone closure summary (auto-synced by doc-sync subagent 2026-06-22).
+  原 M1.x / M2.x 详细历史保留在下半部 (line 150+),作为审计痕迹。
+  本顶部段为 gsd chain + 主 session 决策 + 当前状态的总览入口。
+-->
+
+# Claude 配置管理器 — STATE.md (v2.0 milestone 闭环)
+
+## Current Position
+
+Phase: 11/11 complete
+Last ship: M3.8 usage query (D14 = D 选 cc-switch JSONL)
+Next: v2.0 milestone complete (audit → cleanup) or v3.0 公证 (M4.x) 启动
+
+## Recent Work
+
+- M3.2 polish (Phase 3): 8 子任务 (托盘 dblclick / sidebar / backup / settings / F15) — commit 0731b76 + 0023e09
+- M3.5 reveal bug (Phase 6): RevealError 结构化 + 4 类前端本地化 — commit e040a48, ship 7/7
+- M3.9 SQL 导入 (Phase 10): 命名 "SQL导入配置" + sql-validator 5 场景 — commit 3ed3ff3 + e3af4c3, ship 7/7
+- M3.8 usage (Phase 9): cc-switch JSONL 读法 (D 选) — 5 天估时压缩
+- M3.10 双模式 (Phase 11): 用户/项目 — commit 98429b5
+
+## Decisions
+
+- D14 (2026-06-22): M3.8 用量查询走 cc-switch-main JSONL 读法 (D 选, 5 天估时)
+
+## Known Issues (Remaining, post-v2.0)
+
+- M4.1 证书 (代码签名) — 需用户拍板采购
+- M4.5 应用商店上架 — 用户拍板 (Microsoft Store / Mac App Store)
+- D6 Mac 真机验证 — 暂缓, M4 启动前再问
+- 17 MEDIUM/LOW M2.16 限制已逐条评估 (D10), v2.0 关闭期归档
+
+---
+
+<!-- === 原 M1.x / M2.x 详细历史 (审计痕迹, 不可删) === -->
+
 M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 
 ## M1.2 — OS abstraction layer (8 traits × Win+Mac)

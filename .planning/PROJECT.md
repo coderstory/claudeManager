@@ -19,11 +19,16 @@
 - **Success metric**: 桌面 ship 的 Claude Config Manager 安装包能稳定切换 ≥3 个 provider 不出错
 - **Strategy notes**: 无（项目方向由 STATE.md 决策日志 + 用户反馈清单驱动）
 
+## Current Milestone
+
+- ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1~M3.10)** — 11/11 ship, smoke 7/7
+- 📋 **v3.0 公证发布 (M4.1~M4.6)** — 6 phases, planned
+
 ## Requirements
 
 ### Validated
 
-> Shipped and confirmed working. 完整 ship 清单见 `~/Desktop/ClaudeConfigManager-M1/` 与 `~/Desktop/ClaudeConfigManager-M2/`，详细 git 提交见 git log。
+> Shipped and confirmed working. 完整 ship 清单见 `~/Desktop/ClaudeConfigManager-M1/`、`~/Desktop/ClaudeConfigManager-M2/` 与 `~/Desktop/ClaudeConfigManager-M3/`, 详细 git 提交见 git log。
 
 - [x] **Tauri v2 scaffold + 托盘 + 最小化到托盘** — M1.1 (commit `2914342`)
 - [x] **OS 抽象层 (8 traits × Win/Mac)** — M1.2 (commit `13290b3`)
@@ -51,18 +56,22 @@
 - [x] **F15 error feedback 横切 (shared ErrorBanner)** — M2.14
 - [x] **Page padding/h1 字号统一 (polish)** — M2.15
 - [x] **9 new plugins + macOS compat + splash + cleanup** — M2.16 (commit `d820b82`)
+- [x] **M2.17 收尾期 (D9/D10/F15-batch4)** — commit `03e062a` + `f7196e8` + `c724f9a`
+- [x] **M3.1 启动优化** — commit `f7196e8`
+- [x] **M3.2 F2/托盘/InfoBar polish** — commit `0731b76` + `0023e09`
+- [x] **M3.3 配置优化 16 规则** — M-finalize
+- [x] **M3.4 资源市场重构** — commit `5e06296` + `c8d17f5`
+- [x] **M3.5 资源浏览修 bug** — commit `e040a48`
+- [x] **M3.6 Provider CRUD** — M-finalize
+- [x] **M3.7 单文件部署重构 + 关于页** — M-finalize
+- [x] **M3.8 用量查询 (cc-switch JSONL)** — D14 D 选
+- [x] **M3.9 SQL 导入命名 + 校验** — commit `3ed3ff3`
+- [x] **M3.10 双模式 用户/项目** — commit `98429b5`
 
 ### Active
 
-> 当前阶段（M2.17 收尾期 + M3 启动门）正在构建或即将构建的。
+> v2.0 milestone 已 ship 11/11 phase。当前空 — 等待 v3.0 公证 (M4.1~M4.6) 启动。
 
-- [ ] **M2.17 收尾**：3 件套 (PluginHost wiring / build pipeline refresh / docs refresh) + 17 MEDIUM/LOW 限制评估 + F15 ErrorBanner 接入剩余页面 + 桌面清理 (D9)
-- [ ] **M3 启动门 4 槽** (D11：4 槽并发首批)：
-  - 槽 1：M3.10 双模式架构设计 → `docs/design/M3.10-dataflow.md` + Project domain model + `IPlatformPaths::active_root_dir` 草案
-  - 槽 2：F17 marketplace 重构评估 → `docs/design/M3.4-marketplace-refactor.md`
-  - 槽 3：清单 20 JSON 编辑器路径 bug 修复 (D12)
-  - 槽 4：M3.8 用量查询方向调研 (D14 待问)
-- [ ] **M3.1~M3.10**：10 个迭代（M3.1 启动优化 / M3.2 polish / M3.3 13 规则 / M3.4 marketplace / M3.5 reveal bug / M3.6 provider CRUD / M3.7 单文件部署重构 / M3.8 用量 / M3.9 SQL 导入 / M3.10 双模式）
 - [ ] **M4.1~M4.6**：代码签名证书 / 公证 / updater / 双轨打包 / 应用商店（可选）/ 长期 backlog
 
 ### Out of Scope

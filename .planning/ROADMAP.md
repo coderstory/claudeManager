@@ -67,7 +67,7 @@
 
 **Milestone Goal**: 修复 M2.x 阶段 26+ 已知限制 + 27 条用户反馈清单中的 P0/P1 项,引入"用户 / 项目"双模式架构 (M3.10),为 M4 公证发布做技术准备。
 
-#### Phase M2.17: 收尾期 (M1 3 件套 + 17 限制评估 + F15 扩展 + 桌面清理)
+### Phase 1: M2.17 收尾期 (M1 3 件套 + 17 限制评估 + F15 扩展 + 桌面清理)
 
 **Goal**: M2.16 收尾 + M1 架构期遗留 3 件套 + 17 MEDIUM/LOW 已知限制全评估 + F15 ErrorBanner 接入剩余页面 + D9 桌面清理。
 **Depends on**: M2.16 (✅ done)
@@ -89,7 +89,7 @@ Plans:
 - [ ] M2.17-D9: 桌面清理 (M2.17 启动 subagent 执行)
 - [ ] M2.17-F15-batch4: ErrorBanner 接入剩余页面 (commit `02e5b14` 是 batch3-c3;后续 batch4 待派)
 
-#### Phase M3.1: 启动优化 (清单 1 — 冷启动白屏→全透明→loading 闪烁)
+### Phase 2: M3.1 启动优化 (清单 1 — 冷启动白屏→全透明→loading 闪烁)
 
 **Goal**: 冷启动事件链路 (Tauri setup → splash → window show → webview ready → first paint) 时序修复 + 透明度闪烁根因 + webview 预加载优化。
 **Depends on**: M2.17 (D10 限制评估完成)
@@ -103,7 +103,7 @@ Plans:
 Plans:
 - [ ] M3.1-01: 启动事件链路梳理 + splash 透明度修复 + webview 预加载
 
-#### Phase M3.2: F2/托盘/InfoBar polish (清单 3/4/5/6/7/8/24 + M2.16-007-L)
+### Phase 3: M3.2 F2/托盘/InfoBar polish (清单 3/4/5/6/7/8/24 + M2.16-007-L)
 
 **Goal**: 8 项 polish 子任务并行 + D7 F15 ErrorBanner 扩到全部页面。
 **Depends on**: M3.1
@@ -122,7 +122,7 @@ Plans:
 Plans:
 - [ ] M3.2-01: 8 项 polish + ErrorBanner 全扩展
 
-#### Phase M3.3: 配置优化 13 规则 + Fix + 新增 env (清单 9/10)
+### Phase 4: M3.3 配置优化 13 规则 + Fix + 新增 env (清单 9/10)
 
 **Goal**: 内置 13 规则 markdown 文档化 + UI 重构 (规则名 + 状态 + Fix 按钮) + 新增 3 个 env 规则。
 **Depends on**: M3.2
@@ -137,7 +137,7 @@ Plans:
 Plans:
 - [ ] M3.3-01: 13 规则文档化 + UI 重构 + 3 env 规则
 
-#### Phase M3.4: 资源市场重构 (清单 11/12/13/14/16/17)
+### Phase 5: M3.4 资源市场重构 (清单 11/12/13/14/16/17)
 
 **Goal**: 安装流程重设计 (内置 vs 第三方 vs npx 三类统一 API) + 删除克隆源码流程 + superpowers + GSD 内置源 + GSD-* 合并展示 + 资源浏览过滤规则。
 **Depends on**: M3.3
@@ -154,7 +154,7 @@ Plans:
 Plans:
 - [ ] M3.4-01: F17 marketplace 重构 (基于启动门槽 2 的 `docs/design/M3.4-marketplace-refactor.md`)
 
-#### Phase M3.5: 资源浏览修 bug (清单 15)
+### Phase 6: M3.5 资源浏览修 bug (清单 15)
 
 **Goal**: `IPlatformReveal::reveal_file` 错误处理增强 + `explorer.exe exit 1` 根因排查 + 前端错误本地化。
 **Depends on**: M3.4
@@ -168,7 +168,7 @@ Plans:
 Plans:
 - [ ] M3.5-01: reveal 错误处理 + 前端本地化
 
-#### Phase M3.6: Provider CRUD + JSON 编辑器路径 (清单 20/22)
+### Phase 7: M3.6 Provider CRUD + JSON 编辑器路径 (清单 20/22)
 
 **Goal**: 启动门槽 3 验证回归 (清单 20 JSON 编辑器路径 bug 已修半) + provider 新增/修改/查看/删除 CRUD UI。
 **Depends on**: M3.5
@@ -185,7 +185,7 @@ Plans:
 Plans:
 - [ ] M3.6-01: Provider CRUD 4 命令 + UI
 
-#### Phase M3.7: 单文件部署重构 (清单 18)
+### Phase 8: M3.7 单文件部署重构 (清单 18)
 
 **Goal**: F8 单文件部署页面文案重写 + 抽出"关于"页 (版本/build hash/许可证/致谢) + sidebar 加"关于"入口。
 **Depends on**: M3.6
@@ -200,7 +200,7 @@ Plans:
 Plans:
 - [ ] M3.7-01: F8 文案重写 + about 页新建
 
-#### Phase M3.8: 用量查询修 bug (清单 19)
+### Phase 9: M3.8 用量查询修 bug (清单 19) [BLOCKED D14]
 
 **Goal**: **D14 待问用户** → 根据 API key 来源 (用户手动 / OAuth / 本地代理) 决定技术路线 → HTTP 客户端 + 错误处理 + 缓存策略 + UI 表格。
 **Depends on**: M3.7 + **D14 用户拍板** (BLOCKED)
@@ -216,7 +216,7 @@ Plans:
 Plans:
 - [ ] M3.8-01: 用量查询重写 (按 D14 选定方向)
 
-#### Phase M3.9: SQL 导入命名 + 校验 (清单 2/21)
+### Phase 10: M3.9 SQL 导入命名 + 校验 (清单 2/21)
 
 **Goal**: 菜单改名 + SQL 文件 schema 校验 + 部分合法 dry-run 预览。
 **Depends on**: M3.8
@@ -232,7 +232,7 @@ Plans:
 Plans:
 - [ ] M3.9-01: 命名 + 校验 + dry-run 预览
 
-#### Phase M3.10: 双模式 用户/项目 (清单 23 — M3 核心新功能)
+### Phase 11: M3.10 双模式 用户/项目 (清单 23 — M3 核心新功能)
 
 **Goal**: **架构级新功能** — 引入 Project 数据模型 + 持久化 + 用户级 (特殊 is_system=true 不可删) + 项目级 (指向 `<root>/.claude/` 虚拟视图) + 所有 plugin 适配 `IPlatformPaths::active_root_dir` + 切换走 F13 备份 + 原子切换。
 **Depends on**: M3.9 + 启动门槽 1 架构评审通过
@@ -258,7 +258,7 @@ Plans:
 
 **Milestone Goal**: 获取代码签名证书 + 公证 (SmartScreen + notarization) + 启用 updater + 双轨打包 + (可选) 应用商店上架。
 
-#### Phase M4.1: 代码签名证书
+### Phase 12: M4.1 代码签名证书
 
 **Goal**: 申请 Windows EV 代码签名证书 + macOS Developer ID。
 **Depends on**: M3.10 ship
@@ -269,7 +269,7 @@ Plans:
   3. 证书本地导入 + 私钥保护方案落地
 **Plans**: TBD (2-4 周,可与 M3 并行)
 
-#### Phase M4.2: 公证 (SmartScreen + notarization + staple)
+### Phase 13: M4.2 公证 (SmartScreen + notarization + staple)
 
 **Goal**: Windows SmartScreen 提交 + macOS notarization + staple ticket。
 **Depends on**: M4.1
@@ -280,7 +280,7 @@ Plans:
   3. 文档化 SmartScreen 信誉积累策略 (新证书前几次会有警告)
 **Plans**: TBD (~1 周)
 
-#### Phase M4.3: updater 启用
+### Phase 14: M4.3 updater 启用
 
 **Goal**: Tauri updater 真实 pubkey + endpoint + E2E 更新流程。
 **Depends on**: M4.1 (pubkey 关联签名)
@@ -291,7 +291,7 @@ Plans:
   3. 签名校验强制开启
 **Plans**: TBD (1-2 周)
 
-#### Phase M4.4: 双轨打包
+### Phase 15: M4.4 双轨打包
 
 **Goal**: Windows MSI/NSIS + macOS DMG + CI matrix (Windows Server 2019 + macOS 14 真机)。
 **Depends on**: M4.2 (公证后才能分发)
@@ -302,7 +302,7 @@ Plans:
   3. CI matrix 在 Windows + macOS 真机分别跑完整 e2e
 **Plans**: TBD (2-3 周)
 
-#### Phase M4.5: 应用商店上架 (可选)
+### Phase 16: M4.5 应用商店上架 (可选)
 
 **Goal**: Microsoft Store + Mac App Store 上架 (需用户拍板)。
 **Depends on**: M4.2 + M4.4
@@ -313,7 +313,7 @@ Plans:
   3. 商店审核往返跟踪
 **Plans**: TBD (2-4 周)
 
-#### Phase M4.6: 长期 Backlog (按需启动)
+### Phase 17: M4.6 长期 Backlog (按需启动)
 
 **Goal**: 不在 M4 主线,按需启动的增强项。
 **Depends on**: 不适用
@@ -333,28 +333,26 @@ Plans:
 ## Progress
 
 **Execution Order:**
-M2.17 → M3.1 → M3.2 → M3.3 → M3.4 → M3.5 → M3.6 → M3.7 → M3.8 (待 D14) → M3.9 → M3.10 → M4.1 → M4.2 → M4.3 → M4.4 → M4.5 (可选) → M4.6 (backlog)
+M2.17 → M3.1 → M3.2 → M3.3 → M3.4 → M3.5 → M3.6 → M3.7 → M3.8 → M3.9 → M3.10
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| M1.1 ~ M1.12 | v1.0 | 12/12 | ✅ Complete | 2026-06-19 |
-| M2.1 ~ M2.16 | v1.5 | 16/16 | ✅ Complete | 2026-06-21 |
-| M2.17 | v2.0 | 4/7 | 🚧 In progress | - |
-| M3.1 | v2.0 | 0/1 | Not started | - |
-| M3.2 | v2.0 | 0/1 | Not started | - |
-| M3.3 | v2.0 | 0/1 | Not started | - |
-| M3.4 | v2.0 | 0/1 | Not started | - |
-| M3.5 | v2.0 | 0/1 | Not started | - |
-| M3.6 | v2.0 | 0/1 | Not started | - |
-| M3.7 | v2.0 | 0/1 | Not started | - |
-| M3.8 | v2.0 | 0/1 | **BLOCKED** (D14) | - |
-| M3.9 | v2.0 | 0/1 | Not started | - |
-| M3.10 | v2.0 | 0/4 | Not started | - |
-| M4.1 | v3.0 | 0/TBD | 📋 Planned | - |
-| M4.2 | v3.0 | 0/TBD | 📋 Planned | - |
-| M4.3 | v3.0 | 0/TBD | 📋 Planned | - |
-| M4.4 | v3.0 | 0/TBD | 📋 Planned | - |
-| M4.5 | v3.0 | 0/TBD | 📋 Planned (需用户拍板) | - |
-| M4.6 | v3.0 | 0/TBD | 📋 Backlog | - |
+| 1. M2.17 收尾期 | v2.0 | 2/2 | Complete | 2026-06-22 |
+| 2. M3.1 启动优化 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 3. M3.2 F2/托盘/InfoBar polish | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 4. M3.3 配置优化 16 规则 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 5. M3.4 资源市场重构 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 6. M3.5 资源浏览修 bug | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 7. M3.6 Provider CRUD | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 8. M3.7 单文件部署重构 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 9. M3.8 用量查询 (cc-switch JSONL) | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 10. M3.9 SQL 导入命名 + 校验 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| 11. M3.10 双模式 用户/项目 | v2.0 | 1/1 | Complete | 2026-06-22 |
+| M4.1 | v3.0 | 0/TBD | Planned | - |
+| M4.2 | v3.0 | 0/TBD | Planned | - |
+| M4.3 | v3.0 | 0/TBD | Planned | - |
+| M4.4 | v3.0 | 0/TBD | Planned | - |
+| M4.5 | v3.0 | 0/TBD | Planned (需用户拍板) | - |
+| M4.6 | v3.0 | 0/TBD | Backlog | - |
 </content>
 </invoke>
