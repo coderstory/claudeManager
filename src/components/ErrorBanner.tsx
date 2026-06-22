@@ -27,12 +27,120 @@
  *   - optimizer 3 个 banner (scan/apply/export)。
  *   - import-sql: 评估 ErrorView (含重试按钮) 是否替换。
  *   - marketplace: 提取已存在的 ErrorBanner 到 components/。
+ *
+ * ## M3.5 — RevealError 本地化辅助
+ *
+ * 后端 `RevealFailure` (Rust) 序列化后字段:
+ *   { kind: string, message: string, path: string }
+ *
+ * `kind` 是稳定的 IPC routing key (kebab-case, 不本地化):
+ *   - "not_found"         → 路径不存在
+ *   - "permission_denied" → 无权限 / 路径校验失败 / 路径为空
+ *   - "network_path"      → 不支持网络路径 (UNC / SMB / AFP / NFS)
+ *   - "launcher_failed"   → explorer / open 启动失败 (退出码 1 等)
+ *
+ * `formatRevealError(failure)` 把后端错误转成中文 message + hint,
+ * resource-browser 页面在 `catch` 块里调一次,再喂给本组件。
  */
 import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
 export type ErrorBannerKind = 'error' | 'warning' | 'info' | 'success';
+
+// ---------------------------------------------------------------------------
+// M3.5 — Reveal error 路由(后端 RevealFailure IPC contract)
+// ---------------------------------------------------------------------------
+
+/**
+ * 后端 `RevealFailure` 的 TS 镜像。Rust 侧定义在
+ * `src-tauri/src/services/resource_service.rs::RevealFailure`。
+ *
+ * 注:`path` 字段在 `permission_denied` 来自「路径为空」时是
+ * 空字符串,UI 应避免显示空路径(见 `formatRevealError`)。
+ */
+export interface RevealFailure {
+  kind: string;
+  message: string;
+  path: string;
+}
+
+/**
+ * 已知 `kind` 列表(后端 contract 锁定,前端用 exhaustive
+ * check 保证后端新增 kind 时这里会被 TypeScript 报红,提醒
+ * 同步加文案)。
+ */
+export type RevealErrorKind =
+  | 'not_found'
+  | 'permission_denied'
+  | 'network_path'
+  | 'launcher_failed';
+
+/**
+ * 4 类 reveal 错误的中文文案 + hint。
+ *
+ * 顺序与 `RevealErrorKind` union 对齐;若后端新增 kind,
+ * 这里 switch 会自动报错。
+ */
+function revealErrorText(
+  kind: RevealErrorKind,
+  failure: RevealFailure,
+): { message: string; hint: string | null } {
+  switch (kind) {
+    case 'not_found':
+      return {
+        message: `文件不存在,可能已被删除或移动。`,
+        hint: failure.path ? `路径: ${failure.path}` : null,
+      };
+    case 'permission_denied':
+      return {
+        message:
+          failure.path === ''
+            ? '路径为空,请检查资源是否有效。'
+            : '无法访问该路径(权限不足或路径被拒绝)。',
+        hint: failure.path && failure.path !== '' ? `路径: ${failure.path}` : null,
+      };
+    case 'network_path':
+      return {
+        message: '暂不支持显示网络路径。',
+        hint: '请将文件复制到本地后重试。',
+      };
+    case 'launcher_failed':
+      return {
+        message: '文件管理器启动失败,请重试或重启应用。',
+        hint: '若多次失败,请检查系统文件管理器(explorer.exe / Finder)是否可用。',
+      };
+  }
+}
+
+/**
+ * 把后端 `RevealFailure` 转成 ErrorBanner 可直接渲染的
+ * `(message, kind)` 二元组。`message` 是「主文案 + 路径/
+ * 提示」的两行字符串(用 `\n` 分隔)。
+ *
+ * 未知 `kind` 不抛错,fallback 到「launcher_failed」文案 —
+ * 保证新加 kind 时 UI 仍能显示(不阻塞 ship)。
+ */
+export function formatRevealError(
+  failure: RevealFailure | null | undefined,
+): { message: string; kind: ErrorBannerKind } {
+  if (!failure) {
+    return { message: '未知错误', kind: 'error' };
+  }
+  const knownKinds: RevealErrorKind[] = [
+    'not_found',
+    'permission_denied',
+    'network_path',
+    'launcher_failed',
+  ];
+  const kind: RevealErrorKind = (knownKinds as string[]).includes(failure.kind)
+    ? (failure.kind as RevealErrorKind)
+    : 'launcher_failed';
+  const { message, hint } = revealErrorText(kind, failure);
+  // 两行:主文案 / hint 或 path
+  const fullMessage = hint ? `${message}\n${hint}` : message;
+  return { message: fullMessage, kind: 'error' };
+}
 
 export interface ErrorBannerProps {
   /** 提示条类型,默认 'error' (F15 主用例)。 */

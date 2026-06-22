@@ -168,7 +168,14 @@ describe('ResourceBrowserPage — F16 (M2.13)', () => {
         return [item('plugin/x', 'plugin')];
       }
       if (cmd === 'reveal_in_file_manager') {
-        throw new Error('explorer.exe not found');
+        // M3.5 — backend now throws structured RevealFailure.
+        const err = new Error('Path does not exist: /x/y') as Error & {
+          kind?: string;
+          path?: string;
+        };
+        err.kind = 'not_found';
+        err.path = '/x/y';
+        throw err;
       }
       return null;
     });
@@ -187,9 +194,131 @@ describe('ResourceBrowserPage — F16 (M2.13)', () => {
         screen.getByTestId('resource-browser-reveal-error'),
       ).toBeInTheDocument();
     });
+    // M3.5 — 错误已通过 ErrorBanner 渲染,文案为「不存在」+ 路径
     expect(
-      screen.getByText(/explorer\.exe not found/),
+      screen.getByText(/不存在/),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/\/x\/y/),
+    ).toBeInTheDocument();
+  });
+
+  /// M3.5 — 后端按 `kind` 路由中文文案。4 类分别验证。
+  it('reveal failure with kind=network_path renders 「网络路径」文案', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [item('plugin/x', 'plugin')];
+      if (cmd === 'reveal_in_file_manager') {
+        const err = new Error('Network') as Error & { kind?: string; path?: string };
+        err.kind = 'network_path';
+        err.path = '\\\\srv\\share';
+        throw err;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => screen.getByTestId('resource-browser-row-plugin/x'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-reveal-plugin/x'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-reveal-error')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/网络路径/)).toBeInTheDocument();
+  });
+
+  it('reveal failure with kind=permission_denied renders 「无法访问」文案', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [item('plugin/x', 'plugin')];
+      if (cmd === 'reveal_in_file_manager') {
+        const err = new Error('denied') as Error & { kind?: string; path?: string };
+        err.kind = 'permission_denied';
+        err.path = 'C:/secret';
+        throw err;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => screen.getByTestId('resource-browser-row-plugin/x'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-reveal-plugin/x'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-reveal-error')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/无法访问/)).toBeInTheDocument();
+  });
+
+  it('reveal failure with kind=launcher_failed renders 「文件管理器启动失败」文案', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [item('plugin/x', 'plugin')];
+      if (cmd === 'reveal_in_file_manager') {
+        const err = new Error('exit 1') as Error & { kind?: string; path?: string };
+        err.kind = 'launcher_failed';
+        err.path = '/x';
+        throw err;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => screen.getByTestId('resource-browser-row-plugin/x'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-reveal-plugin/x'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-reveal-error')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/文件管理器启动失败/)).toBeInTheDocument();
+  });
+
+  /// M3.5 — 旧 IPC 抛 Error 字符串(无 kind)走 launcher_failed 兜底。
+  it('reveal failure without kind 走 launcher_failed 兜底', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [item('plugin/x', 'plugin')];
+      if (cmd === 'reveal_in_file_manager') {
+        throw new Error('some random string error');
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => screen.getByTestId('resource-browser-row-plugin/x'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-reveal-plugin/x'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-reveal-error')).toBeInTheDocument();
+    });
+    // launcher_failed 兜底文案
+    expect(screen.getByText(/文件管理器启动失败/)).toBeInTheDocument();
+  });
+
+  /// M3.5 — dismiss 按钮可清除 reveal error。
+  it('reveal error dismiss button clears the banner', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [item('plugin/x', 'plugin')];
+      if (cmd === 'reveal_in_file_manager') {
+        const err = new Error('x') as Error & { kind?: string; path?: string };
+        err.kind = 'not_found';
+        err.path = '/x';
+        throw err;
+      }
+      return null;
+    });
+    render(<ResourceBrowserPage />);
+    await waitFor(() => screen.getByTestId('resource-browser-row-plugin/x'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('resource-browser-reveal-plugin/x'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('resource-browser-reveal-error')).toBeInTheDocument(),
+    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByTestId('resource-browser-reveal-error-banner-dismiss'),
+      );
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId('resource-browser-reveal-error')).toBeNull(),
+    );
   });
 
   it('scan failure surfaces a list-level error', async () => {

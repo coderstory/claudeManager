@@ -10,46 +10,57 @@
 //!   不直接调 OS API」的纪律（这里属于 platform 层的 OS 抽象实现，调系统 CLI 是允许的）
 //! - 行为与 Windows 侧 `explorer /select` 完全对称：父目录 + 选中目标
 //!
-//! 注意 `open -R` 的语义：
-//! - path 是文件 → Finder 打开所在目录并选中该文件
-//! - path 是目录 → Finder 直接打开该目录（不报错，与 Windows explorer 行为一致）
-//! - path 不存在 → Finder 不打开任何窗口，用户无感知；故我们在调用前先做存在性检查，
-//!   把「路径不存在」转成 `PlatformError::Path`，跟 WindowsReveal 行为一致
+//! ## M3.5 (清单 15)
+//!
+//! 与 Windows 侧同构：拆 `RevealError` 4 variant,把
+//! 网络路径 / 不存在 / spawn 失败 / exit 非 0 区分清楚。
+//! 前置检测顺序：网络路径 → 存在性 → spawn → status.success()。
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::platform::traits::{IPlatformReveal, PlatformError};
+use crate::platform::traits::{IPlatformReveal, RevealError};
 
 pub struct MacReveal;
 
 impl IPlatformReveal for MacReveal {
-    fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
-        // 存在性检查：`open -R` 对不存在的路径会静默失败（Finder 不弹窗），
-        // 我们提前拦截，返回明确错误，与 WindowsReveal 行为对齐。
-        if !path.exists() {
-            return Err(PlatformError::Path(format!(
-                "cannot reveal: path does not exist: {}",
-                path.display()
-            )));
+    fn reveal_file(&self, path: &Path) -> Result<(), RevealError> {
+        // 1) 网络路径预检。`open -R` 在 SMB / NFS / AFP 挂载点上
+        //    行为不可预测,前端按 "不支持" 路由,与 Windows 侧
+        //    `NetworkPath` 行为对齐。
+        let path_str = path.to_string_lossy();
+        let is_network = path_str.starts_with("//")
+            || path_str.starts_with("smb:")
+            || path_str.starts_with("afp:")
+            || path_str.starts_with("nfs:");
+        if is_network {
+            return Err(RevealError::NetworkPath(path.to_path_buf()));
         }
 
-        // `open -R <path>`：`-R` 表示 reveal（在 Finder 中显示），path 作为独立参数传入。
-        // 与 Windows 的 `explorer /select,<path>`（逗号拼接成单参数）不同，`open` 把
-        // path 当作独立 argv 元素，直接 `.arg(path)` 即可，Command 会负责 OsStr 转换。
+        // 2) 存在性预检：`open -R` 对不存在的路径会静默失败
+        //    （Finder 不弹窗），提前拦截，与 WindowsReveal 行为一致。
+        if !path.exists() {
+            return Err(RevealError::NotFound(path.to_path_buf()));
+        }
+
+        // 3) spawn + 状态码。
+        //
+        // `open -R <path>`：`-R` 表示 reveal（在 Finder 中显示），
+        // path 作为独立参数传入。
+        let path_buf: PathBuf = path.to_path_buf();
         let status = Command::new("open")
             .arg("-R")
             .arg(path)
             .status()
-            .map_err(|e| PlatformError::Command {
-                cmd: "open".into(),
-                message: e.to_string(),
+            .map_err(|_| RevealError::LauncherFailed {
+                code: None,
+                path: path_buf.clone(),
             })?;
 
         if !status.success() {
-            return Err(PlatformError::Command {
-                cmd: "open".into(),
-                message: format!("exit status: {status}"),
+            return Err(RevealError::LauncherFailed {
+                code: status.code(),
+                path: path_buf,
             });
         }
         Ok(())
@@ -62,26 +73,50 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    /// M3.5 — 不存在的路径必须在调用 `open` 之前就被存在性检查
+        /// 拦截,返回 `NotFound`(与 Windows 侧一致)。
     #[test]
-    fn mac_reveal_returns_err_for_nonexistent_path() {
-        // 不存在的路径必须在调用 `open` 之前就被存在性检查拦截。
-        let r = MacReveal.reveal(Path::new("/Z/does/not/exist.xyz"));
-        assert!(r.is_err(), "must return Err for nonexistent path");
+    fn mac_reveal_returns_not_found_for_nonexistent_path() {
+        let r = MacReveal.reveal_file(Path::new("/Z/does/not/exist.xyz"));
         match r.unwrap_err() {
-            PlatformError::Path(_) => {}
-            other => panic!("expected PlatformError::Path, got {other:?}"),
+            RevealError::NotFound(p) => {
+                assert_eq!(p, PathBuf::from("/Z/does/not/exist.xyz"));
+            }
+            other => panic!("expected NotFound, got {other:?}"),
         }
     }
 
+    /// M3.5 — SMB / AFP / NFS / `//host` 视为网络路径。
+    #[test]
+    fn mac_reveal_returns_network_path_for_smb() {
+        let r = MacReveal.reveal_file(Path::new("smb://server/share/file.txt"));
+        assert!(matches!(r.unwrap_err(), RevealError::NetworkPath(_)));
+    }
+
+    /// M3.5 — 在 Windows 开发机上 `open` 命令不存在 → spawn
+    /// 返回 io::Error → 映射成 `LauncherFailed { code: None }`。
+    /// 在 macOS 真机上则会真正唤起 Finder。两种情况下都不应 panic。
     #[test]
     fn mac_reveal_does_not_panic_on_existing_path() {
-        // 在 Windows 开发机上 `open` 命令不存在 → spawn 返回 io::Error →
-        // 映射成 `PlatformError::Command`，但不会 panic。在 macOS 真机上则会真正
-        // 唤起 Finder。两种情况下测试都只验证「不 panic」，忽略返回值。
         let tmp = TempDir::new().expect("create tempdir");
         let f = tmp.path().join("sample.txt");
         fs::write(&f, b"hello").expect("write file");
-        let _ = MacReveal.reveal(&f);
+        let _ = MacReveal.reveal_file(&f);
         // 走到这里说明没有 panic。
+    }
+
+    /// M3.5 — 已存在的合法路径返回 Ok 或 LauncherFailed,
+    /// 绝不返回 NotFound / NetworkPath。
+    #[test]
+    fn mac_reveal_existing_path_returns_ok_or_launcher_failed() {
+        let tmp = TempDir::new().expect("create tempdir");
+        let f = tmp.path().join("exists.txt");
+        fs::write(&f, b"x").expect("write file");
+        let r = MacReveal.reveal_file(&f);
+        match r {
+            Ok(()) => {}
+            Err(RevealError::LauncherFailed { .. }) => {}
+            Err(other) => panic!("expected Ok or LauncherFailed, got {other:?}"),
+        }
     }
 }

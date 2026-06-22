@@ -20,9 +20,15 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::domain::{ResourceDetail, ResourceItem, ResourceKind};
+use crate::services::resource_service::RevealFailure;
 
 /// Tauri-friendly error type.
+///
+/// `list_resources` / `get_resource_detail` use `String` (display
+/// message); `reveal_in_file_manager` returns the structured
+/// `RevealFailure` so the frontend can route by `kind`.
 type CmdResult<T> = Result<T, String>;
+type RevealCmdResult = Result<(), RevealFailure>;
 
 /// F16 — list resources of the given kind.
 ///
@@ -74,22 +80,43 @@ pub async fn get_resource_detail(
 
 /// F16 — open the system file manager with `path` selected.
 ///
-/// On Windows this is `explorer /select,<path>`. On macOS this is
-/// `open -R <path>` (macOS impl is currently `unimplemented!()` in
-/// the trait stub). On any failure the command returns `Err(...)`
-/// — frontend surfaces it via a non-blocking modal.
+/// M3.5 — returns `Result<(), RevealFailure>` (structured) instead
+/// of `Result<(), String>`. The frontend `formatRevealError`
+/// switches on `RevealFailure.kind` (`"not_found"` /
+/// `"permission_denied"` / `"network_path"` / `"launcher_failed"`)
+/// to render the localized banner.
+///
+/// Empty path is rejected with a synthetic `permission_denied`
+/// failure (the path-validation family), so the frontend routes it
+/// consistently with other validation errors instead of leaking a
+/// bare string.
 #[tauri::command]
 pub async fn reveal_in_file_manager(
     state: State<'_, AppState>,
     path: String,
-) -> CmdResult<()> {
+) -> RevealCmdResult {
     if path.trim().is_empty() {
-        return Err("路径为空".into());
+        return Err(RevealFailure {
+            kind: "permission_denied".into(),
+            message: "路径为空".into(),
+            path: String::new(),
+        });
     }
     state
         .resource_service
         .reveal(&PathBuf::from(&path))
-        .map_err(|e| e.to_string())
+        .map_err(|e| match e {
+            crate::services::resource_service::ResourceServiceError::Reveal {
+                kind,
+                message,
+                path,
+            } => RevealFailure { kind, message, path },
+            other => RevealFailure {
+                kind: "launcher_failed".into(),
+                message: other.to_string(),
+                path: path.clone(),
+            },
+        })
 }
 
 #[cfg(test)]

@@ -296,8 +296,69 @@ pub trait IPlatformAutostart: Send + Sync {
 
 /// Open the system file manager with `path` selected (Win: `explorer
 /// /select,…`; mac: `open -R …`).
+///
+/// M3.5 (清单 15) — 错误类型从通用 `PlatformError` 拆出独立的
+/// [`RevealError`],因为 `explorer.exe` / `open -R` 的失败原因
+/// 必须由调用方按类别路由到不同的用户文案:
+///
+/// - `NotFound` — 路径不存在 (最常见,scanner 之后用户在外部删了文件)
+/// - `PermissionDenied` — ACL 拒绝 (低频,Windows 无 cheap reliable
+///   预检,主要靠前端启发式回退)
+/// - `NetworkPath` — `\\server\share` / `//host` 形式,explorer/open
+///   行为不稳定,前端文案明确告知「不支持」
+/// - `LauncherFailed` — `explorer.exe` / `open` spawn 成功但
+///   `status.success() == false`。注意:explorer.exe 的 exit code
+///   **不可信**(Microsoft 从未文档化),前端文案应弱化退出码。
+///
+/// 详见 `docs/investigations/m3.5-reveal-bug.md`。
 pub trait IPlatformReveal: Send + Sync {
-    fn reveal(&self, path: &Path) -> Result<(), PlatformError>;
+    fn reveal_file(&self, path: &Path) -> Result<(), RevealError>;
+}
+
+/// M3.5 — 结构化 reveal 错误。前端按 [`RevealError::kind`] 字段
+/// 路由中文文案(`formatRevealError` in `src/components/ErrorBanner.tsx`)。
+///
+/// `thiserror::Error` 给到的 `Display` 用于 Rust 侧日志 / 测试断言,
+/// 前端不应直接解析 `Display`,而应通过 IPC 序列化中的 `kind`
+/// 字段路由(参见 `ResourceServiceError::Reveal` 的实现)。
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum RevealError {
+    #[error("Path does not exist: {0}")]
+    NotFound(PathBuf),
+    #[error("Permission denied: {0}")]
+    PermissionDenied(PathBuf),
+    #[error("Network path not supported: {0}")]
+    NetworkPath(PathBuf),
+    #[error("Explorer/launcher failed (exit {code:?}): {path:?}")]
+    LauncherFailed {
+        code: Option<i32>,
+        path: PathBuf,
+    },
+}
+
+impl RevealError {
+    /// Stable category tag for IPC serialization (kebab-case, frontend
+    /// routing key). DO NOT localize — frontend maps this to localized
+    /// text.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            RevealError::NotFound(_) => "not_found",
+            RevealError::PermissionDenied(_) => "permission_denied",
+            RevealError::NetworkPath(_) => "network_path",
+            RevealError::LauncherFailed { .. } => "launcher_failed",
+        }
+    }
+
+    /// Path the error pertains to (cloned). For `LauncherFailed` it is
+    /// the `path` field.
+    pub fn path(&self) -> &Path {
+        match self {
+            RevealError::NotFound(p)
+            | RevealError::PermissionDenied(p)
+            | RevealError::NetworkPath(p)
+            | RevealError::LauncherFailed { path: p, .. } => p,
+        }
+    }
 }
 
 /// Show a native OS notification (toast / NSUserNotification).
@@ -368,7 +429,7 @@ mod tests {
     mock! {
         pub RevealShim {}
         impl IPlatformReveal for RevealShim {
-            fn reveal(&self, path: &Path) -> Result<(), PlatformError>;
+            fn reveal_file(&self, path: &Path) -> Result<(), RevealError>;
         }
     }
 
@@ -513,14 +574,49 @@ mod tests {
     }
 
     #[test]
-    fn reveal_dispatch() {
+    fn reveal_file_dispatch() {
         let mut m = MockRevealShim::new();
-        m.expect_reveal()
+        m.expect_reveal_file()
             .withf(|p| p == Path::new("/x/y.txt"))
             .times(1)
             .returning(|_| Ok(()));
         let r: Box<dyn IPlatformReveal> = Box::new(m);
-        r.reveal(Path::new("/x/y.txt")).unwrap();
+        r.reveal_file(Path::new("/x/y.txt")).unwrap();
+    }
+
+    /// M3.5 — `RevealError` 4 个 variant 的 `kind()` 标签稳定,
+    /// 前端 IPC 路由靠这个字符串(不解析 `Display`)。
+    #[test]
+    fn reveal_error_kind_is_stable_string() {
+        let p = PathBuf::from("/x");
+        assert_eq!(
+            RevealError::NotFound(p.clone()).kind(),
+            "not_found"
+        );
+        assert_eq!(
+            RevealError::PermissionDenied(p.clone()).kind(),
+            "permission_denied"
+        );
+        assert_eq!(
+            RevealError::NetworkPath(p.clone()).kind(),
+            "network_path"
+        );
+        assert_eq!(
+            RevealError::LauncherFailed { code: Some(1), path: p.clone() }.kind(),
+            "launcher_failed"
+        );
+    }
+
+    /// M3.5 — `RevealError::path()` 在 4 个 variant 下都能正确
+    /// 取回路径,IPC 序列化用得到。
+    #[test]
+    fn reveal_error_path_returns_inner() {
+        let p = PathBuf::from("/a/b.txt");
+        assert_eq!(RevealError::NotFound(p.clone()).path(), p);
+        assert_eq!(
+            RevealError::LauncherFailed { code: None, path: p.clone() }.path(),
+            p
+        );
     }
 
     #[test]

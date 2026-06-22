@@ -12,26 +12,64 @@
 //!
 //! ## Error model
 //!
-//! `list` returns `Ok(Vec::ResourceItem>)` even on missing dirs
+//! `list` returns `Ok(Vec<ResourceItem>)` even on missing dirs
 //! (cold-start). `reveal` returns `Err` if the OS shell fails (e.g.
 //! explorer.exe missing). The Tauri command boundary stringifies
 //! these to the frontend.
+//!
+//! ### M3.5 — Reveal error category tag
+//!
+//! `reveal` now returns `ResourceServiceError::Reveal { kind, message, path }`
+//! where `kind` is the stable IPC routing key (`"not_found"` /
+//! `"permission_denied"` / `"network_path"` / `"launcher_failed"`).
+//! Frontend `formatRevealError` switches on `kind` to render
+//! localized text. We deliberately do NOT parse `Display` — Display
+//! is for Rust-side logs.
 
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::domain::{ResourceDetail, ResourceKind};
 use crate::infrastructure::resource_detail;
 use crate::infrastructure::resource_scanner::{self, ResourceScannerError};
-use crate::platform::IPlatformReveal;
+use crate::platform::{IPlatformReveal, RevealError};
 
 #[derive(Debug, Error)]
 pub enum ResourceServiceError {
     #[error("scanner error: {0}")]
     Scanner(#[from] ResourceScannerError),
-    #[error("reveal failed: {0}")]
-    Reveal(String),
+    /// M3.5 — reveal 错误带结构化 category。前端按 `kind` 路由。
+    #[error("reveal failed [{kind}]: {message}")]
+    Reveal {
+        kind: String,
+        message: String,
+        path: String,
+    },
+}
+
+/// M3.5 — `ResourceServiceError::Reveal` 的 Tauri IPC 序列化形态。
+///
+/// `ResourceServiceError` 整体**不**派生 Serialize(避免
+/// 泄漏内部类型 / 破坏 ABI);Tauri 命令 boundary 在
+/// `commands::resource` 里手工把 `Reveal { .. }` 转成
+/// `RevealFailure` 再返回给前端。
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct RevealFailure {
+    pub kind: String,
+    pub message: String,
+    pub path: String,
+}
+
+impl RevealFailure {
+    pub fn from_reveal_error(e: &RevealError) -> Self {
+        Self {
+            kind: e.kind().to_string(),
+            message: e.to_string(),
+            path: e.path().to_string_lossy().into_owned(),
+        }
+    }
 }
 
 /// Business logic for F16 资源浏览.
@@ -72,20 +110,31 @@ impl ResourceService {
             .components()
             .any(|c| matches!(c, std::path::Component::ParentDir))
         {
-            return Err(ResourceServiceError::Reveal(
-                "路径含 '..',拒绝(安全策略)".into(),
-            ));
+            return Err(ResourceServiceError::Reveal {
+                kind: "permission_denied".to_string(),
+                message: "路径含 '..',拒绝(安全策略)".into(),
+                path: path.to_string_lossy().into_owned(),
+            });
         }
         Ok(resource_detail::read_resource_detail(path, kind))
     }
 
-    /// Open the system file manager with `path` selected. Wraps
-    /// `IPlatformReveal::reveal` and converts its `PlatformError` to
-    /// our `ResourceServiceError`.
+    /// Open the system file manager with `path` selected.
+    ///
+    /// M3.5 — wraps [`IPlatformReveal::reveal_file`], converts its
+    /// [`RevealError`] into a structured `ResourceServiceError::Reveal`
+    /// carrying the category tag (`kind`), the OS message, and the
+    /// path. Frontend `formatRevealError` switches on `kind` to
+    /// render the localized banner.
     pub fn reveal(&self, path: &Path) -> Result<(), ResourceServiceError> {
-        self.reveal
-            .reveal(path)
-            .map_err(|e| ResourceServiceError::Reveal(e.to_string()))
+        self.reveal.reveal_file(path).map_err(|e| {
+            let failure = RevealFailure::from_reveal_error(&e);
+            ResourceServiceError::Reveal {
+                kind: failure.kind,
+                message: failure.message,
+                path: failure.path,
+            }
+        })
     }
 }
 
@@ -93,7 +142,6 @@ impl ResourceService {
 mod tests {
     use super::*;
     use crate::domain::ResourceItem;
-    use crate::platform::traits::PlatformError;
     use std::fs;
     use tempfile::TempDir;
 
@@ -134,19 +182,102 @@ mod tests {
     }
 
     /// `reveal` propagates errors from the platform trait. A
-    /// `PlatformError::Path("nope")` from the trait must surface
-    /// as `ResourceServiceError::Reveal` with the message intact.
+    /// `RevealError::NotFound(p)` from the trait must surface as
+    /// `ResourceServiceError::Reveal { kind: "not_found", .. }`
+    /// with the path intact (M3.5 — frontend `formatRevealError`
+    /// switches on `kind`).
     #[test]
-    fn reveal_error_propagates() {
+    fn reveal_error_propagates_with_category_tag() {
         let tmp = make_claude_dir();
-        let reveal = Box::new(FailingReveal);
+        let reveal = Box::new(FailingReveal {
+            kind: RevealErrorKindForTest::NotFound,
+        });
         let svc = ResourceService::new(tmp.path().to_path_buf(), reveal);
 
         let target = tmp.path().join("anything.md");
         let err = svc.reveal(&target).unwrap_err();
         match err {
-            ResourceServiceError::Reveal(msg) => {
-                assert!(msg.contains("nope"), "got msg = {msg}");
+            ResourceServiceError::Reveal { kind, message, path } => {
+                assert_eq!(kind, "not_found");
+                assert!(message.contains("nope"), "got msg = {message}");
+                assert!(path.ends_with("anything.md"), "got path = {path}");
+            }
+            other => panic!("expected Reveal error, got {other:?}"),
+        }
+    }
+
+    /// M3.5 — `RevealError::NetworkPath` 透传到 service 层
+    /// 时 `kind` 必须是 `"network_path"`。
+    #[test]
+    fn reveal_network_path_kind_tag() {
+        let tmp = make_claude_dir();
+        let reveal = Box::new(FailingReveal {
+            kind: RevealErrorKindForTest::NetworkPath,
+        });
+        let svc = ResourceService::new(tmp.path().to_path_buf(), reveal);
+        let target = tmp.path().join("file.txt");
+        let err = svc.reveal(&target).unwrap_err();
+        match err {
+            ResourceServiceError::Reveal { kind, .. } => {
+                assert_eq!(kind, "network_path");
+            }
+            other => panic!("expected Reveal error, got {other:?}"),
+        }
+    }
+
+    /// M3.5 — `RevealError::LauncherFailed` 透传时 `kind`
+    /// 必须是 `"launcher_failed"`。
+    #[test]
+    fn reveal_launcher_failed_kind_tag() {
+        let tmp = make_claude_dir();
+        let reveal = Box::new(FailingReveal {
+            kind: RevealErrorKindForTest::LauncherFailed,
+        });
+        let svc = ResourceService::new(tmp.path().to_path_buf(), reveal);
+        let target = tmp.path().join("file.txt");
+        let err = svc.reveal(&target).unwrap_err();
+        match err {
+            ResourceServiceError::Reveal { kind, .. } => {
+                assert_eq!(kind, "launcher_failed");
+            }
+            other => panic!("expected Reveal error, got {other:?}"),
+        }
+    }
+
+    /// M3.5 — `RevealFailure::from_reveal_error` 把 4 个 variant
+    /// 都正确序列化成 `{ kind, message, path }` 三元组。
+    #[test]
+    fn reveal_failure_serializes_all_variants() {
+        let p = PathBuf::from("/x/y.txt");
+        let nf = RevealFailure::from_reveal_error(&RevealError::NotFound(p.clone()));
+        assert_eq!(nf.kind, "not_found");
+        assert_eq!(nf.path, "/x/y.txt");
+
+        let lf = RevealFailure::from_reveal_error(&RevealError::LauncherFailed {
+            code: Some(1),
+            path: p.clone(),
+        });
+        assert_eq!(lf.kind, "launcher_failed");
+        assert!(lf.message.contains("exit 1"));
+
+        // JSON shape stability (frontend TypeScript 类型依赖)。
+        let json = serde_json::to_value(&nf).unwrap();
+        assert_eq!(json["kind"], "not_found");
+        assert_eq!(json["path"], "/x/y.txt");
+        assert!(json["message"].is_string());
+    }
+
+    /// M3.5 — `detail()` 拒绝 `..` 路径时也返回结构化
+    /// `Reveal { kind: "permission_denied", .. }`(前端可路由)。
+    #[test]
+    fn detail_rejects_parent_traversal_with_category() {
+        let tmp = make_claude_dir();
+        let svc = ResourceService::new(tmp.path().to_path_buf(), Box::new(NoopReveal));
+        let bad = Path::new("../escaped.txt");
+        let err = svc.detail(bad, ResourceKind::Command).unwrap_err();
+        match err {
+            ResourceServiceError::Reveal { kind, .. } => {
+                assert_eq!(kind, "permission_denied");
             }
             other => panic!("expected Reveal error, got {other:?}"),
         }
@@ -182,7 +313,7 @@ mod tests {
 
     struct NoopReveal;
     impl IPlatformReveal for NoopReveal {
-        fn reveal(&self, _path: &Path) -> Result<(), PlatformError> {
+        fn reveal_file(&self, _path: &Path) -> Result<(), RevealError> {
             Ok(())
         }
     }
@@ -191,16 +322,35 @@ mod tests {
         calls: std::sync::Mutex<Vec<PathBuf>>,
     }
     impl IPlatformReveal for RecordingReveal {
-        fn reveal(&self, path: &Path) -> Result<(), PlatformError> {
+        fn reveal_file(&self, path: &Path) -> Result<(), RevealError> {
             self.calls.lock().unwrap().push(path.to_path_buf());
             Ok(())
         }
     }
 
-    struct FailingReveal;
+    /// M3.5 — `FailingReveal` 现在可配置返回的 variant,这样能
+    /// 覆盖 4 个 IPC category tag 的回归。
+    #[derive(Clone, Copy)]
+    enum RevealErrorKindForTest {
+        NotFound,
+        NetworkPath,
+        LauncherFailed,
+    }
+
+    struct FailingReveal {
+        kind: RevealErrorKindForTest,
+    }
     impl IPlatformReveal for FailingReveal {
-        fn reveal(&self, _path: &Path) -> Result<(), PlatformError> {
-            Err(PlatformError::Path("nope".into()))
+        fn reveal_file(&self, path: &Path) -> Result<(), RevealError> {
+            let p = path.to_path_buf();
+            match self.kind {
+                RevealErrorKindForTest::NotFound => Err(RevealError::NotFound(p)),
+                RevealErrorKindForTest::NetworkPath => Err(RevealError::NetworkPath(p)),
+                RevealErrorKindForTest::LauncherFailed => Err(RevealError::LauncherFailed {
+                    code: Some(1),
+                    path: p,
+                }),
+            }
         }
     }
 }

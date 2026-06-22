@@ -17,7 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
-import { ErrorBanner } from '../../components/ErrorBanner';
+import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
 
 beforeEach(() => {
   vi.useRealTimers();
@@ -260,5 +260,89 @@ describe('ErrorBanner — layout & boundaries', () => {
     rerender(<ErrorBanner kind="info" message="x" />);
     el = screen.getByTestId('error-banner-info');
     expect((el as HTMLElement).style.color).toBe('var(--accent)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M3.5 — formatRevealError(后端 IPC RevealFailure → UI 友好文案)
+// ---------------------------------------------------------------------------
+
+describe('formatRevealError — M3.5', () => {
+  it('null / undefined 走 "未知错误" 兜底', () => {
+    expect(formatRevealError(null)).toEqual({
+      message: '未知错误',
+      kind: 'error',
+    });
+    expect(formatRevealError(undefined)).toEqual({
+      message: '未知错误',
+      kind: 'error',
+    });
+  });
+
+  it('not_found: 文案包含「不存在」+ path 提示', () => {
+    const r = formatRevealError({
+      kind: 'not_found',
+      message: 'Path does not exist: /x/y',
+      path: '/x/y',
+    });
+    expect(r.kind).toBe('error');
+    expect(r.message).toContain('不存在');
+    expect(r.message).toContain('/x/y');
+  });
+
+  it('not_found: path 为空时不显示「路径: 」行', () => {
+    const r = formatRevealError({
+      kind: 'not_found',
+      message: 'm',
+      path: '',
+    });
+    expect(r.message).not.toContain('路径: ');
+  });
+
+  it('permission_denied: path 非空 → 显示「无法访问」+ path', () => {
+    const r = formatRevealError({
+      kind: 'permission_denied',
+      message: 'm',
+      path: 'C:/secret.txt',
+    });
+    expect(r.message).toContain('无法访问');
+    expect(r.message).toContain('C:/secret.txt');
+  });
+
+  it('permission_denied: path 为空 → 「路径为空」文案(后端空 path 校验路径)', () => {
+    const r = formatRevealError({
+      kind: 'permission_denied',
+      message: '路径为空',
+      path: '',
+    });
+    expect(r.message).toContain('路径为空');
+  });
+
+  it('network_path: 「不支持显示网络路径」', () => {
+    const r = formatRevealError({
+      kind: 'network_path',
+      message: 'Network path not supported',
+      path: '\\\\server\\share',
+    });
+    expect(r.message).toContain('网络路径');
+  });
+
+  it('launcher_failed: 「文件管理器启动失败」+ 通用 hint', () => {
+    const r = formatRevealError({
+      kind: 'launcher_failed',
+      message: 'exit 1',
+      path: '/x',
+    });
+    expect(r.message).toContain('文件管理器启动失败');
+  });
+
+  it('未知 kind 走 launcher_failed 兜底(不抛错)', () => {
+    const r = formatRevealError({
+      kind: 'totally_new_kind_added_in_backend',
+      message: 'oops',
+      path: '/x',
+    });
+    expect(r.kind).toBe('error');
+    expect(r.message).toContain('文件管理器启动失败');
   });
 });

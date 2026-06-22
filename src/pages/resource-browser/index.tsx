@@ -42,7 +42,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
-  AlertCircle,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -68,6 +67,8 @@ import {
   resourceKindLabel,
   resourceKindSubdir,
 } from '../../types/resource';
+import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
+import type { RevealFailure } from '../../components/ErrorBanner';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -78,7 +79,11 @@ interface PageState {
   items: TauriResourceItem[];
   loading: boolean;
   listError: string | null;
-  revealError: string | null;
+  /**
+   * M3.5 — reveal 错误改为结构化 `RevealFailure`,前端按 `kind` 路由中文文案。
+   * `revealError` 字符串字段保留作为后备 / log 用途,UI 展示走 `formatRevealError`。
+   */
+  revealFailure: RevealFailure | null;
   revealErrorItemName: string | null;
 }
 
@@ -87,7 +92,7 @@ const INITIAL_STATE: PageState = {
   items: [],
   loading: true,
   listError: null,
-  revealError: null,
+  revealFailure: null,
   revealErrorItemName: null,
 };
 
@@ -116,6 +121,22 @@ const NONE_SOURCE_LABEL = '(无来源)';
  *   - mcp → path 指向 mcp.json（聚合文件，每个 mcp 条目共享同一 path）
  */
 type ResourceShape = 'directory' | 'file' | 'aggregate';
+
+/**
+ * M3.5 — 探测 `unknown` 是否是结构化 `RevealFailure`(后端 IPC
+ * 直接抛这个对象)。如果 IPC contract 还停留在旧版(Error /
+ * string),用 `false` 路径降级到 `launcher_failed` 兜底。
+ */
+function isRevealFailure(err: unknown): err is RevealFailure {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'kind' in err &&
+    'message' in err &&
+    'path' in err &&
+    typeof (err as { kind: unknown }).kind === 'string'
+  );
+}
 
 function inferResourceShape(kind: ResourceKind): ResourceShape {
   switch (kind) {
@@ -194,7 +215,7 @@ export default function ResourceBrowserPage(): ReactElement {
       kind,
       loading: true,
       listError: null,
-      revealError: null,
+      revealFailure: null,
       revealErrorItemName: null,
     }));
     try {
@@ -234,14 +255,22 @@ export default function ResourceBrowserPage(): ReactElement {
       // Success: clear any prior reveal error.
       setState((prev) => ({
         ...prev,
-        revealError: null,
+        revealFailure: null,
         revealErrorItemName: null,
       }));
     } catch (err) {
-      // Failure: surface via non-blocking alert (CLAUDE.md §7).
+      // M3.5 — 后端现在返回结构化 `RevealFailure` (kind/message/path);
+      // 兼容旧 IPC(可能仍抛 Error 字符串)用 duck-typing 探测。
+      const failure: RevealFailure = isRevealFailure(err)
+        ? err
+        : {
+            kind: 'launcher_failed',
+            message: err instanceof Error ? err.message : String(err),
+            path: item.path,
+          };
       setState((prev) => ({
         ...prev,
-        revealError: err instanceof Error ? err.message : String(err),
+        revealFailure: failure,
         revealErrorItemName: item.name,
       }));
     }
@@ -250,7 +279,7 @@ export default function ResourceBrowserPage(): ReactElement {
   const handleDismissRevealError = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      revealError: null,
+      revealFailure: null,
       revealErrorItemName: null,
     }));
   }, []);
@@ -626,49 +655,41 @@ export default function ResourceBrowserPage(): ReactElement {
         </div>
       )}
 
-      {/* Reveal error — non-blocking alert (CLAUDE.md §7) */}
-      {state.revealError && (
-        <div
-          data-testid="resource-browser-reveal-error"
-          role="alert"
-          style={{
-            padding: '12px 16px',
-            background: 'rgba(211, 47, 47, 0.08)',
-            border: '1px solid var(--danger)',
-            borderRadius: 4,
-            color: 'var(--danger)',
-            fontSize: 13,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 10,
-          }}
-        >
-          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600 }}>
-              无法打开{state.revealErrorItemName ? `「${state.revealErrorItemName}」` : ''}
-            </div>
-            <div style={{ marginTop: 4 }}>{state.revealError}</div>
-          </div>
-          <button
-            type="button"
-            data-testid="resource-browser-reveal-error-dismiss"
-            onClick={handleDismissRevealError}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--danger)',
-              cursor: 'pointer',
-              fontSize: 16,
-              padding: 0,
-              lineHeight: 1,
-            }}
-            aria-label="关闭错误提示"
+      {/* Reveal error — non-blocking alert (CLAUDE.md §7) + M3.5 本地化文案 */}
+      {state.revealFailure && (() => {
+        const { message, kind } = formatRevealError(state.revealFailure);
+        return (
+          <div
+            data-testid="resource-browser-reveal-error"
+            style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
           >
-            ×
-          </button>
-        </div>
-      )}
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--danger)',
+              }}
+            >
+              无法打开
+              {state.revealErrorItemName
+                ? `「${state.revealErrorItemName}」`
+                : ''}
+              <span
+                style={{ marginLeft: 8, opacity: 0.7, fontWeight: 400 }}
+                data-testid="resource-browser-reveal-error-kind"
+              >
+                (类型: {state.revealFailure.kind})
+              </span>
+            </div>
+            <ErrorBanner
+              kind={kind}
+              message={message}
+              testId="resource-browser-reveal-error-banner"
+              onDismiss={handleDismissRevealError}
+            />
+          </div>
+        );
+      })()}
 
       {/* List-level error */}
       {state.listError && (

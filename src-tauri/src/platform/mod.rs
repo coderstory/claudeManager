@@ -26,7 +26,7 @@ pub mod macos;
 pub use traits::{
     AppPaths, IGitHost, IPlatformAppMenu, IPlatformAutostart, IPlatformNotifier,
     IPlatformPaths, IPlatformReveal, IPlatformSingleInstance, IPlatformWindowChrome,
-    PlatformError, SingleInstanceGuard, TitleBarStyle, WindowChromeOptions,
+    PlatformError, RevealError, SingleInstanceGuard, TitleBarStyle, WindowChromeOptions,
 };
 
 // ---------------------------------------------------------------------------
