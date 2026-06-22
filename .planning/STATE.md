@@ -1,16 +1,16 @@
 ---
-milestone_version: v3.0
-status: in_progress
+gsd_state_version: 1.0
+milestone: v3.0
+milestone_name: 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3 + M4.6)
+status: executing
+last_updated: "2026-06-22T12:44:17.094Z"
+last_activity: 2026-06-22 -- Phase 18 execution started
 progress:
-  phases_complete: 7/10
-  v2.0_phases_complete: 11/11 (shipped, tag v2.0)
-  v3.0_phases_complete: 7/10 (Phase 12-17 ship, Phase 18-21 pending)
-  completed: [M2.17, M3.1, M3.2, M3.3, M3.4, M3.5, M3.6, M3.7, M3.8, M3.9, M3.10, M3.11~M3.12, B3#10 Tailwind, B2#1 usage, A3 backup-incremental, L-M2.08 WindowChrome, M4.3-updater-Phase1]
-  v3.0_pending: [Phase 18 e2e, Phase 19 cloud backup, Phase 20 updater UI, Phase 21 M4.6 long tail]
-last_updated: 2026-06-22
-v3.0_round1_commits: [ed5a3e5, f375bf1, 2e4e75b, afd090e, 8a2650f, a9bd4b5, f145d38, e2d5e06, 4f5df37, 3eadae2, 7efb0f8, da6ba67]
-v3.0_round1_completed: [A1 13/13 plugin 接入, B3#10 Tailwind 移除, B2#1 usage 测试, A3 备份增强 Phase 1, L-M2.08 WindowChrome 统一, M4.3 updater Phase 1]
-v3.0_round1_pending: [#9 F18 scan_optimizations, #14 e2e (402), 备份 Phase 2, updater Phase 2-3, M4.6 其余]
+  total_phases: 10
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 0
+  percent: 0
 ---
 
 <!--
@@ -23,13 +23,13 @@ v3.0_round1_pending: [#9 F18 scan_optimizations, #14 e2e (402), 备份 Phase 2, 
 
 ## Current Position
 
-Phase: Milestone v2.0 complete (11/11 phases shipped) + **v3.0 round 1（2026-06-22）已 ship 7 phases (Phase 12-17)**
-Plan: —
-Status: **v3.0 in progress — 7/10 phases ship / 4 pending (Phase 18-21)**
-Last activity: 2026-06-22 — v3.0 round 1 完成 (A1 13/13 接入 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1)
-Next: v3.0 round 2 启动（Phase 18 e2e 余额恢复 + Phase 19 云备份 + Phase 20 updater UI + Phase 21 M4.6 长尾项）
+Phase: 18 (m1-l1-playwright-e2e-windows-only) — COMPLETE (6/6 specs PASS)
+Plan: 3 of 3 (Wave 3 aggregate — this plan)
+Status: Phase 18 closed (v3.0 → 8/10 ship)
+Last activity: 2026-06-22 -- Phase 18 e2e 6/6 PASS + STATE.md update
+Next: v3.0 round 2 启动（Phase 19 云备份 + Phase 20 updater UI + Phase 21 M4.6 长尾项）
 
-**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1。#14 e2e 待余额恢复。
+**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）。
 
 ## Recent Work
 
@@ -59,7 +59,7 @@ Next: v3.0 round 2 启动（Phase 18 e2e 余额恢复 + Phase 19 云备份 + Pha
 - M4.5 应用商店上架 — 已拍板：不上架（2026-06-22 用户口头确认）→ M4.5 取消
 - D6 Mac 真机验证 — 暂缓, M4 启动前再问
 - 17 MEDIUM/LOW M2.16 限制已逐条评估 (D10), v2.0 关闭期归档
-- **#14 Playwright e2e 本机实跑** — v3.0 round 1 派单，**API 402 余额不足中止（0 token 消耗）**，待重派
+- **#14 Playwright e2e 本机实跑** — ✅ resolved by Phase 18 (2026-06-22): 6/6 specs PASS on dev box (3 WebView2 via tauri-driver CDP + 3 vite dev). Wave 1 needed 1 atomic fixtures fix (commit `b8361ce` — CDP-mode `page.goto` Proxy no-op + `playwright.config.ts` webServer gating); Wave 2 needed zero fixes. See `.planning/phases/18-m1-l1-playwright-e2e-windows-only/18-03-SUMMARY.md`.
 - **#9 F18 scan_optimizations active_root_dir 接入** — v3.0 round 1 跳过，#10 apply 已 ship（commit `2e4e75b`），scan 仍读用户级，进 round 2
 - **M4.3 updater Phase 2/3** — Phase 1 pubkey+endpoint 已 ship（commit `da6ba67`），前端 UI + E2E 灰度回滚未做
 - **A3 备份增强 Phase 2 云备份** — Phase 1 增量已 ship（commit `3eadae2`），云备份未做
@@ -72,31 +72,35 @@ Next: v3.0 round 2 启动（Phase 18 e2e 余额恢复 + Phase 19 云备份 + Pha
 M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 
 ## M1.2 — OS abstraction layer (8 traits × Win+Mac)
+
 - Status: ⏳ Pending user review
 - Shipped: ClaudeConfigManager-M1.1.2-platform-abstractions.exe
 - Smoke: 4/4 PASS
 - Commit: 13290b3
 
 ## M1.3 — Plugin host + 12 stubs
+
 - Status: ⏳ Pending user review
 - Shipped: ClaudeConfigManager-M1.1.3-plugin-host.exe
 - Smoke: 4/4 PASS + 6 vitest pass / 1 skip
 - Commit: 77e070a
 
 ## M1.4 — Tauri capabilities with WHY
+
 - Status: ⏳ Pending user review
 - Shipped: ClaudeConfigManager-M1.1.4-platform-plugins-capabilities.exe
 - Smoke: 4/4 PASS (no behavior change, capability-only)
 - Commit: cc47b7d
 
 ## M1.8 — TDD + UI e2e framework
+
 - Status: ⏳ Pending user review
 - Shipped: ClaudeConfigManager-M1.1.8-tdd-scaffold.exe
 - Smoke: 4/4 PASS + Playwright + CI + Vitest configured
 - Commit: 6814a7a
 
-
 ## M1.3-fix: rebuild release exe to embed latest frontend bundle
+
 - Status: ✅ Fixed (no source changes)
 - Root cause: Stale `dist/` embedded in release exe. Cargo skipped relink because Rust source unchanged.
 - Workaround: `touch src-tauri/src/lib.rs` to invalidate cache, then `cargo build --release`.
@@ -105,6 +109,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - Ship: `ClaudeConfigManager-M1.1.3-plugin-host-fix.exe` (19.8 MB, 6月 19 11:21)
 
 ## M1.3-pipeline-fix-v2: Tauri custom-protocol feature required
+
 - Status: ✅ Fixed (commit 50abbe6)
 - Root cause: `cargo build --release` (without `tauri build`) does NOT enable the `custom-protocol` cargo feature on the `tauri` crate. Without this feature, `tauri::generate_context!()` emits `EmbeddedAssets::default()` (zero dist files embedded) and runtime `manager::get_app_url` returns `devUrl` ("http://localhost:1420"), so the webview tries to load the vite dev server, which isn't running → "ERR_CONNECTION_REFUSED".
 - Fix: `cargo build --release --features tauri/custom-protocol` (added to `scripts/build-and-ship.sh`).
@@ -113,6 +118,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - Memory: `feedback/tauri-v2-custom-protocol-required` (already exists, fully documented).
 
 ## M1.3-fix: viewport meta + CSS reset (no browser scrollbars)
+
 - Status: ✅ Fixed (commit 038aa4f, awaiting user review)
 - Root cause: html/body/#root had no CSS reset (default 8px body margin) → horizontal scrollbar. `.app-shell` used `min-height: 100vh` + content taller than 640px → vertical scrollbar.
 - Fix: `src/App.css` global reset (`overflow:hidden`, `height:100%`, `box-sizing:border-box`) + `index.html` viewport meta. `.container` set to `overflow:auto` (scroll inside, not browser).
@@ -120,22 +126,26 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - Ship: `ClaudeConfigManager-M1.1.3-plugin-host-fix-v3.exe` (19.0 MB, 6月 19 12:06) ⏳ pending user verification
 
 ## kill-app.sh fix: taskkill -F not /F
+
 - Status: ✅ Fixed (commit dd4456b)
 - Root cause: Git Bash msys path conversion mangles `/F` in `taskkill /F /IM` as `F:/` → "invalid option" error, process not killed, tray icon stays.
 - Fix: Use `taskkill -F -IM foo.exe` (dash, not slash).
 - Memory: `feedback/taskkill-dash-flags-not-slash.md` (new, written this session).
 
 ## M1.2 / M1.3 / M1.4 / M1.8 user review status
+
 - M1.2 (commit 13290b3): ⏳ Pending user review (functional behavior unchanged vs M1.1; only adds platform abstraction layer in code)
 - M1.3 (commit 77e070a, superseded by 038aa4f for exe): ⏳ Pending user review of v3 exe
 - M1.4 (commit cc47b7d): ⏳ Pending user review (no behavior change, capability-only)
 - M1.8 (commit 6814a7a): ⏳ Pending user review (test framework, no exe change visible to user)
 
 ## Memory written this session
+
 - `feedback/taskkill-dash-flags-not-slash.md` — Git Bash taskkill /F → -F (cross-project Windows tooling)
 - `feedback/cs-web-fetch-for-internet.md` — cs-web-fetch for subagent network access (cross-project)
 
 ## Outstanding M1 tasks (not yet started)
+
 - M1.5: 前端依赖 + 设计系统基线（瓷白主题 + CSS 变量）
 - M1.6: Rust 后端依赖 + 版本锁
 - M1.7: 自启动集成（Win 注册表 + Mac LaunchAgent）
@@ -151,17 +161,20 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 > 上方"Outstanding M1 tasks"列表已陈旧 —— 自 `98df994 wip: M1 架构期暂停` commit 之后，M1.5 / M1.6 / M1.7 / M1.9 / M1.9.1 / M1.9.2 全部已落地代码 + commit。本节补全实际状态。
 
 ## M1.5 — 前端 deps + 设计系统基线（瓷白主题）
+
 - Status: ✅ 代码落地（无独立 ship exe，与 M1.9 合并 ship）
 - 关键 commit: `5b46d51` (deps: tailwind + postcss + shadcn utils + lucide 锁定版本), `3343db5` (wire: tokens.css import in main.tsx), `e44972e` (cn util + TDD), `16c90ae` (ThemeProvider: light/dark/auto + localStorage), `be955c3` (wire: ThemeProvider 包裹 App)
 - 交付: tailwind 3.4.17 + autoprefixer 10.4.20 + clsx 2.1.1 + tailwind-merge 3.3.1 + lucide-react 0.542.0 + class-variance-authority 0.7.1（**全锁定版本**，CLAUDE.md §2.3）
 - 风险: Tailwind utility class **未真正接入**（tokens.css 直接用 CSS var()），M2 评估是否补 tailwind.config.ts
 
 ## M1.6 — Rust 后端 deps 版本锁
+
 - Status: ✅ 代码落地（无独立 ship exe）
 - 关键 commit: `0397b43` (deps: 10 个 tauri-plugin-* =version 锁), `875b300` (register: lib.rs 10 个 init()), `6beeff8` (caps: 11 个 capability entries), `92a80b3` (lock: Cargo.lock)
 - 交付: tauri-plugin-{fs 2.5.1, dialog 2.7.1, notification 2.3.3, shell 2.3.5, os 2.3.2, deep-link 2.4.9, single-instance 2.4.2 (with deep-link feature), store 2.4.3, log 2.8.0, updater 2.10.1, autostart 2.5.1, process 2.3.1}
 
 ## M1.7 — 自启动集成
+
 - Status: ⏳ 代码落地待用户 review
 - Ship: `ClaudeConfigManager-M1.1.7-chrome-with-autostart.exe` (29.9 MB)
 - 关键 commit: `bb8e873` (PlatformError::Autostart variant), `de8fffa` (rewrite: Win+Mac autostart delegate to tauri-plugin-autostart), `8a1f48a` (commands: get_autostart_status / set_autostart_enabled), `bda412f` (updater pubkey placeholder)
@@ -169,17 +182,20 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - 风险: updater 缺 pubkey（M1.7+1.9-updater-pubkey 用空 placeholder 抑制 warning，M3 release 阶段换真 key）
 
 ## M1.9 — 主窗口框架 + 12 路由占位
+
 - Status: ⏳ 代码落地待用户 review
 - 关键 commit: `13ff10a` (useViewState hook + TDD), `cb586a7` (PluginPlaceholder + 12 plugin pages), `6e27b71` (AppHeader + AppSidebar), `0de4713` (App.tsx 路由 12 stubs + integration test), `3186043` (framer-motion 12.23.25 locked + AnimatePresence), `67cb23f` (TS strict-mode fixes)
 - 风险: placeholder 文案"该功能将在 M2+ 开发"**未渲染 SPEC 摘要**（CLAUDE.md §2.5 UI/UX 头等大事）
 
 ## M1.9.1 — 滚动布局修复
+
 - Status: ⏳ 代码落地待用户 review
 - Ship: `ClaudeConfigManager-M1.9.1-scroll-layout-fix.exe`
 - 关键 commit: `56f716f` (test: scroll-layout regression TDD), `cf0f8b6` (refine: tokens.css inject jsdom <head>), `f98f45a` (fixA: html/body/#root overflow:hidden reset in tokens.css), `e3533ff` (fixB: min-h-0 in flex chain so sidebar internal-scroll)
 - 教训: 滚动布局两层契约——外层 `overflow:hidden` 去浏览器滚动条 + 内层 `overflow:auto` 自滚——必须并存
 
 ## M1.9.2 — 自定义 chrome + Liquid Glass
+
 - Status: ⏳ 代码落地待用户 review（**最新 ship**）
 - Ship: `ClaudeConfigManager-M1.9.2-chrome-and-glass.exe` (29.9 MB, 2026-06-20)
 - 关键 commit: `13076bc` (test), `6737fd3` (fix-scroll), `e5b0d92` (window controls minimize/maximize/close via @tauri-apps/api/window), `63a096c` (tauri.conf: decorations=false + titleBarStyle=Overlay), `f4bffca` (glass tokens: backdrop-filter + glass-bg), `ac94f11` (apply: header + sidebar + placeholder backdrop-filter blur), `b716b01` (effects: setEffects(Mica) fire-and-forget), `28abeed` (caps: 4 core:window permissions), `04395dd` (test refine: align asserts with shipped reality)
@@ -190,9 +206,11 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 # === M1 收尾（2026-06-20 M1.12 关闭） ===
 
 ## 完成日期
+
 - M1 架构期主线完成: 2026-06-20（commit `04395dd` M1.9.2-test-refine）
 
 ## 已完成 / 待 review 总览（47 commits，13 个 ship exe）
+
 | ID | 描述 | Ship exe | 状态 |
 |---|---|---|---|
 | M1.1 | Tauri v2 scaffold + tray + minimize-to-tray | `M1.1-scaffold-release.exe` | ✅ accepted 2026-06-19 00:26:16 |
@@ -212,6 +230,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 | kill-app fix | `-F` not `/F` | (脚本层修复) | ✅ |
 
 ## 已知限制（继承自 M1.11 / M1.9.x / M1.9.1 教训）
+
 - **L1**: Playwright e2e **本机未实际跑过**（需 tauri-driver + 真 exe），CI 配 windows-latest 但 ci.yml 没接 e2e 步骤 → M1.10 补
 - **L2**: dev box `cargo test` 走 lib-test 失败 (`STATUS_ENTRYPOINT_NOT_FOUND 0xc0000139` Windows DLL forwarding)，CI MSYS2 跑通 → 已知环境限制，非代码缺陷
 - **L3**: macOS impls 全是 stub（`unimplemented!()`），Mac dev box 未接入 → M2.5+ Mac 真实 CI
@@ -228,6 +247,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - **L14**: dev box 用户没有一次性 batch approve 全部 M1 exe 的流程建议
 
 ## M2 启动建议（详见 `docs/milestones/M2-roadmap-draft.md`）
+
 - **优先 4 个 plugin**: F1 Provider 列表 → F2 切换 → F5 JSON 编辑 → F6 MCP 管理（按使用频次 + 数据准备成本排序）
 - **M2 启动前必做的 3 件套**:
   1. **PluginHost wiring**（1 subagent，半天）：把 12 stub 接 `plugins/mod.rs::init_all`，同步 HANDOFF.json
@@ -241,6 +261,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 # === M2+ 阶段预备段（待启动） ===
 
 ## M2 业务功能期
+
 - M2.1: F1 Provider 列表（settings.json 解析 + 表格 UI + Provider 模型）
 - M2.2: F2 Provider 切换（原子 rename + 备份恢复 + 切换历史）
 - M2.3: F3 .sql 导入（SQLite parser → Provider 列表）
@@ -255,6 +276,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - M2.12: F12 主题（dark/light/auto 已实现；M2.12 加自定义主题）
 
 ## M3 公证 + 发布
+
 - 代码签名（Windows EV cert + macOS Developer ID）
 - 公证（Windows SmartScreen + macOS notarization）
 - 自动更新（updater 启用 + pubkey 替换）
@@ -262,6 +284,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - 应用商店上架（可选）
 
 ## 长期 backlog
+
 - F13~F24: 备份 / 导出 / 错误反馈 / 资源浏览 / 在线安装 / 优化 / 备份 diff 等
 - i18n（i18next）
 - SQLite 历史 + 备份 diff
@@ -279,6 +302,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 **关键文档**: `docs/milestones/M1-final-report.md`（新建，本 session 产出）
 
 ### M1 已 ship 的 exe（桌面，`~/Desktop/ClaudeConfigManager-M1/`）
+
 1. `ClaudeConfigManager-M1.1-scaffold-release.exe` (M1.1 + fix, ✅ 核定 2026-06-19 00:26:16)
 2. `ClaudeConfigManager-M1.1.2-platform-abstractions.exe` (M1.2, ⏳)
 3. `ClaudeConfigManager-M1.1.3-plugin-host.exe` (M1.3, ⏳)
@@ -295,6 +319,7 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 14. **`ClaudeConfigManager-M1.9.3-fix-layout.exe`** ← **当前推荐用户核定**（M1.9.3 main 绝对定位 + framer-motion 移除）
 
 ### 已知限制 / 风险（M2 启动前必看，完整列表见 `docs/milestones/M1-final-report.md` §5）
+
 - F-1.09 / §5.1: M1.5 dark stub 不完整（`--success` / `--warning` / `--danger` / `--shadow-*` 缺口）
 - F-1.17 / §5.2: Tailwind 未接 PostCSS 管线（className 是 dead code，全部 inline style）
 - F-1.12 / §5.3: macOS impls 在 Win dev box 编译验证过，runtime 验证推迟到 Mac dev box
@@ -305,14 +330,17 @@ M1.1 ✓ accepted by user at 2026-06-19 00:26:16
 - F-1.25 / §5.8: release exe 没 stderr（`eprintln!` silent fail）
 
 ### M2 候选启动（详见 `docs/milestones/M2-roadmap-draft.md`）
+
 P0 = F1 Provider 列表 + F2 Provider 切换 + F5 JSON 编辑 + F6 MCP 管理 + F13 备份基础设施（F2 强依赖）
 
 M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单）：
+
 1. **3.1 PluginHost wiring**：把 12 stub 接到 `plugins/mod.rs::init_all`（半天，1 subagent）
 2. **3.2 M1.10 收尾**：ci.yml 加 npm test / build / e2e；beforeBuildCommand 原子化；tsconfig strict 审计（1-2 天）
 3. **3.3 M1.11 文档**：把 worktree 里的 `ARCHITECTURE.md` / `AGENTS.md` / 4 阶段评审 / final-audit 合并入 master（1 天）
 
 主 session 必拍板的 5 个决策（详见 M1-final-report.md §7.3）：
+
 - D1: M2 启动前是否先补 3 件套？→ **推荐选项 B（与 M2.1 并行）**
 - D2: M2 P0 4 plugin 执行顺序？→ **推荐选项 B（F1+F13 → F2 ‖ F5 ‖ F6 并行）**
 - D3: 是否启用 react-router？→ **推荐选项 A（保持 useViewState）**
@@ -320,6 +348,7 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 - D5: M1 exe 批量核定策略？→ **推荐选项 C（抽查 M1.9.3 + M1.3 v3）**
 
 ### 关键 commit（master HEAD = 9776ee9）
+
 - `9776ee9` M1.12: merge final audit + archive
 - `d79575d` M1.11: merge docs + 4-stage review
 - `d35b81a` M1.10: merge CI matrix + docs
@@ -397,6 +426,7 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 ## M2 业务期启动 — 2026-06-20
 
 **D1-D5 拍板**（commit `b8703df`）：B/B/A/F2-前/C
+
 - D1 (M1.10/11/12 补齐)：B 并行（已合并 master `282aa44` 之上）
 - D2 (M2 P0 4 plugin 顺序)：B F1+F13 → (F2 || F5 || F6)
 - D3 (react-router 重接)：A 保持 useViewState
@@ -445,6 +475,7 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 ## M2.3 F4 deeplink 导入 — 已 ship (P0 fix 验证通过后启动)
 
 **Commits** (5 个, 原子):
+
 - `b514929` design: F4 deeplink dataflow + URL protocol
 - `d01f67c` parser: deeplink_parser for ccswitch://v1/import?resource=provider (17 unit tests)
 - `8337d70` service: provider_service.import_single_provider (4 unit tests)
@@ -458,12 +489,15 @@ M2 启动前必做 3 件套（建议 3 槽并行，CLAUDE.md §11.3 流式派单
 **Rust 单元测试**: 本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5); CI MSYS2 跑通 17+4=21 个新 case
 
 **URL 协议** (与 cc-switch-main 对齐):
+
 ```
 ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&model=W
 ```
+
 只支持 resource=provider (M2.3 scope),其他 resource type → UnsupportedResource error。
 
 **关键设计决策**:
+
 - 模态而不是路由 (deeplink 是事件驱动,不是导航)
 - provider.id 缺省时从 name slug-ify (kebab-case + ASCII lowercase)
 - import 硬错误 AlreadyExists (F4 是用户主动,不等同 F3 批量 skip)
@@ -472,6 +506,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - api_key 在 modal 里 **永不显示** (token leak guard, Vitest 显式 assert)
 
 **已知限制** (M2.5+ 跟进):
+
 - 不支持 resource=mcp/prompt/skill (F4 范围)
 - 不支持"导入并激活" (F2 范围)
 - AlreadyExists → "rename and retry" 提示,但 v1 不实现覆盖
@@ -480,6 +515,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 
 **Commits (5)**: `c823a90` (model) / `8d371bf` (service) / `48c8f73` (commands) / `da7d337` (page) / `3e05adb` (e2e)
 **Files created/modified**:
+
 - `docs/design/M2.5-dataflow.md` (dataflow + 设计原则)
 - `src-tauri/src/domain/mcp_server.rs` (McpServer struct + 16 tests)
 - `src-tauri/src/services/mcp_service.rs` (McpService list/toggle/add/update/remove + 16 tests)
@@ -504,6 +540,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 **Rust 单元测试**: 16 (mcp_server) + 16 (mcp_service) + 9 (deeplink) = 41 new cases; 本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5), CI MSYS2 跑通
 
 **关键设计决策**:
+
 - `McpServer` struct 独立于 sql_parser 输出的 `ParsedMcpServer`(避免类型名冲突 + 清晰分层)
 - mcp.json 是单一文件,读写都用 `serde_json::Value` patch 保留未知字段(同 M2.1 settings.json pattern)
 - 乐观 toggle + 失败回滚(响应延迟 < 100ms)
@@ -513,6 +550,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - `id` 是 uuid(UI 内部稳定 key),`name` 才是 on-disk map key
 
 **已知限制** (M2.6+ 跟进):
+
 - 编辑/删除无 undo (CLAUDE.md §7 强调备份,但撤销栈尚未实现)
 - 表格列不可排序
 - import 只填表,不直接保存(需用户二次确认)
@@ -523,6 +561,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 
 **Commits (7)**: `131ffac` (cleanup) / `ce5a3c5` (model) / `4e630a3` (M2.6-fix) / `18cccf1` (service) / `1fc8d44` (commands) / `3ad5922` (page) / `c7a616f` (M2.6.1 routing-fix) / `faaefd8` (e2e)
 **Files created/modified**:
+
 - `docs/design/M2.7-dataflow.md` (F7 dataflow + 设计原则 + on-disk shape)
 - `src-tauri/src/domain/usage.rs` (UsageSnapshot + UsageWindow + 6 tests)
 - `src-tauri/src/services/usage_service.rs` (5min in-memory cache, `with_ttl` 测试钩子, 7 tests)
@@ -544,6 +583,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 **Rust 单元测试**: 6 (domain::usage) + 7 (services::usage_service) = 13 new cases;本机 `cargo test --lib` 受 pre-existing DLL load issue 阻挡 (M1.12 R5),CI MSYS2 跑通
 
 **关键设计决策**:
+
 - **Stub 模式 (M2.7)**: 只读 `~/.claude/usage.json` 本地 Claude Code 写的快照;外部 API (Anthropic / OpenAI / DeepSeek) 留 M2.8+
 - **Provider fingerprint**: 用 `hash(ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN)` 作为 cache key —— 不是真正的 provider.id(不影响功能,UI 标签显示 `active-<hex>`)
 - **5min cache**: `Mutex<HashMap<String, CacheEntry>>`,key = `(fingerprint, window)`;`refresh_usage` 强制清除重读;`with_ttl` 测试钩子(1 秒 TTL 验证过期分支)
@@ -555,6 +595,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - **不变字段顺序**: F1+F2+F3+F4+F5+F6 路由顺序保持;`usage-query` 插在 `mcp-management` 之后,`backup-restore` 紧随其后
 
 **已知限制** (M2.8+ 跟进):
+
 - 只读本地 stub —— 不发外部 HTTP 请求
 - provider_id 是 fingerprint 不是真正的 provider.id(UI 标签显示 `active-<hex>`)
 - 无历史趋势 —— "最近 24 次" 留 M2.8+(需要持久化 history)
@@ -587,18 +628,21 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 ## M2.15 关键修复（M2.13~M2.15 polish 阶段）
 
 ### M2.13-page (f0ab769) + M2.13-fix (fe39126) — F16 资源浏览真实实现
+
 - Status: ✅ 修复
 - 内容: ResourceBrowserPage 5 tabs (Prompts / Skills / Commands / Templates / Hooks) + reveal_in_file_manager 集成 + 9 vitest + 3 playwright e2e
 - 修复: drop 重复 `resource-browser` branch in App.tsx router (冲突分支合并后导致路由断裂) + 删 `unused args param` in test
 - 相关 commit: `2079cef` (M2.3.1-verify: real-invoke e2e spec) / `855b447` (M2.13-domain: ResourceItem + ResourceKind + 3 cases) / `1dce1c3` (M2.13-service: resource_scanner 5 kinds + 12 cases) / `4a0c527` (M2.13-partial: Tauri commands + AppState wiring) / `be4e12a` (M2.15-regression: defensive test) / `79cf8a4` (M2.3.2-verify-test: commit ui-layout real-invoke spec)
 
 ### M2.15-fix-v2 (a216aff) — Tailwind pipeline 缺失 (root cause)
+
 - Status: ✅ Root cause 修复
 - Root cause: 项目 `tailwindcss@3.4.17` 列在 devDeps 但**没有** `tailwind.config.js` / `postcss.config.js` / vite plugin → `dist/assets/index-*.css` 仅 1.99KB tokens + 0 utility rules → 所有 Tailwind utility class (`flex` / `items-center` / `gap-1` / `hover:` 等) 在真机 release exe 是 dead code
 - 影响: chrome cluster (search/refresh/toggle/settings/shortcut) 之前在 AppHeader 内 y=-40.4 / y=87.6 溢出 viewport → 修复后 5 按钮 x∈[832..1008] y=7.6 在 viewport 内
 - 修复: inline 所有 flex/gap/hover 到 style 属性; 新建 `src/design-system/utilities.css` 集中 hover/transition 规则, 由 `main.tsx` 显式 import
 
 ### M2.15-inline-tailwind (9 commits) — 全项目 inline 化 Tailwind utility class
+
 - Status: ✅ 修复 (9 原子 commit)
 - Root cause: 同 M2.15-fix-v2 (Tailwind pipeline 缺失, 所有 className 是 dead code)
 - 修复 (9 commits):
@@ -613,6 +657,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
   9. `a7cee0b` tailwind audit + cdp probe helper (working artifacts)
 
 ### M2.15-fix-main-top (ce6357a) — <main> 顶部 phantom gap
+
 - Status: ✅ 修复
 - Root cause: `<main>` 用 `position: absolute; top: var(--header-height)` 但其父 `app-content` 已被 `<AppHeader>` flex 顶下 48px → 双重偏移 = 48+48 = 96px
 - 修复: `<main>` top 改为 0
@@ -620,6 +665,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - Ship: `ClaudeConfigManager-M2.15-detail-page-padding-trim.exe` (29.7 MB, 2026-06-20 20:48)
 
 ### M2.15-uniform-detail-pages (7 commits) — 详情页布局统一
+
 - Status: ✅ 修复 (7 原子 commit, 当前最新 ship)
 - Root cause: 4 种 padding 值 / 3 种 h1 字号 / 6 种 max-width 在 7 个 plugin 详情页混用, 视觉一致性破坏
 - 修复: 7 个文件改 padding 到 `var(--space-6)` (24px) + h1 fontSize 到 `var(--fs-heading)` (18px) + h1 marginTop 0, 与 `provider-list` baseline 对齐
@@ -635,6 +681,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - Ship: **`ClaudeConfigManager-M2.15-detail-page-uniform.exe`** (29.7 MB, 2026-06-20 21:13) ← **当前推荐用户核定**
 
 ### M2.15-fix-header (fa2b301 + ad228b2) — AppHeader chrome cluster 真机回归修复
+
 - Status: ✅ 修复
 - Root cause: chrome 按钮在 release exe 上位置漂移 (Tailwind utility class 是 dead code → flex 计算异常)
 - 修复:
@@ -643,6 +690,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - 验证: `be4e12a` regression test 锁住 header chrome + modal labels 行为
 
 ### M2.15-fix-modal (173695a) — QuickSearchModal 缺可访问性
+
 - Status: ✅ 修复
 - 修复: X button 加 `aria-label` + Esc 键 hint 文字 + danger hover 样式
 - 验证: `769293e` align assertions (storage key + 2/3-value padding)
@@ -685,49 +733,58 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 ## M2.16 业务功能新增（9 个 plugin / 增强）
 
 ### F3 .sql 导入真正可用（schema 修 + UI 端到端验证）
+
 - Commit: `7beb0a5` M2.16-fix: F3 sql_parser schema 修复 — 按 app_type 分派 + 支持无列名 INSERT
 - Commit: `452ace0` M2.16-test: F3 import-sql 真机端到端 CDP 验证脚本
 - 影响: F3 解析器按 `app_type` (claude / codex / gemini / opencode) 分派到不同 schema，codex/gemini/opencode 保留 raw settings_config 字段；支持无列名 `INSERT INTO foo VALUES (...)` 语法
 
 ### F10 拖放 .sql 导入
+
 - Commit: `1f216c0` M2.16-f10: drag-drop .sql import — Tauri onDragDropEvent + overlay + reuse F20 pendingSqlFile
 - Ship: `ClaudeConfigManager-M2.16-f10-drag-drop.exe` (31.5 MB, 2026-06-21 13:31)
 - 实现: Tauri `onDragDropEvent` 监听 + 全屏 overlay 显示 + 复用 F20 的 `pendingSqlFile` 状态
 
 ### F14 导出单 provider .json
+
 - Commit: `b2ac17a` M2.16-f14: export single provider to shareable .json (Rust dialog+atomic write + provider-list export button + vitest 7)
 - Ship: `ClaudeConfigManager-M2.16-f14-export-provider.exe` (31.3 MB, 2026-06-21 11:17)
 - 设计: Rust 端用 native dialog 选路径 + atomic write（write-temp + rename），provider-list 表格加 Export 按钮
 
 ### F17 在线安装市场
+
 - Commit: `ecd547b` M2.16-F17: marketplace online install — git clone + scan + install (Rust service + 3 commands + React page + 13 vitest + 17 cargo tests)
 - Ship: `ClaudeConfigManager-M2.16-f17-marketplace.exe` (31.5 MB, 2026-06-21 13:27)
 - 实现: Rust service `MarketplaceService` + 3 Tauri commands + React MarketplacePage + 13 vitest + 17 cargo 单元测试
 - 依赖: 需要 `MacGitHost` (`98bf855`) 实现 git CLI 跨平台调用，Mac 真机才可跑
 
 ### F20 单实例 + .sql 文件关联
+
 - Commit: `4a710ae` M2.16-F20: single-instance + .sql file association → jump to import-sql page
 - Ship: `ClaudeConfigManager-M2.16-f20-single-instance.exe` (31.4 MB, 2026-06-21 13:07)
 - 实现: 单实例锁 + .sql 文件扩展名关联 + 启动时跳到 import-sql 页（带 pendingSqlFile 状态）
 
 ### F21 资源搜索（名称模糊 + 来源仓库过滤）
+
 - Commit: `f927895` M2.16-f21: resource-browser name fuzzy search filter (F9 reuse) + 7 vitest cases
 - Commit: `fcc1a02` M2.16-f21-source-repo: 按来源仓库过滤 (F21 增强, 补 f927895 gap)
 - Ship: `ClaudeConfigManager-M2.16-f21-resource-search.exe` (31.4 MB, 2026-06-21 11:47) / `ClaudeConfigManager-M2.16-f21-source-repo.exe` (31.5 MB, 2026-06-21 14:13)
 - 实现: 复用 F9 fuzzyMatch 算法（不重写）+ 按 source_repo 字段过滤
 
 ### F22 资源详情预览（最小方案 + manifest 增强）
+
 - Commit: `31426c9` M2.16-F22: resource detail preview (inline accordion panel) + vitest 9
 - Commit: `448911a` M2.16-F22-manifest: resource detail manifest + file list (backend get_resource_detail + ResourceDetail + infra + 22 cargo + 6 vitest)
 - Ship: `ClaudeConfigManager-M2.16-f22-resource-detail.exe` (31.4 MB, 2026-06-21 12:00) / `ClaudeConfigManager-M2.16-f22-manifest.exe` (31.5 MB, 2026-06-21 13:54)
 - 实现: 最小方案 = inline accordion panel (前端展开)；manifest 增强 = 后端 `get_resource_detail` command + `ResourceDetail` struct + manifest 全文 + file list + 22 cargo + 6 vitest
 
 ### F23 优化导出 markdown
+
 - Commit: `0a2daa0` M2.16-F23: export optimization findings to markdown report (backend gen + native save dialog + atomic write)
 - Ship: `ClaudeConfigManager-M2.16-f23-export.exe` (31.4 MB, 2026-06-21 11:36)
 - 实现: Rust 端 gen markdown 报告 + native save dialog + atomic write
 
 ### F24 备份 diff（M2.6 验证 ship，无新代码）
+
 - Ship: `ClaudeConfigManager-M2.16-f24-backup-diff.exe` (31.3 MB, 2026-06-21 11:32) — 验证 ship，逻辑在 M2.6 已实现
 
 ## M2.16 Mac 兼容（P0+P1+P2 全修）
@@ -748,21 +805,25 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 ## M2.16 主题/视觉重构
 
 ### 3 档主题
+
 - Commit: `2deceaa` M2.16-glass-themes: 3-way light/glass-clear/glass-tinted cycle
 - Ship: `ClaudeConfigManager-M2.16-glass-themes.exe` (31.2 MB, 2026-06-21 00:03)
 - 实现: 3 档循环 (light → glass-clear → glass-tinted → light)，ThemeProvider 暴露 `cycleTheme`
 
 ### 主题审计删冗余 JS setEffects
+
 - Commit: `865a731` M2.16-theme-fix: remove redundant JS setEffects call (Rust apply_mica is single source)
 - Ship: `ClaudeConfigManager-M2.16-theme-audit-fix.exe` (31.2 MB, 2026-06-21 07:16)
 - 修复: 删 `useEffect(() => setEffects(...))` 冗余调用，Rust `apply_mica` 是 backdrop 单一来源
 
 ### Mica 真生效
+
 - Commit: `fc1fb55` M2.16-fix: Win11 Mica 真机不透 — 改用 window-vibrancy apply_mica 直调 DWM
 - Ship: `ClaudeConfigManager-M2.16-mica-fix.exe` (31.2 MB, 2026-06-21 01:08)
 - 修复: 之前 Mica 在 WebView2 release exe 不透，改用 `tauri-plugin-window-vibrancy` 的 `apply_mica` 直接调 DWM API
 
 ### splash 2s + 动画
+
 - Commit: `4a1fdb5` M2.16-splash: inline loading screen in index.html + App.tsx fade-out + 2 vitest + CDP probe
 - Commit: `72f7b45` M2.16-splash-probe: fix label var injection + add launcher + probe report
 - Commit: `137dde1` M2.16-splash: 至少2s展示 + 呼吸脉冲/进度条/文字淡入动画
@@ -772,14 +833,17 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 ## M2.16 F15 错误反馈横切
 
 ### F15-base 共享组件
+
 - Commit: `ebdf52e` M2.16-F15-base: shared ErrorBanner component + tests
 - 设计: 抽 `src/components/ErrorBanner.tsx` 共享组件，props = `{ tone: 'error' | 'warning' | 'info', title, children, onDismiss? }`，统一样式 + aria
 
 ### F15-batch1（provider-list + backup-restore）
+
 - Commit: `d8e5728` M2.16-F15-batch1: ErrorBanner → provider-list ExportInfoBar + backup-restore InfoBar
 - 影响: provider-list 导出信息条 + backup-restore 提示条接入 ErrorBanner
 
 ### F15-batch2（marketplace + optimizer）
+
 - Commit: `5de839f` M2.16-F15-batch2: ErrorBanner → marketplace + optimizer (3 banner → shared component)
 - Ship: `ClaudeConfigManager-M2.16-F15-banner.exe` (31.5 MB, 2026-06-21 14:26) / `ClaudeConfigManager-M2.16-f15-batch2.exe` (31.5 MB, 2026-06-21 14:37)
 - 影响: marketplace 3 个 banner (clone error / install error / scan warning) + optimizer apply 反馈 → ErrorBanner
@@ -914,6 +978,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 按 §6 纪律, MEDIUM/LOW 不修, 记 STATE.md 留后续:
 
 ### MEDIUM (10) —— M2.17+ 评估
+
 - M2.16-001-M: ErrorBanner 测试覆盖 4 kind 但未测同时多个 banner
 - M2.16-002-M: F3 sql_parser 4 种 app_type (claude/codex/gemini/opencode), 未来 cc-switch 改 schema 时需更新
 - M2.16-003-M: F14 export_provider 不导 `created_at` / `last_used_at` 等运行时元数据 (产品决策, 留痕还是全量)
@@ -926,6 +991,7 @@ ccswitch://v1/import?resource=provider&app=claude&name=X&endpoint=Y&apiKey=Z&mod
 - M2.16-010-M: F23 markdown 报告 deterministic 但没暴露 sort/filter API 给用户
 
 ### LOW (7) —— 可选
+
 - M2.16-001-L: tmp/ 目录 30+ 诊断脚本未清理
 - M2.16-002-L: 部分老测试 fixture 用脱敏 token 但硬编码
 - M2.16-003-L: 文档 (docs/milestones/) 部分章节未同步 M2.16 实际进度
@@ -1272,6 +1338,7 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 ## v3.0 round 1 ship exe 状态
 
 按 M2 桌面策略（仅保留最近 2 个 ship），本轮 ship exe 在桌面保留情况：
+
 - 本轮 12 commits 中，11 个有 src 改动（commit `e2d5e06` 仅 review docs 无 src 改动） → 应 ship 11 个 exe
 - 实际 ship 状态（待主 session 抽查时核实）：M2 桌面策略继承到 v3.0
 - 抽查纪律（D8）：用户抽查建议至少 1-2 个 v3.0 round 1 关键 ship（如 `m3.12-f13-f19-backup` + `m4.3-updater-pubkey` 或 `m4.6-backup-incremental`）
@@ -1294,6 +1361,7 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 ## 完整文档落盘（v3.0 round 1 收尾动作）
 
 本节为 v3.0 round 1 收尾动作的落盘，**纯文档任务不写代码**：
+
 - `.planning/milestones/v2.0-BACKLOG.md`：A1/A2/A3/B2/B3/B5 段加 v3.0 round 1 状态标记 + §C 加 round 1 状态列
 - `.planning/MILESTONES.md`：加 v3.0 round 1 进展段
 - `.planning/STATE.md`：Current Position / Recent Work / Decisions / Known Issues 加 v3.0 round 1 段（本节为新增）
