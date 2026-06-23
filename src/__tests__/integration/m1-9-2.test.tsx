@@ -167,9 +167,15 @@ describe('M1.9.2 — window control buttons (custom chrome)', () => {
     expect(toggleMaximizeMock).toHaveBeenCalledTimes(1);
   });
 
-  it('clicking close calls getCurrentWindow().close()', () => {
+  it('clicking close opens a confirm dialog (M3.0.2) and confirming calls getCurrentWindow().close()', () => {
     renderApp();
     fireEvent.click(screen.getByTestId('app-header-close'));
+    // M3.0.2 — close now goes through a themed ConfirmDialog (CLAUDE.md §7).
+    // The dialog must appear before the OS-level close() is called.
+    const confirmBtn = screen.getByTestId('confirm-dialog-confirm');
+    expect(confirmBtn).toBeInTheDocument();
+    // Clicking the dialog's confirm button fires the real close().
+    fireEvent.click(confirmBtn);
     expect(closeMock).toHaveBeenCalledTimes(1);
   });
 
