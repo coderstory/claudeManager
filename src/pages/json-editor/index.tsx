@@ -214,8 +214,9 @@ export default function JsonEditorPage(): ReactElement {
   );
 
   // M3.11 (A4#12) — 用绝对路径加载一个文件(侧边树点击触发)。
-  // 与 handleFileChosen 共享同一份 "init PageState from content" 逻辑,
-  // 但跳过 file picker input 的 reset。
+  // 抽出来给 handleTreeSelect 复用 — 与 handleFileChosen 共享同一份
+  // "init PageState from content" 逻辑,但跳过 file picker input 的
+  // reset(Input type=file 流程才需要)。
   const loadFileByPath = useCallback(
     async (path: string): Promise<void> => {
       try {

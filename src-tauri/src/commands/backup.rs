@@ -123,6 +123,28 @@ pub async fn backup_now(
     })
 }
 
+/// M4.6.13 — delete a single backup file.
+///
+/// Moves the backup into a sibling `.trash/` dir (with a
+/// timestamped filename to avoid collisions) and then removes
+/// the trash entry. The path is validated against the allow-list
+/// (with active_root expansion) before any filesystem change;
+/// paths outside the allow-list return an error and the file is
+/// not touched. See `BackupService::delete_backup` for the full
+/// algorithm and rationale.
+///
+/// `path` is the absolute path of the backup file to delete —
+/// the frontend reads it from the `BackupEntry::path` returned
+/// by `list_backups`.
+#[tauri::command]
+pub async fn delete_backup(state: State<'_, AppState>, path: String) -> CmdResult<()> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    state
+        .backup_service
+        .delete_backup(std::path::Path::new(&path), active_root.as_deref())
+        .map_err(|e| e.to_string())
+}
+
 /// M4.6 — incremental backup (diff-based, skip no-change).
 ///
 /// Only creates a new `.bak.<ts>` snapshot when the current file
@@ -157,22 +179,4 @@ pub async fn backup_incremental(
         }),
         Err(e) => Err(e.to_string()),
     }
-}
-
-/// M4.6.13 — delete a single backup file.
-///
-/// Moves the backup into a sibling `.trash/` dir (with a
-/// timestamped filename to avoid collisions) and then removes
-/// the trash entry. The path is validated against the allow-list
-/// (with active_root expansion) before any filesystem change;
-/// paths outside the allow-list return an error and the file is
-/// not touched. See `BackupService::delete_backup` for the full
-/// algorithm and rationale.
-#[tauri::command]
-pub async fn delete_backup(state: State<'_, AppState>, path: String) -> CmdResult<()> {
-    let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .backup_service
-        .delete_backup(std::path::Path::new(&path), active_root.as_deref())
-        .map_err(|e| e.to_string())
 }

@@ -1032,7 +1032,7 @@ mod tests {
     fn scan_root_respects_depth_limit() {
         let tmp = tempfile::TempDir::new().unwrap();
         // 6 层深: a/b/c/d/e/f.json  (f 在第 6 层)
-        let deep = "a/b/c/d/e/deep.json";
+        let deep = "a/b/c/d/e/f/deep.json";
         build_test_tree(tmp.path(), &[(deep, true)]);
         // 也放一个浅的,确认浅的不被误杀。
         build_test_tree(tmp.path(), &[("shallow.json", true)]);
@@ -1117,6 +1117,7 @@ mod tests {
     fn scan_root_caps_at_max_entries() {
         let tmp = tempfile::TempDir::new().unwrap();
         let mut tree: Vec<(String, bool)> = Vec::with_capacity(250);
+        let mut tree = Vec::with_capacity(250);
         for i in 0..250 {
             tree.push((format!("f{i:04}.json"), true));
         }

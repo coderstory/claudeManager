@@ -82,6 +82,11 @@ log = "0.4"
 # 链接冲突。2.x 解绑这两个限制,API 兼容(`M::up`/`to_latest` 都不变)。
 # 详见 memory/feedback/rusqlite-migration-1.0.0-no-params-broken-with-rusqlite-0.40.md
 rusqlite = { version = "=0.40.1", features = ["bundled"] }
+# 1.x 系列(rusqlite 0.32 引用)与 =0.40.1 拉两份 rusqlite 进 dep graph,会
+# 在 `links = "sqlite3"` 阶段炸;2.0+ 解绑到 0.32+ 的版本范围,2.6.0 是最新。
+# API 兼容(`M::up`/`Migrations::new`/`to_latest` 同样可用),仅 minor 升级。
+# 1.x → 2.x 的迁移点在 internal 改用 MigrationsBuilder + 显式 feature,
+# 业务侧 1.x 代码迁到 2.x 通常是 0~1 行改动。
 rusqlite_migration = "=2.6.0"
 
 [dev-dependencies]

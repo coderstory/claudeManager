@@ -379,6 +379,10 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
   // M3.11 (A4#12) — F5 json-editor 侧边文件目录树集成测试
   // -----------------------------------------------------------------
 
+  /**
+   * 树测试的 mock:list_editable_jsons 返回固定的 entries,
+   * 让断言稳定。读 / 写路径走真实 mock。
+   */
   const TREE_ENTRIES = [
     {
       path: '/home/u/.claude/settings.json',
@@ -428,6 +432,7 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     mockInvoke.mockImplementation(async (cmd: string, args: unknown) => {
       if (cmd === 'list_editable_jsons') return TREE_ENTRIES;
       if (cmd === 'read_file') {
+        // 根据 path 返回不同内容,方便断言。
         const path = (args as { path: string }).path;
         if (path.includes('settings.json')) return '{"k":"settings"}';
         if (path.includes('a.json')) return '{"k":"a"}';
@@ -442,6 +447,7 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
       expect(screen.getAllByTestId('json-file-tree-entry').length).toBe(3);
     });
 
+    // 点 settings.json
     const entries = screen.getAllByTestId('json-file-tree-entry');
     const target = entries.find((e) => e.getAttribute('data-path') === '/home/u/.claude/settings.json')!;
     await act(async () => {
@@ -449,11 +455,13 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     });
 
     await waitFor(() => {
+      // readFile 用了绝对路径而不是 bare name
       expect(mockInvoke).toHaveBeenCalledWith(
         'read_file',
         expect.objectContaining({ path: '/home/u/.claude/settings.json' }),
       );
     });
+    // 选中态高亮
     await waitFor(() => {
       const selected = screen.getAllByTestId('json-file-tree-entry')
         .find((e) => e.getAttribute('data-selected') === 'true');
@@ -462,7 +470,7 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     });
   });
 
-  it('树集成:list_editable_jsons 错误 → 显示错误 banner', async () => {
+  it('树集成:list_editable_jsons 错误 → 显示错误 banner(不崩)', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_editable_jsons') throw new Error('扫描失败:权限拒绝');
       return null;
@@ -476,7 +484,7 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     });
   });
 
-  it('树集成:scope badge 在 toolbar 中显示', async () => {
+  it('树集成:scope badge 显示在 toolbar 中', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_editable_jsons') return TREE_ENTRIES;
       if (cmd === 'read_file') return SAMPLE_JSON;

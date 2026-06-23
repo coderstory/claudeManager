@@ -162,6 +162,42 @@ impl BackupService {
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => std::cmp::Ordering::Equal,
         });
+        // M4.6.13 — dedupe by canonical path.
+        //
+        // Background: the user reported "each backup shows twice"
+        // in production. Root cause: merging multiple scan results
+        // into a single Vec without dedup. When a user (or a sync
+        // script / hard link / cp -l) places the SAME .bak.<ts>
+        // file into both `<app_data>/backups/` and `~/.claude/`,
+        // each scan root returns it → the timeline shows it twice.
+        //
+        // Fix: walk the sorted list in order and keep only the
+        // first occurrence of each canonical path. Subsequent
+        // occurrences (same inode) are silently dropped — the user
+        // should not see the same backup file twice regardless of
+        // how many scan roots it's reachable from.
+        //
+        // We use `std::fs::canonicalize` because that's the only
+        // reliable way to detect "same file": string comparison of
+        // `BackupEntry::path` would NOT match `backups/x.bak` vs
+        // `~/.claude/x.bak` (different prefixes), but `canonicalize`
+        // follows hardlinks / symlinks to the same inode and
+        // resolves `..` traversal.
+        let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+        let before = all.len();
+        all.retain(|e| {
+            let canonical = std::fs::canonicalize(&e.path).unwrap_or_else(|_| e.path.clone());
+            seen.insert(canonical)
+        });
+        if all.len() < before {
+            eprintln!(
+                "[backup] list_backups deduped {n} duplicate entr{y} ({before} -> {after})",
+                n = before - all.len(),
+                y = if before - all.len() == 1 { "y" } else { "ies" },
+                before = before,
+                after = all.len(),
+            );
+        }
         all
     }
 
@@ -535,6 +571,8 @@ impl BackupService {
         // We pick the parent dir of the file (sibling of the
         // backup) as the trash root, then append
         // `.trash/<basename>.<nanos>` so:
+        // backup) as the trash root, then append `.trash/<basename>.<nanos>`
+        // so:
         //   - the move stays on the same volume (rename is atomic
         //     on Windows / POSIX when source and dest are on the
         //     same volume — see `std::fs::rename` docs);
@@ -560,6 +598,8 @@ impl BackupService {
 
         // Lazy-create `.trash/`. `create_dir_all` handles the
         // missing-parent case.
+        // Lazy-create `.trash/`. The create_dir_all inside the
+        // .trash dir handles the missing-parent case.
         if let Err(e) = std::fs::create_dir_all(&trash_dir) {
             return Err(BackupError::Io(e));
         }
@@ -573,9 +613,11 @@ impl BackupService {
         // drive from `~/.claude/`), rename would fail with
         // `cross-device link` on Linux or ERROR_NOT_SAME_DEVICE
         // on Windows. Fall back to copy + remove.
-        if let Err(rename_err) = std::fs::rename(&safe, &trash_path) {
+        let rename_result = std::fs::rename(&safe, &trash_path);
+        if let Err(rename_err) = rename_result {
             // Fallback: copy then remove.
             if let Err(copy_err) = std::fs::copy(&safe, &trash_path) {
+                // Both failed → return a descriptive error.
                 return Err(BackupError::Io(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!(
@@ -1221,7 +1263,7 @@ mod tests {
         );
     }
 
-    // ----- M4.6 incremental backup -----
+    // ----- M4.6 incremental backup + delete + dedupe -----
 
     /// 场景 1: 首次备份 → 等于全量 (无前备参考, 必定创建新备份)。
     #[test]
@@ -1296,5 +1338,153 @@ mod tests {
             Ok(entry) => panic!("expected NoChange but got new backup: {entry:?}"),
             Err(other) => panic!("expected NoChange but got: {other:?}"),
         }
+    }
+
+    // ----- M4.6.13 — list_backups dedupe -----
+
+    /// `list_backups` 跨多个扫描根合并时,必须按 canonical path
+    /// 去重 —— 否则用户报告的"每个备份显示 2 份"会出现。
+    ///
+    /// 模拟场景:同一个 .bak.<ts> 文件被同时放在
+    /// `<app_data>/backups/` 和 `~/.claude/` 两个允许目录里(用户
+    /// 用 `cp` 复制,或硬链接,或某些 sync 工具)。两个 scan 各返回
+    /// 一份 → 合并时必须 dedupe,只保留一条记录。
+    ///
+    /// 实现要点:
+    /// - 用硬链接(hard link)而不是 copy,因为 `canonicalize` 会
+    ///   把同一文件的不同路径折叠到同一个 canonical path。这是
+    ///   dedupe 的判别依据。
+    /// - Windows 上硬链接不需要 admin(`std::fs::hard_link` 在
+    ///   NTFS 上对同一卷内的文件 OK)。
+    #[test]
+    fn list_backups_dedupes_when_same_file_in_two_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::create_dir_all(tmp.path().join("backups")).unwrap();
+
+        let dup_name = "settings.json.bak.20260619-140000";
+        let app_data_bak = tmp.path().join("backups").join(dup_name);
+        std::fs::write(&app_data_bak, br#"{"url":"https://dup"}"#).unwrap();
+        // Hard-link so both paths canonicalize to the same inode.
+        std::fs::hard_link(&app_data_bak, claude_dir.join(dup_name)).unwrap();
+
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+        let list = svc.list_backups(None);
+
+        // 两个 dir 都扫到了同一文件 → dedupe 后应该只有 1 条。
+        assert_eq!(
+            list.len(),
+            1,
+            "duplicate canonical path must be deduped, got {} entries: {list:?}",
+            list.len()
+        );
+        assert_eq!(list[0].original_name, "settings.json");
+    }
+
+    /// Dedup 不能误伤独立文件 —— 当两个目录的文件完全不重叠时,
+    /// 必须保留所有条目 (不 over-dedupe)。
+    #[test]
+    fn list_backups_dedup_keeps_unique_entries() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (s_old, s_new, archived) = seed_backups(tmp.path(), &claude_dir);
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        let list = svc.list_backups(None);
+        // seed_backups 写 3 个独立文件到不同 dir,dedupe 后仍应见 3 条。
+        assert!(list.iter().any(|e| e.path == s_old), "s_old missing");
+        assert!(list.iter().any(|e| e.path == s_new), "s_new missing");
+        assert!(list.iter().any(|e| e.path == archived), "archived missing");
+    }
+
+    // ----- M4.6.13 — delete -----
+
+    /// Happy path:合法路径的备份被删除后,原位置不再有文件。
+    #[test]
+    fn delete_backup_removes_file_from_allowed_dir() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (_s_old, s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        assert!(s_new.exists(), "backup must exist before delete");
+        svc.delete_backup(&s_new, None).unwrap();
+        assert!(
+            !s_new.exists(),
+            "backup must be gone after delete (path: {s_new:?})"
+        );
+    }
+
+    /// Safety boundary: allow-list 之外的路径拒绝删除,且不触动文件。
+    #[test]
+    fn delete_backup_rejects_path_outside_allowed_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        let outside = tmp.path().join("not-a-backup.txt");
+        fs::write(&outside, b"hi").unwrap();
+        let err = svc
+            .delete_backup(&outside, None)
+            .expect_err("delete outside allow-list must error");
+        assert!(matches!(err, BackupError::PathNotAllowed(_)));
+        // 文件不应被删除。
+        assert!(outside.exists(), "rejected delete must not touch the file");
+    }
+
+    /// Missing file:删除不存在的备份 → NotFound。
+    #[test]
+    fn delete_backup_missing_file_errors() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (_s_old, _s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        let missing = claude_dir.join("settings.json.bak.20990101-000000");
+        let err = svc
+            .delete_backup(&missing, None)
+            .expect_err("missing file must error");
+        assert!(matches!(err, BackupError::NotFound(_)));
+    }
+
+    /// 幂等删除:第一次 Ok,第二次 NotFound。
+    #[test]
+    fn delete_backup_twice_returns_not_found_on_second() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join("claude");
+        let settings = claude_dir.join("settings.json");
+        let (_s_old, s_new, _archived) = seed_backups(tmp.path(), &claude_dir);
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        svc.delete_backup(&s_new, None).unwrap();
+        let err = svc
+            .delete_backup(&s_new, None)
+            .expect_err("second delete on the same path must error");
+        assert!(matches!(err, BackupError::NotFound(_)));
+    }
+
+    /// 路径字面上不在任何 allow-list 范围内 → PathNotAllowed。
+    /// (这里不需要 active_root,因为 allow-list 已涵盖所有扫描根。)
+    #[test]
+    fn delete_backup_rejects_path_completely_outside_allowlist() {
+        let tmp = TempDir::new().unwrap();
+        let settings = tmp.path().join("settings.json");
+        let svc = BackupService::new(test_paths(tmp.path(), &settings));
+
+        let ghost_root = tmp.path().join("ghost_root");
+        std::fs::create_dir_all(&ghost_root).unwrap();
+        let ghost_file = ghost_root.join("settings.json.bak.20990101-000000");
+        std::fs::write(&ghost_file, b"{}").unwrap();
+
+        let err = svc
+            .delete_backup(&ghost_file, None)
+            .expect_err("path outside allow-list must be rejected");
+        assert!(matches!(err, BackupError::PathNotAllowed(_)));
+        assert!(ghost_file.exists(), "rejected delete must leave file untouched");
     }
 }
