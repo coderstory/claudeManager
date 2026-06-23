@@ -22,10 +22,16 @@
  *     `/components` — those don't exist yet (the project's M2.x
  *     pages all inline their markup).
  */
-import type { ReactElement } from 'react';
-import { useState } from 'react';
+import type { ReactElement, ChangeEvent } from 'react';
+import { useState, useRef } from 'react';
 import { useProjects } from '../../hooks/useProjects';
 import type { ViewId } from '../../hooks/useViewState';
+
+/** M3.13.4 — pure-frontend path validation result. */
+interface PathValidation {
+  valid: boolean;
+  reason: string | null;
+}
 
 /**
  * Optional navigation props kept for compatibility with App.tsx's
@@ -57,6 +63,46 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
   const [newRoot, setNewRoot] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // M3.13.4 — project picker (HTML5 file input) + frontend path validation.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pathValidation, setPathValidation] = useState<PathValidation | null>(null);
+
+  const handlePickRoot = (e: ChangeEvent<HTMLInputElement>): void => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const firstFile = files[0] as File & { webkitRelativePath?: string };
+      // webkitRelativePath looks like "projects/foo" — the first segment is the
+      // picked directory name. Frontend-only picker (no Rust side change needed).
+      const dirName = firstFile.webkitRelativePath?.split('/')[0] ?? '';
+      setNewRoot(dirName);
+      handleValidateRoot();
+    }
+  };
+
+  const handleValidateRoot = (): void => {
+    const trimmed = newRoot.trim();
+    if (!trimmed) {
+      setPathValidation(null);
+      return;
+    }
+    // Pure-frontend validation — avoid new Rust command (CLAUDE.md §2.3 dep lock).
+    if (trimmed.includes('..')) {
+      setPathValidation({ valid: false, reason: '路径不能包含 ..' });
+      return;
+    }
+    if (trimmed.length < 3) {
+      setPathValidation({ valid: false, reason: '路径过短' });
+      return;
+    }
+    if (!/^[A-Za-z]:[\\/]/.test(trimmed) && !trimmed.startsWith('/')) {
+      setPathValidation({
+        valid: false,
+        reason: '必须是绝对路径（D:/... 或 /Users/...）',
+      });
+      return;
+    }
+    setPathValidation({ valid: true, reason: null });
+  };
 
   const handleSwitch = async (id: string): Promise<void> => {
     setBusy(true);
@@ -532,6 +578,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                   data-testid="new-project-root"
                   value={newRoot}
                   onChange={(e) => setNewRoot(e.target.value)}
+                  onBlur={handleValidateRoot}
                   placeholder="D:/projects/foo"
                   style={{
                     flex: 1,
@@ -542,7 +589,49 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                     fontSize: 'var(--fs-caption)',
                   }}
                 />
+                <button
+                  type="button"
+                  data-testid="pick-root-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'var(--bg-overlay)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-button)',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 'var(--fs-caption)',
+                  }}
+                >
+                  浏览…
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  data-testid="pick-root-input"
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  {...({ webkitdirectory: '', directory: '' } as any)}
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={handlePickRoot}
+                />
               </div>
+              {pathValidation && (
+                <div
+                  data-testid="path-validation-hint"
+                  style={{
+                    marginTop: 4,
+                    fontSize: 'var(--fs-caption)',
+                    color: pathValidation.valid
+                      ? 'var(--success, #388E3C)'
+                      : 'var(--danger, #D32F2F)',
+                  }}
+                >
+                  {pathValidation.valid
+                    ? '✓ 路径合法'
+                    : `✗ ${pathValidation.reason ?? '路径无效'}`}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
