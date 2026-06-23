@@ -87,6 +87,10 @@ body,
   /* --- Radius (§4.4) --- */
   --card-radius:        8px;
   --button-radius:      6px;
+  /* --- Backward-compat aliases (v3.0 主题重构: 保留旧名映射, 见 STATE.md bug fix) --- */
+  --radius-card:        var(--card-radius);
+  --radius-button:      var(--button-radius);
+  --radius-modal:       12px;
   /* 卡片描边宽度: anime 主题在 §4.8 中固定 3px, light 默认 1px */
   --card-border-width:  1px;
 
@@ -183,6 +187,10 @@ body,
   /* --- Radius (§4.4 + §4.8 — anime 大圆角 + 厚描边) --- */
   --card-radius:       20px;
   --button-radius:     14px;
+  /* --- Backward-compat aliases (v3.0 主题重构: 保留旧名映射, 见 STATE.md bug fix) --- */
+  --radius-card:       var(--card-radius);
+  --radius-button:     var(--button-radius);
+  --radius-modal:      12px;
   --card-border-width: 3px;            /* spec §4.8: anime 卡片固定 3px */
 
   /* --- Font size (§4.4) --- */
