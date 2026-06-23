@@ -20,7 +20,7 @@
  *   by the OS chrome via Tauri config (src-tauri/tauri.conf.json)
  *   — they don't render in the webview at all.
  */
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { ArrowLeft, Settings, Sun, Sparkles, type LucideIcon } from 'lucide-react';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
@@ -64,15 +64,24 @@ export function AppHeader({
 }: AppHeaderProps): ReactElement {
   const isHome = currentView === HOME_VIEW;
 
-  // v3.0 主题切换 — 循环到下一个主题
+  // v3.0 主题切换 — 循环到下一个主题, 切换时按钮旋转 360°
   const { theme, themes, setTheme } = useTheme();
   const themeIconMap: Record<string, LucideIcon> = { sun: Sun, sparkles: Sparkles };
   const ThemeIcon = themeIconMap[theme.icon] ?? Sun;
   const nextTheme = themes[(themes.findIndex((t) => t.id === theme.id) + 1) % themes.length];
   const themeToggleDisabled = themes.length <= 1;
+  // 旋转动画状态 — 400ms 后清掉 spinning class, 让 .theme-toggle.spinning
+  // (base.css) 的 @keyframes spin-once 生效一次
+  const [themeSpinning, setThemeSpinning] = useState(false);
+  const handleThemeToggle = () => {
+    setTheme(nextTheme.id);
+    setThemeSpinning(true);
+    window.setTimeout(() => setThemeSpinning(false), 400);
+  };
 
   return (
     <header
+      className="titlebar"
       data-tauri-drag-region=""
       data-testid="app-header"
       style={{
@@ -177,13 +186,18 @@ export function AppHeader({
           flexShrink: 0 keeps the chrome pinned to the right edge
           even when the left zone title is very long.
 
-          M2.16 theme-trim: 主题切换按钮已删(单档 light 无需切换)。
+          v3.0-base: outer wrapper now carries className="actions"
+          so base.css `.titlebar .actions button` + themes/anime.css
+          `[data-theme="anime"] .titlebar .actions button` can
+          layer their sizes/borders (anime uses 34x34 + 2px white
+          border + translucent white fill).
           M2.15-fix-v2: `gap-1` Tailwind class was inert (no
           Tailwind pipeline) — buttons stacked vertically and the
           cluster extended past the 48px header height. Inlined
           `display: flex` + `gap: 4px` so the chrome cluster sits
           as a tight horizontal row, matching the spec. */}
       <div
+        className="actions"
         style={{
           ...noDragStyle,
           flexShrink: 0,
@@ -194,12 +208,13 @@ export function AppHeader({
       >
         <button
           type="button"
+          className={`theme-toggle${themeSpinning ? ' spinning' : ''}`}
           data-testid="app-header-theme-toggle"
           data-app-control-hover="true"
           aria-label="切换主题"
           title={`切换到 ${nextTheme.name} 主题`}
           disabled={themeToggleDisabled}
-          onClick={() => setTheme(nextTheme.id)}
+          onClick={handleThemeToggle}
           style={{
             ...noDragStyle,
             width: 32,
@@ -255,29 +270,6 @@ export function AppHeader({
             remain visible and clickable as a backup. */}
         <WindowControls />
       </div>
-      {/* Shared hover rules for the header's chrome buttons
-          (back / settings / min / max / close).
-          Tailwind would normally supply these via
-          `hover:bg-black/5 dark:hover:bg-white/5` utility classes,
-          but the project has no Tailwind pipeline (no
-          tailwind.config.js / no PostCSS plugin in vite.config.ts)
-          so the rules were never generated. Inlining a small
-          `<style>` block here restores the cosmetic hover cue
-          without touching the build pipeline. Scoping by data-*
-          attributes prevents leakage to unrelated chrome in the
-          rest of the app. */}
-      <style>{`
-        [data-app-control-hover] {
-          transition: background-color 120ms ease, color 120ms ease;
-        }
-        [data-app-control-hover]:hover {
-          background-color: rgba(0, 0, 0, 0.05);
-        }
-        [data-app-close-hover]:hover {
-          background-color: var(--danger);
-          color: #fff;
-        }
-      `}</style>
     </header>
   );
 }

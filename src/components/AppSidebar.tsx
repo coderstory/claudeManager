@@ -131,18 +131,18 @@ export function AppSidebar({
   return (
     <nav
       data-testid="app-sidebar"
+      className="sidebar"
       aria-label="主导航"
       style={{
         // M1.9.3: width comes from --sidebar-width token (single
         // source of truth shared with <main>'s left: var(...) inset).
-        width: 'var(--sidebar-width)',
-        // flexShrink:0 so the rail never compresses to fit a
-        // narrower window; minHeight:0 lets the flex parent
-        // constrain its height so overflowY:auto actually engages
-        // when the 12 nav items exceed the viewport. The earlier
-        // height:'100%' was a no-op in the flex chain (parent
-        // wasn't a definite-height block container) and made the
-        // sidebar silently clip instead of scroll.
+        // v3.0-base: width/overflowY/height also live in
+        // src/design-system/base.css under the .sidebar rule.
+        // We still inline overflowY/minHeight/flexShrink so the
+        // M1.9.2 + M1.9.1-fix integration tests (which read
+        // getComputedStyle without injecting base.css) still see
+        // the scroll contract — base.css layers theme tweaks on
+        // top via the `.sidebar` className.
         flexShrink: 0,
         minHeight: 0,
         overflowY: 'auto',
@@ -155,7 +155,6 @@ export function AppSidebar({
         WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(180%)',
         borderRight: '1px solid var(--glass-border)',
         boxShadow: 'var(--glass-shadow)',
-        padding: '8px 0',
       }}
     >
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
