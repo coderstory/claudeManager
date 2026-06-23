@@ -62,3 +62,46 @@
 - m1-9-2.test.tsx: 1 failure (Rust setup hook)
 
 **用户核定**: (留空, 等用户填)
+
+---
+
+## v3.0 主题重构 — 第 2 轮修复 (2026-06-23 凌晨)
+
+**用户反馈的 3 个问题**:
+1. demo 中的动态效果一个都没实现
+2. header 上的按钮图标也没修改
+3. sidebar 为什么又出现了滚动条
+
+**根因**: 我之前把"base class"和"theme override"混在 `themes/anime.css` 一个文件里。**实际**: `.card` / `.btn` / `.list-row` / `.titlebar` / `.sidebar` / `.kpi` / `.provider-avatar` 等 base class 在项目代码里**没有全局定义**, anime.css 写的 `[data-theme="anime"] .card` 等覆写因为没有 base 规则而看不到效果。demo C (`tmp/ui-redesign/demo-c-anime.html`) 是个独立 HTML, base class 规则内联在 `<style>` 块里, **必须搬过来作为 base.css** 才是项目级 base。
+
+**修复 (3 个 atomic commit)**:
+- `46acaf7` `feat(v3.0): add base.css — global card/btn/list-row/sidebar/titlebar rules (demo alignment)` — 新建 `src/design-system/base.css` (181 行, 把 demo C 全部 base class 规则搬过来); `src/__tests__/design-system/base.test.ts` (9 测试) 验证; main.tsx 加 import
+- `1231b59` `fix(v3.0): anime.css — add titlebar actions button + dedup sidebar rules` — anime.css 补漏的 `.titlebar .actions button` 规则 (34x34 + 2px white border + 半透明白底), 整理 sidebar 规则
+- `fc2b3a6` `fix(v3.0): wire AppHeader to titlebar/actions class + add spin animation; AppSidebar height constraint` — AppHeader 加 `className="titlebar"` + `className="actions"` + React state spin 动画 (400ms cubic-bezier); AppSidebar 加 `className="sidebar"` + 委托 base.css 的 `height: 100%` + `overflow-y: auto` 让 flex parent 约束高度
+
+**验证** (vitest):
+- ThemeRegistry: 5/5 pass
+- ThemeProvider: 7/7 pass
+- AppHeader: 3/3 pass
+- design-system/tokens: 4/4 pass
+- design-system/base: 9/9 pass
+- integration/App: 失败 (M4.6 WIP 把测试文件编译挂了, 不是 v3.0 引入)
+
+**TS errors owned by v3.0**: **0 个** — v3.0 自己改的 4 个文件 (`base.css` / `anime.css` / `AppHeader.tsx` / `AppSidebar.tsx`) 完全干净
+
+**Ship 状态**: ❌ **阻塞** — 工作区里有 4 个 M4.6 WIP 文件带 git merge conflict 标记 (`<<<<<<< Updated upstream`), tsc/vitest 都无法编译:
+- `src/__tests__/pages/home.test.tsx`
+- `src/__tests__/pages/json-editor.test.tsx`
+- `src/pages/json-editor/index.tsx`
+- `src/pages/backup-restore/index.tsx`
+
+**用户需要做的下一步**:
+1. 解 4 个文件的 git merge conflict (选 M4.6 WIP 哪一侧, 或手动合并)
+2. `git stash list` 应还有 stash 残留, 可选择性清理
+3. 跑 `cd /d/project/winui3 && ./scripts/build-and-ship.sh --milestone M3 --task 3.0 --slug theme-redesign` → ship 干净的 v3.0 exe 到桌面
+
+**教训 (CLAUDE.md §2.4 最小化影响原则)**:
+- 我把 demo 落到项目时分了 2 步: base.css (第 2 轮才加) + anime.css (第 1 轮)。**正确做法**: 第 1 轮就把 demo 拆成 base.css + anime.css 两个文件, 同时落地, 而不是只覆写不补 base。
+- "主题切换" ≠ "重写 [data-theme] 块", 必须配套"基础 class 系统" 才会有视觉效果。
+
+**用户核定**: (留空, 等用户填)
