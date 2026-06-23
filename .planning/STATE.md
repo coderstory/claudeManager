@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3 + M4.6)
-status: ready_to_plan
-last_updated: 2026-06-22T13:10:44.334Z
-last_activity: 2026-06-22 -- Phase 18 execution started
+status: awaiting_user_review
+last_updated: 2026-06-23T12:30:00.000Z
+last_activity: 2026-06-23 -- 8/8 tasks ship (M3.13.x bug fix 4/4 + Phase 21 SQLite history 4/4) + 主 session merge conflict 收尾
 progress:
   total_phases: 10
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 15
-  percent: 0
-stopped_at: Phase 18 complete (3/3) — ready to discuss Phase 19
+  completed_plans: 19
+  percent: 100
+stopped_at: 8/8 tasks ship 完成, 等用户醒来核定 exe (M3.13.2/3/4/5 + M4.6-sqlite-history)
 ---
 
 <!--
@@ -1368,3 +1368,108 @@ D11: F15 batch3 (剩余页面) + 切流程 InfoBars 统一 → 视 D7 决策。
 - `tmp/white-list-v3.0-round1-acceptance.md`：本轮改动的 3 个文件白名单
 - `tmp/reviews/v3.0-round1-acceptance-self.md`：自审报告
 - `git commit`：v3.0 round 1 文档落盘（无 push）
+
+---
+
+# === v3.0 round 2 — M3.13.x bug 修复 + Phase 21 SQLite 历史查询（2026-06-23）===
+
+> 来源：用户返回后发现 7 个未修复 P0 bug（来自测试 M3.13.1 ship exe）+ 用户明确要求 "Phase 21 Plan A sqlite 的功能也需要开发"。本轮 8/8 任务全部 ship（4 个 M3.13.x bug fix + 4 个 Phase 21 plan）。
+
+## 任务清单与 ship 状态
+
+| # | 任务 | Commit | Ship exe | 状态 |
+|---|---|---|---|---|
+| A1 | 冷启动 splash 闪烁 + 文本替换 | `fdaaaa5` | `M3.13.2-splash-fix-and-text.exe` | ✅ |
+| A2 | 备份补全（删除 + 去重 + diff 全屏） | `ca23753` | `M3.13.3-backup-complete.exe` | ✅ |
+| A3 | 新建项目 picker + 路径校验 | `64ce18e` | `M3.13.4-project-picker-validation.exe` | ✅ |
+| A4 | JSON 编辑器侧边文件目录树 | `ce65ce8` | `M3.13.5-json-file-tree.exe` | ✅ |
+| A5 | Phase 21-A Rust 后端基础 | `3dcfd5c` | (B/C/D 统一 ship) | ✅ |
+| P21-B | Phase 21-B Tauri commands | `d4d5b65` | (同) | ✅ |
+| P21-C | Phase 21-C 前端 UI history | `d4d5b65` | (同) | ✅ |
+| P21-D | Phase 21-D 集成 + ship | `0c32758` | `M4.6-m4-6-sqlite-history.exe` | ✅ |
+| 收尾 | 主 session 修 6 文件 merge conflict + dedup | `f47f253` | (A3 v5 ship 必需) | ✅ |
+
+**8/8 全部 ship + 主 session 收尾完成**。
+
+## Phase 21 完整 ship 链
+
+```
+3dcfd5c  Plan A: Rust 后端基础 (rusqlite 0.40.1 + rusqlite_migration 2.6.0 + HistoryService + F7/F13 接入 + backfill)
+d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
+0c32758  Plan D: 集成测试 + smoke 10/10 + ship M4.6 + SUMMARY
+```
+
+**关键决策**：
+- 用户拍板 A+A+B（rusqlite + 全局 history.db + 按需启动 P3 backlog）
+- rusqlite_migration 1.0.0 与 rusqlite 0.40.1 不兼容（已记录 memory `feedback/rusqlite-migration-1.0.0-no-params-broken-with-rusqlite-0.40.md`），改用 2.6.0
+- IPC 命名冲突：`get_usage_history` → `get_usage_history_rows`（避开 F7）
+- backfill_jsonl 暂为 stub（v3.1+ 跟进）
+
+## M3.13.x 关键修复
+
+### A1 冷启动 splash 闪烁
+- **Root cause**: Tauri v2 `tauri://ready` 事件在 Win WebView2 不可靠
+- **修复**: React-first-paint + double rAF（前端 only，无 Rust 改动）
+- **效果**: 8s failsafe → 32ms React mount 触发
+
+### A2 备份补全
+- 删除: `BackupService::delete_backup`（trash + rm 原子） + UI 二次确认
+- 去重: 后端 `canonicalize` inode 去重 + 前端 `useMemo+Set` 兜底
+- diff 全屏: 100vw × 100vh overlay + ESC + active 高亮
+
+### A3 项目 picker + 路径校验（v5 收尾）
+- 极简版：HTML5 `<input type="file" webkitdirectory>` 模拟 picker（避免 npm dep lock 违反 §2.3）
+- 纯前端 regex validation（无 IPC）
+- A3 subagent 反复失败 4 次（v1 503 / v2 race / v3 文件损坏 / v4 被 kill）→ 主 session 收尾派 A3 v5
+- A3 v5 commit `64ce18e` ship 代码 + smoke 10/10
+
+### A4 JSON 文件树
+- 后端 `list_editable_jsons` 递归扫描 `~/.claude/` 用户级 + active_root 项目级
+- 严格白名单 root 列表（不扫 `~/.codex/` 等避免安全作用域泄露）
+- MAX_JSON_TREE_ENTRIES=200 + MAX_JSON_TREE_DEPTH=5 双重 cap
+- 11 vitest + 3 playwright e2e + 1 snapshot
+
+## 主 session 收尾（f47f253）
+
+**触发**：ship A3 v5 失败 → 6 个文件有 merge conflict marker（其他 subagent 引入）
+
+**修复的 6 个文件**：
+1. `src-tauri/Cargo.toml` — 1 对 marker + 1 个重复 key（rusqlite = 0.40.1 出现 2 次）
+2. `src-tauri/src/commands/backup.rs` — 1 对 marker + 重复 `delete_backup` 函数
+3. `src-tauri/src/commands/fs.rs` — 2 对 marker + 重复 `let deep` 变量
+4. `src-tauri/src/services/backup_service.rs` — 4 对 marker + 嵌套 if 链缺 close brace
+5. `src/__tests__/pages/json-editor.test.tsx` — 5 对 marker + 2 处重复 `it()` 紧挨
+6. `src/pages/json-editor/index.tsx` — 2 对 marker（注释差异）
+
+**关键 bug**：删 marker 后两个实现嵌套 + 缺 close brace → 手动 dedup。
+**最终结果**：cargo build --tests PASS，npx tsc 0 error，451/460 vitest PASS（9 个 pre-existing failure 未触碰，CLAUDE.md §2.4），smoke 10/10。
+
+## Round 2 关键经验（本 session 沉淀）
+
+1. **多 subagent 并发时 `git stash pop` 容易引入 merge conflict**：subagent A 改 A 段 + subagent B 改 B 段 → stash pop 后 A 的 B 段变成 conflict marker
+2. **删 marker 后必须 dedup 重复代码**：如果 A 侧和 B 侧有相同实现，删 marker 后会嵌套
+3. **主 session 应在 subagent 大规模并行后做 cleanup pass**：批量检查 + 修复 merge conflict + 跑测试 + ship
+4. **A3 v5 极简策略避免 §2.3 dep lock 违反**：HTML5 file input 模拟 picker（不加 tauri-plugin-dialog npm dep）
+
+## 已 ship 的 exe（桌面，`~/Desktop/ClaudeConfigManager-M3/` + `~/Desktop/ClaudeConfigManager-M4/`）
+
+- `M3.13.2-splash-fix-and-text.exe` (32.18 MB)
+- `M3.13.3-backup-complete.exe` (35 MB)
+- `M3.13.4-project-picker-validation.exe` (32+ MB)
+- `M3.13.5-json-file-tree.exe` (34.9 MB)
+- `M4.6-m4-6-sqlite-history.exe` (33.4 MB)
+- `WebView2Loader.dll` (160 KB × 各目录)
+
+## 等用户醒来核定（CLAUDE.md §9.5）
+
+- 启动各 exe 验证功能
+- 给出"完成"或"未完成：<原因>"反馈
+- 主 session 收尾后才能进下一迭代
+
+---
+
+# === v3.0 round 2 落盘（2026-06-23） ===
+
+- `.planning/STATE.md` 顶部状态更新（status: executing → awaiting_user_review）
+- 本节追加：v3.0 round 2 完整 ship 状态（8/8 + 收尾 commit）
+- `git commit`：`docs(v3.0-round2): STATE.md 落盘 - 8/8 任务 ship 完成 + 主 session 收尾`
