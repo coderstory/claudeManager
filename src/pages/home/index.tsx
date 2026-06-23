@@ -25,7 +25,9 @@
 import type { ReactElement, ChangeEvent } from 'react';
 import { useState, useRef } from 'react';
 import { useProjects } from '../../hooks/useProjects';
+import type { ProjectSummary } from '../../types/project';
 import type { ViewId } from '../../hooks/useViewState';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 /** M3.13.4 — pure-frontend path validation result. */
 interface PathValidation {
@@ -63,6 +65,10 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
   const [newRoot, setNewRoot] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // M3.0.2 — themed confirmation dialog state for the destructive
+  // "delete project" action. Stores the full row so the dialog title
+  // can show the project name without a second fetch.
+  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   // M3.13.4 — project picker (HTML5 file input) + frontend path validation.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pathValidation, setPathValidation] = useState<PathValidation | null>(null);
@@ -117,10 +123,11 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
     }
   };
 
-  const handleRemove = async (id: string, name: string): Promise<void> => {
-    if (!window.confirm(`确定要删除项目「${name}」吗？此操作不可撤销。`)) {
-      return;
-    }
+  // M3.0.2 — confirmation now goes through the themed ConfirmDialog
+  // (set by the table row's onClick → setPendingDelete). This entry
+  // point is called by the dialog's onConfirm handler, so no
+  // window.confirm() is needed here.
+  const handleRemove = async (id: string): Promise<void> => {
     setBusy(true);
     setActionError(null);
     try {
@@ -130,6 +137,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       setActionError(msg);
     } finally {
       setBusy(false);
+      setPendingDelete(null);
     }
   };
 
@@ -211,14 +219,8 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
         {/* Active project callout */}
         <section
           data-testid="active-project"
-          style={{
-            padding: 16,
-            marginBottom: 24,
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-card)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
+          className="card"
+          style={{ padding: 16, marginBottom: 24 }}
         >
           <div
             style={{
@@ -287,34 +289,21 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
+                className="btn"
                 data-testid="refresh-projects"
                 onClick={() => void reload()}
                 disabled={busy || loading}
-                style={{
-                  padding: '6px 12px',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-button)',
-                  cursor: busy || loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                }}
+                style={{ cursor: busy || loading ? 'not-allowed' : 'pointer', opacity: busy || loading ? 0.6 : 1 }}
               >
                 刷新
               </button>
               <button
                 type="button"
+                className="btn btn-primary"
                 data-testid="add-project-toggle"
                 onClick={() => setAdding((v) => !v)}
                 disabled={busy}
-                style={{
-                  padding: '6px 12px',
-                  background: 'var(--accent)',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  cursor: busy ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                }}
+                style={{ cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
               >
                 {adding ? '取消' : '+ 新增项目'}
               </button>
@@ -350,51 +339,15 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
 
           {projects.length > 0 && (
             <table
+              className="dense card"
               data-testid="project-table"
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-card)',
-                overflow: 'hidden',
-              }}
+              style={{ overflow: 'hidden' }}
             >
               <thead>
-                <tr style={{ background: 'var(--bg-overlay)' }}>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: 8,
-                      borderBottom: '1px solid var(--border)',
-                      color: 'var(--text-secondary)',
-                      fontSize: 'var(--fs-caption)',
-                    }}
-                  >
-                    项目名
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'left',
-                      padding: 8,
-                      borderBottom: '1px solid var(--border)',
-                      color: 'var(--text-secondary)',
-                      fontSize: 'var(--fs-caption)',
-                    }}
-                  >
-                    根目录
-                  </th>
-                  <th
-                    style={{
-                      textAlign: 'right',
-                      padding: 8,
-                      borderBottom: '1px solid var(--border)',
-                      color: 'var(--text-secondary)',
-                      fontSize: 'var(--fs-caption)',
-                    }}
-                  >
-                    操作
-                  </th>
+                <tr>
+                  <th>项目名</th>
+                  <th>根目录</th>
+                  <th style={{ textAlign: 'right' }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -404,18 +357,9 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                     <tr
                       key={p.id}
                       data-testid={`project-row-${p.id}`}
-                      style={{
-                        background: isActive ? 'var(--bg-overlay)' : 'transparent',
-                      }}
+                      className={isActive ? 'active' : undefined}
                     >
-                      <td
-                        style={{
-                          padding: 8,
-                          borderBottom: '1px solid var(--border)',
-                          color: 'var(--text-primary)',
-                          fontSize: 'var(--fs-body)',
-                        }}
-                      >
+                      <td>
                         {p.name}
                         {p.is_system && (
                           <span
@@ -442,56 +386,32 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                         )}
                       </td>
                       <td
-                        style={{
-                          padding: 8,
-                          borderBottom: '1px solid var(--border)',
-                          color: 'var(--text-muted)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 'var(--fs-caption)',
-                        }}
+                        className="mono"
+                        style={{ color: 'var(--text-muted)' }}
                       >
                         {p.root_dir}
                       </td>
-                      <td
-                        style={{
-                          padding: 8,
-                          borderBottom: '1px solid var(--border)',
-                          textAlign: 'right',
-                        }}
-                      >
+                      <td style={{ textAlign: 'right' }}>
                         <button
                           type="button"
+                          className="btn btn-primary"
                           data-testid={`switch-${p.id}`}
                           onClick={() => void handleSwitch(p.id)}
                           disabled={busy || isActive}
-                          style={{
-                            marginRight: 8,
-                            padding: '4px 10px',
-                            background: 'var(--accent)',
-                            color: '#FFFFFF',
-                            border: 'none',
-                            borderRadius: 'var(--radius-button)',
-                            cursor: busy || isActive ? 'not-allowed' : 'pointer',
-                            opacity: isActive ? 0.5 : 1,
-                            fontFamily: 'inherit',
-                          }}
+                          style={{ marginRight: 8, opacity: isActive ? 0.5 : 1 }}
                         >
                           {isActive ? '当前' : '切换'}
                         </button>
                         <button
                           type="button"
+                          className="btn"
                           data-testid={`remove-${p.id}`}
-                          onClick={() => void handleRemove(p.id, p.name)}
+                          onClick={() => setPendingDelete(p)}
                           disabled={busy || p.is_system}
                           title={p.is_system ? '用户级项目不可删除' : '删除此项目'}
                           style={{
-                            padding: '4px 10px',
-                            background: 'var(--bg-elevated)',
                             color: p.is_system ? 'var(--text-muted)' : 'var(--danger, #D32F2F)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-button)',
-                            cursor: busy || p.is_system ? 'not-allowed' : 'pointer',
-                            fontFamily: 'inherit',
+                            opacity: p.is_system ? 0.4 : 1,
                           }}
                         >
                           删除
@@ -677,6 +597,21 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
           </section>
         )}
       </div>
+
+      {/* M3.0.2 — destructive "delete project" confirmation. */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete ? `删除项目「${pendingDelete.name}」` : '删除项目'}
+        message="此操作不可撤销,项目配置将被永久删除。"
+        confirmLabel="删除"
+        danger
+        onConfirm={() => {
+          if (pendingDelete) {
+            void handleRemove(pendingDelete.id);
+          }
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

@@ -30,8 +30,10 @@
  *   applied in M1.9.2).
  */
 import type { ReactElement } from 'react';
+import { useState } from 'react';
 import { Maximize2, Minus, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { ConfirmDialog } from './ConfirmDialog';
 
 /**
  * noDragStyle — applied to the wrapping cluster so the Tauri
@@ -43,23 +45,10 @@ const noDragStyle = {
   WebkitAppRegion: 'no-drag',
 } as React.CSSProperties;
 
-const BUTTON_SIZE = 32;
-
-const baseButtonStyle: React.CSSProperties = {
-  width: BUTTON_SIZE,
-  height: BUTTON_SIZE,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: 'none',
-  background: 'transparent',
-  cursor: 'pointer',
-  borderRadius: 'var(--radius-button)',
-  color: 'var(--text-primary)',
-  // Match the settings button in AppHeader so the chrome row has
-  // consistent rhythm. (M2.16 theme-trim: theme-toggle 已删。)
-  transition: 'background-color 120ms ease, color 120ms ease',
-};
+// baseButtonStyle 删除 (M3.0.1 inline-fix): 改用 className="chrome-btn",
+// 样式由 base.css `.titlebar .chrome-btn` + themes/anime.css 覆写接管。
+// 之前 inline style 优先级 1000 压住 CSS class, 导致 anime 主题下
+// 最大化/最小化/关闭按钮没变圆胖白边。
 
 async function safeCall(action: () => Promise<void>): Promise<void> {
   try {
@@ -77,11 +66,11 @@ function MinimizeButton(): ReactElement {
   return (
     <button
       type="button"
+      className="chrome-btn"
       data-testid="app-header-minimize"
       data-app-control-hover="true"
       aria-label="最小化窗口"
       title="最小化"
-      style={baseButtonStyle}
       onClick={() => {
         void safeCall(() => getCurrentWindow().minimize());
       }}
@@ -95,11 +84,11 @@ function MaximizeButton(): ReactElement {
   return (
     <button
       type="button"
+      className="chrome-btn"
       data-testid="app-header-maximize"
       data-app-control-hover="true"
       aria-label="最大化窗口"
       title="最大化 / 还原"
-      style={baseButtonStyle}
       onClick={() => {
         void safeCall(() => getCurrentWindow().toggleMaximize());
       }}
@@ -110,45 +99,40 @@ function MaximizeButton(): ReactElement {
 }
 
 function CloseButton(): ReactElement {
+  // M3.0.2: close-app is the most dangerous OS-level action
+  // (CLAUDE.md §7 — destructive ops need explicit confirmation).
+  // Wraps the bare getCurrentWindow().close() in a themed ConfirmDialog
+  // so the user gets one last chance to back out.
+  const [showConfirm, setShowConfirm] = useState<boolean>(false);
   return (
-    <button
-      type="button"
-      data-testid="app-header-close"
-      aria-label="关闭窗口"
-      title="关闭"
-      // On hover the close button flips to the --danger token
-      // (Windows convention for "this will close your app").
-      // Background is also tinted so the cue is visible even on
-      // the glass header (which would otherwise bleed the icon
-      // color through at low alpha).
-      // M2.15-fix-v2: removed Tailwind hover classes
-      // (`hover:bg-[var(--danger)] hover:text-white`) — Tailwind
-      // isn't configured in this project (no tailwind.config.js),
-      // so the rules were never generated. Hover cue is now
-      // handled by a single shared <style> tag in WindowControls
-      // below (data-app-close-hover / data-app-control-hover).
-      style={baseButtonStyle}
-      data-app-close-hover="true"
-      onClick={() => {
-        // M1.11 fix (BP-4.01 / P-7): close button MUST NOT silently
-        // swallow errors. If the IPC call rejects, the user clicks
-        // close and nothing happens — they are stuck with a
-        // frozen-feeling window. Re-throw so the React error
-        // boundary (or a future toast) surfaces it.
-        // The other two buttons (min / max) keep safeCall because
-        // their failure is cosmetic — close is the only one whose
-        // failure leaves the user stuck.
-        // `Promise.resolve(...)` guards against tests that mock
-        // `close` as a non-Promise return value.
-        Promise.resolve(getCurrentWindow().close()).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('[WindowControls] close() failed:', err);
-          throw err;
-        });
-      }}
-    >
-      <X size={16} aria-hidden="true" />
-    </button>
+    <>
+      <button
+        type="button"
+        className="chrome-btn close"
+        data-testid="app-header-close"
+        aria-label="关闭窗口"
+        title="关闭"
+        data-app-close-hover="true"
+        onClick={() => setShowConfirm(true)}
+      >
+        <X size={16} aria-hidden="true" />
+      </button>
+      <ConfirmDialog
+        open={showConfirm}
+        title="关闭应用"
+        message="所有未保存的更改将丢失。确定要关闭吗?"
+        confirmLabel="关闭"
+        danger
+        onConfirm={() => {
+          setShowConfirm(false);
+          Promise.resolve(getCurrentWindow().close()).catch((err) => {
+            console.error('[WindowControls] close() failed:', err);
+            throw err;
+          });
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
+    </>
   );
 }
 
