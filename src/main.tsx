@@ -1,3 +1,4 @@
+import "./design-system/base.css";
 import "./design-system/tokens.css";
 // M2.x-inline: shared style block that provides the (no-Tailwind-pipeline)
 // :hover / :focus / @keyframes rules used by AppHeader, AppSidebar,
