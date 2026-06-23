@@ -73,24 +73,40 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
-/* ── 侧边栏 ── */
+/* ── Header actions button (anime 专属: 圆胖白边 + 半透明白底) ── */
+[data-theme="anime"] .titlebar .actions button {
+  width: 34px; height: 34px;
+  border-radius: 12px;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+[data-theme="anime"] .titlebar .actions button:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+[data-theme="anime"] .titlebar .actions button[disabled] {
+  opacity: 0.5;
+}
+
+/* ── Sidebar (anime 专属: 圆胖 + hover translateX) ── */
 [data-theme="anime"] .sidebar .nav-item {
   padding: 10px 14px;
   border-radius: 16px;
   border-left: none;
   margin: 0 8px 4px;
+  width: calc(100% - 16px);
 }
 [data-theme="anime"] .sidebar .nav-item:hover {
   background: rgba(34, 211, 238, 0.15);
   transform: translateX(2px);
 }
 [data-theme="anime"] .sidebar .nav-item.active {
+  border-left: none;
   background: var(--accent);
   color: #fff;
 }
-[data-theme="anime"] .sidebar .nav-item.active svg {
-  color: #fff;
-}
+[data-theme="anime"] .sidebar .nav-item.active svg { color: #fff; }
 
 /* ── Provider avatar ── */
 [data-theme="anime"] .provider-avatar {
