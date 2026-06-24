@@ -72,6 +72,12 @@ pub struct ComputeStats {
     pub lines_skipped_parse: u64,
     pub lines_skipped_encoding: u64,
     pub messages_after_dedup: u64,
+    /// 2026-06-24 — count of messages filtered out for being
+    /// Claude Code internal `<synthetic>` markers (non-billable
+    /// intermediate frames). 0 in normal usage; high means the
+    /// active session was emitting lots of tool-use intermediate
+    /// frames that should NOT be shown in the breakdown.
+    pub messages_after_synthetic_filter: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -370,6 +376,19 @@ fn parse_file(
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
+
+        // Skip Claude Code synthetic/system entries. These are non-billable
+        // placeholders the CLI emits for tool-call intermediate frames;
+        // showing them in the breakdown as "<synthetic>" with 0 tokens
+        // is meaningless noise to the user. Real model usage is always
+        // one of the known model IDs (e.g. "claude-sonnet-4-20250514",
+        // "MiniMax-M3", "LongCat-2.0-Preview-LongCatAI"). The "<synthetic>"
+        // sentinel is exclusively Claude Code's internal marker — verified
+        // by grep on real ~/.claude/projects/**/*.jsonl (2026-06-24).
+        if model == "<synthetic>" || model.is_empty() {
+            continue;
+        }
+        stats.messages_after_synthetic_filter += 1;
         let input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
         let output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
         let cache_read = usage
@@ -672,5 +691,83 @@ mod tests {
         let elapsed = start.elapsed();
         assert!(elapsed.as_secs() < 2, "1MB scan took {:?}", elapsed);
         assert_eq!(res.snapshot.tokens_used, 3000 * 1500);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2026-06-24 regression: Claude Code JSONL emits "<synthetic>" as a
+    // sentinel model for non-billable intermediate frames. These must be
+    // filtered out of the breakdown (they pollute the UI as "<synthetic>"
+    // rows with 0 tokens and make the model count wrong).
+    // -----------------------------------------------------------------------
+
+    fn write_line_with_model(file: &Path, model: &str, input: u64, output: u64, msg_id: &str) {
+        use std::io::Write;
+        let line = format!(
+            r#"{{"type":"assistant","message":{{"id":"{msg_id}","role":"assistant","model":"{model}","usage":{{"input_tokens":{input},"output_tokens":{output},"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}},"timestamp":"2026-06-22T10:00:00Z","sessionId":"s1","cwd":"C:\\foo"}}"#
+        );
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap();
+        writeln!(f, "{}", line).unwrap();
+    }
+
+    #[test]
+    fn filters_out_synthetic_model_entries() {
+        let tmp = TempDir::new().unwrap();
+        let projects = build_projects_layout(tmp.path());
+        let file = projects.join("synth.jsonl");
+
+        // Real model + 100 tokens
+        write_line_with_model(&file, "claude-sonnet-4-20250514", 100, 200, "m1");
+        // <synthetic> sentinel (Claude Code internal) + 0 tokens
+        write_line_with_model(&file, "<synthetic>", 0, 0, "m2");
+        // <synthetic> again (synthetic filter must drop both)
+        write_line_with_model(&file, "<synthetic>", 0, 0, "m3");
+        // Real model + 50 tokens
+        write_line_with_model(&file, "claude-sonnet-4-20250514", 50, 75, "m4");
+
+        let res = compute_usage_from_jsonl(&projects, UsageWindow::OneMonth, "test").unwrap();
+        // Only 2 real-model messages counted
+        assert_eq!(res.snapshot.model_count, 2,
+            "model_count must skip <synthetic>; got {}", res.snapshot.model_count);
+        // Tokens: only real-model entries (100+200 + 50+75 = 425)
+        assert_eq!(res.snapshot.tokens_used, 425,
+            "tokens_used must skip <synthetic> zero-token entries");
+        // Breakdown: only 1 model key (claude-sonnet-4-20250514)
+        assert_eq!(res.snapshot.breakdown.len(), 1,
+            "breakdown must not contain <synthetic> key; got {:?}", res.snapshot.breakdown);
+        assert_eq!(res.snapshot.breakdown[0].model, "claude-sonnet-4-20250514");
+    }
+
+    #[test]
+    fn filters_out_empty_model() {
+        let tmp = TempDir::new().unwrap();
+        let projects = build_projects_layout(tmp.path());
+        let file = projects.join("empty.jsonl");
+        // Empty model (CLI bug or malformed JSONL)
+        write_line_with_model(&file, "", 100, 200, "m1");
+        // Real model
+        write_line_with_model(&file, "claude-sonnet-4-20250514", 50, 75, "m2");
+
+        let res = compute_usage_from_jsonl(&projects, UsageWindow::OneMonth, "test").unwrap();
+        assert_eq!(res.snapshot.model_count, 1, "empty model must be filtered");
+        assert_eq!(res.snapshot.tokens_used, 125);
+    }
+
+    #[test]
+    fn synthetic_filter_does_not_affect_real_models() {
+        // Smoke test: only real models → no change in behavior
+        let tmp = TempDir::new().unwrap();
+        let projects = build_projects_layout(tmp.path());
+        let file = projects.join("real.jsonl");
+        write_line_with_model(&file, "claude-sonnet-4-20250514", 100, 200, "m1");
+        write_line_with_model(&file, "MiniMax-M3", 50, 75, "m2");
+        write_line_with_model(&file, "LongCat-2.0-Preview-LongCatAI", 25, 30, "m3");
+
+        let res = compute_usage_from_jsonl(&projects, UsageWindow::OneMonth, "test").unwrap();
+        assert_eq!(res.snapshot.model_count, 3);
+        assert_eq!(res.snapshot.breakdown.len(), 3);
+        let models: Vec<&str> = res.snapshot.breakdown.iter().map(|b| b.model.as_str()).collect();
+        assert!(models.contains(&"claude-sonnet-4-20250514"));
+        assert!(models.contains(&"MiniMax-M3"));
+        assert!(models.contains(&"LongCat-2.0-Preview-LongCatAI"));
     }
 }
