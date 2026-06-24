@@ -93,6 +93,11 @@ rusqlite_migration = "=2.6.0"
 tempfile = "3"
 mockall = "0.13"
 base64 = "0.22"
+# M4.6+ e2e: async test runtime for #[tokio::test] in e2e_all_ipc.rs
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# M4.6+ e2e: tauri/test feature 启用 tauri::test::mock_builder(),
+# 写真实 Tauri app + State + invoke_handler, 测试所有 50 个 IPC 命令.
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "test"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Security", "Win32_UI_Controls"] }
