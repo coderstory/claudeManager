@@ -134,30 +134,11 @@ export function AppSidebar({
       className="sidebar"
       aria-label="主导航"
       style={{
-        // M1.9.3: width comes from --sidebar-width token (single
-        // source of truth shared with <main>'s left: var(...) inset).
-        // v3.0-base: width/overflowY/height also live in
-        // src/design-system/base.css under the .sidebar rule.
-        // We still inline overflowY/minHeight/flexShrink so the
-        // M1.9.2 + M1.9.1-fix integration tests (which read
-        // getComputedStyle without injecting base.css) still see
-        // the scroll contract — base.css layers theme tweaks on
-        // top via the `.sidebar` className.
-        flexShrink: 0,
-        minHeight: 0,
-        overflowY: 'auto',
-        // M1.9.2 liquid glass: same token family as AppHeader so
-        // the rail visually belongs to the same layer. The right
-        // border is glass (translucent) rather than the opaque
-        // --border so the divider picks up the backdrop tint.
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(var(--blur-md)) saturate(180%)',
-        WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(180%)',
-        borderRight: '1px solid var(--glass-border)',
-        boxShadow: 'var(--glass-shadow)',
-      }}
+        // macOS vibrancy sidebar: 让 backdrop-filter 生效
+        WebkitAppRegion: 'drag',
+      } as React.CSSProperties}
     >
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+      <ul>
         {ALL_VIEWS.map((view) => {
           const meta = VIEW_META[view];
           const isActive = currentView === view;
@@ -169,41 +150,16 @@ export function AppSidebar({
                 data-testid={`sidebar-item-${view}`}
                 aria-current={isActive ? 'page' : undefined}
                 data-app-sidebar-hover="true"
+                className={isActive ? 'nav-item active' : 'nav-item'}
                 style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderLeft: isActive
-                      ? '2px solid var(--accent)'
-                      : '2px solid transparent',
-                    background: isActive
-                      ? 'var(--bg-overlay)'
-                      : 'transparent',
-                    color: isActive
-                      ? 'var(--accent)'
-                      : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontSize: 'var(--fs-body)',
-                    textAlign: 'left',
-                    // hover transition lives in src/design-system/utilities.css
-                    // under [data-app-sidebar-hover] — see M2.x-inline.
-                    flexShrink: 0,
-                  }}
+                  // macOS sidebar nav item: 单独 no-drag, 不被父 drag 吞 click
+                  WebkitAppRegion: 'no-drag',
+                } as React.CSSProperties}
               >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                  }}
-                >
+                <span className="nav-item-icon">
                   {meta.icon}
                 </span>
-                <span style={{ flex: '1 1 auto', minWidth: 0 }}>{meta.short}</span>
+                <span className="nav-item-label">{meta.short}</span>
               </button>
             </li>
           );
@@ -214,12 +170,11 @@ export function AppSidebar({
           screenshots. Stays inside the sidebar so it doesn't compete
           with the page header. */}
       <div
+        className="sidebar-footer"
         style={{
-          marginTop: 16,
-          padding: '8px 16px',
-          fontSize: 'var(--fs-caption)',
-          color: 'var(--text-muted)',
-        }}
+          // macOS: footer 不该 drag
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}
       >
         <Package
           size={12}

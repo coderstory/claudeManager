@@ -178,6 +178,27 @@ trait IPlugin {
 4. **业务流程分析**：逐步骤推演完整生命周期，找断点
 5. **修复 + 文档**：修所有 CRITICAL/HIGH，剩余写 STATE.md 已知限制
 
+### 6.4 UI 文案改动 → 必须同步的 3 处 (M3.0.3 lesson)
+前端任何"显示文案"改动（如产品名 / URL / 版本号）必须**同时改 3 处**，否则 build 通过但 UI 不变：
+1. **前端字符串**（如 `src/pages/about/index.tsx` 里的 `const PROJECT_HOMEPAGE`）
+2. **Rust IPC 常量**（如 `src-tauri/src/commands/app.rs::PRODUCT_NAME`）— IPC 返回的字段会渲染到 UI
+3. **测试 fixture**（如 `src/__tests__/pages/about.test.tsx` 里的 `sampleMetadata` mock）
+
+**反事故**：本会话改 `ClaudeConfigManager` → `ClaudeManager` 反复 5 轮才改全（漏 Rust IPC 常量 / 漏测试 fixture），每次 ship smoke test 通过但 UI 不变——smoke test 不检测 UI 文本内容，只检测进程/窗口/dist 指纹，**"看起来 OK"和"实际生效"是两件事**。
+
+### 6.5 显示名 vs 系统标识分层 (M3.0.3 lesson)
+`ClaudeConfigManager` 这串字符在项目里同时出现在 4 个语义不同的位置，改"显示名"时**只改显示层**：
+
+| 位置 | 性质 | 改不改 |
+|---|---|---|
+| `tauri.conf.json` `productName` | **显示**（exe 文件名 / 任务栏 / Dock）| ✅ 改 |
+| `src-tauri/src/commands/app.rs` `const PRODUCT_NAME` | **IPC 显示**（→ 关于页"应用名"字段）| ✅ 改 |
+| `src-tauri/src/commands/app.rs` `const IDENTIFIER` / `DISPLAY_IDENTIFIER` | **bundle id 系统层**（macOS bundle / Windows installer / 注册表 / mutex 名 / AppData 路径）| ❌ 不动 bundle id；如果一定要让关于页显示新 identifier，新增 `DISPLAY_IDENTIFIER` 独立常量 |
+| `src-tauri/Cargo.toml` `[package].name` | **Rust crate 名**（影响 `use claude_config_manager::*` 全 Rust 代码 + Cargo.lock）| ❌ 不动 |
+| `package.json` `name` | **npm 包名** | ❌ 不动 |
+
+**规则**：用户说"修改显示名"时，**Rust 端的 `const PRODUCT_NAME` 算显示文案不算代码名**（IPC 显示用）；但 `const IDENTIFIER` 是 bundle id 算系统层 → 用新 `DISPLAY_IDENTIFIER` 显示 + 保留 `IDENTIFIER` 不动。
+
 ## 7. 内存/状态纪律
 
 - 任何配置 / 状态变更必须可回滚（备份 → 原子 rename）
@@ -301,6 +322,103 @@ subagent 生成 exe 后必须跑 4 项验证，全部通过才 cp：
 主 session 的决策分为两类：
 - **必须问用户**：技术栈选型 / 架构重大分歧 / 是否进入下一迭代 / SPEC 冲突解决 / 大范围返工
 - **可自主决定**：单文件命名 / 单函数签名 / 局部重构 / 单条命令 / 单元测试细节
+
+### 11.7 用户核定未到 → 不派 ship 类 subagent (M3.0.3 lesson)
+§9.5 要求"未经核定不能进下一迭代"。主 session 必须 enforce：
+- 收到 ship subagent 完成回报后 → **不要立即派下一个 build/ship/dist-touching subagent**
+- 等用户明确 "完成" 或 "未完成：<原因>" 后再决定下一步
+- 即使是"修复已知 bug"也属于下一迭代（如本会话 M3.0.3 → M3.0.3-fix-v2）
+
+**反事故**：本会话主 session 在 M3.0.3 未核定时就派了 M3.0.3-fix-v2 build subagent，违反了 §9.5 精神。
+
+## 12. 编译性能 (M3.0.3 调研产出，2026-06-24)
+
+### 12.1 当前基线
+- `cargo build --release`: ~3m30s (Tauri v2 + 30+ Rust crate + windows-gnu toolchain 是瓶颈)
+- `vite build`: ~4s (TSC check + Vite bundle)
+- `cp + smoke test`: ~5s
+- **合计: ~3m40s**
+- 调研报告: `tmp/build-perf-investigation.md`
+
+### 12.2 加速方案 A — sccache (推荐，已实施)
+**原理**：rustc-wrapper 把每次 cargo 编译的 .rlib 输出 hash 到磁盘缓存，重复 crate 链直接命中。
+
+**步骤**：
+```bash
+cargo install sccache --locked
+# ~/.cargo/config.toml 追加（用户级，不污染项目）
+cat >> ~/.cargo/config.toml << 'EOF'
+
+[build]
+rustc-wrapper = "sccache"
+EOF
+```
+
+**预期收益**：
+- 首次 build (cold cache)：不变（需预热）
+- 二次起 build (warm cache)：**-50~70%**（3m30s → 90-120s）
+- 改 1-2 行 Rust 后的增量 build：**-80%+**（只重编译变更 crate + 下游）
+
+**回滚**（30 秒回原状）：
+```bash
+# 编辑 ~/.cargo/config.toml，注释 [build] 块，或设 RUSTC_WRAPPER=""
+RUSTC_WRAPPER="" cargo build --release
+```
+
+**风险**：低（用户级配置，零项目污染；Windows 兼容 sccache 0.7+）。
+
+### 12.3 加速方案 B — lld linker (中期评估中，未实施)
+**原理**：用 lld 替换默认 link.exe，跳过 MSVC 链接器瓶颈。
+**收益**：link 阶段再砍 50~70%。
+**成本**：装 LLVM ~300MB + 改 `.cargo/config.toml`（项目级，需用户白名单）。
+**状态**：本会话调研完成，未实施；待评估。
+
+### 12.4 加速禁忌
+- ❌ **不要 cargo profile 调优**（`Cargo.toml` `[profile.release]` 改 codegen-units / LTO）— 违反 §2.3 版本锁纪律精神，且收益小
+- ❌ **不要在 ship 流程切 dev build** — 违反 §9.3，dev build 有 conhost 黑窗（M1.1 时代 user 已反馈）
+- ❌ **不要并行跑 cargo build** — webview2-com 静态链接 + 进程内 mutex 锁会冲突，cargo 自带 -j 调度足够
+- ❌ **不要用 cargo-zigbuild / cross** — 本项目不是交叉编译场景，徒增工具链复杂度
+
+## 13. Build Pipeline Regression Classes (smoke test 10 项的 why)
+
+### 13.1 4 项 → 10 项的演进 (M1.3 lesson)
+**原 4 项 smoke test**（进程运行 / 主窗口 / 托盘 / kill 干净）能通过但**实际页面是空白**：
+- M1.3 era：用户报告 exe 启动后白屏 / ERR_CONNECTION_REFUSED，smoke test 仍 PASS
+- **根因**：`cargo build --release` 没加 `--features tauri/custom-protocol`，`tauri::generate_context!()` 退化为 `EmbeddedAssets::default()`，webview 加载 vite dev server (1420 端口) → dev server 没起 → ERR_CONNECTION_REFUSED
+
+**修复 + 扩展**：
+1. `cargo build --release --features tauri/custom-protocol` (M1.3-fix-v2)
+2. M2.17-C3 切到 `tauri build --no-bundle`（自动跑 beforeBuildCommand = `npm run build` + 自动 enable custom-protocol，根除 stale-dist / dist-not-embedded 失败模式）
+3. smoke test 从 4 项扩到 **10 项**，覆盖 4 类 build regression：
+   - launch / window / webview / title (进程 + UI 可达)
+   - **assets** (dist fingerprint grep PE) — 抓 stale dist
+   - **db_exists / schema / queryable** (SQLite 状态) — 抓迁移失败
+   - tray / kill (生命周期)
+
+**反事故**：smoke test PASS ≠ exe 可用。任何 ship 前 subagent 必须跑完 10 项。
+
+### 13.2 手工 cargo build 时的隐藏陷阱
+如果你手动跑 `cargo build --release`（不通过 `tauri build`）：
+- 必须加 `--features tauri/custom-protocol`，否则 dist 不嵌入 PE，webview 加载 vite dev server → ERR_CONNECTION_REFUSED
+- 不要 `cargo build --release -p claude-config-manager` 单包编译 — Tauri build.rs 需要 workspace 信息，单包编译会 break
+
+**正确做法**：本项目所有 release build 都走 `scripts/build-and-ship.sh`（内部 `tauri build --no-bundle`），不直接 cargo build。
+
+## 14. Subagent 行为禁区 (M3.0.3 sccache subagent 违反案例)
+
+### 14.1 禁止擅自 commit / push / tag / 改全局配置
+subagent 完成任务后**不得**：
+- ❌ `git add` + `git commit`（即使只是 `tmp/` 下的报告文件）
+- ❌ `git push` / `git tag` / `git branch`
+- ❌ 改 `~/.cargo/config.toml` / `~/.bashrc` / 任何用户级配置（即使是"加速"用途）
+- ❌ 装全局工具 `cargo install xxx` / `npm install -g xxx`
+
+**正确流程**：subagent 完成 → 回报主 session → 主 session 列白名单 → 用户确认 → 主 session 自己 commit / 自己改全局配置，**或**显式批准 subagent 执行并指定精确命令。
+
+**反事故**：本会话 sccache subagent 自行 `git add tmp/sccache-install-verify.md && git commit`（commit `645680b`）— 违反本条。回滚命令：`git reset --soft HEAD~1`（保留工作区）或 `git reset --hard HEAD~1`（彻底回滚）。
+
+### 14.2 用户核定未到 → 不派 ship 类 subagent
+见 §11.7。ship 类 subagent 定义：任何会修改 `dist/` / `target/release/` / 桌面 exe / `Cargo.lock` / `package-lock.json` 的 subagent。
 
 ---
 

@@ -49,7 +49,7 @@ const INITIAL_STATE: PageState = {
 // ---------------------------------------------------------------------------
 
 const LICENSE_TYPE = 'MIT';
-const PROJECT_HOMEPAGE = 'github.com/e-Yunfei.Qian/claude-config-manager';
+const PROJECT_HOMEPAGE = 'github.com/coderstory/claude-config-manager';
 
 const CREDITS: ReadonlyArray<{ label: string; value: string }> = [
   {
@@ -74,10 +74,6 @@ const STACK: ReadonlyArray<{ label: string; value: string }> = [
   {
     label: '后端',
     value: 'Rust + Tauri v2',
-  },
-  {
-    label: '设计',
-    value: '瓷白磨砂玻璃 (M2.16)',
   },
 ];
 

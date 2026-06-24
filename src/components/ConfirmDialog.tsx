@@ -46,6 +46,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { X } from 'lucide-react';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -147,7 +148,10 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement | null {
 
   if (!open) return null;
 
-  const confirmClass = danger ? 'btn btn-danger' : 'btn btn-primary';
+  /* v3.0 redesign: 取消用 .btn-modal-cancel (浅色底), 确认用 .btn-modal-confirm (深色 solid).
+   * danger 模式下 confirm 保持深色不变 (警告信号由 .modal-header 左侧竖条承担, data-danger 控制). */
+  const cancelClass = 'btn-modal-cancel';
+  const confirmClass = 'btn-modal-confirm';
 
   return (
     <div
@@ -161,10 +165,23 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement | null {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleIdRef.current}
+        data-danger={danger ? 'true' : 'false'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header" id={titleIdRef.current}>
-          {title}
+          <h2 className="modal-title">{title}</h2>
+          {dismissable && (
+            <button
+              type="button"
+              className="modal-close-btn"
+              data-testid="confirm-dialog-close"
+              aria-label="关闭弹窗"
+              title="关闭"
+              onClick={onCancel}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <div className="modal-body">
           {typeof message === 'string' ? <p style={{ margin: 0 }}>{message}</p> : message}
@@ -172,7 +189,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement | null {
         <div className="modal-footer">
           <button
             type="button"
-            className="btn btn-ghost"
+            className={cancelClass}
             data-testid="confirm-dialog-cancel"
             onClick={onCancel}
           >

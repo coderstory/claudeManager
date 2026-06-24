@@ -86,26 +86,12 @@ export function AppHeader({
       data-testid="app-header"
       style={{
         ...dragRegionStyle,
-        // M1.9.3: read the height from the --header-height token so
-        // <main> in App.tsx can inset from the same source of truth.
-        // Previously hardcoded to 48 here and a separate 48 reference
-        // in App.tsx, which is a CLAUDE.md §4 violation (token
-        // discipline: dimensions in tokens.css only).
+        // 高度 + 布局: 留 inline; 背景/阴影/边框走 base.css + anime.css
         height: 'var(--header-height)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 16px',
-        // M1.9.2 liquid glass: translucent surface + backdrop blur
-        // so the native Mica (Win11) / vibrancy (macOS) backdrop
-        // shows through the header. The Webkit prefix is required
-        // for Safari (macOS WKWebView) and the bare property
-        // covers Chromium (WebView2 / Win11).
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(var(--blur-md)) saturate(180%)',
-        WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(180%)',
-        borderBottom: '1px solid var(--glass-border)',
-        boxShadow: 'var(--glass-shadow)',
         flexShrink: 0,
       }}
     >
@@ -126,50 +112,24 @@ export function AppHeader({
           past the 48px header height (theme at y=-40.4, close at
           y=55.6). Fix: inline the structural rules on the same
           element so they don't depend on Tailwind being present. */}
-      <div
-        style={{
-          minWidth: 0,
-          flex: '1 1 auto',
-          maxWidth: 'calc(100% - 280px)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
+      <div className="titlebar-title">
         {!isHome && (
           <button
             type="button"
+            className="back-btn"
             onClick={() => onNavigate(HOME_VIEW)}
             data-testid="app-header-back"
             data-app-control-hover="true"
             aria-label="返回主页"
             title="返回主页"
-            style={{
-              ...noDragStyle,
-              width: 32,
-              height: 32,
-              borderRadius: 'var(--radius-button)',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-primary)',
-              transition: 'background-color 120ms ease',
-            }}
+            style={noDragStyle}
           >
-            <ArrowLeft size={16} style={{ color: 'var(--text-primary)' }} />
+            <ArrowLeft size={16} />
           </button>
         )}
         <h1
           style={{
-            color: 'var(--text-primary)',
-            fontSize: 'var(--fs-heading)',
-            fontWeight: 600,
-            // truncate equivalent: nowrap + overflow hidden + ellipsis.
-            // Was `className="font-semibold truncate"` which relied
-            // on Tailwind — not generated, see M2.15-fix-v2 note.
+            // truncate: nowrap + overflow hidden + ellipsis
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -217,21 +177,11 @@ export function AppHeader({
           onClick={handleThemeToggle}
           style={{
             ...noDragStyle,
-            width: 32,
-            height: 32,
-            borderRadius: 'var(--radius-button)',
-            border: '1px solid var(--border)',
-            background: 'transparent',
             cursor: themeToggleDisabled ? 'not-allowed' : 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-primary)',
-            transition: 'background-color 120ms ease',
             opacity: themeToggleDisabled ? 0.4 : 1,
           }}
         >
-          <ThemeIcon size={16} style={{ color: 'var(--text-primary)' }} />
+          <ThemeIcon size={16} />
         </button>
         <button
           type="button"
@@ -240,27 +190,11 @@ export function AppHeader({
           aria-label="设置"
           title="设置（前往关于页查看应用信息）"
           onClick={() => {
-            // M3.2 polish — wire the settings entry to navigate to
-            // the closest available view (about) until a dedicated
-            // settings page ships. M3.7 ship-status shows no
-            // settings plugin is in the registry yet.
             onNavigate('about');
           }}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 'var(--radius-button)',
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-primary)',
-            transition: 'background-color 120ms ease',
-          }}
+          style={noDragStyle}
         >
-          <Settings size={16} style={{ color: 'var(--text-primary)' }} />
+          <Settings size={16} />
         </button>
         {/* Custom chrome (M1.9.2): OS native title bar is off
             (decorations:false + titleBarStyle:Overlay in

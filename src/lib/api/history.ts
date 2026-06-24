@@ -35,8 +35,15 @@ export function getUsageHistory(
   // Omit `filter` arg entirely when undefined so the backend can
   // pick its own default. Mirrors the pattern in
   // `src/lib/api/backup.ts::backupNow`.
+  //
+  // v3.0 (M4.6 history fix): route to the SQLite-backed
+  // `get_usage_history_rows` command (commands/history.rs), not the
+  // older `get_usage_history` in commands/usage.rs which expects a
+  // `window: String` for the cached JSONL re-scan path. Calling the
+  // old command with `{ filter }` triggers Tauri's arg-validation
+  // error: "command get_usage_history missing required key window".
   const args = filter === undefined ? {} : { filter };
-  return invoke<UsageHistoryRow[]>('get_usage_history', args);
+  return invoke<UsageHistoryRow[]>('get_usage_history_rows', args);
 }
 
 /**

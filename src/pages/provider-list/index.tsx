@@ -406,73 +406,18 @@ function ProviderRow({
       data-testid={`provider-row-${provider.id}`}
       data-active={isActive ? 'true' : 'false'}
       className={`list-row${isActive ? ' active' : ''}`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-3)',
-        padding: 'var(--space-3) var(--space-4)',
-        marginBottom: 'var(--space-2)',
-        background: isActive ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-        border: 'var(--card-border-width) solid var(--border)',
-        borderColor: isActive ? 'var(--accent)' : 'var(--border)',
-        borderRadius: 'var(--radius-card)',
-        boxShadow: 'var(--shadow-sm)',
-      }}
     >
-      <div className="provider-avatar" style={{ flexShrink: 0 }}>
-        {provider.name.slice(0, 2).toUpperCase()}
-      </div>
-      <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            marginBottom: 4,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 'var(--fs-body)',
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-            }}
-          >
-            {provider.name}
-          </span>
-          <span className="badge badge-type" style={{ flexShrink: 0 }}>
-            {provider.provider_type}
-          </span>
+      <div className="provider-avatar">{provider.name.slice(0, 2).toUpperCase()}</div>
+      <div className="list-row-content">
+        <div className="list-row-header">
+          <span className="name">{provider.name}</span>
+          <span className="badge badge-type">{provider.provider_type}</span>
           {provider.models.length > 0 && (
-            <span
-              style={{
-                fontSize: 'var(--fs-caption)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              · {provider.models.length} 个模型
-            </span>
+            <span className="meta">· {provider.models.length} 个模型</span>
           )}
         </div>
-        <div
-          style={{
-            fontFamily: 'monospace',
-            fontSize: 'var(--fs-caption)',
-            color: 'var(--text-secondary)',
-            wordBreak: 'break-all',
-          }}
-        >
-          {provider.api_base}
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--fs-caption)',
-            color: 'var(--text-muted)',
-            marginTop: 2,
-          }}
-        >
-          {lastUsedLabel(provider)}
-        </div>
+        <div className="mono api-base">{provider.api_base}</div>
+        <div className="last-used">{lastUsedLabel(provider)}</div>
       </div>
       {/* §4.8.4: 行级状态指示器(badge) + 行级操作按钮(导出/激活)
           必须在同一 flex 层级, 让 .list-row 的 align-items: center 统一对齐。 */}
@@ -487,34 +432,23 @@ function ProviderRow({
       )}
       <button
         type="button"
+        className="btn"
         data-testid={`provider-export-${provider.id}`}
         disabled={exporting}
         onClick={() => onExport(provider)}
         title="导出为 .json 分享"
-        style={{
-          ...btnStyle,
-          opacity: exporting ? 0.6 : 1,
-          cursor: exporting ? 'not-allowed' : 'pointer',
-          flexShrink: 0,
-        }}
+        style={{ opacity: exporting ? 0.6 : 1 }}
       >
         {exporting ? '导出中…' : '导出'}
       </button>
       {!isActive && (
         <button
           type="button"
+          className="btn btn-primary"
           data-testid={`provider-activate-${provider.id}`}
           disabled={switching}
           onClick={() => onActivate(provider.id)}
-          style={{
-            ...btnStyle,
-            background: switching ? 'var(--bg-overlay)' : 'var(--accent)',
-            color: switching ? 'var(--text-muted)' : '#fff',
-            border: 'none',
-            fontWeight: 600,
-            minWidth: 80,
-            flexShrink: 0,
-          }}
+          style={{ minWidth: 80, opacity: switching ? 0.6 : 1 }}
         >
           {switching ? '切换中…' : '激活'}
         </button>

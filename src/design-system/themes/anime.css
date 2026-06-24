@@ -165,13 +165,52 @@
 
 /* ── 弹窗 (anime 专属: 圆胖 + 薄荷边 + bounceIn 入场) ── */
 /* overlay 用 base.css 的 fadeIn 120ms; 这里只让 .modal 自己 bounceIn. 两者并存 */
+/* anime 主题用 bounceIn 320ms (比 light 主题 modalSlideDown 240ms 更慢更弹, 表达轻快氛围) */
 [data-theme="anime"] .modal {
   border-width: var(--card-border-width);
-  border-radius: calc(var(--card-radius) + 4px);
+  border-radius: calc(var(--card-radius) + 4px);  /* 24px 圆胖 (anime card-radius = 20px) */
+  border-color: #99F6E4;                          /* 薄荷边 */
   box-shadow: var(--shadow-md);
-  border-color: #99F6E4;
-  animation: bounceIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: bounceIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-[data-theme="anime"] .modal-footer {
-  border-top-color: var(--border-soft);
+/* 注: 新弹窗设计删了 .modal-footer 的 border-top, 因此旧的 [data-theme="anime"] .modal-footer
+   覆写不再需要, 已在 v3.0 redesign 移除. */
+
+/* === 弹窗 v2: anime 主题覆写 (light 主题值在 base.css 写死, anime 主题这里覆写) ===
+ * 全部用直接值, 不引用 var(--modal-*) — WebView2 不解析嵌套 var().
+ *
+ * 注意: 不要用合并选择器 (`[data-theme=anime] .modal, .modal-header, ... { background: ... }`),
+ * vite/esbuild 在合并多个 css 文件的相同选择器时会丢属性 (background 被优化掉).
+ * 必须拆成 4 条独立规则, 避免 vite 合并 bug. */
+[data-theme="anime"] .modal { background: #F0FDFA; }                   /* 薄荷底 (anime 主题 bg-primary) */
+[data-theme="anime"] .modal-header { background: #F0FDFA; }           /* 薄荷底 */
+[data-theme="anime"] .modal-body { background: #F0FDFA; }             /* 薄荷底 */
+[data-theme="anime"] .modal-footer { background: #F0FDFA; }           /* 薄荷底 */
+[data-theme="anime"] .modal-header { border-left-color: #06B6D4; }     /* 青色 accent 竖条 (普通) */
+[data-theme="anime"] .modal[data-danger="true"] .modal-header { border-left-color: #FB7185; }  /* 粉红 danger 竖条 */
+/* v3.0 confirm dialog buttons — 深蓝 (#1E3A8A) 统一色相 */
+[data-theme="anime"] .modal-close-btn {
+  background: transparent;
+  color: #1E3A8A;                       /* 深蓝字 */
+  border: 1px solid #1E3A8A;            /* 深蓝边 */
 }
+[data-theme="anime"] .modal-close-btn:hover {
+  background: rgba(30, 58, 138, 0.10);   /* 深蓝 10% hover 底 */
+  color: #1E3A8A;
+}
+[data-theme="anime"] .btn-modal-cancel {
+  background: #FFFFFF;                  /* 白底 + 深蓝边/字 (outline 风格) */
+  color: #1E3A8A;                       /* 深蓝字 */
+  border: 1px solid #1E3A8A;            /* 深蓝边 */
+  min-width: 80px;                      /* 与 .btn-modal-confirm 同宽, 视觉对齐 */
+}
+[data-theme="anime"] .btn-modal-cancel:hover {
+  background: rgba(30, 58, 138, 0.08);  /* 深蓝 8% hover 底 */
+  border-color: #1E3A8A;
+}
+[data-theme="anime"] .btn-modal-confirm {
+  background: #1E3A8A;                  /* 深蓝 solid */
+  color: #FFFFFF;
+  border: 1px solid #1E3A8A;            /* 深蓝边 */
+}
+[data-theme="anime"] .btn-modal-confirm:hover { filter: brightness(1.15); }

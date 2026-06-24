@@ -43,11 +43,22 @@ type CmdResult<T> = Result<T, String>;
 
 /// Mirror of `tauri.conf.json` `productName`. Kept in sync manually;
 /// see module docstring.
-const PRODUCT_NAME: &str = "ClaudeConfigManager";
+const PRODUCT_NAME: &str = "ClaudeManager";
 
 /// Mirror of `tauri.conf.json` `identifier`. Kept in sync manually;
 /// see module docstring.
+///
+/// NOTE: bundle identifier (used for macOS bundle id / Windows
+/// installer) stays as `IDENTIFIER` (= `com.claudeconfigmanager.app`).
+/// `DISPLAY_IDENTIFIER` is a separate constant returned by the
+/// IPC to the About page so the displayed name matches the
+/// rebrand without touching the system-level bundle id.
 const IDENTIFIER: &str = "com.claudeconfigmanager.app";
+
+/// Display-only identifier shown on the About page. Independent
+/// of `IDENTIFIER` (the bundle id) — changing this has no effect
+/// on the OS / installer / registry.
+const DISPLAY_IDENTIFIER: &str = "com.claudemanager.app";
 
 /// Snapshot of "which app is running" — version, build provenance,
 /// target triple. Returned to the frontend by `get_app_metadata`.
@@ -60,9 +71,11 @@ const IDENTIFIER: &str = "com.claudeconfigmanager.app";
 pub struct AppMetadata {
     /// CARGO_PKG_VERSION (semver from Cargo.toml).
     pub version: String,
-    /// Bundle identifier, e.g. "com.claudeconfigmanager.app".
+    /// Display identifier, e.g. "com.claudemanager.app". Independent
+    /// of the system bundle id (which stays "com.claudeconfigmanager.app"
+    /// for OS / installer compatibility).
     pub identifier: String,
-    /// Product name, e.g. "ClaudeConfigManager".
+    /// Product name, e.g. "ClaudeManager".
     pub product_name: String,
     /// Short git SHA of HEAD at build time, or "unknown".
     pub git_commit: String,
@@ -87,7 +100,7 @@ impl AppMetadata {
         );
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
-            identifier: IDENTIFIER.to_string(),
+            identifier: DISPLAY_IDENTIFIER.to_string(),
             product_name: PRODUCT_NAME.to_string(),
             git_commit,
             build_target,
@@ -140,16 +153,20 @@ mod tests {
     }
 
     #[test]
-    fn identifier_mirrors_tauri_conf() {
-        // If you change `tauri.conf.json` `identifier`, update the
-        // const at the top of this module too. This test is the
-        // canary.
-        assert_eq!(AppMetadata::current().identifier, "com.claudeconfigmanager.app");
+    fn identifier_returns_display_value_for_about_page() {
+        // DISPLAY_IDENTIFIER is the value returned by IPC to the
+        // About page — independent of the system bundle id
+        // (`IDENTIFIER` = "com.claudeconfigmanager.app"), which
+        // stays unchanged for OS / installer compatibility.
+        assert_eq!(
+            AppMetadata::current().identifier,
+            "com.claudemanager.app"
+        );
     }
 
     #[test]
     fn product_name_mirrors_tauri_conf() {
-        assert_eq!(AppMetadata::current().product_name, "ClaudeConfigManager");
+        assert_eq!(AppMetadata::current().product_name, "ClaudeManager");
     }
 
     #[test]

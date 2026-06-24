@@ -368,13 +368,20 @@ export default function App(): ReactElement {
       }, 300);
     };
 
-    // Primary path: React has just mounted and committed. Wait one
-    // animation frame so the React tree is on screen, THEN hide the
-    // splash. The 300ms CSS opacity transition overlaps with React's
-    // own .view-transition fadeIn (also ~300ms) so the handoff is
-    // visually continuous — no flash, no gap.
+    // Primary path: React has just mounted and committed. We enforce
+    // a MIN_SPLASH_MS floor (1.2s) so the splash is actually visible
+    // — on fast machines React mount + 1st paint lands in ~50ms, which
+    // makes the splash look like a one-frame flash and feels broken
+    // to the user. The 300ms CSS fade still overlaps the React
+    // content, so visually the handoff is smooth.
+    const MIN_SPLASH_MS = 1200;
+    const t0 = performance.now();
     const rafId = window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(hide);
+      window.requestAnimationFrame(() => {
+        const elapsed = performance.now() - t0;
+        const wait = Math.max(0, MIN_SPLASH_MS - elapsed);
+        window.setTimeout(hide, wait);
+      });
     });
 
     // Optional early-hide signal. On Tauri v2 Win WebView2 this is

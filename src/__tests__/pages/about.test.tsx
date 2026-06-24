@@ -25,9 +25,9 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 const sampleMetadata = (overrides: Partial<AppMetadata> = {}): AppMetadata => ({
-  version: '0.1.0',
-  identifier: 'com.claudeconfigmanager.app',
-  product_name: 'ClaudeConfigManager',
+  version: '0.1.1',
+  identifier: 'com.claudemanager.app',
+  product_name: 'ClaudeManager',
   git_commit: 'abc1234',
   build_target: 'windows/x86_64',
   build_timestamp: 1_700_000_000,
@@ -65,9 +65,9 @@ describe('AboutPage — M3.7 (清单 18)', () => {
       expect(screen.getByTestId('about-version-section')).toBeInTheDocument();
     });
     expect(screen.getByTestId('about-app-name').textContent).toContain(
-      'ClaudeConfigManager',
+      'ClaudeManager',
     );
-    expect(screen.getByTestId('about-version').textContent).toContain('0.1.0');
+    expect(screen.getByTestId('about-version').textContent).toContain('0.1.1');
     expect(screen.getByTestId('about-build-hash').textContent).toContain(
       'abc1234',
     );
@@ -75,7 +75,7 @@ describe('AboutPage — M3.7 (清单 18)', () => {
       'windows/x86_64',
     );
     expect(screen.getByTestId('about-identifier').textContent).toContain(
-      'com.claudeconfigmanager.app',
+      'com.claudemanager.app',
     );
   });
 

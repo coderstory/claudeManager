@@ -35,6 +35,18 @@ body,
   --bg-elevated: #FFFFFF;
   --bg-overlay:  rgba(255, 255, 255, 0.7);
 
+  /* --- Modal (v3.0 confirm dialog redesign, 2026-06-24) ---
+   * 8 个 modal 专属 token, 主题可覆写.
+   * light 主题: 瓷白底 + 深灰文字 + 蓝竖条/红竖条 */
+  --modal-header-bg:   #FFFFFF;                    /* header 底色 */
+  --modal-body-bg:     #FFFFFF;                    /* body 底色 (= .modal 主底) */
+  --modal-footer-bg:   #FFFFFF;                    /* footer 底色 */
+  --modal-cancel-bg:   rgba(0, 0, 0, 0.05);         /* 取消按钮底 (浅灰) */
+  --modal-cancel-fg:   #1F2328;                     /* 取消按钮字 (深灰, 直接写死避免 var() 嵌套) */
+  --modal-confirm-bg:  #1F2328;                     /* 确认按钮底 (深灰, 直接写死避免 var() 嵌套在 WebView2 不解析) */
+  --modal-accent-bar:  #0969DA;                     /* 左侧 4px 竖条 (light accent, 直接写死) */
+  --modal-danger-bar:  #D32F2F;                     /* 左侧 4px 竖条 danger (light danger, 直接写死) */
+
   /* --- Text (§4.2) --- */
   --text-primary:   #1F2328;
   --text-secondary: #656D76;
@@ -144,6 +156,17 @@ body,
   --bg-primary:  #F0FDFA;             /* 薄荷汽水基底 */
   --bg-elevated: #FFFFFF;
   --bg-overlay:  rgba(255, 255, 255, 0.7);
+
+  /* --- Modal (v3.0 confirm dialog redesign, 2026-06-24) ---
+   * anime 主题: 薄荷底 + 深薄荷文字 + 青竖条/粉红竖条 */
+  --modal-header-bg:   #F0FDFA;                    /* 薄荷底 (跟 --bg-primary 同色) */
+  --modal-body-bg:     #F0FDFA;                    /* 薄荷底 */
+  --modal-footer-bg:   #F0FDFA;                    /* 薄荷底 */
+  --modal-cancel-bg:   rgba(19, 78, 74, 0.08);      /* 浅薄荷底 (8% alpha, 几乎透明) */
+  --modal-cancel-fg:   #134E4A;                     /* 深薄荷字 (直接写死) */
+  --modal-confirm-bg:  #134E4A;                     /* 深薄荷底 (直接写死) */
+  --modal-accent-bar:  #06B6D4;                     /* 青竖条 (anime accent, 直接写死) */
+  --modal-danger-bar:  #FB7185;                     /* 粉红竖条 (anime danger, 直接写死) */
 
   /* --- Text (§4.2) --- */
   --text-primary:   #134E4A;          /* 深薄荷 */

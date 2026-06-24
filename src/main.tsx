@@ -13,6 +13,59 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "./design-system/ThemeProvider";
 
+// v3.0 (M3.0.2 fix) — `@tauri-apps/api/core`'s `invoke` reaches for
+// `window.__TAURI_INTERNALS__.transformCallback` which is undefined in
+// plain browser (vite dev on localhost:1420) AND in the first paint
+// of a Tauri release build where the IPC bridge isn't ready yet.
+// Calling into that throws "Cannot read properties of undefined
+// (reading 'transformCallback')" synchronously, bypassing every
+// try/catch in lib/api/*.ts and crashing the React tree. The Tauri
+// window then white-screens and dies (white → fade → splash fallback).
+//
+// We inject a minimal shim whenever the Tauri runtime is missing so
+// the page renders an empty-but-stable state in the browser and the
+// React tree survives long enough for the real bridge to attach in
+// the release build. The shim only sets the property if it doesn't
+// already exist (Tauri attaches the real object on window first).
+if (
+  typeof window !== "undefined" &&
+  !("__TAURI_INTERNALS__" in window)
+) {
+  // No-op callback id allocator — Tauri uses this to map the returned
+  // promise back to a callback. We return a unique number so calls
+  // are tracked, but the callback registry stays empty (so any
+  // later .then() is a no-op rather than throwing).
+  let nextCallbackId = 0;
+  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
+    transformCallback: (
+      _callback: (...args: unknown[]) => unknown,
+      _once: boolean,
+    ) => {
+      const id = nextCallbackId;
+      nextCallbackId += 1;
+      return id;
+    },
+    invoke: () => Promise.resolve(null),
+  };
+}
+
+// v3.0 (M3.0.2 fix) — global error guards. Tauri release builds with an
+// in-flight `invoke()` promise rejection used to crash the webview
+// before the React error boundary could render. The Tauri window
+// then dies (white screen → splash fallback). Swallow + log instead.
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    // eslint-disable-next-line no-console
+    console.warn("[M3.0.2] unhandled rejection (swallowed):", event.reason);
+    event.preventDefault();
+  });
+  window.addEventListener("error", (event) => {
+    // eslint-disable-next-line no-console
+    console.warn("[M3.0.2] window error (swallowed):", event.message);
+    event.preventDefault();
+  });
+}
+
 // M2.16-theme-fix: 原生窗口 backdrop（Win11 Mica / macOS vibrancy）的
 // 应用已完全移至 Rust setup hook（src-tauri/src/lib.rs 调
 // window_vibrancy::apply_mica / apply_vibrancy）。
