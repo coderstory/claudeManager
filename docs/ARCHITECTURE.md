@@ -9,6 +9,8 @@
 > code structure**; `CLAUDE.md` is the higher authority for project
 > process. In conflict, `CLAUDE.md` wins for process questions.
 
+> **最近更新**: 2026-06-24 — §2 trait 表格行号重生成 (前次偏移 13-50 行) + IPlatformWindowChrome Mac 状态修正为 live (L-M2.08 commit `7efb0f8`)
+
 ---
 
 ## 0. 30-second overview
@@ -124,14 +126,14 @@ so the contract compiles and so a Mac dev can find the work.
 
 | Trait | File | Win impl | Mac impl | M1.x status |
 |---|---|---|---|---|
-| `IPlatformPaths` | `platform/traits.rs:217-225` | `WindowsPaths` | `MacPaths` (unimplemented) | Win live, Mac panic at runtime |
-| `IPlatformSingleInstance` | `platform/traits.rs:229-233` | `WindowsSingleInstance` (mutex) | `MacSingleInstance` (unimplemented) | Win live, Mac panic |
-| `IPlatformAutostart` | `platform/traits.rs:236-240` | `WindowsAutostart` (delegates to tauri-plugin-autostart) | `MacAutostart` (delegates) | Win + Mac live (via plugin) |
-| `IPlatformReveal` | `platform/traits.rs:244-246` | `WindowsReveal` (explorer /select) | `MacReveal` (unimplemented, will use `open -R`) | Win live |
-| `IPlatformNotifier` | `platform/traits.rs:249-251` | `WindowsNotifier` (stub, eprintln) | `MacNotifier` (unimplemented) | Stub — replace in M1.4 |
-| `IPlatformAppMenu` | `platform/traits.rs:255-257` | `WindowsAppMenu` (NotSupported) | `MacAppMenu` (unimplemented) | Mac-only concept |
-| `IPlatformWindowChrome` | `platform/traits.rs:261-263` | `WindowsWindowChrome` (DWM Mica + DwmExtendFrameIntoClientArea) | `MacWindowChrome` (unimplemented, NSVisualEffectView) | Win live (with HWND lookup TODO); Mac unimplemented |
-| `IGitHost` | `platform/traits.rs:267-277` | `WindowsGitHost` (CLI shim via `git`) | `MacGitHost` (unimplemented) | Win live (CLI shim); Mac shares the CLI shim when implemented |
+| `IPlatformPaths` | `platform/traits.rs:231-294` | `WindowsPaths` | `MacPaths` (unimplemented) | Win live, Mac panic at runtime |
+| `IPlatformSingleInstance` | `platform/traits.rs:298-302` | `WindowsSingleInstance` (mutex) | `MacSingleInstance` (unimplemented) | Win live, Mac panic |
+| `IPlatformAutostart` | `platform/traits.rs:305-309` | `WindowsAutostart` (delegates to tauri-plugin-autostart) | `MacAutostart` (delegates) | Win + Mac live (via plugin) |
+| `IPlatformReveal` | `platform/traits.rs:328-330` | `WindowsReveal` (explorer /select) | `MacReveal` (unimplemented, will use `open -R`) | Win live |
+| `IPlatformNotifier` | `platform/traits.rs:379-381` | `WindowsNotifier` (stub, eprintln) | `MacNotifier` (unimplemented) | Stub — replace in M1.4 |
+| `IPlatformAppMenu` | `platform/traits.rs:385-387` | `WindowsAppMenu` (NotSupported) | `MacAppMenu` (unimplemented) | Mac-only concept |
+| `IPlatformWindowChrome` | `platform/traits.rs:391-393` | `WindowsWindowChrome` (DWM Mica + DwmExtendFrameIntoClientArea) | `MacWindowChrome` (unimplemented, NSVisualEffectView) | Win live (with HWND lookup TODO); Mac live (commit 7efb0f8 L-M2.08, apply_vibrancy via window_vibrancy crate; cfg-gated compile-only on non-macOS targets) |
+| `IGitHost` | `platform/traits.rs:397-407` | `WindowsGitHost` (CLI shim via `git`) | `MacGitHost` (unimplemented) | Win live (CLI shim); Mac shares the CLI shim when implemented |
 
 ### Runtime factory
 
