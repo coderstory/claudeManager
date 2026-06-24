@@ -487,7 +487,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     mockInvoke.mockResolvedValueOnce(undefined); // switchProvider
     mockInvoke.mockResolvedValueOnce([p('generated-1', 'minimaxi.com')]); // reload after import
     mockInvoke.mockResolvedValueOnce([p('generated-1', 'minimaxi.com', { is_active: true })]); // reload after switch
-    await act(async => {
+    await act(() => {
       fireEvent.click(screen.getByTestId('provider-generate-preview-confirm'));
     });
 
