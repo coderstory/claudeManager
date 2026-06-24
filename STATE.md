@@ -55,11 +55,23 @@
 - 无 Settings 页 — 主题切换仅 AppHeader 按钮
 - prefers-reduced-motion 全局生效但无 per-theme motion token
 - Nunito / Fredoka 字体未在 index.html 加 Google Fonts link, 暂 fallback 到系统字体(anime 主题视觉降级)
+- **P2 未修复**: 8 处 3px/2px/999 硬编码 borderRadius 无对应 token, 保留原值待评估
+- **P2 未修复**: tmp/ 目录 20 文件(已归档 53 文件到 docs/), 但仍有 20 活动文件(tmp/INDEX.md + 未归档的 retro/cjs 探针/图片)
+- **P3 未修复**: CLAUDE.md 652 行膨胀, 未拆分 (待 M4 评估)
+- **P3 未修复**: anime.css 内 6 个 --modal-* token 写死 (WebView2 var() 嵌套 bug workaround), 注释缺失版本号
+- **跨平台**: macOS cargo test 仍挂 (B-2/E-6 修了 project_service + history_integration, 但 optimizer_fix test 有 warning), 需用户 mac 真机验
+- **跨平台**: A.1-A.3 整脚本 Windows-only (smoke-test/kill-app/run-e2e), macOS fork 仅 dev 工具, 不进 CI (CLAUDE.md §15.7)
+- **文档**: docs/SIGNING.md 已 ARCHIVED (M4.1 取消决策), 但未物理删除
+- **文档**: docs/milestones/ 覆盖断档 (缺 M3-final / M4-roadmap)
+- **CI**: e2e job 永久禁用 (`if: ${{ false }}`), 28 Playwright spec 0 跑过
 
 **Pre-existing 25 个 vitest failures** (与本重构无关, 不在本轮范围; 实测 2026-06-24, D-1 button-radius 修复后从 26 降到 25):
 - home.test.tsx: 10 failures (pick-project-root 缺失)
 - usage-query.test.tsx: 7 failures (state.history null)
 - m1-9-2.test.tsx: 1 failure (Rust setup hook)
+- ConfirmDialog.test.tsx: 2 failures (class 名漂移)
+- splash test: 3 failures (启动屏闪烁)
+- scroll layout: 2 failures (滚动条)
 
 **用户核定**: (留空, 等用户填)
 
