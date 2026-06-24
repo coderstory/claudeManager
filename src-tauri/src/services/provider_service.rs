@@ -953,6 +953,10 @@ struct WriteError {
 
 /// Read `(base_url, api_key)` from settings.json's `env` map.
 /// Returns `(None, None)` if the file is missing or env is absent.
+///
+/// Accepts both `ANTHROPIC_AUTH_TOKEN` (Claude Code 早期命名) and
+/// `ANTHROPIC_API_KEY` (Claude Code 当前标准命名). `ANTHROPIC_API_KEY`
+/// is preferred if both are present.
 fn read_current_active_env(settings_path: &Path) -> (Option<String>, Option<String>) {
     let raw = match std::fs::read_to_string(settings_path) {
         Ok(s) => s,
@@ -967,8 +971,13 @@ fn read_current_active_env(settings_path: &Path) -> (Option<String>, Option<Stri
         .and_then(|m| m.get("ANTHROPIC_BASE_URL"))
         .and_then(|v| v.as_str())
         .map(String::from);
+    // Prefer ANTHROPIC_API_KEY (Claude Code current standard), fall back
+    // to ANTHROPIC_AUTH_TOKEN (legacy/alias name).
     let key = env
-        .and_then(|m| m.get("ANTHROPIC_AUTH_TOKEN"))
+        .and_then(|m| {
+            m.get("ANTHROPIC_API_KEY")
+                .or_else(|| m.get("ANTHROPIC_AUTH_TOKEN"))
+        })
         .and_then(|v| v.as_str())
         .map(String::from);
     (base, key)
@@ -1517,6 +1526,91 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         let err = svc.import_providers_from_sql("").unwrap_err();
         // The empty case is mapped to ProviderError::Json by the service.
         assert!(matches!(err, ProviderError::Json(_)));
+    }
+
+    // -----------------------------------------------------------------------
+    // read_current_active_env + generate_from_current_config (M3.13.4
+    // regression: ANTHROPIC_API_KEY vs ANTHROPIC_AUTH_TOKEN).
+    //
+    // Claude Code current standard uses ANTHROPIC_API_KEY. Project
+    // code historically used ANTHROPIC_AUTH_TOKEN. The reader must
+    // accept both; ANTHROPIC_API_KEY wins on conflict.
+    // -----------------------------------------------------------------------
+
+    fn write_raw_settings(tmp: &TempDir, body: &str) {
+        std::fs::write(tmp.path().join("settings.json"), body).unwrap();
+    }
+
+    #[test]
+    fn read_env_accepts_anthropic_api_key() {
+        let tmp = TempDir::new().unwrap();
+        write_raw_settings(
+            &tmp,
+            r#"{
+                "env": {
+                    "ANTHROPIC_API_KEY": "sk-test-123",
+                    "ANTHROPIC_BASE_URL": "https://example.com"
+                }
+            }"#,
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &tmp.path().join("settings.json")));
+        let result = svc.generate_from_current_config().unwrap();
+        assert_eq!(result.provider.api_base, "https://example.com");
+        assert_eq!(result.provider.api_key, "sk-test-123");
+        assert!(result.is_new);
+    }
+
+    #[test]
+    fn read_env_accepts_anthropic_auth_token_legacy() {
+        let tmp = TempDir::new().unwrap();
+        write_raw_settings(
+            &tmp,
+            r#"{
+                "env": {
+                    "ANTHROPIC_AUTH_TOKEN": "sk-legacy-456",
+                    "ANTHROPIC_BASE_URL": "https://legacy.example.com"
+                }
+            }"#,
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &tmp.path().join("settings.json")));
+        let result = svc.generate_from_current_config().unwrap();
+        assert_eq!(result.provider.api_base, "https://legacy.example.com");
+        assert_eq!(result.provider.api_key, "sk-legacy-456");
+    }
+
+    #[test]
+    fn read_env_prefers_api_key_over_auth_token_when_both_present() {
+        let tmp = TempDir::new().unwrap();
+        write_raw_settings(
+            &tmp,
+            r#"{
+                "env": {
+                    "ANTHROPIC_API_KEY": "sk-current-789",
+                    "ANTHROPIC_AUTH_TOKEN": "sk-legacy-000",
+                    "ANTHROPIC_BASE_URL": "https://both.example.com"
+                }
+            }"#,
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &tmp.path().join("settings.json")));
+        let result = svc.generate_from_current_config().unwrap();
+        assert_eq!(result.provider.api_key, "sk-current-789");
+    }
+
+    #[test]
+    fn read_env_missing_base_url_returns_error() {
+        let tmp = TempDir::new().unwrap();
+        write_raw_settings(
+            &tmp,
+            r#"{ "env": { "ANTHROPIC_API_KEY": "sk-only-key" } }"#,
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &tmp.path().join("settings.json")));
+        let err = svc.generate_from_current_config().unwrap_err();
+        // Verify the user-facing error message contains the actionable hint.
+        assert!(
+            err.to_string().contains("ANTHROPIC_BASE_URL"),
+            "expected error to mention ANTHROPIC_BASE_URL, got: {}",
+            err
+        );
     }
 
     #[test]
