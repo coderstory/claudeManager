@@ -376,7 +376,7 @@ function EmptyState(): ReactElement {
         }}
       >
         Provider 文件位于{' '}
-        <code style={{ fontFamily: 'monospace', background: 'var(--bg-elevated)', padding: '2px 4px', borderRadius: 4 }}>
+        <code style={{ fontFamily: 'var(--font-mono, monospace)', background: 'var(--bg-elevated)', padding: '2px 4px', borderRadius: 'var(--radius-button)' }}>
           %APPDATA%\ClaudeConfigManager\providers\&lt;id&gt;.json
         </code>
         。放入 JSON 文件后刷新本页即可看到。M2.3+ 将提供图形化新增 / 编辑界面。

@@ -169,7 +169,7 @@ export default function DeeplinkImportPage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        从 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>ccswitch://v1/import?...</code> URL
+        从 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>ccswitch://v1/import?...</code> URL
         解析单个 provider 配置,导入到 library。
         OS 唤起（如点网页链接 → 打开本应用）会自动弹出模态；这里也可以手动粘贴 URL 调试。
       </p>
@@ -179,7 +179,7 @@ export default function DeeplinkImportPage(): ReactElement {
         style={{
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           padding: 16,
           marginBottom: 16,
         }}
@@ -206,7 +206,7 @@ export default function DeeplinkImportPage(): ReactElement {
               flex: 1,
               padding: '8px 10px',
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               fontSize: 13,
               fontFamily: '"Cascadia Code", "SF Mono", Menlo, Consolas, monospace',
               background: 'var(--bg-primary)',
@@ -223,7 +223,7 @@ export default function DeeplinkImportPage(): ReactElement {
             style={{
               padding: '8px 12px',
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-secondary)',
               fontSize: 12,
@@ -246,7 +246,7 @@ export default function DeeplinkImportPage(): ReactElement {
             style={{
               padding: '8px 16px',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--accent)',
               color: '#fff',
               fontSize: 13,
@@ -277,7 +277,7 @@ export default function DeeplinkImportPage(): ReactElement {
             style={{
               marginTop: 8,
               padding: '8px 10px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'rgba(211, 47, 47, 0.08)',
               color: 'var(--danger)',
               fontSize: 12,
@@ -296,7 +296,7 @@ export default function DeeplinkImportPage(): ReactElement {
             style={{
               marginTop: 8,
               padding: '8px 10px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'rgba(56, 142, 60, 0.08)',
               color: 'var(--success)',
               fontSize: 12,
@@ -375,7 +375,7 @@ function ImportConfirmModal({
         style={{
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
-          borderRadius: 12,
+          borderRadius: 'var(--radius-modal)',
           padding: 24,
           maxWidth: 480,
           width: '90%',
@@ -430,7 +430,7 @@ function ImportConfirmModal({
             style={{
               marginTop: 12,
               padding: '8px 10px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'rgba(211, 47, 47, 0.08)',
               color: 'var(--danger)',
               fontSize: 12,
@@ -458,7 +458,7 @@ function ImportConfirmModal({
             style={{
               padding: '8px 16px',
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
               fontSize: 13,
@@ -474,7 +474,7 @@ function ImportConfirmModal({
             style={{
               padding: '8px 16px',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--accent)',
               color: '#fff',
               fontSize: 13,

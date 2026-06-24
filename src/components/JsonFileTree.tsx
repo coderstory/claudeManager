@@ -196,7 +196,7 @@ export function JsonFileTree(props: JsonFileTreeProps): ReactElement {
         height: '100%',
         background: 'var(--bg-primary)',
         border: '1px solid var(--border)',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         overflow: 'hidden',
       }}
     >
@@ -236,7 +236,7 @@ export function JsonFileTree(props: JsonFileTreeProps): ReactElement {
             padding: '4px 8px',
             fontSize: 11,
             border: '1px solid var(--border)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background: 'var(--bg-primary)',
             color: 'var(--text-secondary)',
             cursor: loading ? 'default' : 'pointer',
@@ -264,7 +264,7 @@ export function JsonFileTree(props: JsonFileTreeProps): ReactElement {
             gap: 6,
             padding: '4px 8px',
             border: '1px solid var(--border)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background: 'var(--bg-primary)',
           }}
         >

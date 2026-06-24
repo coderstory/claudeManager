@@ -297,7 +297,7 @@ export default function OptimizerPage(): ReactElement {
               alignItems: 'center',
               gap: 6,
               padding: '6px 14px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               border: '1px solid var(--border)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
@@ -323,7 +323,7 @@ export default function OptimizerPage(): ReactElement {
               alignItems: 'center',
               gap: 6,
               padding: '6px 14px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               border: '1px solid var(--border)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
@@ -380,7 +380,7 @@ export default function OptimizerPage(): ReactElement {
             padding: 32,
             textAlign: 'center',
             background: 'var(--bg-elevated)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border)',
             color: 'var(--text-secondary)',
           }}
@@ -431,7 +431,7 @@ export default function OptimizerPage(): ReactElement {
             gap: 12,
             padding: '12px 16px',
             background: 'var(--bg-elevated)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid var(--border)',
           }}
         >
@@ -450,7 +450,7 @@ export default function OptimizerPage(): ReactElement {
               alignItems: 'center',
               gap: 6,
               padding: '8px 16px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               border: 'none',
               background:
                 selectedCount === 0 ? 'var(--text-muted)' : 'var(--accent)',
@@ -508,7 +508,7 @@ function SeverityGroup({
       data-testid={`optimizer-group-${severity}`}
       style={{
         background: 'var(--bg-elevated)',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         border: '1px solid var(--border)',
         overflow: 'hidden',
       }}
@@ -678,7 +678,7 @@ function ApplyResultsPanel({
       data-testid="optimizer-apply-results"
       style={{
         background: 'var(--bg-elevated)',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         border: '1px solid var(--border)',
         overflow: 'hidden',
       }}

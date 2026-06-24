@@ -109,7 +109,7 @@ export function FilterBar({
         alignItems: 'flex-end',
         marginBottom: 16,
         padding: 12,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         border: '1px solid var(--border)',
         background: 'var(--bg-elevated)',
       }}

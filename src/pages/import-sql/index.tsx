@@ -611,7 +611,7 @@ function PreviewList({ providers }: { providers: Provider[] }): ReactElement {
             </div>
             <div
               style={{
-                fontFamily: 'monospace',
+                fontFamily: 'var(--font-mono, monospace)',
                 fontSize: 'var(--fs-caption)',
                 color: 'var(--text-secondary)',
                 marginTop: 2,
@@ -663,7 +663,7 @@ function McpPreviewBanner({
         }}
       >
         {mcp.slice(0, 5).map((m) => (
-          <li key={m.id} style={{ fontFamily: 'monospace' }}>
+          <li key={m.id} style={{ fontFamily: 'var(--font-mono, monospace)' }}>
             · {m.name} ({m.id}) — {m.command || '无 command'}
           </li>
         ))}
@@ -722,7 +722,7 @@ function SkippedDetails({
           <li
             key={i}
             data-testid={`import-sql-skip-${i}`}
-            style={{ fontFamily: 'monospace', marginBottom: 2 }}
+            style={{ fontFamily: 'var(--font-mono, monospace)', marginBottom: 2 }}
           >
             行 {s.line}: {s.reason}
           </li>
@@ -960,7 +960,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 const codeStyle: React.CSSProperties = {
-  fontFamily: 'monospace',
+  fontFamily: 'var(--font-mono, monospace)',
   fontSize: 'var(--fs-caption)',
   background: 'var(--bg-overlay)',
   padding: '1px 6px',

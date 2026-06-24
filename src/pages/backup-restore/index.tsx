@@ -338,9 +338,9 @@ export default function BackupRestorePage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        显示 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>~/.claude/</code> 和
+        显示 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>~/.claude/</code> 和
         应用数据目录下所有
-        <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>*.bak.&lt;ts&gt;</code>
+        <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>*.bak.&lt;ts&gt;</code>
         备份时间线。可查看内容、比对两版差异,或一键回滚。
       </p>
 
@@ -486,7 +486,7 @@ export default function BackupRestorePage(): ReactElement {
           data-testid="backup-timeline"
           style={{
             border: '1px solid var(--border)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             background: 'var(--bg-elevated)',
             overflow: 'hidden',
             maxHeight: '70vh',
@@ -638,7 +638,7 @@ export default function BackupRestorePage(): ReactElement {
           data-testid="backup-detail-panel"
           style={{
             border: '1px solid var(--border)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             background: 'var(--bg-elevated)',
             minHeight: 200,
             maxHeight: '70vh',
@@ -750,7 +750,7 @@ export default function BackupRestorePage(): ReactElement {
             style={{
               flex: 1,
               border: '1px solid var(--border)',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-card)',
               background: 'var(--bg-elevated)',
               padding: 16,
               overflow: 'auto',
@@ -843,7 +843,7 @@ function DiffView({ entries }: { entries: DiffEntry[] }): ReactElement {
             data-diff-path={e.path}
             style={{
               padding: '8px 12px',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               fontSize: 12,
               background:
                 e.op === 'add'
@@ -913,7 +913,7 @@ function toolbarBtn(): React.CSSProperties {
     gap: 4,
     padding: '6px 12px',
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-elevated)',
     color: 'var(--text-primary)',
     fontSize: 12,
@@ -928,7 +928,7 @@ function primaryBtn(): React.CSSProperties {
     gap: 4,
     padding: '6px 12px',
     border: 'none',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--accent)',
     color: '#fff',
     fontSize: 12,
@@ -945,7 +945,7 @@ function iconBtn(): React.CSSProperties {
     width: 24,
     height: 24,
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-elevated)',
     color: 'var(--text-secondary)',
     cursor: 'pointer',

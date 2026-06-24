@@ -72,7 +72,7 @@ exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty
   </div>
   <div
     data-testid="history-filter-bar"
-    style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elevated);"
+    style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; padding: 12px; border-radius: var(--radius-card); border: 1px solid var(--border); background: var(--bg-elevated);"
   >
     <label
       data-testid="history-filter-from"

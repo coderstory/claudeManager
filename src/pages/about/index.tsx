@@ -197,7 +197,7 @@ export default function AboutPage(): ReactElement {
             display: 'flex',
             alignItems: 'flex-start',
             gap: 8,
-            borderRadius: 6,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid rgba(211, 47, 47, 0.3)',
             background: 'rgba(211, 47, 47, 0.05)',
             padding: 12,

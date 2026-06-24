@@ -75,7 +75,7 @@ export function UsageHistoryTable({
           color: 'var(--text-muted)',
           fontSize: 13,
           textAlign: 'center',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           border: '1px dashed var(--border)',
           background: 'var(--bg-elevated)',
         }}
@@ -94,7 +94,7 @@ export function UsageHistoryTable({
     <div
       data-testid="usage-history-table-wrap"
       style={{
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         border: '1px solid var(--border)',
         background: 'var(--bg-elevated)',
         overflow: 'hidden',

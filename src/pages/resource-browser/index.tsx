@@ -425,7 +425,7 @@ export default function ResourceBrowserPage(): ReactElement {
             alignItems: 'center',
             gap: 6,
             padding: '6px 14px',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid var(--border)',
             background: 'var(--bg-elevated)',
             color: 'var(--text-primary)',
@@ -511,7 +511,7 @@ export default function ResourceBrowserPage(): ReactElement {
               padding: '6px 12px',
               background: 'var(--bg-elevated)',
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               flex: '1 1 280px',
               minWidth: 240,
             }}
@@ -586,7 +586,7 @@ export default function ResourceBrowserPage(): ReactElement {
                 padding: '4px 10px 4px 12px',
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border)',
-                borderRadius: 4,
+                borderRadius: 'var(--radius-button)',
               }}
             >
               <label
@@ -699,7 +699,7 @@ export default function ResourceBrowserPage(): ReactElement {
             padding: '12px 16px',
             background: 'rgba(211, 47, 47, 0.08)',
             border: '1px solid var(--danger)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             color: 'var(--danger)',
             fontSize: 13,
           }}
@@ -735,7 +735,7 @@ export default function ResourceBrowserPage(): ReactElement {
             padding: 32,
             textAlign: 'center',
             background: 'var(--bg-elevated)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border)',
             color: 'var(--text-secondary)',
           }}
@@ -794,7 +794,7 @@ export default function ResourceBrowserPage(): ReactElement {
           data-testid="resource-browser-list"
           style={{
             background: 'var(--bg-elevated)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border)',
             overflow: 'hidden',
           }}
@@ -997,7 +997,7 @@ function ResourceRow({
               padding: '4px 10px',
               fontSize: 12,
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
               cursor: 'pointer',
@@ -1180,7 +1180,7 @@ function ResourceDetailPanel({
             fontFamily: 'var(--font-mono, monospace)',
             background: 'rgba(0,0,0,0.02)',
             padding: '6px 8px',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid var(--border)',
             wordBreak: 'break-all',
             maxHeight: 120,
@@ -1201,7 +1201,7 @@ function ResourceDetailPanel({
             color: 'var(--danger)',
             padding: '6px 8px',
             background: 'rgba(211, 47, 47, 0.06)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
           }}
         >
           详情读取失败: {detailError}
@@ -1289,7 +1289,7 @@ function ResourceDetailPanel({
             padding: '4px 10px',
             fontSize: 12,
             border: '1px solid var(--border)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background: 'var(--bg-elevated)',
             color: 'var(--text-primary)',
             cursor: 'pointer',

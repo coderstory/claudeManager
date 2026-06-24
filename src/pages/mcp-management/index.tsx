@@ -311,7 +311,7 @@ export default function McpManagementPage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        管理 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>~/.claude/mcp.json</code> 中的 MCP server 列表。
+        管理 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>~/.claude/mcp.json</code> 中的 MCP server 列表。
         启用 toggle 立即生效,所有写操作都会自动备份(SPEC §6.1)。
       </p>
 
@@ -382,7 +382,7 @@ export default function McpManagementPage(): ReactElement {
           style={{
             padding: 32,
             border: '1px dashed var(--border)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             background: 'var(--bg-elevated)',
             color: 'var(--text-muted)',
             textAlign: 'center',
@@ -390,7 +390,7 @@ export default function McpManagementPage(): ReactElement {
           }}
         >
           未配置 MCP server。点击「新增 MCP server」开始配置,或粘贴一个
-          <code style={{ background: 'var(--bg-primary)', padding: '1px 4px', borderRadius: 4 }}>ccswitch://v1/import?resource=mcp&...</code>
+          <code style={{ background: 'var(--bg-primary)', padding: '1px 4px', borderRadius: 'var(--radius-button)' }}>ccswitch://v1/import?resource=mcp&...</code>
           URL 到剪贴板后点「从剪贴板导入」。
         </div>
       ) : (
@@ -398,7 +398,7 @@ export default function McpManagementPage(): ReactElement {
           data-testid="mcp-table"
           style={{
             border: '1px solid var(--border)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             background: 'var(--bg-elevated)',
             overflow: 'hidden',
           }}
@@ -437,7 +437,7 @@ export default function McpManagementPage(): ReactElement {
                       style={{
                         fontSize: 11,
                         padding: '2px 6px',
-                        borderRadius: 4,
+                        borderRadius: 'var(--radius-button)',
                         background: 'var(--bg-primary)',
                         color: 'var(--text-secondary)',
                       }}
@@ -625,7 +625,7 @@ function McpServerForm({
         onSubmit={handleSubmit}
         style={{
           background: 'var(--bg-elevated)',
-          borderRadius: 12,
+          borderRadius: 'var(--radius-modal)',
           padding: 24,
           width: 480,
           maxWidth: '90vw',
@@ -820,7 +820,7 @@ function toolbarBtn(): React.CSSProperties {
     gap: 4,
     padding: '6px 12px',
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-elevated)',
     color: 'var(--text-primary)',
     fontSize: 12,
@@ -835,7 +835,7 @@ function primaryBtn(): React.CSSProperties {
     gap: 4,
     padding: '6px 12px',
     border: 'none',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--accent)',
     color: '#fff',
     fontSize: 12,
@@ -853,7 +853,7 @@ function rowIconBtn(): React.CSSProperties {
     height: 24,
     marginRight: 4,
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-elevated)',
     color: 'var(--text-primary)',
     cursor: 'pointer',
@@ -883,7 +883,7 @@ function formInput(): React.CSSProperties {
   return {
     padding: '6px 8px',
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-primary)',
     color: 'var(--text-primary)',
     fontSize: 13,

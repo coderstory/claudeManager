@@ -346,7 +346,7 @@ export default function MarketplacePage(): ReactElement {
         style={{
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           padding: 16,
           display: 'flex',
           flexDirection: 'column',
@@ -401,7 +401,7 @@ export default function MarketplacePage(): ReactElement {
         style={{
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           padding: 16,
           display: 'flex',
           flexDirection: 'column',
@@ -435,7 +435,7 @@ export default function MarketplacePage(): ReactElement {
               padding: '8px 12px',
               fontSize: 13,
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-primary)',
               color: 'var(--text-primary)',
               fontFamily: 'var(--font-mono, monospace)',
@@ -454,7 +454,7 @@ export default function MarketplacePage(): ReactElement {
               padding: '8px 16px',
               fontSize: 13,
               border: '1px solid var(--accent)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--accent)',
               color: '#fff',
               cursor:
@@ -480,7 +480,7 @@ export default function MarketplacePage(): ReactElement {
             padding: 16,
             background: 'rgba(9, 105, 218, 0.05)',
             border: '1px solid var(--accent)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             color: 'var(--accent)',
             fontSize: 13,
             display: 'flex',
@@ -508,7 +508,7 @@ export default function MarketplacePage(): ReactElement {
           style={{
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             overflow: 'hidden',
           }}
         >
@@ -657,7 +657,7 @@ export default function MarketplacePage(): ReactElement {
                     fontSize: 13,
                     fontWeight: 600,
                     border: '1px solid var(--accent)',
-                    borderRadius: 4,
+                    borderRadius: 'var(--radius-button)',
                     background: 'var(--accent)',
                     color: '#fff',
                     cursor:
@@ -710,7 +710,7 @@ function RepoCard({
       data-testid={`marketplace-repo-card-${repo.id}`}
       style={{
         border: '1px solid var(--border)',
-        borderRadius: 6,
+        borderRadius: 'var(--radius-button)',
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
@@ -792,7 +792,7 @@ function RepoCard({
             padding: '4px 10px',
             fontSize: 12,
             border: '1px solid var(--accent)',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background: 'var(--bg-elevated)',
             color: 'var(--accent)',
             cursor: cloning || loading ? 'not-allowed' : 'pointer',
@@ -998,7 +998,7 @@ function ResourceInstallRow({
               padding: '4px 10px',
               fontSize: 12,
               border: '1px solid var(--border)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
               cursor: loading ? 'not-allowed' : 'pointer',

@@ -128,7 +128,7 @@ export default function SingleFileDeployPage(): ReactElement {
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          borderRadius: 4,
+          borderRadius: 'var(--radius-button)',
           border: '1px solid var(--border)',
           background: 'var(--bg-elevated)',
           paddingLeft: 12,
@@ -152,7 +152,7 @@ export default function SingleFileDeployPage(): ReactElement {
         <section
           style={{
             marginTop: 12,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border)',
             background: 'var(--bg-elevated)',
             padding: 16,
@@ -171,7 +171,7 @@ export default function SingleFileDeployPage(): ReactElement {
             从项目根目录运行以下命令;产物会写入{' '}
             <code
               style={{
-                borderRadius: 4,
+                borderRadius: 'var(--radius-button)',
                 background: 'var(--bg-overlay)',
                 paddingLeft: 4,
                 paddingRight: 4,
@@ -207,7 +207,7 @@ export default function SingleFileDeployPage(): ReactElement {
                   style={{
                     marginTop: 4,
                     overflowX: 'auto',
-                    borderRadius: 4,
+                    borderRadius: 'var(--radius-button)',
                     border: '1px solid var(--border)',
                     background: '#1F2328',
                     padding: 8,

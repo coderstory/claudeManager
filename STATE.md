@@ -56,7 +56,7 @@
 - prefers-reduced-motion 全局生效但无 per-theme motion token
 - Nunito / Fredoka 字体未在 index.html 加 Google Fonts link, 暂 fallback 到系统字体(anime 主题视觉降级)
 
-**Pre-existing 18 个 vitest failures** (与本重构无关, 不在本轮范围):
+**Pre-existing 25 个 vitest failures** (与本重构无关, 不在本轮范围; 实测 2026-06-24, D-1 button-radius 修复后从 26 降到 25):
 - home.test.tsx: 10 failures (pick-project-root 缺失)
 - usage-query.test.tsx: 7 failures (state.history null)
 - m1-9-2.test.tsx: 1 failure (Rust setup hook)

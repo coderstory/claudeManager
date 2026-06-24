@@ -178,7 +178,7 @@ export default function UsageQueryPage(): ReactElement {
         style={{
           marginBottom: 16,
           display: 'inline-flex',
-          borderRadius: 6,
+          borderRadius: 'var(--radius-button)',
           border: '1px solid var(--border)',
           background: 'var(--bg-elevated)',
           padding: 4,
@@ -201,7 +201,7 @@ export default function UsageQueryPage(): ReactElement {
                 paddingTop: 6,
                 paddingBottom: 6,
                 fontSize: 14,
-                borderRadius: 4,
+                borderRadius: 'var(--radius-button)',
                 border: 'none',
                 cursor: 'pointer',
                 background: active ? 'var(--accent)' : 'transparent',
@@ -235,7 +235,7 @@ export default function UsageQueryPage(): ReactElement {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid var(--border)',
             background: 'var(--bg-elevated)',
             paddingLeft: 12,
@@ -277,7 +277,7 @@ export default function UsageQueryPage(): ReactElement {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid var(--border)',
             background: 'var(--bg-elevated)',
             paddingLeft: 12,
@@ -305,7 +305,7 @@ export default function UsageQueryPage(): ReactElement {
             display: 'flex',
             alignItems: 'flex-start',
             gap: 8,
-            borderRadius: 6,
+            borderRadius: 'var(--radius-button)',
             border: '1px solid rgba(211, 47, 47, 0.3)',
             background: 'rgba(211, 47, 47, 0.05)',
             padding: 12,
@@ -392,7 +392,7 @@ export default function UsageQueryPage(): ReactElement {
       <section
         style={{
           marginTop: 24,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           border: '1px solid var(--border)',
           background: 'var(--bg-elevated)',
           padding: 16,
@@ -479,7 +479,7 @@ export default function UsageQueryPage(): ReactElement {
       <section
         style={{
           marginTop: 24,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           border: '1px solid var(--border)',
           background: 'var(--bg-elevated)',
           padding: 16,
@@ -530,7 +530,7 @@ export default function UsageQueryPage(): ReactElement {
           暂无数据 — 等待 Claude Code 写入{' '}
           <code
             style={{
-              borderRadius: 4,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-overlay)',
               paddingLeft: 4,
               paddingRight: 4,
@@ -563,7 +563,7 @@ function Card({ title, testId, loading, children }: CardProps): ReactElement {
   return (
     <div
       style={{
-        borderRadius: 8,
+        borderRadius: 'var(--radius-card)',
         border: '1px solid var(--border)',
         background: 'var(--bg-elevated)',
         padding: 20,
@@ -587,7 +587,7 @@ function Card({ title, testId, loading, children }: CardProps): ReactElement {
           style={{
             height: 36,
             width: 96,
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background: 'var(--bg-overlay)',
           }}
         />
@@ -673,7 +673,7 @@ function HistoryChart({ history, loading }: { history: UsageHistoryEntry[]; load
         data-app-pulse="true"
         style={{
           height: H,
-          borderRadius: 4,
+          borderRadius: 'var(--radius-button)',
           background: 'var(--bg-overlay)',
         }}
       />

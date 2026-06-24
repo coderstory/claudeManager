@@ -422,8 +422,8 @@ export default function JsonEditorPage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        打开 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>~/.claude/</code> 下的
-        <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>.json</code>
+        打开 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>~/.claude/</code> 下的
+        <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>.json</code>
         文件,实时校验 + 格式化 + token 遮罩 + 原子保存。
       </p>
 
@@ -586,7 +586,7 @@ export default function JsonEditorPage(): ReactElement {
                 fontSize: 10,
                 fontWeight: 600,
                 padding: '2px 6px',
-                borderRadius: 4,
+                borderRadius: 'var(--radius-button)',
                 background: 'var(--bg-elevated)',
                 color: 'var(--text-secondary)',
                 border: '1px solid var(--border)',
@@ -620,7 +620,7 @@ export default function JsonEditorPage(): ReactElement {
           style={{
             marginBottom: 12,
             padding: '8px 12px',
-            borderRadius: 4,
+            borderRadius: 'var(--radius-button)',
             background:
               state.message.kind === 'success'
                 ? 'rgba(56, 142, 60, 0.08)'
@@ -654,7 +654,7 @@ export default function JsonEditorPage(): ReactElement {
           border: `1px solid ${
             state.error ? 'var(--danger)' : 'var(--border)'
           }`,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-card)',
           background: 'var(--bg-elevated)',
           overflow: 'hidden',
         }}
@@ -732,7 +732,7 @@ function toolbarBtn(): React.CSSProperties {
     gap: 4,
     padding: '6px 12px',
     border: '1px solid var(--border)',
-    borderRadius: 4,
+    borderRadius: 'var(--radius-button)',
     background: 'var(--bg-elevated)',
     color: 'var(--text-primary)',
     fontSize: 12,

@@ -206,7 +206,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
               padding: 12,
               marginBottom: 16,
               border: '1px solid var(--danger, #D32F2F)',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-button)',
               background: 'var(--bg-overlay)',
               color: 'var(--danger, #D32F2F)',
               fontSize: 'var(--fs-body)',
@@ -248,7 +248,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                   fontSize: 'var(--fs-caption)',
                   color: 'var(--accent)',
                   background: 'var(--bg-overlay)',
-                  borderRadius: 4,
+                  borderRadius: 'var(--radius-button)',
                 }}
               >
                 用户级
@@ -329,7 +329,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 fontSize: 'var(--fs-body)',
                 padding: 16,
                 border: '1px dashed var(--border)',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-button)',
                 textAlign: 'center',
               }}
             >
