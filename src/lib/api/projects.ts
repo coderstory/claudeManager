@@ -66,3 +66,49 @@ export async function currentProject(): Promise<Project | null> {
   if (!isTauriRuntime()) return null;
   return invoke<Project | null>('current_project');
 }
+
+/**
+ * M3.13.4 — native folder picker for the "新建项目" form.
+ *
+ * The Rust-side `pick_project_root_dir` wraps
+ * `tauri-plugin-dialog::DialogExt::blocking_pick_folder`, so the
+ * frontend never imports `@tauri-apps/plugin-dialog` directly
+ * (CLAUDE.md §2.3 dep discipline — keeps the npm dep surface tight,
+ * same pattern as `exportProvider` in `optimizer.ts`).
+ *
+ * Returns the absolute path string if the user picked a folder, or
+ * `null` if they cancelled the dialog (which is a normal flow, not
+ * an error).
+ */
+export async function pickProjectRoot(): Promise<string | null> {
+  return invoke<string | null>('pick_project_root_dir');
+}
+
+/**
+ * M3.13.4 — live validation result for the "新建项目" root path.
+ *
+ * `reason_code` is a stable snake_case identifier (e.g.
+ * `"missing_claude_subdir"`) for analytics / future i18n; `reason`
+ * is the user-facing Chinese message that the page renders as the
+ * red hint line.
+ *
+ * When `valid === true`, both fields are empty strings — the page
+ * renders a green check mark in that case.
+ */
+export interface PathValidation {
+  path: string;
+  valid: boolean;
+  reason_code: string;
+  reason: string;
+}
+
+/**
+ * M3.13.4 — validate a candidate project root path without
+ * committing it. The frontend's "新建项目" form runs this on input
+ * blur and after a successful folder pick, so the user gets instant
+ * feedback (green ✓ or red reason) and the submit button can lock
+ * itself before `addProject` actually touches disk.
+ */
+export async function validateProjectPath(path: string): Promise<PathValidation> {
+  return invoke<PathValidation>('validate_project_path', { path });
+}

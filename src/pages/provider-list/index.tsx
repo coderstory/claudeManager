@@ -179,12 +179,23 @@ export function ProviderListPage(): ReactElement {
       try {
         // 写盘到 providers 目录
         await importSingleProvider(provider);
+        // 立刻刷新列表 (修复 b6aa402 漏调 reload 导致的列表不刷新)
+        await reload();
+        // 自动激活新 provider (保持原设计意图)
+        try {
+          await switchProvider(provider.id);
+        } catch (switchErr) {
+          // 激活失败不阻塞导入成功, 记录即可
+          console.warn('auto-switch failed after import:', switchErr);
+        }
+        // 再刷一次拿最新 is_active / last_used_at
+        await reload();
         setGenerateState({ kind: 'imported', id: provider.id });
       } catch (e) {
         setGenerateState({ kind: 'failure', message: stringifyError(e) });
       }
     },
-    [],
+    [reload],
   );
 
   /** 取消预览,回到 idle。 */

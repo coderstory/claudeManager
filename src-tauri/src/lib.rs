@@ -173,6 +173,11 @@ pub fn run() {
             commands::project::remove_project,
             commands::project::switch_project,
             commands::project::current_project,
+            // M3.13.4 — 新建项目 picker + 路径合法性校验（后端全权弹
+            // dialog + 校验,前端不直接调 tauri-plugin-dialog 的 JS wrapper,
+            // 见 commands::project 的注释）
+            commands::project::pick_project_root_dir,
+            commands::project::validate_project_path,
             // M4.3 — updater commands (pubkey + endpoint config + check stub).
             commands::updater::get_updater_pubkey,
             commands::updater::get_updater_endpoints,
