@@ -46,7 +46,7 @@ describe('CSS variable aliases (backward compat — v3.0 bug fix)', () => {
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';
     expect(getComputedVar('--radius-button')).toBe('var(--button-radius)');
-    expect(getComputedVar('--button-radius')).toBe('6px');
+    expect(getComputedVar('--button-radius')).toBe('4px');
   });
 
   it('light 主题: --radius-modal = 12px (字面量, 非 var 别名)', () => {

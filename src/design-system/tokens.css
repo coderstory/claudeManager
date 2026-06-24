@@ -96,9 +96,9 @@ body,
   --space-8:  32px;
   --space-12: 48px;
 
-  /* --- Radius (§4.4) --- */
+  /* --- Radius (§4.4 — 卡片 8px / 按钮 4px / 弹窗 12px) --- */
   --card-radius:        8px;
-  --button-radius:      6px;
+  --button-radius:      4px;
   /* --- Backward-compat aliases (v3.0 主题重构: 保留旧名映射, 见 STATE.md bug fix) --- */
   --radius-card:        var(--card-radius);
   --radius-button:      var(--button-radius);

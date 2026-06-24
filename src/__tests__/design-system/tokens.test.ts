@@ -58,4 +58,12 @@ describe('tokens.css theme switching (v3.0 Task 5)', () => {
     document.documentElement.dataset.theme = 'anime';
     expect(getComputedVar('--card-border-width')).toBe('3px');
   });
+
+  it('light 主题圆角: 卡片 8px / 按钮 4px / 弹窗 12px (SPEC §5.8)', () => {
+    injectTokensOnce();
+    document.documentElement.dataset.theme = 'light';
+    expect(getComputedVar('--card-radius')).toBe('8px');
+    expect(getComputedVar('--button-radius')).toBe('4px');
+    expect(getComputedVar('--radius-modal')).toBe('12px');
+  });
 });
