@@ -2,19 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- macOS entitlements (M4 stage, 2026-06-25) -->
-    <!-- 参考 tauri.conf.json::bundle.macOS.entitlements 引用 -->
-
-    <!-- 出站网络 (F7 usage query, F21 资源搜索) -->
+    <!-- Dev only: 不开 sandbox (签名 + 公证时再开) -->
+    <!-- F7 用量查询 + F17 marketplace git clone 出站 HTTP -->
     <key>com.apple.security.network.client</key>
     <true/>
-
-    <!-- 文件系统: 用户选择的文件 (F3 .sql import picker, F8 export single-file-deploy) -->
+    <!-- F3 .sql picker / F5/F14 save-open 对话框 -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
-
-    <!-- Apple Events: tauri-plugin-single-instance (单实例锁 macOS 实现) -->
-    <key>com.apple.security.automation.apple-events</key>
+    <!-- F19 备份与恢复的下载目录 -->
+    <key>com.apple.security.files.downloads.read-write</key>
     <true/>
+    <!-- deep-link / 文件关联 (Finder Apple Events) -->
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.finder</string>
+    </array>
 </dict>
 </plist>
