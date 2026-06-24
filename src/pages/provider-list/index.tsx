@@ -34,8 +34,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { listProviders, switchProvider, exportProvider } from '../../lib/api/providers';
+import { listProviders, switchProvider, exportProvider, generateFromCurrentConfig, importSingleProvider } from '../../lib/api/providers';
 import type { Provider } from '../../types/provider';
+import type { GenerateFromCurrentConfigResult } from '../../lib/api/providers';
 import { ErrorBanner } from '../../components/ErrorBanner';
 
 type LoadState =
@@ -68,10 +69,28 @@ type ExportState =
   | { kind: 'cancelled' }
   | { kind: 'export_failure'; message: string };
 
+/**
+ * "从当前配置生成"流程的状态机:
+ * - `idle` — 无操作
+ * - `generating` — 后端正在读 settings.json + 生成候选
+ * - `preview` — 已生成候选 provider,等待用户确认导入
+ * - `importing` — 已确认,正在写盘
+ * - `imported` — 写盘成功
+ * - `failure` — 任何步骤失败
+ */
+type GenerateState =
+  | { kind: 'idle' }
+  | { kind: 'generating' }
+  | { kind: 'preview'; result: GenerateFromCurrentConfigResult }
+  | { kind: 'importing' }
+  | { kind: 'imported'; id: string }
+  | { kind: 'failure'; message: string };
+
 export function ProviderListPage(): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [switchState, setSwitchState] = useState<SwitchState>({ kind: 'idle' });
   const [exportState, setExportState] = useState<ExportState>({ kind: 'idle' });
+  const [generateState, setGenerateState] = useState<GenerateState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -135,6 +154,44 @@ export function ProviderListPage(): ReactElement {
     [],
   );
 
+  /**
+   * 从当前 Claude 配置生成 provider 候选。
+   * 后端读 settings.json 的 env,生成或匹配现有 provider。
+   * 进入 preview 状态等待用户确认。
+   */
+  const handleGenerateFromCurrentConfig = useCallback(async () => {
+    setGenerateState({ kind: 'generating' });
+    try {
+      const result = await generateFromCurrentConfig();
+      setGenerateState({ kind: 'preview', result });
+    } catch (e) {
+      setGenerateState({ kind: 'failure', message: stringifyError(e) });
+    }
+  }, []);
+
+  /**
+   * 确认导入生成的 provider。
+   * 写盘成功后自动激活(调用 switchProvider)并刷新列表。
+   */
+  const handleConfirmImport = useCallback(
+    async (provider: Provider) => {
+      setGenerateState({ kind: 'importing' });
+      try {
+        // 写盘到 providers 目录
+        await importSingleProvider(provider);
+        setGenerateState({ kind: 'imported', id: provider.id });
+      } catch (e) {
+        setGenerateState({ kind: 'failure', message: stringifyError(e) });
+      }
+    },
+    [],
+  );
+
+  /** 取消预览,回到 idle。 */
+  const handleCancelGenerate = useCallback(() => {
+    setGenerateState({ kind: 'idle' });
+  }, []);
+
   return (
     <div
       data-testid="provider-list-page"
@@ -146,7 +203,20 @@ export function ProviderListPage(): ReactElement {
         color: 'var(--text-primary)',
       }}
     >
-      <HeaderBar onRefresh={reload} />
+      <HeaderBar
+        onRefresh={reload}
+        onGenerateFromCurrentConfig={handleGenerateFromCurrentConfig}
+        generateDisabled={generateState.kind === 'generating' || generateState.kind === 'importing'}
+      />
+      <GenerateInfoBar
+        generateState={generateState}
+        onDismiss={() => setGenerateState({ kind: 'idle' })}
+      />
+      <GeneratePreviewModal
+        generateState={generateState}
+        onConfirm={handleConfirmImport}
+        onCancel={handleCancelGenerate}
+      />
       <InfoBars switchState={switchState} onDismiss={() => setSwitchState({ kind: 'idle' })} />
       <ExportInfoBar
         exportState={exportState}
@@ -169,9 +239,15 @@ export function ProviderListPage(): ReactElement {
 
 interface HeaderBarProps {
   onRefresh: () => void;
+  onGenerateFromCurrentConfig: () => void;
+  generateDisabled: boolean;
 }
 
-function HeaderBar({ onRefresh }: HeaderBarProps): ReactElement {
+function HeaderBar({
+  onRefresh,
+  onGenerateFromCurrentConfig,
+  generateDisabled,
+}: HeaderBarProps): ReactElement {
   return (
     <div
       style={{
@@ -191,15 +267,30 @@ function HeaderBar({ onRefresh }: HeaderBarProps): ReactElement {
       >
         Provider 列表
       </h1>
-      <button
-        type="button"
-        data-testid="provider-list-refresh"
-        onClick={onRefresh}
-        style={btnStyle}
-        title="重新加载列表"
-      >
-        刷新
-      </button>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <button
+          type="button"
+          data-testid="provider-list-generate"
+          onClick={onGenerateFromCurrentConfig}
+          disabled={generateDisabled}
+          style={{
+            ...btnStyle,
+            opacity: generateDisabled ? 0.6 : 1,
+          }}
+          title="从 ~/.claude/settings.json 当前配置生成新 provider"
+        >
+          从当前配置生成
+        </button>
+        <button
+          type="button"
+          data-testid="provider-list-refresh"
+          onClick={onRefresh}
+          style={btnStyle}
+          title="重新加载列表"
+        >
+          刷新
+        </button>
+      </div>
     </div>
   );
 }
@@ -304,6 +395,180 @@ function truncatePath(path: string): string {
   const head = path.slice(0, 24);
   const tail = path.slice(-28);
   return `${head}…${tail}`;
+}
+
+/**
+ * "从当前配置生成"流程的 InfoBar。
+ * - generating / preview / importing → 无 InfoBar(进度在 modal/按钮显示)
+ * - imported → 绿色"已生成 X"提示(5s 自动消失)
+ * - failure → 红色"生成失败:<原因>"(5s)
+ */
+interface GenerateInfoBarProps {
+  generateState: GenerateState;
+  onDismiss: () => void;
+}
+
+function GenerateInfoBar({
+  generateState,
+  onDismiss,
+}: GenerateInfoBarProps): ReactElement | null {
+  const bar = useMemo(() => {
+    if (generateState.kind === 'imported') {
+      return {
+        kind: 'success' as const,
+        text: `已添加 provider ${generateState.id}`,
+      };
+    }
+    if (generateState.kind === 'failure') {
+      return {
+        kind: 'error' as const,
+        text: `生成失败:${generateState.message}`,
+      };
+    }
+    return null;
+  }, [generateState]);
+
+  if (!bar) return null;
+  return (
+    <ErrorBanner
+      kind={bar.kind}
+      message={bar.text}
+      onDismiss={onDismiss}
+      autoDismissMs={5000}
+      testId={`provider-generate-${bar.kind}-bar`}
+      style={{ marginBottom: 'var(--space-3)' }}
+    />
+  );
+}
+
+/**
+ * "从当前配置生成"的预览 modal。
+ * 显示候选 provider 详情 + 确认/取消按钮。
+ * - `generating` → 不渲染(进度在按钮显示)
+ * - `idle` / `importing` / `imported` / `failure` → 不渲染
+ * - `preview` → 渲染预览 modal
+ */
+interface GeneratePreviewModalProps {
+  generateState: GenerateState;
+  onConfirm: (provider: Provider) => void;
+  onCancel: () => void;
+}
+
+function GeneratePreviewModal({
+  generateState,
+  onConfirm,
+  onCancel,
+}: GeneratePreviewModalProps): ReactElement | null {
+  if (generateState.kind !== 'preview') return null;
+  const { result } = generateState;
+  const { provider, is_new } = result;
+
+  return (
+    <div
+      data-testid="provider-generate-preview-modal"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-elevated)',
+          borderRadius: 'var(--radius-modal, 12px)',
+          padding: 'var(--space-6)',
+          minWidth: 480,
+          maxWidth: 640,
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        <h2
+          style={{
+            margin: 0,
+            marginBottom: 'var(--space-4)',
+            fontSize: 'var(--fs-heading)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          {is_new ? '从当前配置生成新 provider' : '当前配置匹配现有 provider'}
+        </h2>
+
+        {!is_new && (
+          <p
+            data-testid="provider-generate-preview-exists-notice"
+            style={{
+              color: 'var(--warning)',
+              fontSize: 'var(--fs-body)',
+              marginBottom: 'var(--space-4)',
+            }}
+          >
+            库中已有相同 base_url 的 provider "{provider.name}",无需再次添加。
+          </p>
+        )}
+
+        <div
+          style={{
+            background: 'var(--bg-primary)',
+            padding: 'var(--space-4)',
+            borderRadius: 'var(--radius-button)',
+            marginBottom: 'var(--space-4)',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: 'var(--fs-body)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <div>
+            <strong>id:</strong> {provider.id}
+          </div>
+          <div>
+            <strong>name:</strong> {provider.name}
+          </div>
+          <div>
+            <strong>base_url:</strong> {provider.api_base}
+          </div>
+          <div>
+            <strong>api_key:</strong> {'•'.repeat(Math.min(provider.api_key.length, 12))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+          <button
+            type="button"
+            data-testid="provider-generate-preview-cancel"
+            onClick={onCancel}
+            style={btnStyle}
+          >
+            取消
+          </button>
+          {is_new && (
+            <button
+              type="button"
+              data-testid="provider-generate-preview-confirm"
+              className="btn btn-primary"
+              onClick={() => onConfirm(provider)}
+              style={{
+                padding: '6px 12px',
+                background: 'var(--accent)',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontSize: 'var(--fs-body)',
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              确认导入
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface BodyProps {

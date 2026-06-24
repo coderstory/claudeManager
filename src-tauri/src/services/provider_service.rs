@@ -341,6 +341,77 @@ impl ProviderService {
         Provider::from_json_file(&path)
     }
 
+    /// Generate a `Provider` from the current `~/.claude/settings.json`.
+    ///
+    /// Reads the active env (ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN)
+    /// and either:
+    /// - Returns the provider matching the current base_url (if one exists
+    ///   in the library), or
+    /// - Creates a new `Provider` with an auto-generated id (based on the
+    ///   base_url domain) if no match exists.
+    ///
+    /// The caller (frontend) decides whether to persist via
+    /// `import_single_provider` — this method is pure read + construct so
+    /// it stays testable.
+    ///
+    /// Errors:
+    /// - `Io` — settings.json unreadable
+    /// - `Json` — settings.json malformed
+    pub fn generate_from_current_config(&self) -> Result<GeneratedProvider, ProviderError> {
+        self.generate_with_active_root(None)
+    }
+
+    pub fn generate_with_active_root(
+        &self,
+        active_root: Option<&Path>,
+    ) -> Result<GeneratedProvider, ProviderError> {
+        let settings_path = self.settings_json_for_active_root(active_root);
+        let (base_url, auth_token) = read_current_active_env(&settings_path);
+
+        let (base_url, auth_token) = match (base_url, auth_token) {
+            (Some(b), Some(k)) => (b, k),
+            _ => {
+                return Err(ProviderError::Json(serde_json::Error::custom(
+                    "当前配置不完整:缺少 ANTHROPIC_BASE_URL 或 ANTHROPIC_AUTH_TOKEN",
+                )));
+            }
+        };
+
+        // Check if a provider with this base_url already exists
+        let providers = self.list_providers();
+        if let Some(existing) = providers.iter().find(|p| p.api_base == base_url) {
+            return Ok(GeneratedProvider {
+                provider: existing.clone(),
+                is_new: false,
+            });
+        }
+
+        // Auto-generate id from domain
+        let id = domain_to_id(&base_url);
+        let name = domain_to_name(&base_url);
+
+        // Check if the auto-generated id already exists (different base_url
+        // but rare collision) — if so, append a suffix.
+        let final_id = if providers.iter().any(|p| p.id == id) {
+            format!("{}-{}", id, 1)
+        } else {
+            id
+        };
+
+        let provider = Provider::new(
+            &final_id,
+            &name,
+            "anthropic",
+            &base_url,
+            &auth_token,
+        );
+
+        Ok(GeneratedProvider {
+            provider,
+            is_new: true,
+        })
+    }
+
     // -----------------------------------------------------------------------
     // F4 — import_single_provider (M2.3)
     // -----------------------------------------------------------------------
@@ -774,6 +845,69 @@ impl ProviderService {
 // ---------------------------------------------------------------------------
 // Import result types (F3 — M2.2)
 // ---------------------------------------------------------------------------
+
+/// Result of [`ProviderService::generate_from_current_config`].
+#[derive(Debug, Clone)]
+pub struct GeneratedProvider {
+    /// The provider (either existing match or newly constructed).
+    pub provider: Provider,
+    /// `false` = matched an existing library entry; `true` = brand new.
+    pub is_new: bool,
+}
+
+/// Convert a base_url to a kebab-case id.
+/// e.g. "https://api.anthropic.com" → "api-anthropic-com"
+fn domain_to_id(base_url: &str) -> String {
+    let without_scheme = base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    // Take just the host (strip port and path)
+    let host = without_scheme
+        .split(|c: char| c == '/' || c == ':')
+        .next()
+        .unwrap_or(without_scheme);
+    // Replace dots and invalid chars with dashes, collapse dashes
+    let mut result = String::new();
+    let mut prev_dash = false;
+    for c in host.chars() {
+        if c.is_ascii_alphanumeric() {
+            result.push(c.to_ascii_lowercase());
+            prev_dash = false;
+        } else if !prev_dash {
+            result.push('-');
+            prev_dash = true;
+        }
+    }
+    result.trim_matches('-').to_string()
+}
+
+/// Convert a base_url to a human-readable name.
+/// e.g. "https://api.anthropic.com" → "Api Anthropic"
+fn domain_to_name(base_url: &str) -> String {
+    let without_scheme = base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    let host = without_scheme
+        .split(|c: char| c == '/' || c == ':')
+        .next()
+        .unwrap_or(without_scheme);
+    // Split on dots, title-case each segment
+    host.split('.')
+        .filter(|s| !s.is_empty())
+        .map(|segment| {
+            let mut chars = segment.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => {
+                    let mut s = c.to_uppercase().to_string();
+                    s.extend(chars.flat_map(|c| c.to_lowercase()));
+                    s
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// Result of [`ProviderService::import_providers_from_sql`].
 #[derive(Debug, Clone)]

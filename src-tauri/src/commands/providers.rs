@@ -279,6 +279,40 @@ pub async fn import_single_provider(
         .map_err(|e| e.to_string())
 }
 
+/// Generate a provider from the current `~/.claude/settings.json` env.
+///
+/// Reads the active provider config (ANTHROPIC_BASE_URL +
+/// ANTHROPIC_AUTH_TOKEN) and either locates the matching existing
+/// library entry or constructs a new `Provider` with an auto-generated
+/// id from the domain. The frontend previews the result and then
+/// optionally persists it via `import_single_provider`.
+///
+/// Returns a JSON payload with `provider` (the candidate) and `is_new`
+/// (whether a matching library entry already existed).
+#[tauri::command]
+pub async fn generate_from_current_config(
+    state: State<'_, AppState>,
+) -> CmdResult<GenerateFromCurrentConfigResult> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let active_root_ref = active_root.as_deref();
+    let result = state
+        .provider_service
+        .generate_with_active_root(active_root_ref)
+        .map_err(|e| e.to_string())?;
+    Ok(GenerateFromCurrentConfigResult {
+        provider: result.provider,
+        is_new: result.is_new,
+    })
+}
+
+/// Response from `generate_from_current_config`.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct GenerateFromCurrentConfigResult {
+    pub provider: Provider,
+    pub is_new: bool,
+}
+
 // ---------------------------------------------------------------------------
 // F14 — 导出单 provider (M2.16)
 // ---------------------------------------------------------------------------
@@ -459,6 +493,66 @@ impl From<&Provider> for ExportedProvider {
             settings_config,
         }
     }
+}
+
+/// Read the current Claude configuration from `~/.claude/settings.json`.
+///
+/// Returns the `env` map (ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN,
+/// ANTHROPIC_MODEL) so the frontend can preview and decide whether to
+/// import as a new provider. Missing file / missing env → returns
+/// `Ok(None)` (non-fatal — the UI shows a "no config found" notice).
+#[tauri::command]
+pub async fn read_current_claude_config(
+    state: State<'_, AppState>,
+) -> CmdResult<Option<CurrentClaudeConfig>> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let settings_path = match active_root.as_deref() {
+        Some(root) => root.join(".claude").join("settings.json"),
+        None => state.paths.settings_json.clone(),
+    };
+    let raw = match std::fs::read_to_string(&settings_path) {
+        Ok(s) => s,
+        Err(_) => return Ok(None),
+    };
+    let v: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return Err("settings.json 格式错误".into()),
+    };
+    let env = match v.get("env").and_then(|e| e.as_object()) {
+        Some(e) => e,
+        None => return Ok(None),
+    };
+    let base_url = env
+        .get("ANTHROPIC_BASE_URL")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let auth_token = env
+        .get("ANTHROPIC_AUTH_TOKEN")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let model = env
+        .get("ANTHROPIC_MODEL")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    if base_url.is_none() && auth_token.is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(CurrentClaudeConfig {
+        base_url,
+        auth_token,
+        model,
+    }))
+}
+
+/// Current Claude config extracted from `~/.claude/settings.json`.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CurrentClaudeConfig {
+    pub base_url: Option<String>,
+    pub auth_token: Option<String>,
+    pub model: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

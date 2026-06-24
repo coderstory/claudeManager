@@ -151,6 +151,39 @@ export function exportProvider(
   });
 }
 
+/**
+ * Read the current Claude configuration from `~/.claude/settings.json`.
+ *
+ * Returns the active env (base_url / auth_token / model) so the UI
+ * can preview and decide whether to import as a new provider.
+ * Missing file or missing env → `null`.
+ */
+export interface CurrentClaudeConfig {
+  base_url: string | null;
+  auth_token: string | null;
+  model: string | null;
+}
+
+export function readCurrentClaudeConfig(): Promise<CurrentClaudeConfig | null> {
+  return invoke<CurrentClaudeConfig | null>('read_current_claude_config');
+}
+
+/**
+ * Generate a provider from the current Claude settings.
+ *
+ * Returns the candidate provider + whether it's new (true) or already
+ * existed in the library (false). The UI previews the result and
+ * optionally persists via `importSingleProvider`.
+ */
+export interface GenerateFromCurrentConfigResult {
+  provider: Provider;
+  is_new: boolean;
+}
+
+export function generateFromCurrentConfig(): Promise<GenerateFromCurrentConfigResult> {
+  return invoke<GenerateFromCurrentConfigResult>('generate_from_current_config');
+}
+
 // Re-export the F3 McpServer type (parser shape, used in SqlPreview
 // `preview_mcp`) for the page so callers don't need a second import.
 // The F6 write-side `McpServer` lives in `../../types/mcp` and is
