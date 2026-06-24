@@ -218,59 +218,125 @@ trait IPlugin {
 ### 9.1 交付物
 每次迭代（M1.1 / M1.2 / ... / M2.1 / ...）完成时，**必须生成一个 exe 放到桌面**等待用户核定。
 
-### 9.2 命名规则
-```
-~/Desktop/ClaudeConfigManager-M{major}/ClaudeConfigManager-M{major}.{minor}-{slug}.exe
-```
-示例：
-- `~/Desktop/ClaudeConfigManager-M1/ClaudeConfigManager-M1.1-scaffold.exe`
-- `~/Desktop/ClaudeConfigManager-M1/ClaudeConfigManager-M1.2-platform-abstractions.exe`
-- `~/Desktop/ClaudeConfigManager-M2/ClaudeConfigManager-M2.1-provider-list.exe`
+### 9.2 命名规则 (跨平台)
+| 平台 | exe 名 | Desktop 目录 | 备注 |
+|---|---|---|---|
+| Windows | `ClaudeConfigManager-M{major}.{minor}-{slug}.exe` | `~/Desktop/ClaudeConfigManager-M{major}/` | 当前实际 |
+| macOS | `ClaudeConfigManager-M{major}.{minor}-{slug}.app` | `~/Desktop/ClaudeConfigManager-M{major}/` | .app 是 bundle 目录 |
 
-slug 用 kebab-case 短描述本次任务（如 `scaffold` / `platform-abstractions` / `provider-list`）。
+**`{major}` = M1/M2/M3/M4**；**`{minor}` = 1.1/1.2/.../3.0.3**；**`{slug}` = kebab-case 短描述**（如 `scaffold` / `platform-abstractions` / `ui-text-cleanup`）。
 
 ### 9.3 Build 类型
 - **M1.x（架构期）**：Dev build（快，5-10 分钟），含调试信息
 - **M2.x 及以后**：Dev build（功能迭代期）+ 里程碑结束额外做 1 次 Release build（验证打包链路）
 
-### 9.4 Smoke Test（cp 到桌面之前必过）
-subagent 生成 exe 后必须跑 4 项验证，全部通过才 cp：
-1. ✅ 启动 exe → 进程在 5 秒内运行
-2. ✅ 检测到主窗口（用 PowerShell `Get-Process` + 窗口标题判断）
-3. ✅ 检测到托盘图标（用 `[System.Windows.Forms.SystemInformation]::UserInteractive` 或枚举 NotifyIcon）
-4. ✅ 进程清理：`taskkill /F /IM ClaudeConfigManager.exe` 后 2 秒内进程消失
+### 9.4 Smoke Test (跨平台)
+**当前实跑 10 项**（见 `scripts/smoke-test.sh`，M1.3 时代从 4 项扩到 10 项覆盖 build regression classes）。
 
-如果 4 项任一失败 → **不要 cp 到桌面**，回到任务修复后重跑。
+**Windows**（当前实跑命令）：
+1. ✅ 启动 exe → 进程在 5 秒内运行
+2. ✅ 检测到主窗口（`Get-Process` + `MainWindowHandle` + `Responding`）
+3. ✅ 检测到 WebView2 子窗口（`EnumChildWindows` + `Chrome_WidgetWin_*` 类名匹配 → 证明前端 bundle 真的加载）
+4. ✅ 窗口标题 = tauri.conf.json 中的 productName
+5. ✅ dist fingerprint (`index-*.js`) 嵌入到 exe PE 资源（`strings` 命令）
+6. ✅ history.db 在 `%APPDATA%\ClaudeConfigManager\` 创建且非空
+7. ✅ history.db schema 含 `usage_history` + `backup_history` + `schema_version` 3 个对象
+8. ✅ history.db 可查询（usage_history 或 backup_history 至少 1 行 OR 0 行但 schema 有效）
+9. ✅ 关闭窗口 → 进程仍在（最小化到托盘）
+10. ✅ 强制 kill → 2 秒内进程消失
+
+**macOS**（M4 阶段补，目前仅 §13 "build regression classes" 提及）：
+- 第 1-2 项：`pgrep -f ClaudeConfigManager` + `osascript` 查 NSWindow 存在性
+- 第 3 项：WKWebView 子窗口枚举（无 CLI 等价；需 Rust IPC 加 `get_webview_children_count` 命令，参考 audit-rust.md）
+- 第 4-8 项：相同概念（标题 / dist / db / schema / queryable — 路径改为 `~/Library/Application Support/ClaudeConfigManager/`）
+- 第 9-10 项：`osascript quit` + `kill -9`
+
+**禁止 subagent 跳过 smoke test 直接 cp exe 到桌面**（违反 §9.4）。
 
 ### 9.5 用户核定
 - cp 到桌面后，**等待用户明确"完成"或"未完成：<原因>"**
 - 未经核定不能进下一个迭代
 - 核定记录写入 `STATE.md`（迭代号 / 日期 / 用户反馈 / 下一步）
 
-### 9.6 实现位置
-- **统一脚本**（在 `scripts/` 目录）：
-  - `scripts/build-only.sh` — 仅编译（debug/release/check/clean）
-  - `scripts/smoke-test.sh` — 单独 smoke test
-  - `scripts/kill-app.sh` — 关闭进程（优雅或 force）
-  - `scripts/build-and-ship.sh` — 完整 build + smoke + cp 到桌面
+### 9.6 实现位置 (跨平台)
+**统一脚本**（在 `scripts/` 目录）：
+
+| 脚本 | Windows | macOS | 职责 |
+|---|---|---|---|
+| `scripts/build-only.sh` | ✅ | ⚠️ 部分 | 仅编译（debug/release/check/clean）|
+| `scripts/smoke-test.sh` | ✅ 10/10 | ❌ M4 改造 | 单独 smoke test |
+| `scripts/kill-app.sh` | ✅ | ❌ M4 改造 | 关闭进程（优雅或 force）|
+| `scripts/build-and-ship.sh` | ✅ | ⚠️ 部分 | 完整 build + smoke + cp 到桌面 |
+| `scripts/disk-usage-check.sh` | ✅ | ✅ | target/ 磁盘监控 |
+
 - **build-and-ship.sh 接收参数**：`--milestone M1 --task 1.1 --slug scaffold`
 - **build-and-ship.sh 职责**：build → copy exe + WebView2Loader.dll → smoke test → 输出报告
-- **WebView2Loader.dll 必须跟 exe 一同 cp**：Tauri debug build 不会自动放置，bundler 才处理
+- **WebView2Loader.dll 必须跟 exe 一同 cp**（仅 Windows）：Tauri debug build 不会自动放置，bundler 才处理
+- **scripts 互相依赖**（见 §9.7.2 ASCII 图）：
+  - `build-and-ship.sh` → `smoke-test.sh`（内部调做 ship 前验证）
+  - `smoke-test.sh` → `kill-app.sh`（内部调做 pre-cleanup）
+  - `build-only.sh` 和 `kill-app.sh` 是独立工具，可单独调
+- **当前 scripts/ macOS 兼容度**：见 `tmp/audit-scripts.md`（34 处不兼容点，高 27 / 中 7）
+- **完整使用决策树 + 速查表**：见 §9.7.1 / §9.7.2；详细 pitfalls 见 `tmp/scripts-usage-guide.md`（审阅后决定是否合入 CLAUDE.md）
 
-### 9.7 脚本使用流程
-```bash
-# 1. 关闭可能残留的旧进程
-./scripts/kill-app.sh
+### 9.7 脚本使用流程 (跨平台)
 
-# 2. 编译（dev 周期内迭代用）
-./scripts/build-only.sh
+#### 9.7.1 决策树（什么场景用什么脚本）
+| 场景 | 用哪个 | 命令 |
+|---|---|---|
+| **迭代完成，准备 ship 给用户核定** | `build-and-ship.sh` | `./scripts/build-and-ship.sh --milestone M3 --task 0.3 --slug ui-text-cleanup` |
+| **dev 循环内只改 Rust，想验证编译通过** | `build-only.sh` | `./scripts/build-only.sh` (默认 release; --check 更快; --clean 全量重建) |
+| **改了 src/ 前端** | `npm run build`（不走 build-only） | `npm run build` — build-only 不跑 beforeBuildCommand |
+| **想看 vite HMR 实时预览** | `npm run tauri dev` | dev server + dev build；**不 ship** |
+| **已 ship 后想复跑 smoke test** | `smoke-test.sh <exe>` | `./scripts/smoke-test.sh src-tauri/target/release/claude-config-manager.exe` |
+| **dev 中残留进程卡死 / smoke 前清理** | `kill-app.sh` | `./scripts/kill-app.sh` (优雅 + force fallback) |
+| **进程僵死无法优雅关** | `kill-app.sh --force` | `./scripts/kill-app.sh --force` |
 
-# 3. smoke test（手动验证某个已存在的 exe）
-./scripts/smoke-test.sh src-tauri/target/debug/claude-config-manager.exe
-
-# 4. 一键 build + smoke + cp 到桌面（每次迭代完成用）
-./scripts/build-and-ship.sh --milestone M1 --task 1.1 --slug scaffold
+#### 9.7.2 4 脚本依赖关系
 ```
+                  ┌──────────────────────────────┐
+                  │  build-and-ship.sh           │   一键 ship 入口 (§9.5 唯一允许)
+                  │  (build + cp + smoke)        │
+                  └──────────────┬───────────────┘
+                                 │ 内部调
+                  ┌──────────────┴──────────────┐
+                  ▼                             ▼
+      ┌──────────────────────┐      ┌──────────────────────┐
+      │  build-only.sh       │      │  smoke-test.sh       │
+      │  (仅 cargo build)    │      │  (10 项验证)          │
+      └──────────────────────┘      └───────────┬──────────┘
+                                                │ 内部调
+                                                ▼
+                                     ┌──────────────────────┐
+                                     │  kill-app.sh         │
+                                     │  (pre-cleanup)       │
+                                     └──────────────────────┘
+```
+
+#### 9.7.3 速查表（3 个最常见 flow）
+
+```bash
+# Flow 1: dev 循环 (只改 Rust)
+./scripts/kill-app.sh
+./scripts/build-only.sh
+./scripts/smoke-test.sh src-tauri/target/release/claude-config-manager.exe
+
+# Flow 2: 改前端 (src/ 下任何文件)
+npm run build                           # 必须! build-only 不跑 beforeBuildCommand
+./scripts/kill-app.sh
+./scripts/build-and-ship.sh --milestone M3 --task 0.3 --slug my-feature
+
+# Flow 3: 迭代 ship 给用户核定
+./scripts/build-and-ship.sh --milestone M2 --task 2.3 --slug provider-list
+# 内部全流程: kill residue → tauri build --no-bundle → cp exe + WebView2Loader.dll → smoke 10 项
+# smoke PASS → 输出 "SHIPPED ✓" + 桌面路径
+# smoke FAIL → 自动 rm 桌面 exe, exit 1 (不回桌面)
+# 等用户回 "完成" 或 "未完成: <原因>" (§11.7 不核定不派下一个 ship 类 subagent)
+```
+
+#### 9.7.4 平台注意
+- **macOS subagent 当前限制**（M4 前）：smoke-test / kill-app / build-and-ship 仅 Windows 部分能用；mac subagent 可用 `build-only.sh --check` + `disk-usage-check.sh` + `npm run tauri dev`
+- 详细 pitfalls 与各脚本"何时不用"清单见 `tmp/scripts-usage-guide.md`（180 行），本次未合入 CLAUDE.md（按 preference `doc-focused-not-comprehensive`）
 
 ## 10. 不要做
 
@@ -312,18 +378,66 @@ subagent 生成 exe 后必须跑 4 项验证，全部通过才 cp：
 - [ ] 上下文已塞进 prompt（不依赖主 session 私有信息）
 - [ ] 不违反本 CLAUDE.md 的任何规则
 
+#### 11.4.1 临时命令合并为脚本 (M3.0.3 lesson)
+**规则**：subagent（或主 session）执行 ≥ 3 个**相关联的临时命令**时（如 `sccache --show-stats` + `cargo check` + `grep cfg(windows)`），必须评估是否合并成一个可复用脚本，写入 `scripts/` 目录。
+
+**判断标准**：
+- ✅ **合并场景**：命令序列有明确目的（如"诊断 sccache 是否坏"），下次还可能用上
+- ❌ **不合并场景**：命令彼此无关 + 一次性探索 + 命令输出仅当前 session 看
+
+**反事故**：
+- 本会话派了 3 个 subagent 跑 sccache 诊断（`a374807b29f187ddd` → `acc194445e850f73a` → `a779884d3191cf32d`），每个都跑 `sccache --show-stats` + `cargo check 2>&1 | tail -30`。**正确做法**：第 1 次跑时就该写 `scripts/sccache-diag.sh`，把 `sccache --show-stats` + `cargo check` + 错误分类逻辑固化
+- 临时命令 3 次重复 = 必须脚本化（§11.7 三次失败规则的镜像应用：3 次重复 ≠ 1 次性）
+
+**合并步骤**：
+1. 收集命令序列 + 输出格式
+2. 抽函数（参数化路径 / crate 名 / 输出格式）
+3. 写入 `scripts/<purpose>-<target>.sh`（如 `scripts/sccache-diag.sh`）
+4. `chmod +x` + `bash -n` 验证
+5. 加到 §9.6 实现位置表（如果项目级）
+6. 下次同类任务调脚本，不重复 inline
+
+**例外**：纯一次性 ad-hoc 排查（如"先 ls 看看这个文件在不在"）不需要脚本化。
+
 ### 11.5 派单后行为
 派完 subagent 后：
 - 主 session **不要亲自执行任何 shell / file 操作**
 - 等 subagent 完成（可能数分钟，silence is normal）
 - 收到完成通知后立即分析 + 决定下一步
 
+#### 11.5.1 macOS 开发 subagent 的额外约束（M4 阶段）
+- ❌ **mac subagent 不能跑** `scripts/{kill-app,smoke-test,build-and-ship}.sh` 当前版本（含 powershell 调用）— 必须先 audit-scripts 改造
+- ✅ mac subagent 可以跑：`scripts/build-only.sh --check`（纯 cargo check）+ `scripts/disk-usage-check.sh`（跨平台）+ `npm run tauri dev`（Vite + Tauri CLI 跨平台）
+- ⚠️  macOS 编译产物 = `.app` bundle（不是 `.exe`），命名约定见 §9.2
+- ⚠️  macOS 用户数据路径 = `~/Library/Application Support/ClaudeConfigManager/`（不是 `%APPDATA%\ClaudeConfigManager\`）
+
 ### 11.6 决策门槛
 主 session 的决策分为两类：
 - **必须问用户**：技术栈选型 / 架构重大分歧 / 是否进入下一迭代 / SPEC 冲突解决 / 大范围返工
 - **可自主决定**：单文件命名 / 单函数签名 / 局部重构 / 单条命令 / 单元测试细节
 
-### 11.7 用户核定未到 → 不派 ship 类 subagent (M3.0.3 lesson)
+### 11.7 三次失败必须暂停复盘 (M3.0.3 lesson)
+**规则**：同一个问题（同一文件 / 同一错误 / 同一目标）尝试修复 **3 次仍失败** 时：
+1. ❌ **禁止** 派第 4 次 subagent / 第 4 轮 Edit / 继续猜
+2. ⏸️ **必须** 暂停，进入复盘流程：
+   - 重新读 §6 评审纪律（自审 / 头脑风暴 / 同行评审 / 业务流程分析）
+   - **重审前提假设**：之前 3 次失败是不是方向错了？该方案是不是压根不可行？
+   - 列证据：3 次分别改了什么？每次具体报什么错？错在哪个调用栈？
+   - 列可能根因：≥ 3 个候选根因
+3. 🛑 **必须** 要么：
+   - 改换方案（重新设计，不在原路径上继续试）
+   - 或要求用户介入（提供更多上下文 / 授权大改 / 决定是否回滚）
+
+**反事故**：本会话杀死的 `a374807b29f187ddd` 子任务 —— 编译错误诊断跑 20+ 分钟仍无完整产出，被我 TaskStop。原因是任务方向中途改了 2 次（先派"跑 cargo build" → SendMessage 改"只 grep" → TaskStop 杀），subagent 在矛盾指令下陷入死循环。**正确的应对**：第 1 次发现矛盾时立即 TaskStop + 重派新任务，而不是等 20 分钟。
+
+**根因诊断流程**（暂停后必走）：
+1. 收集所有错误日志（`cargo check 2>&1 | tee build.log` + `sccache --show-stats` + 浏览器 console 等）
+2. 按"调用栈分类"：是 A 处错、B 处错、还是 A → B 链式错？
+3. 按"假设 vs 证据"：列出过去 3 次的**前提假设**，哪些假设没被验证？
+4. 按"已知 vs 未知"：哪些事实已知（可验证）？哪些未知（需用户确认）？
+5. 写"暂停复盘报告"到 `tmp/issue-retro-<date>.md`，包含以上 4 项
+
+### 11.8 用户核定未到 → 不派 ship 类 subagent (M3.0.3 lesson)
 §9.5 要求"未经核定不能进下一迭代"。主 session 必须 enforce：
 - 收到 ship subagent 完成回报后 → **不要立即派下一个 build/ship/dist-touching subagent**
 - 等用户明确 "完成" 或 "未完成：<原因>" 后再决定下一步
@@ -331,22 +445,25 @@ subagent 生成 exe 后必须跑 4 项验证，全部通过才 cp：
 
 **反事故**：本会话主 session 在 M3.0.3 未核定时就派了 M3.0.3-fix-v2 build subagent，违反了 §9.5 精神。
 
-## 12. 编译性能 (M3.0.3 调研产出，2026-06-24)
+## 12. 编译性能 (M3.0.3 调研产出，2026-06-24；macOS 适配 2026-06-25)
 
-### 12.1 当前基线
-- `cargo build --release`: ~3m30s (Tauri v2 + 30+ Rust crate + windows-gnu toolchain 是瓶颈)
-- `vite build`: ~4s (TSC check + Vite bundle)
-- `cp + smoke test`: ~5s
-- **合计: ~3m40s**
-- 调研报告: `tmp/build-perf-investigation.md`
+### 12.1 当前基线 (跨平台)
+| 步骤 | Windows | macOS |
+|---|---|---|
+| `cargo build --release` | ~3m30s (windows-gnu toolchain + 30+ Rust crate) | ~2m30s (apple-darwin clang + wry/wkwebview 链略轻) |
+| `vite build` | ~4s | ~4s |
+| `cp + smoke test` | ~5s (10/10) | N/A (smoke test 待 M4 改造) |
+| **合计** | **~3m40s** | **~2m40s** |
+
+调研报告: `tmp/build-perf-investigation.md`
 
 ### 12.2 加速方案 A — sccache (推荐，已实施)
 **原理**：rustc-wrapper 把每次 cargo 编译的 .rlib 输出 hash 到磁盘缓存，重复 crate 链直接命中。
 
-**步骤**：
+**步骤**（跨平台，macOS 路径是 `~/.cargo/config.toml`，Windows Git Bash 是 `/c/Users/<user>/.cargo/config.toml`）：
 ```bash
 cargo install sccache --locked
-# ~/.cargo/config.toml 追加（用户级，不污染项目）
+# 用户级 config（macOS / Linux）
 cat >> ~/.cargo/config.toml << 'EOF'
 
 [build]
@@ -356,28 +473,38 @@ EOF
 
 **预期收益**：
 - 首次 build (cold cache)：不变（需预热）
-- 二次起 build (warm cache)：**-50~70%**（3m30s → 90-120s）
+- 二次起 build (warm cache)：**-50~70%**（Win 3m30s → 90-120s；mac 2m30s → 60-90s）
 - 改 1-2 行 Rust 后的增量 build：**-80%+**（只重编译变更 crate + 下游）
 
-**回滚**（30 秒回原状）：
+**回滚**（30 秒回原状，跨平台）：
 ```bash
 # 编辑 ~/.cargo/config.toml，注释 [build] 块，或设 RUSTC_WRAPPER=""
 RUSTC_WRAPPER="" cargo build --release
 ```
 
-**风险**：低（用户级配置，零项目污染；Windows 兼容 sccache 0.7+）。
+**风险**：低（用户级配置，零项目污染；Windows 兼容 sccache 0.7+；macOS 兼容 sccache 0.7+，但 Apple Silicon 注意 sandbox 缓存路径 `~/Library/Caches/sccache`）。
 
-### 12.3 加速方案 B — lld linker (中期评估中，未实施)
-**原理**：用 lld 替换默认 link.exe，跳过 MSVC 链接器瓶颈。
+### 12.3 加速方案 B — lld linker (Windows link.exe / macOS ld64 替换)
+**原理**：用 lld 替换默认 link.exe（Win）或 ld64（mac），跳过 OS 自带链接器瓶颈。
+
+| 平台 | 替换目标 | 成本 |
+|---|---|---|
+| Windows | `link.exe` → `lld-link.exe` (LLVM) | 装 LLVM ~300MB + 改项目 `.cargo/config.toml`（项目级，需白名单）|
+| macOS | `ld64` → `zld` 或 `mold` | `brew install mold` ~10MB；改 `~/.cargo/config.toml` 用户级 OK |
+
 **收益**：link 阶段再砍 50~70%。
-**成本**：装 LLVM ~300MB + 改 `.cargo/config.toml`（项目级，需用户白名单）。
 **状态**：本会话调研完成，未实施；待评估。
 
-### 12.4 加速禁忌
+### 12.4 加速禁忌 (跨平台)
 - ❌ **不要 cargo profile 调优**（`Cargo.toml` `[profile.release]` 改 codegen-units / LTO）— 违反 §2.3 版本锁纪律精神，且收益小
+  - **例外**：长期治理场景（target/ 缩体积）允许 dev/release profile 调优（见 §15.5），但需用户白名单
 - ❌ **不要在 ship 流程切 dev build** — 违反 §9.3，dev build 有 conhost 黑窗（M1.1 时代 user 已反馈）
-- ❌ **不要并行跑 cargo build** — webview2-com 静态链接 + 进程内 mutex 锁会冲突，cargo 自带 -j 调度足够
+- ❌ **不要并行跑 cargo build** — webview2-com 静态链接 + 进程内 mutex 锁会冲突（Win）；macOS wry+WKWebView 也类似（WKWebView 进程内 IPC），cargo 自带 -j 调度足够
 - ❌ **不要用 cargo-zigbuild / cross** — 本项目不是交叉编译场景，徒增工具链复杂度
+- ⚠️ **macOS 专属禁忌**：
+  - ❌ 不要用 `sudo xcode-select` 改 CLT 默认值，会破坏其他项目
+  - ❌ 不要在 macOS 跑 cargo build 时手动 `RUST_LOG=trace`（性能掉 50%，仅 debug 用）
+  - ✅ macOS 上 `cargo build --release` 默认用 Apple clang，不需额外装 gcc/clang
 
 ## 13. Build Pipeline Regression Classes (smoke test 10 项的 why)
 
@@ -397,10 +524,19 @@ RUSTC_WRAPPER="" cargo build --release
 
 **反事故**：smoke test PASS ≠ exe 可用。任何 ship 前 subagent 必须跑完 10 项。
 
-### 13.2 手工 cargo build 时的隐藏陷阱
-如果你手动跑 `cargo build --release`（不通过 `tauri build`）：
+**macOS smoke test**（M4 阶段补）：目前仅 Windows 上跑 10/10 项。macOS 上的 WKWebView child window 枚举无 CLI 等价，需 Rust IPC 加 `get_webview_children_count` 命令（详见 §15.4）。
+
+### 13.2 手工 cargo build 时的隐藏陷阱 (跨平台)
+
+**Windows**：
 - 必须加 `--features tauri/custom-protocol`，否则 dist 不嵌入 PE，webview 加载 vite dev server → ERR_CONNECTION_REFUSED
 - 不要 `cargo build --release -p claude-config-manager` 单包编译 — Tauri build.rs 需要 workspace 信息，单包编译会 break
+
+**macOS**：
+- 必须用 Xcode Command Line Tools（`xcode-select --install`），否则 rustc 找不到 clang
+- 第一次 cargo build 链 `wry` / `tao` 时会**重新编译 objc / cocoa / core-foundation** 等 macOS-only crate（来自 wry 传递依赖），耗时 ~5-8 分钟（仅首次）
+- `tauri build --no-bundle` 在 macOS 上同样适用，会自动跑 `beforeBuildCommand`
+- **不要** `cargo build --target x86_64-apple-darwin` 从 Windows 跨编译 macOS（缺 macOS SDK + codesign 工具链，**不可行**）；如需在 mac 上构建，必须真机跑
 
 **正确做法**：本项目所有 release build 都走 `scripts/build-and-ship.sh`（内部 `tauri build --no-bundle`），不直接 cargo build。
 
@@ -410,8 +546,8 @@ RUSTC_WRAPPER="" cargo build --release
 subagent 完成任务后**不得**：
 - ❌ `git add` + `git commit`（即使只是 `tmp/` 下的报告文件）
 - ❌ `git push` / `git tag` / `git branch`
-- ❌ 改 `~/.cargo/config.toml` / `~/.bashrc` / 任何用户级配置（即使是"加速"用途）
-- ❌ 装全局工具 `cargo install xxx` / `npm install -g xxx`
+- ❌ 改 `~/.cargo/config.toml` / `~/.bashrc` / `~/.zshrc` / 任何用户级配置（即使是"加速"用途）
+- ❌ 装全局工具 `cargo install xxx` / `npm install -g xxx` / `brew install xxx`
 
 **正确流程**：subagent 完成 → 回报主 session → 主 session 列白名单 → 用户确认 → 主 session 自己 commit / 自己改全局配置，**或**显式批准 subagent 执行并指定精确命令。
 
@@ -419,6 +555,53 @@ subagent 完成任务后**不得**：
 
 ### 14.2 用户核定未到 → 不派 ship 类 subagent
 见 §11.7。ship 类 subagent 定义：任何会修改 `dist/` / `target/release/` / 桌面 exe / `Cargo.lock` / `package-lock.json` 的 subagent。
+
+## 15. macOS 开发约束 (M4 阶段, 2026-06-25)
+
+### 15.1 编译环境前置
+- ✅ **必须装 Xcode Command Line Tools**（`xcode-select --install`，约 200 MB）
+- ✅ **必须装 Rust toolchain apple-darwin**（`rustup target add aarch64-apple-darwin` + `x86_64-apple-darwin` 二选一，跟主机 CPU 走）
+- ⚠️  Apple Silicon (M1/M2/M3) 默认 target = `aarch64-apple-darwin`；Intel Mac = `x86_64-apple-darwin`
+- ❌ **不要从 Windows 跨编译 macOS**（缺 SDK + codesign 工具链，必失败）
+- ⚠️  **本机是 Windows**，macOS 验证必须由用户在 Mac dev box 上跑
+
+### 15.2 编译产物与路径
+- 编译产物 = `target/release/bundle/macos/Claude Manager.app`（不是 `.exe`）
+- 调试用裸二进制 = `target/release/claude-config-manager`（无后缀）
+- 用户数据路径：
+  - Windows: `%APPDATA%\ClaudeConfigManager\`
+  - macOS: `~/Library/Application Support/ClaudeConfigManager/`
+  - **`~/.claude/`** 是 Claude CLI 自己的目录，**跨平台都用这个路径**（不要改）
+
+### 15.3 macOS 脚本能力 (M4 阶段补)
+| 脚本 | Windows | macOS 替代 |
+|---|---|---|
+| `kill-app.sh` | powershell + taskkill | `osascript` + `pgrep -f` + `kill -9`（待改造）|
+| `smoke-test.sh` | 10 项实跑 | 需 Rust IPC 加 `get_webview_children_count` + `get_window_state` 命令（详见 §15.4）|
+| `build-and-ship.sh` | ✅ 全流程 | 部分（缺 smoke test 跨平台）|
+| `build-only.sh --check` | ✅ | ✅ |
+| `disk-usage-check.sh` | ✅ | ✅ |
+| `npm run tauri dev` | ✅ | ✅（Vite + Tauri CLI 跨平台）|
+
+**当前 mac subagent 可用命令**：`build-only.sh --check` + `disk-usage-check.sh` + `npm run tauri dev` + 直接 `cargo build` + `cargo test`。
+
+### 15.4 Rust IPC 需补充的 macOS-only 命令
+smoke test 在 macOS 上无法用 `EnumChildWindows` 枚举 WKWebView 子窗口，需 Rust 加 3 个 IPC：
+- `get_webview_children_count() -> u32` — 返回主窗口下 webview 子窗口数
+- `get_window_state() -> { handle: u64, responding: bool, title: String }`
+- `get_app_metadata()` 已存在（display name 等），无需新增
+
+### 15.5 长期治理场景的 Cargo.toml profile 调优（允许）
+§12.4 写明"禁 cargo profile 调优"，但**target/ 长期治理**场景例外：
+- 修改前必须列白名单给用户
+- 只改 `[profile.dev]` / `[profile.release]` 的 `codegen-units` / `lto` / `strip` / `debug` 字段
+- **不改** crate 版本 / 依赖 / 其他字段
+- 改动记录在 commit message，说明为什么豁免 §12.4
+
+**当前生效的豁免**（M3.0.3 cleanup）：`src-tauri/Cargo.toml` 已加 `[profile.dev]` + `[profile.release]`，预期 target/ 从 9.6GB 降到 ~4.5GB（-53%）。
+
+### 15.6 macOS 权限与 entitlements (M4 待办)
+需创建 `src-tauri/<name>.entitlements` 含必要权限（app sandbox / 文件 / 网络 / Apple Events）；Tauri 自动生成的 `Info.plist` 已含 ccswitch URL scheme 注册（来自 `tauri.conf.json::plugins.deep-link.desktop.schemes`）。详见 `tmp/path-permission-audit.md`（待产出）。
 
 ---
 

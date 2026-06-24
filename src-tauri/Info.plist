@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- macOS 26 / Tahoe 必需 (M4 stage, 2026-06-25) -->
+    <!-- NSAppleEventsUsageDescription: tauri-plugin-single-instance 用 NSAppleEventManager
+         拦截二次启动事件, 需要用户授权 (macOS 14+ 强制) -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Claude Manager uses Apple Events to detect when you try to launch a second instance and focus the existing window instead.</string>
+
+    <!-- LSApplicationCategoryType: 让 macOS Launchpad / Finder 正确分类应用 -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+
+    <!-- LSMinimumSystemVersion: 跟 tauri.conf.json::bundle.macOS.minimumSystemVersion 一致 -->
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+
+    <!-- CFBundleURLTypes: tauri-plugin-deep-link 自动追加 ccswitch:// scheme;
+         这里手动声明保持显式可见 (Tauri build 会自动 inject, 这里作 fallback) -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.claudemanager.deeplink.ccswitch</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>ccswitch</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

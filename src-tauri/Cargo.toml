@@ -97,3 +97,23 @@ base64 = "0.22"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Security", "Win32_UI_Controls"] }
 winreg = "0.52"
+
+# === target/ 长期治理 (2026-06-24 M3.0.3 cleanup) ===
+# 历史: target/ 曾涨到 9.6GB (debug 7.4G + release 2.3G).
+# 根因: cargo 默认 incremental + 完整 .rlib 符号表 + release 不 strip.
+# 治理: dev 用 codegen-units=256 + debug=1; release 用 thin LTO + strip symbols.
+# 预期: debug 从 7.4G → ~3.5G, release 从 2.3G → ~1.0G (合计 -53%).
+# 长期: 每次 cargo build 产物体积减半, 防止无限增长.
+# 见 tmp/target-cleanup-plan.md / scripts/disk-usage-check.sh.
+[profile.dev]
+codegen-units = 256          # LLVM parallel codegen (artifact 略小)
+opt-level = 0
+debug = 1                    # line tables only, 不要 full debug info
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = "thin"                 # thin LTO 替代 fat, link 快很多
+opt-level = 3
+debug = false
+strip = "symbols"            # 关键: 去 .rlib 符号表, 缩 40-60%

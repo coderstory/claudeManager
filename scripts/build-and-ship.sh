@@ -65,14 +65,14 @@ echo "  dest:      $DEST_EXE"
 echo "================================================"
 echo ""
 
-# === Step 1: Pre-cleanup ===
-echo "[1/5] Pre-cleanup: killing any existing instances..."
-powershell.exe -NoProfile -Command "Get-Process -Name '${EXE_NAME%.exe}' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
-sleep 1
-
-# === Step 2: Build ===
+# === Step 1: Build ===
+# Note: pre-cleanup is delegated to kill-app.sh. Per CLAUDE.md §9.7 the
+# build flow is `./scripts/kill-app.sh` (residual cleanup) before
+# compiling. smoke-test.sh also calls kill-app.sh at its own pre-cleanup
+# step, so we deliberately do NOT inline a powershell Stop-Process here
+# (would be a redundant cold-start).
 echo ""
-echo "[2/5] Building release exe..."
+echo "[1/4] Building release exe..."
 cd "$PROJECT_ROOT"
 
 # M2.17-C3: switch from `cargo build --release` to `tauri build`.
@@ -111,9 +111,9 @@ fi
 EXE_SIZE=$(stat -c%s "$SOURCE_EXE" 2>/dev/null || stat -f%z "$SOURCE_EXE" 2>/dev/null || echo "?")
 echo "    exe size: $EXE_SIZE bytes ($(echo "scale=1; $EXE_SIZE/1024/1024" | bc 2>/dev/null || echo "?") MB)"
 
-# === Step 3: Copy exe + WebView2Loader.dll ===
+# === Step 2: Copy exe + WebView2Loader.dll ===
 echo ""
-echo "[3/5] Copying to desktop..."
+echo "[2/4] Copying to desktop..."
 mkdir -p "$DEST_DIR"
 
 cp "$SOURCE_EXE" "$DEST_EXE"
@@ -126,18 +126,18 @@ else
   echo "    WARN: WebView2Loader.dll not found at $WEBVIEW2_DLL_SRC"
 fi
 
-# === Step 4: Smoke test ===
+# === Step 3: Smoke test ===
 echo ""
-echo "[4/5] Running smoke test..."
+echo "[3/4] Running smoke test..."
 if "$PROJECT_ROOT/scripts/smoke-test.sh" "$DEST_EXE"; then
   SMOKE_RESULT="PASS"
 else
   SMOKE_RESULT="FAIL"
 fi
 
-# === Step 5: Report ===
+# === Step 4: Report ===
 echo ""
-echo "[5/5] Result"
+echo "[4/4] Result"
 if [[ "$SMOKE_RESULT" == "FAIL" ]]; then
   echo "FAIL: smoke test failed. Removing exe from desktop..."
   rm -f "$DEST_EXE" "$WEBVIEW2_DLL_DST"

@@ -28,6 +28,14 @@ MODE="debug"
 ACTION="build"
 EXTRA_ARGS=""
 
+# === macOS 兼容 (audit-scripts 改造 1/3) ===
+# Tauri 编译产物在 macOS 上是裸 ELF/Mach-O 可执行文件，无 .exe 后缀。
+# Windows 上才是 <name>.exe。脚本里所有拼 .exe 的地方用 $EXE_SUFFIX 替代。
+EXE_SUFFIX=""
+if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "CYGWIN"* || "$(uname -s)" == "MSYS"* ]]; then
+  EXE_SUFFIX=".exe"
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --release) MODE="release"; shift ;;
@@ -69,7 +77,7 @@ case "$ACTION" in
       cargo build --manifest-path src-tauri/Cargo.toml 2>&1 | tail -30
       OUTPUT_DIR="src-tauri/target/debug"
     fi
-    EXE_PATH="$PROJECT_ROOT/$OUTPUT_DIR/claude-config-manager.exe"
+    EXE_PATH="$PROJECT_ROOT/$OUTPUT_DIR/claude-config-manager$EXE_SUFFIX"
     if [[ -f "$EXE_PATH" ]]; then
       SIZE=$(stat -c%s "$EXE_PATH" 2>/dev/null || stat -f%z "$EXE_PATH" 2>/dev/null || echo "?")
       SIZE_MB=$(awk "BEGIN {printf \"%.1f\", $SIZE/1024/1024}")

@@ -237,7 +237,15 @@ fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
 
 /// Local UTC offset in minutes east of UTC.
 ///
-/// Uses libc::localtime on POSIX, GetTimeZoneInformation on Windows.
+/// Platform dispatch (CLAUDE.md §3.2: keep OS details out of business code):
+/// - **Windows**: raw FFI to `GetTimeZoneInformation` (kernel32). We use raw
+///   externs instead of the `windows` crate's `Win32_System_Time` feature
+///   to avoid touching Cargo.toml — the surface area is tiny (one struct,
+///   one call) and stable since Windows 2000.
+/// - **macOS / Linux (POSIX)**: `localtime_r` + `tm_gmtoff` (BSD libc
+///   extension). macOS's libc ships `tm_gmtoff` since 10.0, so the
+///   `#[cfg(not(windows))]` branch covers macOS without extra deps.
+///
 /// Returns 0 if the lookup fails (we still produce a valid timestamp;
 /// it just won't match the user's wall clock).
 #[cfg(windows)]
@@ -283,7 +291,15 @@ fn local_utc_offset_minutes() -> i64 {
 
 #[cfg(not(windows))]
 fn local_utc_offset_minutes() -> i64 {
-    // POSIX: mktime(localtime(t)) == t + offset. Use time() + localtime_r.
+    // POSIX (Linux + macOS): tm_gmtoff is seconds east of UTC on
+    // BSD-derived libcs (macOS, FreeBSD) and glibc (Linux). We use the
+    // raw libc externs to avoid pulling the `libc` crate just for two
+    // calls — same reason as the Windows branch above.
+    //
+    // For macOS, Apple's libc ships tm_gmtoff since 10.0 and the
+    // declaration is stable, so the `#[repr(C)]` struct below matches
+    // the platform ABI exactly. No platform trait needed — this
+    // single #[cfg(not(windows))] branch covers every POSIX target.
     extern "C" {
         fn time(t: *mut i64) -> i64;
     }
@@ -310,7 +326,8 @@ fn local_utc_offset_minutes() -> i64 {
         if localtime_r(&now, &mut tm).is_null() {
             return 0;
         }
-        // tm_gmtoff is in seconds east of UTC on Linux/macOS BSD libc.
+        // tm_gmtoff is in seconds east of UTC on macOS (BSD libc) and
+        // Linux (glibc). Convert to minutes.
         tm.tm_gmtoff / 60
     }
 }

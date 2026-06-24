@@ -16,8 +16,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "lucide-react": "0.542.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^6.30.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

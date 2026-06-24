@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- macOS entitlements (M4 stage, 2026-06-25) -->
+    <!-- 参考 tauri.conf.json::bundle.macOS.entitlements 引用 -->
+
+    <!-- 出站网络 (F7 usage query, F21 资源搜索) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- 文件系统: 用户选择的文件 (F3 .sql import picker, F8 export single-file-deploy) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Apple Events: tauri-plugin-single-instance (单实例锁 macOS 实现) -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>

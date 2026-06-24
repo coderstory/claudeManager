@@ -26,6 +26,13 @@
 #   - 真正细致的 DOM 校验由 Vitest 单元测试 + WebDriver e2e 覆盖
 #   - 本脚本是"exe 能跑起来 + 窗口真的有内容"的兜底门禁
 #
+# 性能优化（M3.0.4）：
+#   - Pre-cleanup 改为调 kill-app.sh（避免重复实现）
+#   - Test 1/2/5/8 共用一次 PowerShell heredoc（每次冷启动 ~200-400ms）
+#     通过 TEST<n>_<KEY>=VALUE 前缀让 bash 端 grep 解析
+#   - Test 6 的 UTF-8 title 保留 PowerShell 写文件方案（GBK 是 Git Bash 真实坑）
+#   - Test 9/10 保留 sqlite3/python fallback（不是 powershell 瓶颈）
+#
 # 任何失败 exit code = 1
 
 set -euo pipefail
@@ -57,6 +64,18 @@ ALL_PROCNAMES=("${SOURCE_PROCNAME}" "${EXE_NAME_NO_EXT}")
 # Windows form, so always normalise.
 EXE_PATH_WIN=$(cygpath -w "$EXE_PATH" 2>/dev/null || echo "$EXE_PATH")
 
+# Locate the project root and the kill-app.sh sibling. BASH_SOURCE may be
+# unset when sourced; in that case fall back to $0 (the caller's path).
+SMOKE_SCRIPT="${BASH_SOURCE[0]:-$0}"
+SMOKE_SCRIPT_DIR=$(cd "$(dirname "$SMOKE_SCRIPT")" 2>/dev/null && pwd || echo "")
+PROJECT_ROOT=""
+if [[ -n "$SMOKE_SCRIPT_DIR" && "$SMOKE_SCRIPT_DIR" == */scripts ]]; then
+  PROJECT_ROOT="${SMOKE_SCRIPT_DIR%/scripts}"
+elif [[ -n "$SMOKE_SCRIPT_DIR" ]]; then
+  PROJECT_ROOT="$SMOKE_SCRIPT_DIR"
+fi
+KILL_APP_SH="${PROJECT_ROOT}/scripts/kill-app.sh"
+
 # Read expected window title from tauri.conf.json. We look at the line
 # with `"title":` (a child key of `app.windows[0]`) — that's the OS
 # window title shown by Win32.
@@ -81,14 +100,22 @@ if [[ ! -f "$EXE_PATH" ]]; then
   exit 1
 fi
 
-# Pre-cleanup
+# Pre-cleanup: delegate to kill-app.sh so there's one source of truth for
+# "kill all matching processes" (used by build-and-ship.sh, smoke-test.sh,
+# and ad-hoc cleanups). We source it in a subshell so the `exit 0` on the
+# "already clean" path doesn't terminate this script.
 echo ">>> Pre-cleanup: killing any existing instances..."
-# Kill any process matching either name (original PE image or renamed copy)
-powershell.exe -NoProfile -Command "
-  foreach (\$n in @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')) {
-    Get-Process -Name \$n -ErrorAction SilentlyContinue | Stop-Process -Force
-  }
-" 2>&1 || true
+if [[ -x "$KILL_APP_SH" ]]; then
+  "$KILL_APP_SH" 2>&1 | tail -5 || true
+else
+  # Fallback to the original inline powershell if kill-app.sh is missing
+  # (should never happen in normal use, but keeps the test self-contained).
+  powershell.exe -NoProfile -Command "
+    foreach (\$n in @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')) {
+      Get-Process -Name \$n -ErrorAction SilentlyContinue | Stop-Process -Force
+    }
+  " 2>&1 || true
+fi
 sleep 1
 
 PASS=0
@@ -110,42 +137,105 @@ record() {
   RESULTS+=("$status $name")
 }
 
-# === Test 1: Launch & process running within 5s ===
-echo ""
-echo ">>> Test 1: Launch & process running"
-powershell.exe -NoProfile -Command "Start-Process -FilePath '$EXE_PATH_WIN'" 2>&1 || true
-sleep 5
+# Helper: extract a `TEST<n>_<KEY>=VALUE` line from multi-line PowerShell
+# output. Trims CR + leading/trailing whitespace.
+pwsh_get() {
+  local test_num="$1"
+  local key="$2"
+  local output="$3"
+  echo "$output" \
+    | tr -d '\r' \
+    | grep -E "^TEST${test_num}_${key}=" \
+    | head -1 \
+    | sed -E "s/^TEST${test_num}_${key}=//" \
+    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+}
 
-PROC_COUNT=$(powershell.exe -NoProfile -Command "
-  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
-  @(Get-Process -Name \$n -ErrorAction SilentlyContinue).Count
-" 2>&1 | tr -d '\r' | head -1)
-if [[ "$PROC_COUNT" -ge "1" ]]; then
+# === Test 1: Launch + Test 2: Main window visible + Test 5: WebView2 child ===
+# Why combined: all three need the same `Get-Process -Name @(... | ...)` lookup
+# and process handle. Folding them into one PowerShell session saves 2 cold
+# starts (~400-400ms). Each test emits `TEST<n>_<KEY>=VALUE` lines that bash
+# picks apart with pwsh_get.
+#
+# Implementation note: we write the PowerShell body to a temp .ps1 file and
+# invoke `powershell -File`, NOT `-Command -` reading from stdin. Why:
+# `Add-Type` (required for EnumChildWindows P/Invoke) silently dies when run
+# via a piped stdin command — the C# compiler can't initialise in that
+# context. We confirmed this empirically: a 4-line Add-Type test piped into
+# `powershell -Command -` prints "BEFORE" and exits 0 with no errors, but
+# never prints "AFTER". The fix is `-File <path>` which gives PowerShell a
+# proper file-backed session. Cold-start cost is the same (~200ms).
+echo ""
+echo ">>> Test 1: Launch + Test 2/5: window + WebView2 (combined session)"
+SMOKE_PS1="/tmp/smoke-test-1-$$-$RANDOM.ps1"
+cat > "$SMOKE_PS1" <<PWSH_EOF
+Start-Process -FilePath '${EXE_PATH_WIN}' | Out-Null
+Start-Sleep -Seconds 5
+
+\$procs = @(Get-Process -Name @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}') -ErrorAction SilentlyContinue)
+"TEST1_COUNT=\$(\$procs.Count)"
+
+\$p = \$procs | Select-Object -First 1
+if (\$p -and \$p.MainWindowHandle -ne 0 -and \$p.Responding) {
+  "TEST2_STATE=OK"
+  "TEST2_PID=\$(\$p.Id)"
+} else {
+  "TEST2_STATE=BAD"
+  "TEST2_PID="
+}
+
+<# Test 5: WebView2 child window enumeration (Add-Type defined inline once) #>
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Collections.Generic;
+public class W2 {
+  [DllImport("user32.dll")]
+  public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll", CharSet = CharSet.Auto)]
+  public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+  [DllImport("user32.dll")]
+  public static extern bool IsWindowVisible(IntPtr hWnd);
+}
+'@ -ErrorAction SilentlyContinue
+
+if (-not \$p -or \$p.MainWindowHandle -eq 0) {
+  "TEST5_FOUND=NO_MAIN"
+} else {
+  \$found = New-Object System.Collections.Generic.List[string]
+  \$cb = [W2+EnumWindowsProc]{
+    param(\$hwnd, \$lparam)
+    \$cn = New-Object System.Text.StringBuilder 256
+    [void][W2]::GetClassName(\$hwnd, \$cn, 256)
+    \$class = \$cn.ToString()
+    if (\$class -match 'Chrome_WidgetWin|Chrome_RenderWidgetHostHWND|Intermediate D3D Window|Tauri.*WEBVIEW|Tauri\.WebView|WRY_WebView|CefBrowserWindow') {
+      \$found.Add(\$class)
+    }
+    return \$true
+  }
+  [void][W2]::EnumChildWindows(\$p.MainWindowHandle, \$cb, [IntPtr]::Zero)
+  if (\$found.Count -gt 0) {
+    "TEST5_FOUND=\$(\$found -join ',')"
+  } else {
+    "TEST5_FOUND=NONE"
+  }
+}
+PWSH_EOF
+
+PWSH_OUT_1=$(powershell.exe -NoProfile -File "$SMOKE_PS1" 2>&1)
+rm -f "$SMOKE_PS1"
+
+PROC_COUNT=$(pwsh_get 1 COUNT "$PWSH_OUT_1")
+WINDOW_STATE=$(pwsh_get 2 STATE "$PWSH_OUT_1")
+WEBVIEW_INFO=$(pwsh_get 5 FOUND "$PWSH_OUT_1")
+
+if [[ "$PROC_COUNT" =~ ^[0-9]+$ ]] && [[ "$PROC_COUNT" -ge 1 ]]; then
   record "1_launch" "PASS" "process running (count=$PROC_COUNT)"
 else
-  record "1_launch" "FAIL" "process not found after 5s"
+  record "1_launch" "FAIL" "process not found after 5s (count=${PROC_COUNT:-?})"
 fi
-
-# === Test 2: Main window visible ===
-# M1.1 historical: Tauri webview window's MainWindowTitle is sometimes empty
-# until the user gives the window focus (or the OS completes a delayed
-# compositor handoff). The previous check `[[ -n "$WINDOW_TITLE" ]]` was a
-# race-condition false positive. Switch to a structural check that doesn't
-# depend on the title text being populated yet:
-#   - MainWindowHandle != 0  → Tauri created the window
-#   - Responding = True       → the message loop is alive
-# If both hold, the GUI is up; title text is a separate concern.
-echo ""
-echo ">>> Test 2: Main window visible"
-WINDOW_STATE=$(powershell.exe -NoProfile -Command "
-  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
-  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (\$p -and \$p.MainWindowHandle -ne 0 -and \$p.Responding) {
-    Write-Host 'OK'
-  } else {
-    Write-Host 'BAD'
-  }
-" 2>&1 | tr -d '\r' | head -1)
 
 if [[ "$WINDOW_STATE" == "OK" ]]; then
   record "2_window" "PASS" "MainWindowHandle present + Responding=True"
@@ -153,80 +243,14 @@ else
   record "2_window" "FAIL" "window handle missing or process not responding (state=$WINDOW_STATE)"
 fi
 
-# === Test 5: WebView2 child window exists (frontend loaded) ===
-# Why: previous smoke test only proved Tauri created *an* HWND. It did not
-# prove the WebView2 host started. If `dist/` is empty or the JS bundle is
-# missing/corrupt, Tauri still creates the main window (the Rust side
-# doesn't care) — but no WebView2 child ever spawns. We use
-# `EnumChildWindows` on the main HWND and look for any of these class
-# names that WebView2 creates internally:
-#   - Chrome_WidgetWin_0 / Chrome_WidgetWin_1 — chromium top-level widget
-#   - Chrome_RenderWidgetHostHWND — composited render surface
-#   - Intermediate D3D Window — D3D compositor overlay
-#   - Tauri / Tauri.WebView2 — some Tauri builds tag the webview host
-# If ANY of these exist as a child of our MainWindowHandle, the WebView2
-# process is alive and attached → the frontend bundle was loaded.
-#
-# Implementation note: we pass a script-block callback to EnumChildWindows.
-# Inside it we cannot mutate script-scope variables the usual way; we use
-# a `[ref]` int and a counter-class. Simpler: write child class names to
-# the Information stream and parse them in bash.
-echo ""
-echo ">>> Test 5: WebView2 child window exists"
-WEBVIEW_INFO=$(powershell.exe -NoProfile -Command "
-  Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Collections.Generic;
-public class W2 {
-  [DllImport(\"user32.dll\")]
-  public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
-  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-  [DllImport(\"user32.dll\", CharSet = CharSet.Auto)]
-  public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-  [DllImport(\"user32.dll\", CharSet = CharSet.Auto)]
-  public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-  [DllImport(\"user32.dll\")]
-  public static extern bool IsWindowVisible(IntPtr hWnd);
-}
-'@ -ErrorAction SilentlyContinue
-
-  \$n = @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')
-  \$p = Get-Process -Name \$n -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not \$p -or \$p.MainWindowHandle -eq 0) {
-    Write-Host 'NO_MAIN'
-    exit
-  }
-
-  \$found = New-Object System.Collections.Generic.List[string]
-  \$cb = [W2+EnumWindowsProc]{
-    param(\$hwnd, \$lparam)
-    \$cn = New-Object System.Text.StringBuilder 256
-    [void][W2]::GetClassName(\$hwnd, \$cn, 256)
-    \$class = \$cn.ToString()
-    if (\$class -match 'Chrome_WidgetWin|Chrome_RenderWidgetHostHWND|Intermediate D3D Window|Tauri.*WEBVIEW|Tauri\\.WebView|WRY_WebView|CefBrowserWindow') {
-      \$found.Add(\$class)
-    }
-    return \$true
-  }
-  [void][W2]::EnumChildWindows(\$p.MainWindowHandle, \$cb, [IntPtr]::Zero)
-  if (\$found.Count -gt 0) {
-    Write-Host (\"FOUND:\" + (\$found -join ','))
-  } else {
-    Write-Host 'NONE'
-  }
-" 2>&1 | tr -d '\r' | head -1)
-
-if [[ "$WEBVIEW_INFO" == FOUND:* ]]; then
-  CLASSES="${WEBVIEW_INFO#FOUND:}"
-  record "5_webview" "PASS" "WebView2 child(ren) found: $CLASSES"
+if [[ "$WEBVIEW_INFO" == NO_MAIN ]]; then
+  record "5_webview" "FAIL" "main window handle missing at test time"
 elif [[ "$WEBVIEW_INFO" == "NONE" ]]; then
   record "5_webview" "FAIL" "no WebView2 child window under main HWND (frontend may not have loaded)"
-elif [[ "$WEBVIEW_INFO" == "NO_MAIN" ]]; then
-  record "5_webview" "FAIL" "main window handle missing at test time"
+elif [[ -n "$WEBVIEW_INFO" ]]; then
+  record "5_webview" "PASS" "WebView2 child(ren) found: $WEBVIEW_INFO"
 else
-  record "5_webview" "FAIL" "unexpected PowerShell output: $WEBVIEW_INFO"
+  record "5_webview" "FAIL" "unexpected PowerShell output"
 fi
 
 # === Test 6: Window title matches tauri.conf.json productName ===
@@ -285,20 +309,7 @@ fi
 # `strings` will find it. If dist was never embedded, `strings` returns nothing.
 echo ""
 echo ">>> Test 7: Frontend assets embedded in exe"
-# Find current dist bundle name(s) — they include a content hash
-# PROJECT_ROOT may be unset in this scope (we're in a subshell that inherited
-# `set -u` from the parent), so derive it from EXE_DIR. The smoke test script
-# itself is at <PROJECT_ROOT>/scripts/smoke-test.sh, so the dir 2 levels above
-# the script is the project root. If the script is run from elsewhere, we fall
-# back to the TAURI_CONF env var's parent.
-SMOKE_SCRIPT="${BASH_SOURCE[0]:-$0}"
-SMOKE_SCRIPT_DIR=$(cd "$(dirname "$SMOKE_SCRIPT")" && pwd 2>/dev/null || echo "")
-INFERRED_ROOT=""
-if [[ -n "$SMOKE_SCRIPT_DIR" && "$SMOKE_SCRIPT_DIR" == */scripts ]]; then
-  INFERRED_ROOT="${SMOKE_SCRIPT_DIR%/scripts}"
-elif [[ -n "$SMOKE_SCRIPT_DIR" ]]; then
-  INFERRED_ROOT="$SMOKE_SCRIPT_DIR"
-fi
+INFERRED_ROOT="$PROJECT_ROOT"
 TEST7_DIST_DIR=""
 for cand in "${INFERRED_ROOT}/dist/assets" "/d/project/winui3/dist/assets" "$(dirname "$EXE_DIR")/dist/assets"; do
   if [[ -d "$cand" ]]; then

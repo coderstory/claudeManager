@@ -49,7 +49,15 @@
         "role": "Editor",
         "mimeType": "application/sql"
       }
-    ]
+    ],
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "11.0",
+      "exceptionDomain": "",
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": "ClaudeConfigManager.entitlements"
+    }
   },
   "plugins": {
     "updater": {

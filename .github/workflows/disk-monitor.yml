@@ -1,0 +1,23 @@
+# .github/workflows/disk-monitor.yml
+# 每月 1 号 00:00 UTC 跑一次 target/ 磁盘检查; 超阈值自动开 issue
+name: target disk monitor
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # 每月 1 号
+  workflow_dispatch:       # 也支持手动触发
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check target/ disk usage
+        run: |
+          ./scripts/disk-usage-check.sh src-tauri/target || EXIT=$?
+          echo "exit=$EXIT"
+          # exit 1 = 警告, exit 2 = 超限; 都 OK, fail job 让 GitHub 邮件通知
+          exit $EXIT

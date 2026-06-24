@@ -16,8 +16,41 @@
 // 那是 switch_provider 的职责)。导入幂等 (已存在 id 跳过)。
 const http = require('http');
 const WebSocket = require('ws');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// === macOS 兼容 (audit-scripts 改造 3/3) ===
+const IS_WINDOWS = process.platform === 'win32';
+
+function getAppDataDir() {
+  // Windows: %APPDATA%\ClaudeConfigManager
+  // macOS:   ~/Library/Application Support/ClaudeConfigManager
+  // Linux:   ~/.config/ClaudeConfigManager (未在本项目支持, fallback)
+  if (IS_WINDOWS) {
+    return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'ClaudeConfigManager');
+  } else if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'ClaudeConfigManager');
+  } else {
+    return path.join(os.homedir(), '.config', 'ClaudeConfigManager');
+  }
+}
+
+function killProcess(procName) {
+  if (IS_WINDOWS) {
+    execFileSync('powershell.exe', ['-NoProfile', '-Command',
+      `Get-Process -Name '${procName}' -ErrorAction SilentlyContinue | Stop-Process -Force`
+    ]);
+  } else {
+    // macOS / Linux
+    try {
+      execFileSync('pkill', ['-f', procName]);
+    } catch (e) {
+      // pkill returns 1 if no process matched, ignore
+    }
+  }
+}
 
 const PORT = 9223;
 
@@ -188,7 +221,7 @@ async function main() {
 
     // ---- 8. 检查磁盘 ----
     // 注意: paths.app_data 用 productName(=ClaudeConfigManager) 不是 identifier。
-    const providersDir = 'C:\\Users\\e-Yunfei.Qian\\AppData\\Roaming\\ClaudeConfigManager\\providers';
+    const providersDir = path.join(getAppDataDir(), 'providers');
     let diskCount = -1;
     try {
       diskCount = fs.readdirSync(providersDir).filter((f) => f.endsWith('.json')).length;
@@ -203,10 +236,7 @@ async function main() {
     try { child.kill(); } catch {}
     // 确保杀干净
     try {
-      require('child_process').execSync(
-        'powershell.exe -NoProfile -Command "Get-Process -Name \'claude-config-manager\' -ErrorAction SilentlyContinue | Stop-Process -Force"',
-        { stdio: 'ignore' },
-      );
+      killProcess('claude-config-manager');
     } catch {}
   }
 

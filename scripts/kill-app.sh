@@ -6,6 +6,10 @@
 #   ./scripts/kill-app.sh --force   # 立即 taskkill /F
 #
 # 用于：smoke test 收尾 / 重新编译前清理 / 调试卡死时清理
+#
+# 性能优化（M3.0.4）：
+#   - PID 循环里 N 次 powershell 合并为 1 次（一次性把 PIDs 数组传进去）
+#   - 抽 check_remaining_count() 复用（L73-75 + L91-93 共用）
 
 set -euo pipefail
 
@@ -30,6 +34,15 @@ ALL_NAMES=("${SHORT_NAME}" "${SUFFIX_WILDCARD}")
 NAME_REGEX=$(printf '%s|' "${ALL_NAMES[@]}")
 NAME_REGEX="${NAME_REGEX%|}"
 
+# check_remaining_count: prints the number of ClaudeConfigManager processes
+# still alive (matches BOTH SHORT_NAME and SUFFIX_WILDCARD). Replaces two
+# duplicated inline powershell calls in the original script.
+check_remaining_count() {
+  powershell.exe -NoProfile -Command "
+    @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
+  " 2>&1 | tr -d '\r' | head -1
+}
+
 echo ">>> kill-app.sh: searching for ${ALL_NAMES[*]} processes..."
 
 # 1) Find all matching PIDs (case-insensitive on Windows)
@@ -52,27 +65,32 @@ if [[ "$FORCE" == "true" ]]; then
     taskkill -F -PID "$pid" 2>&1 || true
   done
 else
-  echo ">>> Graceful mode: sending CloseMainWindow via PowerShell..."
-  for pid in $PIDS; do
-    powershell.exe -NoProfile -Command "
-      \$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
-      if (\$proc -and \$proc.MainWindowHandle -ne 0) {
-        \$proc.CloseMainWindow() | Out-Null
-      } else {
-        # No main window (tray-only) → kill
-        Stop-Process -Id $pid -Force
-      }
-    " 2>&1 || true
-  done
+  echo ">>> Graceful mode: sending CloseMainWindow via PowerShell (one batched call)..."
+  # Build a CSV of PIDs (comma-separated, no trailing comma). We pass all PIDs
+  # in ONE powershell call instead of N (the original loop spawned powershell
+  # per PID — each cold start ~200-400ms, so multi-process scenarios paid N*cost).
+  # We use a powershell heredoc + $pid_csv arg-passing via environment variable
+  # to avoid bash quoting hell (mixing single/double quotes inside `-Command` is
+  # brittle — `echo "$X" | sed "s/'/\"/g"` can produce ""23708""' which breaks
+  # PowerShell parsing. A heredoc + env var is rock solid.)
+  PIDS_CSV=$(echo $PIDS | tr '\n' ',' | sed 's/,$//')
+  PID_CSV="$PIDS_CSV" powershell.exe -NoProfile -Command - <<PWSH_EOF 2>&1 || true
+\$idStr = \$env:PID_CSV
+\$ids = @(\$idStr -split ',' | Where-Object { \$_ -match '^\d+\$' } | ForEach-Object { [int]\$_ })
+foreach (\$id in \$ids) {
+  \$proc = Get-Process -Id \$id -ErrorAction SilentlyContinue
+  if (\$proc -and \$proc.MainWindowHandle -ne 0) {
+    \$proc.CloseMainWindow() | Out-Null
+  } else {
+    Stop-Process -Id \$id -Force
+  }
+}
+PWSH_EOF
 
   echo ">>> Waiting up to 5s for graceful exit..."
   for i in {1..10}; do
     sleep 0.5
-    # Get-Process -Name accepts wildcards, so the SUFFIX_WILDCARD covers all
-    # ClaudeConfigManager-M*.exe variants; SHORT_NAME covers the legacy case.
-    REMAINING=$(powershell.exe -NoProfile -Command "
-      @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
-    " 2>&1 | tr -d '\r' | head -1)
+    REMAINING=$(check_remaining_count)
     if [[ "$REMAINING" == "0" ]]; then
       echo ">>> Graceful exit successful."
       exit 0
@@ -88,9 +106,7 @@ else
 fi
 
 sleep 1
-REMAINING=$(powershell.exe -NoProfile -Command "
-  @(Get-Process -Name @('${ALL_NAMES[0]}','${ALL_NAMES[1]}') -ErrorAction SilentlyContinue).Count
-" 2>&1 | tr -d '\r' | head -1)
+REMAINING=$(check_remaining_count)
 if [[ "$REMAINING" == "0" ]]; then
   echo ">>> All processes cleaned."
   exit 0

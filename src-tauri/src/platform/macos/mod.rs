@@ -1,3 +1,10 @@
+//! macOS 平台抽象层 — 所有 macOS-only 代码
+//!
+//! 模块级 cfg 防止 rust-analyzer 在其他平台误报。
+//! impl 自身已有 #[cfg(target_os = "macos")] 隔离, 这是友好化补丁。
+
+#![cfg(target_os = "macos")]
+
 //! macOS-side stub implementations of the platform traits.
 //!
 //! On the mac build these will be filled in. On the current Windows-only
