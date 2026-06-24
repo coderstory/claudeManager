@@ -451,4 +451,87 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
       expect(banner!.textContent).toContain('disk full');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Reload-after-import regression (b6aa402 + 38d4f60):
+  // "从当前配置生成" 按钮 confirm 导入后, 列表必须刷新才能看到新 provider.
+  // 真实 testid 命名 (看 src/pages/provider-list/index.tsx): provider-*
+  // -----------------------------------------------------------------------
+  it('generate-confirm 触发 importSingleProvider + switchProvider + 2 次 reload', async () => {
+    // 1) 初次加载: 列表为空
+    mockInvoke.mockResolvedValueOnce([]);
+    render(<ProviderListPage />);
+    // 先等 loading 出现, 再等 list/empty 出现
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-loading')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-empty')).toBeInTheDocument();
+    });
+
+    // 2) 点 "从当前配置生成" 按钮 → 后端返回 1 个 candidate
+    mockInvoke.mockResolvedValueOnce({
+      provider: p('generated-1', 'minimaxi.com'),
+      is_new: true,
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-list-generate'));
+    });
+    // 3) preview modal 应出现
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-generate-preview-modal')).toBeInTheDocument();
+    });
+
+    // 4) 点 "确认导入" → importSingleProvider + switchProvider + 2 次 listProviders
+    mockInvoke.mockResolvedValueOnce(undefined); // importSingleProvider
+    mockInvoke.mockResolvedValueOnce(undefined); // switchProvider
+    mockInvoke.mockResolvedValueOnce([p('generated-1', 'minimaxi.com')]); // reload after import
+    mockInvoke.mockResolvedValueOnce([p('generated-1', 'minimaxi.com', { is_active: true })]); // reload after switch
+    await act(async => {
+      fireEvent.click(screen.getByTestId('provider-generate-preview-confirm'));
+    });
+
+    // 5) 验证 listProviders 被调用 >=3 次 (初次 + 2 次 reload)
+    const listCalls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'list_providers');
+    expect(listCalls.length).toBeGreaterThanOrEqual(3);
+
+    // 6) 新 provider 出现在 DOM
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-generated-1')).toBeInTheDocument();
+    });
+  });
+
+  it('generate-confirm 失败: importSingleProvider reject → 状态切 failure', async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-loading')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-empty')).toBeInTheDocument();
+    });
+
+    // generate 成功
+    mockInvoke.mockResolvedValueOnce({
+      provider: p('generated-2', 'minimaxi.com'),
+      is_new: true,
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-list-generate'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-generate-preview-modal')).toBeInTheDocument();
+    });
+
+    // confirm 失败
+    mockInvoke.mockRejectedValueOnce(new Error('disk full write failed'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('provider-generate-preview-confirm'));
+    });
+
+    // 状态切 failure (GeneratePreviewModal 关闭, 错误显示在 generate-info-bar)
+    await waitFor(() => {
+      expect(screen.queryByTestId('provider-generate-preview-modal')).toBeNull();
+    });
+  });
 });
