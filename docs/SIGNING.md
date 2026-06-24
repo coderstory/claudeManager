@@ -1,5 +1,10 @@
 # Signing & Notarization
 
+> **⚠️ ARCHIVED 2026-06-24** — M4.1 代码签名证书取消 + M4.5 商店取消 (user 决策).
+> 维护者请勿按本文件配置 Apple Developer Program / 购买 EV cert.
+> 详见 [CLAUDE.md §15.7](../CLAUDE.md#157--本项目不做发布2026-06-24-user决定) + [.planning/PROJECT.md §Out of Scope](../.planning/PROJECT.md).
+> 历史原因: M1.10 阶段文档, v3.0 决策后冻结.
+
 > **Status (M1.10)**: All secrets in this document are **placeholders** for
 > the v1.1 release phase. M1 builds are dev builds (debug) and do NOT
 > require signing — they are only iterated locally via
