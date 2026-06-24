@@ -16,10 +16,11 @@
 #   ./scripts/build-mac.sh                  # release bundle (.app + .dmg)
 #   ./scripts/build-mac.sh --debug          # debug bundle (faster)
 #   ./scripts/build-mac.sh --no-bundle      # cargo build only, no bundling
+#   ./scripts/build-mac.sh --no-dmg         # build .app but skip .dmg (dev: 直接 cp 到 /Applications)
 #
 # Output:
 #   src-tauri/target/release/bundle/macos/ClaudeManager.app
-#   src-tauri/target/release/bundle/dmg/ClaudeConfigManager_<VERSION>_aarch64.dmg
+#   src-tauri/target/release/bundle/dmg/ClaudeConfigManager_<VERSION>_aarch64.dmg (除非 --no-dmg)
 #
 # Required env:
 #   - macOS host with Xcode Command Line Tools (`xcode-select --install`)
@@ -41,11 +42,13 @@ cd "$PROJECT_ROOT"
 
 MODE="release"
 EXTRA_ARGS=()
+NO_DMG=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --debug)     MODE="debug"; shift ;;
     --no-bundle) EXTRA_ARGS+=("--no-bundle"); shift ;;
+    --no-dmg)    NO_DMG=1; shift ;;
     *)           echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -112,10 +115,16 @@ fi
 if [[ -d "$DMG_DIR" ]]; then
   DMG_FILES=$(ls "$DMG_DIR"/*.dmg 2>/dev/null || true)
   if [[ -n "$DMG_FILES" ]]; then
-    for f in $DMG_FILES; do
-      SIZE=$(du -sh "$f" 2>/dev/null | awk '{print $1}')
-      echo "    dmg:  $f ($SIZE)"
-    done
+    if [[ $NO_DMG -eq 1 ]]; then
+      # dev: 用户直接 cp .app 到 /Applications, 不需要 dmg
+      echo "    [--no-dmg] 删除 dmg: $DMG_DIR/"
+      rm -f "$DMG_DIR"/*.dmg
+    else
+      for f in $DMG_FILES; do
+        SIZE=$(du -sh "$f" 2>/dev/null | awk '{print $1}')
+        echo "    dmg:  $f ($SIZE)"
+      done
+    fi
   fi
 fi
 
