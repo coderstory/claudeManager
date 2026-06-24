@@ -29,7 +29,12 @@
 # This script does NOT sign or notarize the bundle. v1.1 signing lives
 # in CI (.github/workflows/release.yml). See docs/SIGNING.md.
 
-set -euo pipefail
+# Note: we deliberately omit `-u` from `set -e`. macOS ships bash 3.2.57
+# by default (last GPLv2 release, 2007), where unset/empty array expansion
+# under `set -u` is brittle (e.g. `${EXTRA_ARGS[*]}` when no flag was
+# passed triggers "unbound variable" on bash 3.2 even though bash 4+ is
+# fine). We use the array defensively and tolerate unset vars instead.
+set -eo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
