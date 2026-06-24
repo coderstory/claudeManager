@@ -955,7 +955,7 @@ function ResourceRow({
               style={{
                 fontSize: 11,
                 padding: '2px 6px',
-                borderRadius: 3,
+                borderRadius: 'var(--radius-sm)',
                 background: 'rgba(56, 142, 60, 0.12)',
                 color: 'var(--success)',
               }}
@@ -968,7 +968,7 @@ function ResourceRow({
               style={{
                 fontSize: 11,
                 padding: '2px 6px',
-                borderRadius: 3,
+                borderRadius: 'var(--radius-sm)',
                 background: 'rgba(0,0,0,0.05)',
                 color: 'var(--text-muted)',
                 display: 'inline-flex',

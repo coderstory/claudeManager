@@ -749,7 +749,7 @@ function RepoCard({
               style={{
                 fontSize: 10,
                 padding: '2px 6px',
-                borderRadius: 3,
+                borderRadius: 'var(--radius-sm)',
                 background:
                   repo.install_mode === 'builtin'
                     ? 'rgba(56, 142, 60, 0.12)'
@@ -948,7 +948,7 @@ function ResourceInstallRow({
                 style={{
                   fontSize: 10,
                   padding: '1px 5px',
-                  borderRadius: 3,
+                  borderRadius: 'var(--radius-sm)',
                   background: 'rgba(9, 105, 218, 0.10)',
                   color: 'var(--accent)',
                   fontWeight: 500,

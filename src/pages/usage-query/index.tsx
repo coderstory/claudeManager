@@ -792,7 +792,7 @@ function HistoryChart({ history, loading }: { history: UsageHistoryEntry[]; load
                 width: 10,
                 height: 10,
                 background: colorFor(model),
-                borderRadius: 2,
+                borderRadius: 'var(--radius-xs)',
                 display: 'inline-block',
               }}
             />
