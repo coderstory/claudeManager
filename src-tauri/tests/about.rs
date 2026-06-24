@@ -61,7 +61,7 @@ fn about_snapshot_is_stable_across_calls() {
 fn about_identifier_mirrors_tauri_conf() {
     assert_eq!(
         app::AppMetadata::current().identifier,
-        "com.claudeconfigmanager.app"
+        "com.claudeconfigmanager.desktop"
     );
 }
 

@@ -49,7 +49,7 @@ const PRODUCT_NAME: &str = "ClaudeManager";
 /// see module docstring.
 ///
 /// NOTE: bundle identifier (used for macOS bundle id / Windows
-/// installer) stays as `IDENTIFIER` (= `com.claudeconfigmanager.app`).
+/// installer) stays as `IDENTIFIER` (= `com.claudeconfigmanager.desktop`).
 /// `DISPLAY_IDENTIFIER` is a separate constant returned by the
 /// IPC to the About page so the displayed name matches the
 /// rebrand without touching the system-level bundle id.
@@ -60,7 +60,7 @@ const PRODUCT_NAME: &str = "ClaudeManager";
 /// installer / registry / mutex name / AppData path). M3.0.3
 /// rebrand preserved it on purpose; do not delete.
 #[allow(dead_code)]
-const IDENTIFIER: &str = "com.claudeconfigmanager.app";
+const IDENTIFIER: &str = "com.claudeconfigmanager.desktop";
 
 /// Display-only identifier shown on the About page. Independent
 /// of `IDENTIFIER` (the bundle id) — changing this has no effect
@@ -79,7 +79,7 @@ pub struct AppMetadata {
     /// CARGO_PKG_VERSION (semver from Cargo.toml).
     pub version: String,
     /// Display identifier, e.g. "com.claudemanager.app". Independent
-    /// of the system bundle id (which stays "com.claudeconfigmanager.app"
+    /// of the system bundle id (which stays "com.claudeconfigmanager.desktop"
     /// for OS / installer compatibility).
     pub identifier: String,
     /// Product name, e.g. "ClaudeManager".
@@ -163,7 +163,7 @@ mod tests {
     fn identifier_returns_display_value_for_about_page() {
         // DISPLAY_IDENTIFIER is the value returned by IPC to the
         // About page — independent of the system bundle id
-        // (`IDENTIFIER` = "com.claudeconfigmanager.app"), which
+        // (`IDENTIFIER` = "com.claudeconfigmanager.desktop"), which
         // stays unchanged for OS / installer compatibility.
         assert_eq!(
             AppMetadata::current().identifier,

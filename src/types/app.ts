@@ -10,7 +10,7 @@
 export interface AppMetadata {
   /** Semver from Cargo.toml, e.g. "0.1.0". */
   version: string;
-  /** Bundle identifier, e.g. "com.claudeconfigmanager.app". */
+  /** Bundle identifier, e.g. "com.claudeconfigmanager.desktop". */
   identifier: string;
   /** Product name, e.g. "ClaudeConfigManager". */
   product_name: string;

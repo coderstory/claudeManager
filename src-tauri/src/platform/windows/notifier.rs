@@ -3,7 +3,7 @@
 //! Uses the standard `tauri-plugin-notification` API. The plugin wraps the
 //! WinRT `Windows.UI.Notifications` toast APIs, which require an AUMID
 //! (Application User Model ID) on Windows 10+; the app identifier from
-//! `tauri.conf.json` (`com.claudeconfigmanager.app`) is used automatically.
+//! `tauri.conf.json` (`com.claudeconfigmanager.desktop`) is used automatically.
 //!
 //! We do NOT take a direct dependency on the plugin crate here — it's the
 //! app's responsibility to register the plugin. This impl just provides a

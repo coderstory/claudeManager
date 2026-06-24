@@ -22,7 +22,7 @@ fi
 CMD="${1:-all}"
 
 APP_NAME="ClaudeManager"
-LOG_DIR="$HOME/Library/Logs/com.claudeconfigmanager.app"
+LOG_DIR="$HOME/Library/Logs/com.claudeconfigmanager.desktop"
 LOG_FILE="$LOG_DIR/$APP_NAME.log"
 
 cmd_attach() {

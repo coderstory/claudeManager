@@ -29,7 +29,7 @@ open src-tauri/target/debug/bundle/macos/ClaudeManager.app
 pgrep -f ClaudeManager  # 应返回 1+ PID
 
 # 6. 看日志
-tail -F ~/Library/Logs/com.claudeconfigmanager.app/ClaudeManager.log
+tail -F ~/Library/Logs/com.claudeconfigmanager.desktop/ClaudeManager.log
 ```
 
 ### 1.3 一键调试脚本
@@ -129,7 +129,7 @@ npm run tauri dev
 
 ### Q2: 如何看应用日志?
 ```bash
-tail -F ~/Library/Logs/com.claudeconfigmanager.app/ClaudeManager.log
+tail -F ~/Library/Logs/com.claudeconfigmanager.desktop/ClaudeManager.log
 # 或
 ./scripts/debug-mac.sh tail
 ```
