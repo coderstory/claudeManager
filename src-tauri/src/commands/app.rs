@@ -53,6 +53,13 @@ const PRODUCT_NAME: &str = "ClaudeManager";
 /// `DISPLAY_IDENTIFIER` is a separate constant returned by the
 /// IPC to the About page so the displayed name matches the
 /// rebrand without touching the system-level bundle id.
+///
+/// Reserved by design (CLAUDE.md §6.5) — even though `current()`
+/// returns `DISPLAY_IDENTIFIER`, this constant must stay available
+/// for the system-level bundle id (macOS bundle / Windows
+/// installer / registry / mutex name / AppData path). M3.0.3
+/// rebrand preserved it on purpose; do not delete.
+#[allow(dead_code)]
 const IDENTIFIER: &str = "com.claudeconfigmanager.app";
 
 /// Display-only identifier shown on the About page. Independent

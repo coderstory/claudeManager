@@ -111,6 +111,13 @@ pub struct SingleInstanceGuard {
     /// Opaque platform handle. Windows: `HANDLE` to a named mutex.
     /// macOS: stub (a `Box<dyn Any>` would be cleaner but we don't need to
     /// hold anything on the macOS stub path).
+    ///
+    /// `dead_code` allow on non-windows: on macOS this struct only carries
+    /// the `Stub` variant (read in the `Drop` impl on `cfg(windows)` only,
+    /// and the `Drop` impl on macOS is a no-op). The field exists so the
+    /// struct shape matches across targets and the Windows code can
+    /// unconditionally destructure `inner` in its `Drop`.
+    #[cfg_attr(not(windows), allow(dead_code))]
     inner: SingleInstanceGuardInner,
 }
 

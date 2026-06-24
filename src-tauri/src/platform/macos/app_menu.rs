@@ -43,15 +43,16 @@ impl MacAppMenu {
 impl IPlatformAppMenu for MacAppMenu {
     #[cfg(target_os = "macos")]
     fn build_app_menu(&self) -> Result<(), PlatformError> {
-        use tauri::menu::{MenuBuilder, SubmenuBuilder};
+        use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
 
         // ---- App 菜单（第一个 submenu，macOS 自动放到 app 名菜单下）----
         // Tauri v2 文档：macOS 上所有顶层项必须归入 submenu，且第一个
         // submenu 会自动挂到应用名菜单下（无论 text 标签是什么）。
         // About / Separator / Hide (Cmd+H) / Hide Others / Show All /
         // Separator / Quit (Cmd+Q)
+        let about_meta = AboutMetadata::default();
         let app_menu = SubmenuBuilder::new(&self.app, "App")
-            .about()
+            .about(Some(about_meta))
             .separator()
             .hide()
             .hide_others()
