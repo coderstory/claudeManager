@@ -600,8 +600,38 @@ smoke test 在 macOS 上无法用 `EnumChildWindows` 枚举 WKWebView 子窗口�
 
 **当前生效的豁免**（M3.0.3 cleanup）：`src-tauri/Cargo.toml` 已加 `[profile.dev]` + `[profile.release]`，预期 target/ 从 9.6GB 降到 ~4.5GB（-53%）。
 
-### 15.6 macOS 权限与 entitlements (M4 待办)
+### 15.6 macOS 权限与 entitlements
 需创建 `src-tauri/<name>.entitlements` 含必要权限（app sandbox / 文件 / 网络 / Apple Events）；Tauri 自动生成的 `Info.plist` 已含 ccswitch URL scheme 注册（来自 `tauri.conf.json::plugins.deep-link.desktop.schemes`）。详见 `tmp/path-permission-audit.md`（待产出）。
+
+**状态（2026-06-24）**：✅ dev 阶段 entitlements 已 ship 于 commit `2b621ab`。**不开** app-sandbox（仅 dev 调试用）。生产 release 不开 — 详见 §15.7。
+
+### 15.7 🚫 本项目不做发布（2026-06-24 user 决定）
+
+**全局约束**：本项目是 dev / 个人工具，**不**做公开发布 / 上 Apple App Store / 公开分发 .dmg。
+
+**永久砍掉**（不再复活）：
+- ❌ macOS 代码签名（`codesign --sign "Developer ID Application: ..."`）— 不需 Apple Developer 账号
+- ❌ macOS 公证（`notarytool` / `xcrun altool`）— 不需 `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` secrets
+- ❌ Hardened Runtime 配置 — 不需要
+- ❌ `.dmg` 分发 / 桌面交付 cp 脚本（`scripts/cp-to-desktop-mac.sh`）— 无桌面交付需求
+- ❌ macOS smoke test 改造（`get_webview_children_count` / `get_window_state` Rust IPC + `scripts/smoke-test-mac.sh`）— 不进 release CI 链路
+- ❌ release.yml mac matrix `continue-on-error` 调优 — 不做 release 链路
+- ❌ `docs/SIGNING.md` 维护 — 整文件相关
+
+**dev 阶段**（仍做）：
+- ✅ `./scripts/build-mac.sh --debug` — 本地 build + 手验
+- ✅ mac 真机验证（`pgrep` + 日志 + GUI 打开）
+- ✅ dev 阶段 entitlements（`src-tauri/ClaudeConfigManager.entitlements`）— 已 ship
+- ✅ macOS 调试组件（`scripts/debug-mac.sh` + `docs/DEBUG-MAC.md`）— 已 ship
+- ✅ `tauri.conf.json` 仍可产 unsigned `.app` + `.dmg`（仅 dev 用，不上传）
+
+**影响**：
+- §15.4 smoke test 改造：可仅做 dev 工具（不强制），不进 CI
+- §15.6 entitlements：dev 阶段照常；不开 sandbox
+- §9.6 build-and-ship.sh 仍是 Windows-only（M1.x 桌面交付流程）
+- §9.7.3 "桌面交付" flow：仅 Windows 适用；mac dev 走 `scripts/build-mac.sh --debug` 自取
+
+**详细 reasoning**：`docs/macos-p2-backlog.md` §「🚫 已砍清单」段。
 
 ---
 
