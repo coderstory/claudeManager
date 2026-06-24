@@ -1,0 +1,2 @@
+# 强制所有文本文件用 LF (Unix style)
+* text=auto eol=lf
