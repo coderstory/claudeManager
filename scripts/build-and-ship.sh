@@ -65,14 +65,30 @@ echo "  dest:      $DEST_EXE"
 echo "================================================"
 echo ""
 
-# === Step 1: Build ===
+# === Step 1: Auto-bump version (CLAUDE.md §11.4.1 scriptify, cross-platform parity with macOS install script) ===
+echo ""
+echo "[1/5] Auto-bump version..."
+if [[ ! -x "$PROJECT_ROOT/scripts/bump-version.sh" ]]; then
+  echo "FAIL: scripts/bump-version.sh not found or not executable"
+  exit 1
+fi
+OLD_VER="$("$PROJECT_ROOT/scripts/bump-version.sh" --print 2>/dev/null || echo "unknown")"
+if ! "$PROJECT_ROOT/scripts/bump-version.sh" --dry-run; then
+  echo "FAIL: bump-version.sh pre-check failed (3 files inconsistent or unparseable)"
+  echo "      Fix manually or run ./scripts/bump-version.sh --dry-run to diagnose"
+  exit 1
+fi
+NEW_VER="$("$PROJECT_ROOT/scripts/bump-version.sh")" || { echo "FAIL: bump-version.sh exited non-zero"; exit 1; }
+echo "    version: $OLD_VER → $NEW_VER"
+
+# === Step 2: Build ===
 # Note: pre-cleanup is delegated to kill-app.sh. Per CLAUDE.md §9.7 the
 # build flow is `./scripts/kill-app.sh` (residual cleanup) before
 # compiling. smoke-test.sh also calls kill-app.sh at its own pre-cleanup
 # step, so we deliberately do NOT inline a powershell Stop-Process here
 # (would be a redundant cold-start).
 echo ""
-echo "[1/4] Building release exe..."
+echo "[2/5] Building release exe..."
 cd "$PROJECT_ROOT"
 
 # M2.17-C3: switch from `cargo build --release` to `tauri build`.
@@ -96,7 +112,7 @@ cd "$PROJECT_ROOT"
 # We still pass `--debug` here is NOT used — `tauri build` defaults to
 # release. The output exe path is `src-tauri/target/release/...` (matches
 # $SOURCE_EXE below), the same as before.
-echo "    Step 1/1: tauri build (auto-runs beforeBuildCommand + cargo)..."
+echo "    Step 2/1: tauri build (auto-runs beforeBuildCommand + cargo)..."
 BUILD_START=$(date +%s)
 npm run tauri build -- --no-bundle 2>&1 | tail -25
 BUILD_END=$(date +%s)
@@ -113,7 +129,7 @@ echo "    exe size: $EXE_SIZE bytes ($(echo "scale=1; $EXE_SIZE/1024/1024" | bc 
 
 # === Step 2: Copy exe + WebView2Loader.dll ===
 echo ""
-echo "[2/4] Copying to desktop..."
+echo "[3/5] Copying to desktop..."
 mkdir -p "$DEST_DIR"
 
 cp "$SOURCE_EXE" "$DEST_EXE"
@@ -128,7 +144,7 @@ fi
 
 # === Step 3: Smoke test ===
 echo ""
-echo "[3/4] Running smoke test..."
+echo "[4/5] Running smoke test..."
 if "$PROJECT_ROOT/scripts/smoke-test.sh" "$DEST_EXE"; then
   SMOKE_RESULT="PASS"
 else
@@ -137,7 +153,7 @@ fi
 
 # === Step 4: Report ===
 echo ""
-echo "[4/4] Result"
+echo "[5/5] Result"
 if [[ "$SMOKE_RESULT" == "FAIL" ]]; then
   echo "FAIL: smoke test failed. Removing exe from desktop..."
   rm -f "$DEST_EXE" "$WEBVIEW2_DLL_DST"

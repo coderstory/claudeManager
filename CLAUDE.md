@@ -267,6 +267,8 @@ trait IPlugin {
 | `scripts/smoke-test.sh` | ✅ 10/10 | ❌ M4 改造 | 单独 smoke test |
 | `scripts/kill-app.sh` | ✅ | ❌ M4 改造 | 关闭进程（优雅或 force）|
 | `scripts/build-and-ship.sh` | ✅ | ⚠️ 部分 | 完整 build + smoke + cp 到桌面 |
+| `scripts/install-to-applications-mac.sh` | n/a | ✅ | macOS dev build → 自动 install 到 /Applications/ (fallback `~/Applications/`); 备份旧版到 `~/Desktop/.trash-<ts>/`; 自动调 `bump-version.sh` |
+| `scripts/bump-version.sh` | n/a | ✅ | patch bump 3 个版本文件 (package.json / tauri.conf.json / Cargo.toml), 一致性校验, --dry-run / --print 模式 |
 | `scripts/disk-usage-check.sh` | ✅ | ✅ | target/ 磁盘监控 |
 
 - **build-and-ship.sh 接收参数**：`--milestone M1 --task 1.1 --slug scaffold`
@@ -292,7 +294,7 @@ trait IPlugin {
 | **dev 中残留进程卡死 / smoke 前清理** | `kill-app.sh` | `./scripts/kill-app.sh` (优雅 + force fallback) |
 | **进程僵死无法优雅关** | `kill-app.sh --force` | `./scripts/kill-app.sh --force` |
 
-#### 9.7.2 4 脚本依赖关系
+#### 9.7.2 6 脚本依赖关系
 ```
                   ┌──────────────────────────────┐
                   │  build-and-ship.sh           │   一键 ship 入口 (§9.5 唯一允许)
@@ -311,6 +313,19 @@ trait IPlugin {
                                      │  kill-app.sh         │
                                      │  (pre-cleanup)       │
                                      └──────────────────────┘
+
+                  ┌──────────────────────────────┐
+                  │  install-to-applications-    │   mac dev 入口 (§15.7)
+                  │  mac.sh                      │   (无 smoke / 无 kill-app)
+                  │  (build + cp + install)      │
+                  └──────────────┬───────────────┘
+                                 │ 内部调
+                  ┌──────────────┴──────────────┐
+                  ▼                             ▼
+      ┌──────────────────────┐      ┌──────────────────────┐
+      │  build-mac.sh        │      │  bump-version.sh     │
+      │  (tauri build mac)   │      │  (3 文件 patch bump) │
+      └──────────────────────┘      └──────────────────────┘
 ```
 
 #### 9.7.3 速查表（3 个最常见 flow）
@@ -566,7 +581,7 @@ subagent 完成任务后**不得**：
 - ⚠️  **本机是 Windows**，macOS 验证必须由用户在 Mac dev box 上跑
 
 ### 15.2 编译产物与路径
-- 编译产物 = `target/release/bundle/macos/Claude Manager.app`（不是 `.exe`）
+- 编译产物 = `target/release/bundle/macos/ClaudeManager.app`（不是 `.exe`）
 - 调试用裸二进制 = `target/release/claude-config-manager`（无后缀）
 - 用户数据路径：
   - Windows: `%APPDATA%\ClaudeConfigManager\`
@@ -578,7 +593,7 @@ subagent 完成任务后**不得**：
 |---|---|---|
 | `kill-app.sh` | powershell + taskkill | `osascript` + `pgrep -f` + `kill -9`（待改造）|
 | `smoke-test.sh` | 10 项实跑 | 需 Rust IPC 加 `get_webview_children_count` + `get_window_state` 命令（详见 §15.4）|
-| `build-and-ship.sh` | ✅ 全流程 | 部分（缺 smoke test 跨平台）|
+| `build-and-ship.sh` | ✅ 全流程 | n/a (macOS 用 install-to-applications-mac.sh) |
 | `build-only.sh --check` | ✅ | ✅ |
 | `disk-usage-check.sh` | ✅ | ✅ |
 | `npm run tauri dev` | ✅ | ✅（Vite + Tauri CLI 跨平台）|

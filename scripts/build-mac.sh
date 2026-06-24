@@ -18,7 +18,7 @@
 #   ./scripts/build-mac.sh --no-bundle      # cargo build only, no bundling
 #
 # Output:
-#   src-tauri/target/release/bundle/macos/ClaudeConfigManager.app
+#   src-tauri/target/release/bundle/macos/ClaudeManager.app
 #   src-tauri/target/release/bundle/dmg/ClaudeConfigManager_<VERSION>_aarch64.dmg
 #
 # Required env:
@@ -59,11 +59,22 @@ echo "============================================"
 echo ""
 
 # === Step 1: Pre-cleanup ===
-echo "[1/3] Pre-cleanup: killing any running ClaudeConfigManager.app..."
+echo "[1/3] Pre-cleanup: killing any running ClaudeManager.app..."
 osascript -e 'tell application "ClaudeConfigManager" to quit' 2>/dev/null || true
 sleep 1
-pkill -f "ClaudeConfigManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true
+pkill -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true
 sleep 1
+
+# Pre-cleanup: detach stale DMG mounts from previous crashed builds + remove rw.*.dmg orphans
+# (Tauri's bundle preflight wipes bundle/dmg/ but NOT bundle/macos/, where hdiutil
+#  drops its temporary read-write image. Stale mounts + rw.*.dmg cause bundle_dmg.sh
+#  to race / fail intermittently with "Not enough arguments".)
+if command -v hdiutil >/dev/null 2>&1; then
+  hdiutil info 2>/dev/null | grep -E '/dev/disk[0-9]+.*(Apple_HFS|Apple_APFS)' | awk '{print $1}' | while read -r dev; do
+    hdiutil detach "$dev" 2>/dev/null || true
+  done
+fi
+find "$PROJECT_ROOT/src-tauri/target" -path '*/bundle/macos/rw.*.dmg' -delete 2>/dev/null || true
 
 # === Step 2: Build ===
 START=$(date +%s)
@@ -85,7 +96,7 @@ echo ""
 echo "    Build took ${BUILD_DUR}s"
 
 # === Step 3: Report ===
-APP_PATH="$PROJECT_ROOT/src-tauri/target/$MODE/bundle/macos/ClaudeConfigManager.app"
+APP_PATH="$PROJECT_ROOT/src-tauri/target/$MODE/bundle/macos/ClaudeManager.app"
 DMG_DIR="$PROJECT_ROOT/src-tauri/target/$MODE/bundle/dmg"
 
 echo ""
