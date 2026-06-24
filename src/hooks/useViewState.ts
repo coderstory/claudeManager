@@ -71,7 +71,6 @@ export const STORAGE_KEY = 'ccm.lastView';
 export type ViewId =
   | 'home'
   | 'provider-list'
-  | 'provider-switch'
   | 'import-sql'
   | 'deeplink-import'
   | 'json-editor'
@@ -99,7 +98,6 @@ export type ViewId =
 export const ALL_VIEWS: readonly ViewId[] = [
   'home',
   'provider-list',
-  'provider-switch',
   'import-sql',
   'deeplink-import',
   'json-editor',

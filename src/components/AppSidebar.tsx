@@ -34,7 +34,6 @@ import {
   History,
   Home,
   Info,
-  KeyRound,
   Layers,
   Link2,
   Package,
@@ -60,10 +59,6 @@ const VIEW_META: Record<
   'provider-list': {
     icon: <Layers size={18} aria-hidden="true" />,
     short: 'Provider 列表',
-  },
-  'provider-switch': {
-    icon: <KeyRound size={18} aria-hidden="true" />,
-    short: 'Provider 切换',
   },
   'import-sql': {
     icon: <Database size={18} aria-hidden="true" />,

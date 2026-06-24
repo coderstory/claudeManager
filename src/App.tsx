@@ -54,7 +54,6 @@ import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { QuickSearchModal } from './components/QuickSearchModal';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
-import { ProviderSwitchPage } from './pages/provider-switch';
 import { ImportSqlPage } from './pages/import-sql';
 import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
@@ -92,10 +91,6 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
   'provider-list': {
     title: 'Provider 列表',
     description: '管理所有 Claude Code provider 配置：列表、搜索、激活标记、1 键切换。',
-  },
-  'provider-switch': {
-    title: 'Provider 切换',
-    description: '选择 provider → 备份原 settings.json → 原子写入新值。F2 动作而非独立页。',
   },
   'import-sql': {
     // M3.9 — 清单 2: 页面标题 P1 修复: "导入 .sql" → "SQL导入配置"
@@ -582,8 +577,6 @@ export default function App(): ReactElement {
               />
             ) : view === 'provider-list' ? (
               <ProviderListPage />
-            ) : view === 'provider-switch' ? (
-              <ProviderSwitchPage />
             ) : view === 'import-sql' ? (
               <ImportSqlPage initialFilePath={pendingSqlFile} />
             ) : view === 'deeplink-import' ? (

@@ -270,7 +270,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     realTestId: string;
   }> = [
     { view: 'provider-list', realTestId: 'provider-list-page' },
-    { view: 'provider-switch', realTestId: 'provider-switch-page' },
     { view: 'import-sql', realTestId: 'import-sql-page' },
     { view: 'deeplink-import', realTestId: 'deeplink-import-page' },
     { view: 'json-editor', realTestId: 'json-editor-page' },

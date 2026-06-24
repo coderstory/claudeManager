@@ -38,14 +38,15 @@ beforeEach(() => {
 });
 
 describe('useViewState', () => {
-  it('exports 12 plugin views plus "home" as the synthetic landing view', () => {
+  it('exports 11 plugin views plus "home" as the synthetic landing view', () => {
     // M1.9 spec: 12 plugin placeholders are reachable via the sidebar,
     // and 'home' is the welcome tile the user lands on after the first
     // launch (before any localStorage value exists).
     // M3.7: +1 utility view 'about' (清单 18). Total now 14.
     // M4.6 / Phase 21-C: +1 view 'history' (F21). Total now 15.
+    // F2 redirect shim removed (action moved to F1 [激活] button) → 14.
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(15);
+    expect(ALL_VIEWS.length).toBe(14);
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -106,7 +107,7 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 12 plugin ids from the registry', () => {
+  it('ALL_VIEWS contains exactly the 11 plugin ids from the registry', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // This is checked dynamically (not hardcoded) so adding a new
@@ -114,7 +115,6 @@ describe('useViewState', () => {
     // useViewState.ts — the test then points out the omission.
     const registryIds = [
       'provider-list',
-      'provider-switch',
       'import-sql',
       'deeplink-import',
       'json-editor',

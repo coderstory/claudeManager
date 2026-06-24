@@ -108,12 +108,13 @@ describe('QuickSearchModal', () => {
     expect(screen.queryByTestId('quick-search-modal')).toBeNull();
   });
 
-  it('renders the 12 plugin entries when opened with no query', async () => {
+  it('renders the 11 plugin entries when opened with no query', async () => {
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     // M3.7: was 12 plugins (home excluded); +1 utility 'about' → 13.
     // M4.6 / Phase 21-C: +1 utility 'history' → 14.
+    // F2 redirect shim removed (action moved to F1 [激活] button) → 13.
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(14);
+    expect(results.length).toBe(13);
   });
 
   it('typing filters the result list', async () => {

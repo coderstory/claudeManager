@@ -18,7 +18,6 @@ import type { FrontendPlugin } from './types';
 
 import {
   providerListPlugin,
-  providerSwitchPlugin,
   importSqlPlugin,
   deeplinkImportPlugin,
   jsonEditorPlugin,
@@ -38,7 +37,6 @@ import {
  */
 export const ALL_PLUGINS: FrontendPlugin[] = [
   providerListPlugin,
-  providerSwitchPlugin,
   importSqlPlugin,
   deeplinkImportPlugin,
   jsonEditorPlugin,

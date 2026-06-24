@@ -71,7 +71,6 @@ const HISTORY_LIMIT = 10;
 export const PLUGIN_LABELS: Record<ViewId, string> = {
   home: '欢迎页',
   'provider-list': 'Provider 列表',
-  'provider-switch': 'Provider 切换',
   'import-sql': '.sql 导入',
   'deeplink-import': 'Deeplink 导入',
   'json-editor': 'JSON 编辑器',
@@ -555,7 +554,7 @@ export function QuickSearchModal({
                 style={{
                   ...noDragStyle,
                   border: '1px solid var(--border)',
-                  borderRadius: 999,
+                  borderRadius: 999, // 完全圆形 (pill shape), 无 token 对应
                   padding: '2px 10px',
                   background: 'var(--bg-primary)',
                   color: 'var(--text-secondary)',

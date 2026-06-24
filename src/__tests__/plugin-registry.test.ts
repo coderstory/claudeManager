@@ -3,9 +3,10 @@ import { ALL_PLUGINS } from '../plugins/registry';
 import type { FrontendPlugin } from '../plugins/types';
 
 describe('Frontend plugin registry', () => {
-  it('contains the 12 plugin stubs from CLAUDE.md §3.3', () => {
-    // F1..F8 core + F16..F19 L1 features = 12.
-    expect(ALL_PLUGINS.length).toBe(12);
+  it('contains the 11 plugin stubs from CLAUDE.md §3.3 (F2 merged into F1 action button)', () => {
+    // F1..F8 core + F16..F19 L1 features = 11 (F2 removed — its action
+    // now lives on the F1 [激活] button).
+    expect(ALL_PLUGINS.length).toBe(11);
   });
 
   it('every plugin has a unique kebab-case id', () => {

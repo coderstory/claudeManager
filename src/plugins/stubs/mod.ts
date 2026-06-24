@@ -7,7 +7,6 @@
  */
 
 export { providerListPlugin } from './provider-list';
-export { providerSwitchPlugin } from './provider-switch';
 export { importSqlPlugin } from './import-sql';
 export { deeplinkImportPlugin } from './deeplink-import';
 export { jsonEditorPlugin } from './json-editor';
