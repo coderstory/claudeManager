@@ -571,6 +571,26 @@ npm run build
 | `--target x86_64-apple-darwin` | Intel |
 | `--target x86_64-pc-windows-msvc` | Windows x64 |
 
+### 14.1 常见组合 + 坑
+
+```bash
+# ✅ 改 tauri.conf.json / Cargo.toml 后必须做的事
+# tauri::generate_context!() 是 proc-macro，cargo incremental 不追踪 tauri.conf.json
+# 改 conf 后不重清缓存会导致产物内嵌 OLD 配置（如 identifier）
+cd src-tauri && cargo clean -p claude-config-manager && cargo build
+# 然后再 bundle
+cd .. && cargo tauri bundle --debug --bundles app
+
+# ✅ 日常 dev build
+cargo tauri build --debug --no-bundle  # 改 Rust 后快速验编译
+npm run build                          # 改前端后必须（beforeBuildCommand）
+
+# ❌ 常见错
+cargo tauri bundle --debug --bundles app  # 跳过 cargo build 会报 "can't open main binary"
+```
+
+**性能基线**：CLAUDE.md §12（macOS Apple Silicon 冷编 ~5-8 min，含 wry/tao 链；sccache 配后暖编 ~1-2 min）。
+
 
 ## 15. 模块拓扑 (1 段精简)
 
