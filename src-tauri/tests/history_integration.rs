@@ -18,9 +18,16 @@ use std::path::PathBuf;
 
 use claude_config_manager_lib::domain::{UsageSnapshot, UsageWindow};
 use claude_config_manager_lib::infrastructure::sqlite::history_db::open_history_db;
-use claude_config_manager_lib::platform::{
-    windows::WindowsPaths, AppPaths, IPlatformPaths,
-};
+// M4.1 (B-2/E-6) — macOS test cfg: use the host-OS paths impl via the
+// `platform` re-export. The previous `use platform::windows::WindowsPaths`
+// broke macOS cargo test (WindowsPaths only exists in the windows module).
+// CLAUDE.md §3.2: business code (and its tests) only touches the platform
+// abstraction, never a concrete OS struct directly.
+#[cfg(windows)]
+use claude_config_manager_lib::platform::windows::WindowsPaths as HostPaths;
+#[cfg(target_os = "macos")]
+use claude_config_manager_lib::platform::macos::MacPaths as HostPaths;
+use claude_config_manager_lib::platform::{AppPaths, IPlatformPaths};
 use claude_config_manager_lib::services::backup_service::BackupService;
 use claude_config_manager_lib::services::history_service::{
     BackupHistoryFilter, HistoryService, UsageHistoryFilter,
@@ -88,9 +95,9 @@ fn history_db_opens_and_has_schema() {
 #[test]
 fn app_paths_history_db_lives_under_app_data() {
     // Defensive: even if we can't override dirs::home_dir / dirs::config_dir
-    // for WindowsPaths, the resolved path's leaf must end with
+    // for HostPaths, the resolved path's leaf must end with
     // history.db and the directory tree under app_data/.
-    let p = WindowsPaths.resolve();
+    let p = HostPaths.resolve();
     let name = p.history_db.file_name().and_then(|s| s.to_str());
     assert_eq!(name, Some("history.db"));
     assert!(p.history_db.starts_with(&p.app_data));

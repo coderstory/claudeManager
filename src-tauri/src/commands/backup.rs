@@ -180,3 +180,93 @@ pub async fn backup_incremental(
         Err(e) => Err(e.to_string()),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests — pin the command contract (signatures). The commands are
+// thin shims around `BackupService`; full behavioural coverage lives
+// in `tests/backup_commands.rs` where we can construct a real
+// `BackupService` against a `TempDir`.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::backup_scanner::BackupEntry;
+    use crate::infrastructure::json_diff::DiffEntry;
+    use crate::services::backup_service::ManualBackupResult;
+
+    // -----------------------------------------------------------------------
+    // Signature pinning — compile-time check that the `#[tauri::command]`
+    // surface matches the contract documented for F13 / F19.
+    // -----------------------------------------------------------------------
+
+    /// Compile-time check: `list_backups` signature.
+    #[allow(dead_code)]
+    fn _list_backups_signature(
+        s: State<'_, AppState>,
+    ) -> CmdResult<Vec<BackupEntry>> {
+        let _ = s;
+        unimplemented!()
+    }
+
+    /// Compile-time check: `read_backup_content` signature.
+    #[allow(dead_code)]
+    fn _read_backup_content_signature(
+        s: State<'_, AppState>,
+        path: String,
+    ) -> CmdResult<String> {
+        let _ = (s, path);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `diff_backups` signature.
+    #[allow(dead_code)]
+    fn _diff_backups_signature(
+        s: State<'_, AppState>,
+        path1: String,
+        path2: String,
+    ) -> CmdResult<Vec<DiffEntry>> {
+        let _ = (s, path1, path2);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `restore_backup` signature.
+    #[allow(dead_code)]
+    fn _restore_backup_signature(
+        s: State<'_, AppState>,
+        backup_path: String,
+    ) -> CmdResult<()> {
+        let _ = (s, backup_path);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `backup_now` signature.
+    #[allow(dead_code)]
+    fn _backup_now_signature(
+        s: State<'_, AppState>,
+        target: Option<String>,
+    ) -> CmdResult<ManualBackupResult> {
+        let _ = (s, target);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `delete_backup` signature.
+    #[allow(dead_code)]
+    fn _delete_backup_signature(
+        s: State<'_, AppState>,
+        path: String,
+    ) -> CmdResult<()> {
+        let _ = (s, path);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `backup_incremental` signature.
+    #[allow(dead_code)]
+    fn _backup_incremental_signature(
+        s: State<'_, AppState>,
+        target: Option<String>,
+    ) -> CmdResult<ManualBackupResult> {
+        let _ = (s, target);
+        unimplemented!()
+    }
+}

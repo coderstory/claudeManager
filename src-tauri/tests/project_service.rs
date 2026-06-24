@@ -11,9 +11,16 @@
 use std::path::PathBuf;
 
 use claude_config_manager_lib::domain::{ProjectError, ProjectsFile, SYSTEM_PROJECT_ID};
-use claude_config_manager_lib::platform::{
-    windows::WindowsPaths, AppPaths, IPlatformPaths,
-};
+// M4.1 (B-2/E-6) — macOS test cfg: use the host-OS paths impl via the
+// `platform` re-export. The previous `use platform::windows::WindowsPaths`
+// broke macOS cargo test (WindowsPaths only exists in the windows module).
+// CLAUDE.md §3.2: business code (and its tests) only touches the platform
+// abstraction, never a concrete OS struct directly.
+#[cfg(windows)]
+use claude_config_manager_lib::platform::windows::WindowsPaths as HostPaths;
+#[cfg(target_os = "macos")]
+use claude_config_manager_lib::platform::macos::MacPaths as HostPaths;
+use claude_config_manager_lib::platform::{AppPaths, IPlatformPaths};
 use claude_config_manager_lib::services::project_service::{
     ProjectService, ProjectServiceError,
 };
@@ -244,22 +251,22 @@ fn current_command_returns_active_project() {
 }
 
 // ---------------------------------------------------------------------------
-// Cross-plugin contract — `WindowsPaths::active_root_dir` reads the
+// Cross-plugin contract — `HostPaths::active_root_dir` reads the
 // same file `ProjectService` writes.
 // ---------------------------------------------------------------------------
 //
-// We can't easily point `WindowsPaths` at our temp dir (its
+// We can't easily point `HostPaths` at our temp dir (its
 // `resolve()` reads `dirs::config_dir()` which is the real
-// %APPDATA%), so this test exercises the *parse* path: we craft
-// the JSON the platform layer expects and confirm the platform's
-// subset-parsing logic produces the right `Some(path)` outcome via
-// the same `serde::Deserialize` impl. The end-to-end "file on disk
-// → active_root_dir" path is covered by the unit test in
-// `platform/windows/paths.rs::active_root_dir_*`.
+// %APPDATA% / ~/Library/Application Support), so this test exercises
+// the *parse* path: we craft the JSON the platform layer expects and
+// confirm the platform's subset-parsing logic produces the right
+// `Some(path)` outcome via the same `serde::Deserialize` impl. The
+// end-to-end "file on disk → active_root_dir" path is covered by the
+// unit test in `platform/{windows,macos}/paths.rs::active_root_dir_*`.
 
 #[test]
 fn platform_active_root_dir_subset_parses_active_id() {
-    // Same struct shape the Windows impl uses — this test pins the
+    // Same struct shape the host-OS impl uses — this test pins the
     // wire format both ends agree on. If you change either side's
     // (de)serialisation, update both.
     use serde::Deserialize;
@@ -308,10 +315,10 @@ fn platform_active_root_dir_subset_handles_null_current_id() {
 }
 
 #[test]
-fn platform_active_root_dir_with_windows_paths_returns_some_after_service_save() {
+fn platform_active_root_dir_with_host_paths_returns_some_after_service_save() {
     // End-to-end smoke: the platform's `active_root_dir` is fed by
     // the same `projects.json` the service writes. We can't redirect
-    // `WindowsPaths::resolve()` to a temp dir (it reads `dirs::`),
+    // `HostPaths::resolve()` to a temp dir (it reads `dirs::`),
     // so we sanity-check the parser with a tiny end-to-end:
     // service writes → platform reads → matches.
     //
@@ -333,8 +340,8 @@ fn platform_active_root_dir_with_windows_paths_returns_some_after_service_save()
         serde_json::from_str(&std::fs::read_to_string(svc.paths().app_data.join("projects.json")).unwrap()).unwrap();
     assert_eq!(on_disk.current_project_id, Some(created.id));
 
-    // Smoke: WindowsPaths::active_root_dir can be called (it may
-    // return None on this dev box because %APPDATA% doesn't have a
-    // projects.json — that's fine).
-    let _ = WindowsPaths.active_root_dir();
+    // Smoke: HostPaths::active_root_dir can be called (it may
+    // return None on this dev box because the resolved app_data
+    // doesn't have a projects.json — that's fine).
+    let _ = HostPaths.active_root_dir();
 }
