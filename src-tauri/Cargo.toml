@@ -24,7 +24,7 @@ tauri-build = { version = "2", features = [] }
 #       https://v2.tauri.app/reference/config/ → "transparent ... on macOS
 #       this requires the macos-private-api feature flag, enabled under
 #       tauri > macOSPrivateApi")
-tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-positioner = "2"
 serde = { version = "1", features = ["derive"] }
