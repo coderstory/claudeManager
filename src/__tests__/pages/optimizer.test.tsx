@@ -432,4 +432,17 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       expect(btn.disabled).toBe(true);
     });
   });
+
+  // M5 bug #20 — 重新扫描按钮文字 "重新扫描" 不能换行.
+  // 验证 inline style 含 white-space: nowrap + min-width.
+  it('M5 bug #20: 重新扫描按钮有 nowrap + min-width 防止文字换行', () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<OptimizerPage />, { wrapper: wrap });
+    const btn = screen.getByTestId('optimizer-rescan-btn') as HTMLButtonElement;
+    expect(btn.style.whiteSpace).toBe('nowrap');
+    // min-width: 110px (vs 之前 0/auto, 装不下 "重新扫描" 4 字)
+    expect(btn.style.minWidth).toBe('110px');
+    // flexShrink: 0 防止在窄容器被压缩
+    expect(btn.style.flexShrink).toBe('0');
+  });
 });

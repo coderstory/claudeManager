@@ -432,6 +432,11 @@ export default function ResourceBrowserPage(): ReactElement {
             fontSize: 13,
             cursor: state.loading ? 'not-allowed' : 'pointer',
             opacity: state.loading ? 0.6 : 1,
+            // M5 bug #20 — 重新扫描按钮宽度不够导致 "重新扫描" 文字换行.
+            // 加 min-width + white-space: nowrap, 文字始终单行.
+            minWidth: 110,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
         >
           <RefreshCw size={14} />
