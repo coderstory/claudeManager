@@ -74,6 +74,10 @@ interface TreeRow {
   entry?: JsonFileEntry;
   /** 是否被选中(只对 file 有效)。 */
   selected?: boolean;
+  /** M5 bug #10 — 该行是一个 folder header,显示中间目录节点。 */
+  isFolder?: boolean;
+  /** Folder header 的相对路径前缀(例如 "commands/sub")。 */
+  folderPath?: string;
 }
 
 /**
@@ -91,8 +95,15 @@ function indentFromRelative(rel: string): number {
 }
 
 /**
- * 把 entries 转成渲染行 — 每个 scope 一组,组内 file 行按
- * relative_path 排序(后端已排过,这里兜底)。
+ * 把 entries 转成渲染行 — 每个 scope 一组,组内按目录前缀插入 folder
+ * header 行(file 行夹在对应 folder 之间)。这样嵌套 JSON 文件结构
+ * (例如 `commands/foo/a.json`)在 UI 上能看到 `commands` 和 `foo`
+ * 两个目录节点,而不是只缩进不显示中间名字。
+ *
+ * M5 bug #10 — 旧实现只算缩进不渲染 folder name,用户在编辑器左侧
+ * 只看到 `<json><json><json>` 的奇怪层叠(每个 json 文件直接挂在
+ * 上一个下面,目录名没了)。修复后,每个文件夹前缀都对应一个独立
+ * `isFolder` 行,视觉上像真正的目录树。
  */
 function buildRows(entries: JsonFileEntry[], selectedPath: string | null): TreeRow[] {
   const rows: TreeRow[] = [];
@@ -123,7 +134,28 @@ function buildRows(entries: JsonFileEntry[], selectedPath: string | null): TreeR
       isGroup: true,
       scope,
     });
+    // 跟踪已经渲染过的 folder 前缀,避免重复。
+    // key = "scope:project|folder:commands/sub";value = true。
+    const seenFolders = new Set<string>();
     for (const entry of g.entries) {
+      const parts = entry.relative_path.split('/').filter(Boolean);
+      // 对每个父目录插入一个 folder 行(深度从 1 开始,即 scope header
+      // 缩进 + 1)。`parts.length === 1` 表示没有父目录,跳过。
+      for (let depth = 1; depth < parts.length; depth++) {
+        const folderPath = parts.slice(0, depth).join('/');
+        const fkey = `${scope}|${folderPath}`;
+        if (seenFolders.has(fkey)) continue;
+        seenFolders.add(fkey);
+        rows.push({
+          key: `folder:${scope}:${folderPath}`,
+          indent: depth, // 1 = scope header 下第 1 层 = 第一级目录
+          label: parts[depth - 1],
+          secondary: folderPath,
+          scope,
+          isFolder: true,
+          folderPath,
+        });
+      }
       rows.push({
         key: `file:${entry.path}`,
         indent: 1 + indentFromRelative(entry.relative_path),
@@ -433,6 +465,46 @@ function renderRows(
 
     if (currentScopeCollapsed) {
       // 该 scope 已折叠,跳过 file 行
+      continue;
+    }
+
+    // M5 bug #10 — folder header row. 不可点击(纯展示),用 Folder
+    // 图标 + 加粗 + 次级色显示中间目录名,让用户看清文件挂在哪个
+    // 子目录下,而不是像之前那样只看缩进不知道"层叠了啥"。
+    if (row.isFolder) {
+      out.push(
+        <div
+          key={row.key}
+          data-testid="json-file-tree-folder"
+          data-folder-path={row.folderPath}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            width: '100%',
+            padding: '4px 8px',
+            paddingLeft: 8 + row.indent * 16,
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            background: 'transparent',
+            borderLeft: '3px solid transparent',
+            cursor: 'default',
+            overflow: 'hidden',
+          }}
+        >
+          <Folder size={12} color="var(--text-secondary)" />
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {row.label}
+          </span>
+        </div>,
+      );
       continue;
     }
 

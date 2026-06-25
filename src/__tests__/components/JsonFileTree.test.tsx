@@ -203,3 +203,86 @@ describe('JsonFileTree — F5 (M3.11 / A4#12)', () => {
     expect(footer.textContent).toContain('共 4 个文件');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M5 bug #10 — folder header rows for nested relative paths
+// ---------------------------------------------------------------------------
+
+describe('JsonFileTree — M5 bug #10 folder headers', () => {
+  const nested: JsonFileEntry[] = [
+    {
+      path: '/x/settings.json',
+      relative_path: 'settings.json',
+      scope: 'user',
+      scope_label: '用户级',
+      size: 1,
+      last_modified: 1,
+    },
+    {
+      path: '/x/commands/a.json',
+      relative_path: 'commands/a.json',
+      scope: 'user',
+      scope_label: '用户级',
+      size: 1,
+      last_modified: 1,
+    },
+    {
+      path: '/x/commands/sub/b.json',
+      relative_path: 'commands/sub/b.json',
+      scope: 'user',
+      scope_label: '用户级',
+      size: 1,
+      last_modified: 1,
+    },
+  ];
+
+  it('emits one folder row per intermediate directory', () => {
+    render(<JsonFileTree entries={nested} selectedPath={null} onSelect={() => {}} />);
+    const folders = screen.getAllByTestId('json-file-tree-folder');
+    // 期望:`commands`(由 commands/a.json 引入),
+    //       `commands/sub`(由 commands/sub/b.json 引入)。
+    expect(folders.length).toBe(2);
+    expect(folders[0].getAttribute('data-folder-path')).toBe('commands');
+    expect(folders[1].getAttribute('data-folder-path')).toBe('commands/sub');
+  });
+
+  it('does not duplicate folder rows for siblings in the same directory', () => {
+    const siblings: JsonFileEntry[] = [
+      {
+        path: '/x/commands/a.json',
+        relative_path: 'commands/a.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 1,
+        last_modified: 1,
+      },
+      {
+        path: '/x/commands/b.json',
+        relative_path: 'commands/b.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 1,
+        last_modified: 1,
+      },
+    ];
+    render(<JsonFileTree entries={siblings} selectedPath={null} onSelect={() => {}} />);
+    const folders = screen.getAllByTestId('json-file-tree-folder');
+    expect(folders.length).toBe(1);
+    expect(folders[0].getAttribute('data-folder-path')).toBe('commands');
+  });
+
+  it('files at root scope have no folder rows above them', () => {
+    const rootOnly: JsonFileEntry[] = [
+      {
+        path: '/x/settings.json',
+        relative_path: 'settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 1,
+        last_modified: 1,
+      },
+    ];
+    render(<JsonFileTree entries={rootOnly} selectedPath={null} onSelect={() => {}} />);
+    expect(screen.queryAllByTestId('json-file-tree-folder').length).toBe(0);
+  });
+});
