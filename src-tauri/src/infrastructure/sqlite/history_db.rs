@@ -135,6 +135,25 @@ fn migrations() -> Migrations<'static> {
     ])
 }
 
+/// Open an in-memory SQLite database with the schema applied.
+///
+/// Used by the `AppState` fallback path when the on-disk DB is
+/// corrupt or unopenable — see `app_state.rs`. Without applying
+/// migrations here, the in-memory connection would be a totally
+/// empty schema and the first query would crash with
+/// `no such table: usage_history` / `usage_daily_stats` (M5 bug #2).
+///
+/// Tests can also use this to spin up an isolated DB without
+/// touching the filesystem.
+pub fn open_in_memory_db() -> Result<Arc<Mutex<Connection>>, HistoryError> {
+    let mut conn = Connection::open_in_memory()?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    migrations()
+        .to_latest(&mut conn)
+        .map_err(|e| HistoryError::Migration(e.to_string()))?;
+    Ok(Arc::new(Mutex::new(conn)))
+}
+
 /// Open (and create + migrate) the SQLite database at `path`.
 ///
 /// Idempotent — calling twice on the same path returns two
@@ -443,5 +462,50 @@ mod tests {
             }
         }
         assert!(found_corrupt, "expected quarantine sibling file");
+    }
+
+    // M5 bug #2 regression — the AppState fallback path (when
+    // `open_history_db` fails) used to hand `HistoryService` a raw
+    // `Connection::open_in_memory()` with NO schema applied. Every
+    // subsequent query failed with `no such table: usage_history`.
+    // Now `open_in_memory_db()` runs the V1 + V2 migrations, so the
+    // schema is present.
+    #[test]
+    fn open_in_memory_db_has_full_schema() {
+        let conn = open_in_memory_db().unwrap();
+        let guard = conn.lock().unwrap();
+
+        // V1 tables present.
+        for table in ["usage_history", "backup_history", "schema_version"] {
+            let count: i64 = guard
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master
+                     WHERE type='table' AND name=?1",
+                    [table],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "in-memory db must have table `{table}`");
+        }
+
+        // V2 table present (this is the one whose absence bit us).
+        let count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type='table' AND name='usage_daily_stats'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "usage_daily_stats must exist on in-memory db");
+
+        // PRAGMA user_version reflects V2 being applied.
+        let user_version: i64 = guard
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            user_version >= 2,
+            "in-memory db must be at V2 (got {user_version})"
+        );
     }
 }

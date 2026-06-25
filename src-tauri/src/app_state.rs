@@ -126,14 +126,29 @@ impl AppState {
             }
             Err(e) => {
                 eprintln!(
-                    "[app_state] history.db open failed: {e} — continuing without history"
+                    "[app_state] history.db open failed: {e} — continuing with in-memory history"
                 );
-                use std::sync::{Arc, Mutex};
-                let conn = rusqlite::Connection::open_in_memory()
-                    .expect("in-memory sqlite must always open");
-                Arc::new(crate::services::history_service::HistoryService::new(
-                    Arc::new(Mutex::new(conn)),
-                ))
+                // M5 bug #2 fix: the previous code opened a raw
+                // `Connection::open_in_memory()` here, which has
+                // no schema applied. Any subsequent query failed
+                // with `no such table: usage_history` etc. Now we
+                // delegate to `open_in_memory_db()` which runs the
+                // V1 + V2 migrations on the in-memory connection
+                // before handing it to `HistoryService`.
+                match crate::infrastructure::sqlite::history_db::open_in_memory_db() {
+                    Ok(conn) => Arc::new(crate::services::history_service::HistoryService::new(conn)),
+                    Err(e2) => {
+                        eprintln!(
+                            "[app_state] in-memory history.db also failed: {e2} — giving up"
+                        );
+                        use std::sync::{Arc, Mutex};
+                        let conn = rusqlite::Connection::open_in_memory()
+                            .expect("in-memory sqlite must always open");
+                        Arc::new(crate::services::history_service::HistoryService::new(
+                            Arc::new(Mutex::new(conn)),
+                        ))
+                    }
+                }
             }
         };
         let provider_service = Arc::new(
