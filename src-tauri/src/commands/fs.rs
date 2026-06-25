@@ -35,6 +35,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::infrastructure::encoding::decode_sql_bytes;
 use crate::infrastructure::fs_atomic;
 use crate::platform::AppPaths;
 
@@ -163,7 +164,10 @@ fn classify_io_error(path: &Path, e: io::Error) -> String {
 ///   2. 路径不含 `..` 组件(防目录穿越)
 /// 不做 `~/.claude/` 作用域限制,因为用户双击的 `.sql` 可能在任何位置。
 ///
-/// 返回 UTF-8 字符串内容,供前端调 `parse_sql_preview` 走 F3 既有流程。
+/// 编码处理:走 bytes 路径,`fs::read` 拿 `Vec<u8>` → Rust 端
+/// `decode_sql_bytes` 探测 UTF-8 / GB18030 / Big5 / UTF-16 LE/BE
+/// BOM 并解码成 UTF-8 String。覆盖 cc-switch 历史 dump 的 GBK 与
+/// Windows 记事本 UTF-16 编码等非 UTF-8 来源。
 #[tauri::command]
 pub async fn read_sql_file(path: String) -> CmdResult<String> {
     // 空路径是前端 bug — 直接拒绝
@@ -211,8 +215,13 @@ pub async fn read_sql_file(path: String) -> CmdResult<String> {
         }
     }
 
-    std::fs::read_to_string(&user_path)
-        .map_err(|e| format!("读取失败 {}: {}", user_path.display(), e))
+    // bytes 路径:不用 `read_to_string` 强校验 UTF-8,让
+    // `decode_sql_bytes` 处理非 UTF-8 来源(GBK / GB18030 / Big5 /
+    // UTF-16 LE/BE BOM)。
+    let bytes = std::fs::read(&user_path)
+        .map_err(|e| format!("读取失败 {}: {}", user_path.display(), e))?;
+    decode_sql_bytes(&bytes)
+        .map_err(|e| format!("读取失败(编码问题) {}: {}", user_path.display(), e))
 }
 
 /// M2.16 — F20 冷启动 .sql 路径取走(take 语义)。

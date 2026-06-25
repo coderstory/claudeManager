@@ -38,10 +38,6 @@ import {
   parseSqlPreview,
 } from '../../lib/api/providers';
 import { readSqlFile } from '../../lib/api/fs';
-// M3.9 — 清单 21: 前端 SQL schema 预校验 (5 场景)
-// 在调用后端 parseSqlPreview 之前先做轻量分类,空文件 / 编码错误
-// 等场景直接 ErrorBanner,不浪费 IPC 往返。
-import { validateSql } from '../../lib/sql-validator';
 import type {
   ImportResult,
   ImportSkip,
@@ -62,7 +58,7 @@ type PageState =
       kind: 'preview';
       fileName: string;
       preview: SqlPreview;
-      content: string;
+      bytes: number[];
     }
   | { kind: 'importing'; preview: SqlPreview }
   | { kind: 'done'; result: ImportResult; fileName: string }
@@ -89,8 +85,10 @@ export function ImportSqlPage({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // Holds the latest preview payload across the synchronous setState
   // callback so handleConfirm can read it after React's batched update.
+  // Phase 2 改造:从 `content: string` 改为 `bytes: number[]`,与新
+  // IPC 契约 `parseSqlPreview(bytes)` 对齐。
   const handleConfirmRef = useRef<{
-    content: string;
+    bytes: number[];
     fileName: string;
     preview: SqlPreview;
   } | null>(null);
@@ -104,6 +102,11 @@ export function ImportSqlPage({
   //
   // cleanup 设 cancelled 标志:如果路径在加载中途变了(用户再双击另一个
   // .sql),旧请求的 setState 会被忽略,新请求接管。
+  //
+  // Phase 2 改造:`readSqlFile` 返回 String(Rust 端已 decode 成
+  // UTF-8),但 `parseSqlPreview` 现在要 bytes。把 String re-encode
+  // 成 UTF-8 字节数组喂回去 — Rust 端会走 strict UTF-8 fast path,
+  // 等价结果(本身是 UTF-8 → 重新 UTF-8 编码 = idempotent)。
   useEffect(() => {
     if (!initialFilePath) return;
     let cancelled = false;
@@ -114,24 +117,15 @@ export function ImportSqlPage({
       try {
         const content = await readSqlFile(initialFilePath);
         if (cancelled) return;
-        // M3.9 — 清单 21: F20 文件关联双击 .sql 走相同预校验。
-        const validation = validateSql(content);
-        if (
-          validation.scenario === 'empty' ||
-          validation.scenario === 'encoding_error'
-        ) {
-          handleConfirmRef.current = null;
-          setState({
-            kind: 'error',
-            message:
-              validation.errors[0]?.message ?? 'SQL 文件校验失败',
-          });
-          return;
-        }
-        const preview = await parseSqlPreview(content);
+        // Phase 2 — 方案 D 第一变体:跳过前端 validateSql(Rust 端
+        // `decode_sql_bytes` 已做编码兜底,parser 端把空文件 / 无
+        // INSERT 等场景用 `skipped_lines` 反映,UI 跳过行数已等价
+        // 显示)。错误直接 throw,走统一 ErrorView。
+        const bytes = Array.from(new TextEncoder().encode(content));
+        const preview = await parseSqlPreview(bytes);
         if (cancelled) return;
-        handleConfirmRef.current = { content, fileName, preview };
-        setState({ kind: 'preview', fileName, preview, content });
+        handleConfirmRef.current = { bytes, fileName, preview };
+        setState({ kind: 'preview', fileName, preview, bytes });
       } catch (err) {
         if (cancelled) return;
         handleConfirmRef.current = null;
@@ -155,30 +149,23 @@ export function ImportSqlPage({
       if (!file) return;
       setState({ kind: 'parsing', fileName: file.name });
       try {
-        const content = await file.text();
-        // M3.9 — 清单 21: 前端预校验。仅对"空文件 / 编码错误" 2 个
-        // 不可恢复场景阻断 + ErrorBanner,其余场景 (illegal / partially_valid)
-        // 仍调后端,把诊断信息交由后端 parse_sql_preview 统一处理。
-        // (现有 import-sql 流程已能展示"无 importable" / 跳过行 等。)
-        const validation = validateSql(content);
-        if (
-          validation.scenario === 'empty' ||
-          validation.scenario === 'encoding_error'
-        ) {
-          handleConfirmRef.current = null;
-          setState({
-            kind: 'error',
-            message:
-              validation.errors[0]?.message ?? 'SQL 文件校验失败',
-          });
-          return;
-        }
-        const preview = await parseSqlPreview(content);
+        // Phase 2 — bytes 路径。`file.text()` 浏览器/WebView2 强制
+        // UTF-8 读,非 UTF-8 字节会被替换为 U+FFFD 丢信息。改用
+        // `file.arrayBuffer()` 拿原始字节,Rust 端
+        // `decode_sql_bytes` 探测 UTF-8 / GB18030 / Big5 / UTF-16
+        // LE/BE BOM 并解码。这是修 GBK dump 乱码的关键点。
+        const buf = await file.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buf));
+        // Phase 2 — 方案 D 第一变体:跳过前端 validateSql(Rust 端
+        // `decode_sql_bytes` 已做编码兜底,parser 端把空文件 / 无
+        // INSERT 等场景用 `skipped_lines` 反映,UI 跳过行数已等价
+        // 显示)。错误直接 throw,走统一 ErrorView。
+        const preview = await parseSqlPreview(bytes);
         // Mirror the preview payload into a ref so handleConfirm can
         // read it without a setState callback (which StrictMode
         // double-invokes). Reset on success too.
         handleConfirmRef.current = {
-          content,
+          bytes,
           fileName: file.name,
           preview,
         };
@@ -186,7 +173,7 @@ export function ImportSqlPage({
           kind: 'preview',
           fileName: file.name,
           preview,
-          content,
+          bytes,
         });
       } catch (err) {
         handleConfirmRef.current = null;
@@ -206,7 +193,7 @@ export function ImportSqlPage({
     if (!snap) return;
     setState({ kind: 'importing', preview: snap.preview });
     try {
-      const result = await importProvidersFromSql(snap.content);
+      const result = await importProvidersFromSql(snap.bytes);
       setState({ kind: 'done', result, fileName: snap.fileName });
     } catch (err) {
       setState({ kind: 'error', message: stringifyError(err) });

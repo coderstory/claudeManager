@@ -35,12 +35,17 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-// jsdom's File polyfill doesn't have `.text()` — polyfill it once.
-// (In a real browser / WebView2, File extends Blob which has `.text()`.)
-if (typeof File !== 'undefined' && !File.prototype.text) {
+// jsdom's File polyfill doesn't have `.arrayBuffer()` — polyfill it
+// once. (In a real browser / WebView2, File extends Blob which has
+// `.arrayBuffer()`.) Phase 2 改造:从 `.text()` polyfill 改为
+// `.arrayBuffer()` polyfill,因为 import-sql 现在走 bytes 路径。
+if (typeof File !== 'undefined' && !File.prototype.arrayBuffer) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (File.prototype as any).text = function (): Promise<string> {
-    return Promise.resolve(this.toString());
+  (File.prototype as any).arrayBuffer = function (): Promise<ArrayBuffer> {
+    // 优先用 toString() 把内容塞进 buffer(jest File 把内容存在
+    // 内部 slot);若空就拿 file name 当占位。
+    const str = this.toString();
+    return Promise.resolve(new TextEncoder().encode(str).buffer);
   };
 }
 

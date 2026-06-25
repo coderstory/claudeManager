@@ -28,6 +28,7 @@ use tauri_plugin_dialog::DialogExt;
 use crate::app_state::AppState;
 use crate::domain::{ParsedMcpServer, Provider, ProviderModels};
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
+use crate::infrastructure::encoding::decode_sql_bytes;
 use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
 use crate::services::provider_service::{ImportResult, ImportSkip};
 
@@ -154,10 +155,14 @@ pub struct SqlPreview {
 
 /// Parse a SQL dump and return a preview without writing any files.
 ///
-/// `content` is the raw text of the `.sql` file (read by the frontend
-/// via the `tauri-plugin-dialog` open file API).
+/// `bytes` is the raw file content (uint8 array from the frontend's
+/// `file.arrayBuffer()`). Rust 端做编码探测 + 解码(UTF-8 / GB18030 /
+/// Big5 / UTF-16 LE/BE BOM),支持用户从 cc-switch / Windows 记事本 /
+/// 第三方工具导出的非 UTF-8 .sql 文件。
 #[tauri::command]
-pub async fn parse_sql_preview(content: String) -> CmdResult<SqlPreview> {
+pub async fn parse_sql_preview(bytes: Vec<u8>) -> CmdResult<SqlPreview> {
+    let content = decode_sql_bytes(&bytes)
+        .map_err(|e| format!("解析 SQL 失败 (编码问题): {e}"))?;
     let parsed = parse_sql_dump(&content).map_err(|e| format!("解析 SQL 失败: {e}"))?;
     let total_lines =
         parsed.providers.len() + parsed.mcp_servers.len() + parsed.skipped_lines.len();
@@ -177,9 +182,9 @@ pub async fn parse_sql_preview(content: String) -> CmdResult<SqlPreview> {
 
 /// Bulk-import providers from a SQL dump.
 ///
-/// Returns a serialisable summary of what was imported, what was
-/// skipped, and any per-row errors (UI surfaces them as a toast +
-/// details panel).
+/// `bytes` 是原始 .sql 文件内容(Rust 端 decode 成 UTF-8 再喂给
+/// parser)。返回导入 / 跳过 / 错误的可序列化 summary,前端展示
+/// 为 toast + 错误明细面板。
 ///
 /// M3.12 adapter (3-medium A1#3) — routes the import through the
 /// active root: when a project is active (`Some(root)`) providers
@@ -189,8 +194,10 @@ pub async fn parse_sql_preview(content: String) -> CmdResult<SqlPreview> {
 #[tauri::command]
 pub async fn import_providers_from_sql(
     state: State<'_, AppState>,
-    content: String,
+    bytes: Vec<u8>,
 ) -> CmdResult<ImportResultDto> {
+    let content = decode_sql_bytes(&bytes)
+        .map_err(|e| format!("导入 SQL 失败 (编码问题): {e}"))?;
     // M3.12 (A1#3) — query the live active root via the platform shim.
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();

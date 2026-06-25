@@ -31,6 +31,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
 thiserror = "1"
+# Phase 2 — non-UTF-8 .sql 编码探测 + 解码。Mozilla Firefox / Gecko
+# 内置的 WHATWG 编码实现,5 步 fallback (UTF-8 BOM / UTF-16 LE/BE BOM /
+# strict UTF-8 / GB18030 / Big5) 覆盖 cc-switch 历史 dump 的 GBK / 简中
+# / 繁中 / Windows 记事本 UTF-16 编码。0.8.35 是 stable,API 稳定。
+# 见 `infrastructure::encoding::decode_sql_bytes`。
+encoding_rs = "=0.8.35"
 # M2.3 — url crate for ccswitch://v1/import?... deeplink parsing.
 # Version locked to the existing transitive (=2.5.8, see Cargo.lock) so
 # we don't pull a second copy into the dep graph. Per CLAUDE.md §2.3.

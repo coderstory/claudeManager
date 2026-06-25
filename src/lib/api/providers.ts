@@ -57,28 +57,25 @@ export function switchProvider(providerId: string): Promise<Provider> {
 /**
  * F3 — parse a SQL dump and return a preview without writing files.
  *
- * The frontend calls this after the user picks a .sql file (via
- * tauri-plugin-dialog) and the page reads its content. The returned
- * preview shows "importable / skipped" counts + the actual list of
- * providers that will be imported.
- *
- * NOTE: the dialog plugin's `open()` returns a `File` object whose
- * `.text()` method gives the raw content — the frontend does the
- * file reading, not Rust.
+ * `bytes` is the raw .sql file content as a number array (Uint8Array
+ * 序列化形式)。前端从 `File.arrayBuffer()` 拿 `ArrayBuffer` 再
+ * `Array.from(new Uint8Array(buf))` 转 number[] 传入。Rust 端
+ * `decode_sql_bytes` 探测 UTF-8 / GB18030 / Big5 / UTF-16 LE/BE BOM
+ * 并解码,支持 GBK 等非 UTF-8 来源。
  */
-export function parseSqlPreview(content: string): Promise<SqlPreview> {
-  return invoke<SqlPreview>('parse_sql_preview', { content });
+export function parseSqlPreview(bytes: number[]): Promise<SqlPreview> {
+  return invoke<SqlPreview>('parse_sql_preview', { bytes });
 }
 
 /**
  * F3 — bulk-import providers from a SQL dump.
  *
- * Returns the full ImportResult including any per-row errors. The
- * page surfaces the error list in a details panel — they are NOT
- * silently swallowed.
+ * `bytes` 同 `parseSqlPreview` —— 原始 .sql 文件的 number[] 形式。
+ * Rust 端 decode 后写盘。返回 ImportResult 含每行错误(前端展示
+ * 详情面板,不静默吞)。
  */
-export function importProvidersFromSql(content: string): Promise<ImportResult> {
-  return invoke<ImportResult>('import_providers_from_sql', { content });
+export function importProvidersFromSql(bytes: number[]): Promise<ImportResult> {
+  return invoke<ImportResult>('import_providers_from_sql', { bytes });
 }
 
 // ---------------------------------------------------------------------------
