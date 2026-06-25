@@ -346,15 +346,71 @@ fi
 
 ## 9. 开放问题(等用户拍板进 Phase 1)
 
-| # | 问题 |
-|---|---|
-| A | **macOS 14+ accessibility permission** 怎么处理?(用户得在系统设置里允许 Terminal/iTerm/osascript)— 文档化 vs 自动化引导 |
-| B | **14 spec 串行总时长估 5-10 分钟** — 是否接受,还是 spec 之间复用 1 个长跑 .app 进程(复杂度 ↑ 速度 ↑) |
-| C | **v4.0 spec 默认 macOS-first**(AppleScript),Windows 移植延后到 Phase 5 — 确认?还是同时出双平台? |
-| D | **fixture 隔离** — `~/.claude/settings.json` 覆盖风险高,要不要用 `XDG_CONFIG_HOME` 强制重定向(更安全,改动小) |
-| E | **历史 e2e(`tests/e2e/`)是否废弃** — v4.0 写完后,playwright 路径已无 macOS 支持,旧 spec 还能在 Windows 跑但维护成本高,建议归档 |
+| # | 问题 | 拍板 (2026-06-25) |
+|---|---|---|
+| A | macOS 14+ accessibility permission 怎么处理? | **A=2: 自动化引导 + 检测**(Phase 1 加一个 `lib/check-permissions.sh`,跑 spec 前检查权限,缺时弹 UI 引导 + 阻塞运行) |
+| B | 14 spec 串行总时长 5-10 分钟? | **B=1: 接受 5-10 分钟**(不优化,实现最简单) |
+| C | macOS-first 还是双平台? | **C=1: macOS-first**(AppleScript),Windows 移植延后到 Phase 5 |
+| D | fixture 隔离方式? | **D=2: `XDG_CONFIG_HOME` 强制重定向**(具体见 §10) |
+| E | 历史 `tests/e2e/` Playwright 路径? | **E=1: 保留 + 继续 Windows 维护**(不归档,Windows dev box / CI 仍能跑) |
 
-**等用户在 Phase 1 开始前回答 A-E**。
+---
+
+## 10. Fixture 隔离方案(用户拍 D=2 后展开)
+
+### 10.1 问题
+真实 `~/.claude/settings.json` 在 `coderstory@anthropic.local` 这台 dev box 上是**生产配置**(可能是真用的 Claude Code 配置)。直接覆盖:
+- **污染风险**:spec 03 切换 A→B 写 `env.ANTHROPIC_BASE_URL = B.url`,spec 结束 trap 还原失败的话,dev box 自己的 Claude Code 切到 B(可能断网 / 错账号)
+- **状态依赖**:spec 假设启动时是 3 providers,真实 box 上可能是 0 / 5 / 10,影响断言
+
+### 10.2 方案对比
+
+| 方案 | 安全性 | 复杂度 | 真实性 |
+|---|---|---|---|
+| **1. 覆盖真实 settings.json + trap EXIT 还原** | ❌ 中(如果 trap 失败就污染) | 低(直接 cp) | 高(真路径) |
+| **2. XDG_CONFIG_HOME 重定向** ✅ | ✅ **高(物理隔离)** | 中(要在 spec 启动前 set env) | 高(但路径是假的) |
+| 3. Docker container | 最高 | 最高(需要 docker build) | 中(隔离层多) |
+
+### 10.3 方案 2 实现(`XDG_CONFIG_HOME` 重定向)
+
+**机制**:`XDG_CONFIG_HOME` 是 XDG Base Directory 规范的环境变量,Claude Code(Tauri 启动后 Rust 端)读它派生 `~/.claude/` 路径。如果 spec 启动前 `export XDG_CONFIG_HOME=/tmp/cc-test-$$/config`,**所有 `~/.claude/*` 读写都落到临时目录**。
+
+**前置检查**:Tauri app 是否真读 `XDG_CONFIG_HOME`?这需要看 src-tauri/src/lib.rs 的 AppPaths 实现(platform traits,CLAUDE.md §3.2 `IPlatformPaths`)。Phase 1 开始时**必须先验证**这条假设 — 如果 app 不读 XDG_CONFIG_HOME,fall back 到方案 1。
+
+**验证方式**:在 `tests/v4-e2e/lib/check-fixture.sh` 写 1 个 stub spec,启动 app 前 `export XDG_CONFIG_HOME=/tmp/...`,启动后让 app 读 settings.json,**验证 app 读的是 /tmp/... 里的文件,不是真实 ~/.claude/settings.json**。
+
+**spec 骨架调整**(以 03 切换为例):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# === Fixture 隔离(D=2) ===
+export XDG_CONFIG_HOME="/tmp/cc-v4-e2e-$$"
+mkdir -p "$XDG_CONFIG_HOME/claude"   # Tauri 派生 ~/.claude/ 路径
+cp "$SCRIPT_DIR/../fixtures/3-providers.json" "$XDG_CONFIG_HOME/claude/settings.json"
+
+# ... 启动 app + 模拟 + 断言 ...
+
+# === 验证副作用(全在临时目录,真实 settings.json 不受影响) ===
+NEW_URL=$(jq -r '.env.ANTHROPIC_BASE_URL' "$XDG_CONFIG_HOME/claude/settings.json")
+assert_equal "$NEW_URL" "https://api.provider-b.com"
+```
+
+**trap EXIT**: `rm -rf "/tmp/cc-v4-e2e-$$"` 清理临时目录(不需要还原真实 settings.json,**因为从头到尾没碰过**)。
+
+### 10.4 风险(必须 Phase 1 验证)
+
+- ⚠️ **Tauri app 可能不读 `XDG_CONFIG_HOME`** — 如果它硬编码 `~/` 派生命理路径(很多 macOS app 这么干),这条方案失效
+- ⚠️ **macOS 沙盒** — 如果 app 被沙盒化(`/Applications/ClaudeManager.app` 在 Apple Silicon 上有 `LSEnvironment` 限制),`XDG_CONFIG_HOME` 可能被忽略
+- ⚠️ **Spec 03 写 `env.ANTHROPIC_BASE_URL`** — 写后 app 内部可能缓存,跨 spec 状态污染
+
+**Phase 1 必做项**:写一个 1 小时内的 stub spec,验证上述 3 个风险,通过了才进 Phase 2。
+
+---
+
+*Refs: CLAUDE.md §2.1 架构先行 + §2.5 为什么这样设计 + §6 review discipline + §10 不要 + §15 macOS + §13.1 smoke test 10 项.  F1-F24 来自 SPEC.md §3.*
 
 ---
 
