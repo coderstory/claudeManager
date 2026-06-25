@@ -12,9 +12,10 @@
  * still carry used_pct = 0 from the buggy insert path — those
  * rows are not meaningful to display).
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { UsageHistoryRow } from '../../types/history';
+import { Pagination } from '../../components/Pagination';
 
 export interface UsageHistoryTableProps {
   rows: UsageHistoryRow[];
@@ -55,6 +56,9 @@ export function UsageHistoryTable({
   rows,
   loading,
 }: UsageHistoryTableProps): ReactElement {
+  // M5 #31 — pagination state for the rendered slice. Reset to 0
+  // when the row set changes (filter applied / new fetch).
+  const [page, setPage] = useState(0);
   // Filter out rows with used_pct === 0 (legacy DB artifact from
   // pre-cda8b8a `record_usage` hardcoded-zero bug). 0.0001 is kept
   // visible since it represents a real (tiny) snapshot. Memoized so
@@ -128,6 +132,11 @@ export function UsageHistoryTable({
     (a, b) => b.recorded_at - a.recorded_at,
   );
 
+  // M5 #31 — slice the sorted list to the current page.
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + PAGE_SIZE);
+
   return (
     <div
       data-testid="usage-history-table-wrap"
@@ -159,7 +168,7 @@ export function UsageHistoryTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row) => (
+          {pageRows.map((row) => (
             <tr
               key={row.id}
               data-testid="usage-history-row"
@@ -192,6 +201,13 @@ export function UsageHistoryTable({
           ))}
         </tbody>
       </table>
+      <Pagination
+        total={sorted.length}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        testIdPrefix="usage-history-pagination"
+      />
     </div>
   );
 }

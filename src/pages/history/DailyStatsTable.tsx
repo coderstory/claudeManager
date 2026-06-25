@@ -8,10 +8,11 @@
  * Data is pre-sorted by `stat_date DESC` from the backend; we
  * re-sort defensively in case a future refactor changes ORDER BY.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { DailyStatRow } from '../../types/history';
 import { formatChineseTokenCount } from '../../lib/format';
+import { Pagination } from '../../components/Pagination';
 
 export interface DailyStatsTableProps {
   rows: DailyStatRow[];
@@ -59,6 +60,12 @@ export function DailyStatsTable({
     () => [...rows].sort((a, b) => b.stat_date.localeCompare(a.stat_date)),
     [rows],
   );
+
+  // M5 #31 — pagination state for the rendered slice.
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + PAGE_SIZE);
 
   if (loading) {
     return (
@@ -124,7 +131,7 @@ export function DailyStatsTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row) => (
+          {pageRows.map((row) => (
             <tr
               key={`${row.provider_id}-${row.stat_date}`}
               data-testid="daily-stats-row"
@@ -145,6 +152,13 @@ export function DailyStatsTable({
           ))}
         </tbody>
       </table>
+      <Pagination
+        total={sorted.length}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        testIdPrefix="daily-stats-pagination"
+      />
     </div>
   );
 }

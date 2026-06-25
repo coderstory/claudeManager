@@ -8,8 +8,10 @@
  * Empty state: shows a friendly placeholder so users understand
  * "0 rows" doesn't mean the page is broken (vs a crash).
  */
+import { useState } from 'react';
 import type { ReactElement } from 'react';
 import type { BackupHistoryRow } from '../../types/history';
+import { Pagination } from '../../components/Pagination';
 
 export interface BackupHistoryTableProps {
   rows: BackupHistoryRow[];
@@ -104,6 +106,12 @@ export function BackupHistoryTable({
   // refactor changes the ORDER BY.
   const sorted = [...rows].sort((a, b) => b.created_at - a.created_at);
 
+  // M5 #31 — pagination state for the rendered slice.
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageRows = sorted.slice(pageStart, pageStart + PAGE_SIZE);
+
   return (
     <div
       data-testid="backup-history-table-wrap"
@@ -135,7 +143,7 @@ export function BackupHistoryTable({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row) => (
+          {pageRows.map((row) => (
             <tr
               key={row.id}
               data-testid="backup-history-row"
@@ -179,6 +187,13 @@ export function BackupHistoryTable({
           ))}
         </tbody>
       </table>
+      <Pagination
+        total={sorted.length}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        testIdPrefix="backup-history-pagination"
+      />
     </div>
   );
 }
