@@ -28,23 +28,60 @@ pub struct MacPaths;
 
 impl IPlatformPaths for MacPaths {
     fn resolve(&self) -> AppPaths {
+        // M4 fixture isolation — `CCM_TEST_HOME` 短路 home / app_data。
+        //
+        // 背景：M4 e2e 测试需要在隔离的临时目录里跑完整套 provider 切换
+        // / 文件 IO 流程，不能动用户的真实 `~/.claude/` 与 `~/.claude.json`。
+        // `dirs::home_dir()` / `dirs::config_dir()` 在 macOS 上**忽略**
+        // 所有 env vars（包括 `HOME` 与 Linux-only 的 `XDG_CONFIG_HOME`），
+        // 所以必须在平台层显式 short-circuit。
+        //
+        // 行为（详见 .planning/phases/M4-e2e-framework/M4-ANALYSIS.md
+        // §fixture isolation）：
+        // - `CCM_TEST_HOME` 已设置 → `home = $CCM_TEST_HOME`，
+        //   `app_data = $CCM_TEST_HOME/Library/Application Support/ClaudeConfigManager`
+        //   （与其余 derive 字段与 Windows 侧结构对称）
+        // - 未设置 → 行为与改前 100% 一致
+        //
+        // 注：`std::env::var(...).ok()` 返回 `None` 当变量未设置、设为空
+        // 串、或者包含无效 Unicode 时（后两者视为未设置，避免误用空串当
+        // 路径前缀炸 fs IO）。空串 `""` 这种"显式清空"语义在测试场景
+        // 里没有意义，不予支持。
+        let ccm_test_home = std::env::var("CCM_TEST_HOME")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from);
+
         // home_dir 在 macOS 几乎不会失败；极端情况（沙盒异常 / 环境变量
         // 缺失）下回退到 `/Users/Shared`（macOS 系统级共享用户目录，始终
         // 存在），与 WindowsPaths 回退到 `C:\Users\Default` 的意图一致。
-        let home = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/Users/Shared"));
+        let home = ccm_test_home
+            .clone()
+            .unwrap_or_else(|| {
+                dirs::home_dir().unwrap_or_else(|| PathBuf::from("/Users/Shared"))
+            });
 
         // `dirs::config_dir()` 在 macOS 解析为 `~/Library/Application
         // Support`（符合 CLAUDE.md §3.2 与 Apple File System 标准布局）。
         // 拼上本应用子目录。回退路径手动重建同一结构，保证 fallback 与
         // 主路径语义一致。
-        let app_data = dirs::config_dir()
-            .map(|p| p.join("ClaudeConfigManager"))
-            .unwrap_or_else(|| {
-                home.join("Library")
-                    .join("Application Support")
-                    .join("ClaudeConfigManager")
-            });
+        //
+        // M4 fixture isolation：当 `CCM_TEST_HOME` 已设置，app_data 直接
+        // 拼接 `$CCM_TEST_HOME/Library/Application Support/ClaudeConfigManager`
+        // 镜像 macOS 真实目录布局，**不**再调 `dirs::config_dir()`。
+        let app_data = match ccm_test_home.as_ref() {
+            Some(root) => root
+                .join("Library")
+                .join("Application Support")
+                .join("ClaudeConfigManager"),
+            None => dirs::config_dir()
+                .map(|p| p.join("ClaudeConfigManager"))
+                .unwrap_or_else(|| {
+                    home.join("Library")
+                        .join("Application Support")
+                        .join("ClaudeConfigManager")
+                }),
+        };
 
         // Claude Code 自身配置目录与文件——与 Windows 侧保持一致，
         // 均位于 `~/.claude/` 与 `~/.claude.json`。
@@ -240,5 +277,109 @@ mod tests {
     #[test]
     fn mac_paths_active_root_dir_is_always_none() {
         assert_eq!(MacPaths.active_root_dir(), None);
+    }
+
+    // -----------------------------------------------------------------
+    // M4 — CCM_TEST_HOME fixture isolation
+    //
+    // 这些测试使用唯一临时路径（带进程 id + 测试名），所以 cargo 默认
+    // 并行跑测试也不会冲突；不需要 `serial_test`。每个测试都
+    // save/restore env var，避免污染同进程后续测试。
+    // -----------------------------------------------------------------
+
+    /// 验证 `CCM_TEST_HOME` 已设置时，所有 8 个 AppPaths 字段都从
+    /// 该 root 派生（而非 `dirs::home_dir()` / `dirs::config_dir()`）。
+    #[test]
+    fn mac_ccm_test_home_set_overrides_all_paths() {
+        let saved = std::env::var("CCM_TEST_HOME").ok();
+        let test_root = std::env::temp_dir().join(format!(
+            "cc-mac-test-set-{}",
+            std::process::id()
+        ));
+        std::env::set_var("CCM_TEST_HOME", &test_root);
+
+        let p = MacPaths.resolve();
+
+        // 1. home 必须等于 test_root 本身
+        assert_eq!(
+            p.home, test_root,
+            "CCM_TEST_HOME set 时 home 必须 = $CCM_TEST_HOME，实际: {} vs {}",
+            p.home.display(),
+            test_root.display()
+        );
+
+        // 2. app_data 必须 = test_root/Library/Application Support/ClaudeConfigManager
+        let expected_app_data = test_root
+            .join("Library")
+            .join("Application Support")
+            .join("ClaudeConfigManager");
+        assert_eq!(
+            p.app_data, expected_app_data,
+            "CCM_TEST_HOME set 时 app_data 必须在 $CCM_TEST_HOME/Library/Application Support/ClaudeConfigManager"
+        );
+
+        // 3. claude_dir = $CCM_TEST_HOME/.claude
+        assert_eq!(p.settings_json.parent().unwrap(), test_root.join(".claude"));
+
+        // 4. claude_json = $CCM_TEST_HOME/.claude.json
+        assert_eq!(p.claude_json, test_root.join(".claude.json"));
+
+        // 5. 三个子目录都在 app_data 下
+        for (label, sub) in [
+            ("backups", &p.backups_dir),
+            ("marketplaces", &p.marketplaces_dir),
+            ("logs", &p.logs_dir),
+        ] {
+            assert!(
+                sub.starts_with(&p.app_data),
+                "CCM_TEST_HOME set 时 {} 目录 {} 必须在 app_data {} 下",
+                label,
+                sub.display(),
+                p.app_data.display()
+            );
+        }
+
+        // 6. history_db 同样在 app_data 下（M4.6+）
+        assert!(p.history_db.starts_with(&p.app_data));
+
+        // restore
+        match saved {
+            Some(v) => std::env::set_var("CCM_TEST_HOME", v),
+            None => std::env::remove_var("CCM_TEST_HOME"),
+        }
+    }
+
+    /// 验证 `CCM_TEST_HOME` 未设置时，行为与改前 100% 一致：
+    /// `home == dirs::home_dir()`，`app_data` 是 `dirs::config_dir()` + 子目录。
+    /// 这是回归保护：确保 short-circuit 不会意外影响非测试环境。
+    #[test]
+    fn mac_ccm_test_home_unset_uses_dirs_crate() {
+        let saved = std::env::var("CCM_TEST_HOME").ok();
+        std::env::remove_var("CCM_TEST_HOME");
+
+        let p = MacPaths.resolve();
+
+        // home 必须等于 dirs::home_dir()（保证非测试环境无影响）
+        let dirs_home = dirs::home_dir().expect("dirs::home_dir() 在测试环境应可用");
+        assert_eq!(
+            p.home, dirs_home,
+            "CCM_TEST_HOME unset 时 home 必须 = dirs::home_dir()，实际: {} vs {}",
+            p.home.display(),
+            dirs_home.display()
+        );
+
+        // app_data 必须是 dirs::config_dir() + ClaudeConfigManager
+        let dirs_config = dirs::config_dir().expect("dirs::config_dir() 在测试环境应可用");
+        assert_eq!(
+            p.app_data,
+            dirs_config.join("ClaudeConfigManager"),
+            "CCM_TEST_HOME unset 时 app_data 必须 = dirs::config_dir() + ClaudeConfigManager"
+        );
+
+        // restore（即使没改也走一遍对称路径，逻辑零假设）
+        match saved {
+            Some(v) => std::env::set_var("CCM_TEST_HOME", v),
+            None => std::env::remove_var("CCM_TEST_HOME"),
+        }
     }
 }
