@@ -251,6 +251,28 @@ export default function JsonEditorPage(): ReactElement {
     [],
   );
 
+  // M5 #28 — read a deferred file path from sessionStorage on mount.
+  // The optimizer's "在 JSON 编辑器中打开" button writes
+  // `ccm.openFilePath` and navigates here; the editor consumes + clears
+  // it once so subsequent mounts don't re-open the same file.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let pending: string | null = null;
+    try {
+      pending = window.sessionStorage.getItem('ccm.openFilePath');
+      if (pending) {
+        window.sessionStorage.removeItem('ccm.openFilePath');
+      }
+    } catch {
+      // sessionStorage may throw in private mode — treat as no-op.
+      return;
+    }
+    if (pending && pending.length > 0) {
+      void loadFileByPath(pending);
+    }
+    // loadFileByPath identity is stable (memoized with [] deps).
+  }, [loadFileByPath]);
+
   // M3.11 (A4#12) — 点击侧边文件树。如果当前是 dirty,先 confirm。
   const handleTreeSelect = useCallback(
     (entry: JsonFileEntry): void => {

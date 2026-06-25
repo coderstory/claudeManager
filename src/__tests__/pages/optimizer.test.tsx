@@ -21,6 +21,7 @@ import {
   act,
 } from '@testing-library/react';
 import OptimizerPage from '../../pages/optimizer';
+import { ViewStateProvider } from '../../hooks/useViewState';
 import type {
   ApplyResult,
   OptimizationFinding,
@@ -55,19 +56,28 @@ function finding(
 
 beforeEach(() => {
   mockInvoke.mockReset();
+  sessionStorage.clear();
 });
+
+// Wrap every <Page /> render in <ViewStateProvider> — the hook throws
+// if called outside the provider. M5 #28 introduced useViewState() in
+// OptimizerPage for the "open in JSON editor" action, so every test
+// that mounts the page needs the provider.
+function wrap({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <ViewStateProvider>{children}</ViewStateProvider>;
+}
 
 describe('OptimizerPage — F18 (M2.9)', () => {
   it('renders the page chrome and rescan button on mount', async () => {
     mockInvoke.mockResolvedValue([]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     expect(screen.getByTestId('optimizer-page')).toBeInTheDocument();
     expect(screen.getByTestId('optimizer-rescan-btn')).toBeInTheDocument();
   });
 
   it('fires scan_optimizations on mount', async () => {
     mockInvoke.mockResolvedValue([]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       const calls = mockInvoke.mock.calls.filter(
         (c) => c[0] === 'scan_optimizations',
@@ -82,7 +92,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       finding('id-warning', 'WARN_RULE', 'warning'),
       finding('id-error', 'ERR_RULE', 'error'),
     ]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('optimizer-group-error')).toBeInTheDocument();
       expect(screen.getByTestId('optimizer-group-warning')).toBeInTheDocument();
@@ -95,7 +105,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
       finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
     ]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       const auto = screen.getByTestId(
         'optimizer-checkbox-id-auto',
@@ -112,7 +122,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     mockInvoke.mockResolvedValue([
       finding('id-1', 'RULE_A', 'warning', false),
     ]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const checkbox = await screen.findByTestId('optimizer-checkbox-id-1');
     expect((checkbox as HTMLInputElement).checked).toBe(false);
     await act(async () => {
@@ -134,7 +144,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
       finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
     ]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const manual = await screen.findByTestId(
       'optimizer-checkbox-id-manual',
     );
@@ -148,9 +158,34 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     mockInvoke.mockResolvedValue([
       finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
     ]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const checkbox = await screen.findByTestId('optimizer-checkbox-id-auto');
     expect((checkbox as HTMLInputElement).disabled).toBe(false);
+  });
+
+  // M5 #28 — manual-handling findings must expose a "open in JSON
+  // editor" action. Clicking the action must:
+  //   1. Write the finding's affected_path into sessionStorage under
+  //      the documented key (so the JSON editor can pick it up).
+  //   2. Trigger a navigation to the json-editor view via the
+  //      ViewStateContext.
+  it('manual findings expose a [在 JSON 编辑器中打开] action that navigates', async () => {
+    mockInvoke.mockResolvedValue([
+      finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
+    ]);
+    sessionStorage.clear();
+    const { rerender } = render(<OptimizerPage />, { wrapper: wrap });
+    const openBtn = await screen.findByTestId(
+      'optimizer-open-json-editor-id-manual',
+    );
+    await act(async () => {
+      fireEvent.click(openBtn);
+    });
+    // Path written to sessionStorage for the editor to consume.
+    expect(sessionStorage.getItem('ccm.openFilePath')).toBe(
+      '/some/path/ORPHAN_PROVIDER',
+    );
+    rerender(<OptimizerPage />, { wrapper: wrap });
   });
 
   it('apply button calls apply_optimizations with the selected finding ids', async () => {
@@ -170,7 +205,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       }
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const applyBtn = await screen.findByTestId('optimizer-apply-btn');
     await act(async () => {
       fireEvent.click(applyBtn);
@@ -201,7 +236,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       }
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const applyBtn = await screen.findByTestId('optimizer-apply-btn');
     await act(async () => {
       fireEvent.click(applyBtn);
@@ -219,7 +254,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
 
   it('shows empty state when scan returns no findings', async () => {
     mockInvoke.mockResolvedValue([]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('optimizer-empty')).toBeInTheDocument();
     });
@@ -227,7 +262,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
 
   it('shows scan-error InfoBar when scan rejects', async () => {
     mockInvoke.mockRejectedValue(new Error('boom: cannot read settings.json'));
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('optimizer-scan-error')).toBeInTheDocument();
       expect(
@@ -242,7 +277,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
 
   it('renders the export button after scan completes', async () => {
     mockInvoke.mockResolvedValue([]);
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('optimizer-export-btn')).toBeInTheDocument();
     });
@@ -255,7 +290,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       if (cmd === 'export_optimization_report') return '/tmp/report.md';
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const exportBtn = await screen.findByTestId('optimizer-export-btn');
     await act(async () => {
       fireEvent.click(exportBtn);
@@ -285,7 +320,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
         return 'C:\\Users\\test\\report.md';
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const exportBtn = await screen.findByTestId('optimizer-export-btn');
     await act(async () => {
       fireEvent.click(exportBtn);
@@ -306,7 +341,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
         throw new Error('disk full');
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const exportBtn = await screen.findByTestId('optimizer-export-btn');
     await act(async () => {
       fireEvent.click(exportBtn);
@@ -326,7 +361,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       if (cmd === 'export_optimization_report') return null;
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     const exportBtn = await screen.findByTestId('optimizer-export-btn');
     await act(async () => {
       fireEvent.click(exportBtn);
@@ -358,7 +393,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       if (cmd === 'export_optimization_report') return '/tmp/report.md';
       return null;
     });
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     // 先 apply,让 applyResults 进 state。
     const applyBtn = await screen.findByTestId('optimizer-apply-btn');
     await act(async () => {
@@ -389,7 +424,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     mockInvoke.mockImplementation(
       () => new Promise(() => {}),
     );
-    render(<OptimizerPage />);
+    render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
       const btn = screen.getByTestId(
         'optimizer-export-btn',

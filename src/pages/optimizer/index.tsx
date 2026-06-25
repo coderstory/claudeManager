@@ -30,6 +30,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Download,
+  ExternalLink,
   Info,
   RefreshCw,
   ShieldAlert,
@@ -42,6 +43,7 @@ import {
   exportOptimizationReport,
   scanOptimizations,
 } from '../../lib/api/optimizer';
+import { useViewState } from '../../hooks/useViewState';
 import type {
   ApplyResult,
   OptimizationFinding,
@@ -101,6 +103,11 @@ const SEVERITY_ICONS: Record<Severity, typeof Info> = {
 
 export default function OptimizerPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M5 #28 — manual-handling findings navigate to json-editor with
+  // the affected file pre-loaded. We pass the path through
+  // sessionStorage (key `ccm.openFilePath`) so the editor's loadFileByPath
+  // can pick it up on mount without coupling through props.
+  const { setView } = useViewState();
 
   const runScan = useCallback(async () => {
     setState((prev) => ({
@@ -147,6 +154,20 @@ export default function OptimizerPage(): ReactElement {
       return { ...prev, selectedIds: next };
     });
   }, []);
+
+  // M5 #28 — jump to JSON editor with `finding.affected_path` pre-loaded.
+  // Writes to sessionStorage so the editor's mount effect can pick it up
+  // (cross-view handoff without prop drilling).
+  const handleOpenInEditor = useCallback((path: string) => {
+    try {
+      sessionStorage.setItem('ccm.openFilePath', path);
+    } catch {
+      // sessionStorage may be unavailable (private mode / disabled);
+      // fall through to navigation anyway — editor will open to its
+      // last-loaded file.
+    }
+    setView('json-editor');
+  }, [setView]);
 
   const handleApply = useCallback(async () => {
     const ids = Array.from(state.selectedIds);
@@ -415,6 +436,7 @@ export default function OptimizerPage(): ReactElement {
                 findings={list}
                 selectedIds={state.selectedIds}
                 onToggle={handleToggle}
+                onOpenInEditor={handleOpenInEditor}
               />
             );
           })}
@@ -495,11 +517,13 @@ function SeverityGroup({
   findings,
   selectedIds,
   onToggle,
+  onOpenInEditor,
 }: {
   severity: Severity;
   findings: OptimizationFinding[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  onOpenInEditor: (path: string) => void;
 }): ReactElement {
   const Icon = SEVERITY_ICONS[severity];
   const colour = severityColour(severity);
@@ -547,6 +571,7 @@ function SeverityGroup({
             finding={f}
             selected={selectedIds.has(f.id)}
             onToggle={onToggle}
+            onOpenInEditor={onOpenInEditor}
           />
         ))}
       </ul>
@@ -562,10 +587,12 @@ function FindingRow({
   finding,
   selected,
   onToggle,
+  onOpenInEditor,
 }: {
   finding: OptimizationFinding;
   selected: boolean;
   onToggle: (id: string) => void;
+  onOpenInEditor: (path: string) => void;
 }): ReactElement {
   return (
     <li
@@ -666,6 +693,33 @@ function FindingRow({
           >
             建议: {finding.suggested_action}
           </div>
+        )}
+        {/* M5 #28 — manual-handling findings (auto_apply=false) cannot
+            be checked (#26). Offer a click-to-detail action that jumps
+            to the JSON editor with the affected file pre-loaded. */}
+        {!finding.auto_apply && (
+          <button
+            type="button"
+            data-testid={`optimizer-open-json-editor-${finding.id}`}
+            style={{
+              marginTop: 8,
+              padding: '4px 10px',
+              fontSize: 12,
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-button)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--accent)',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontFamily: 'inherit',
+            }}
+            onClick={() => onOpenInEditor(finding.affected_path)}
+          >
+            <ExternalLink size={12} aria-hidden="true" />
+            在 JSON 编辑器中打开
+          </button>
         )}
       </div>
     </li>
