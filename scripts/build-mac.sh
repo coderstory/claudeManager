@@ -89,7 +89,7 @@ sleep 1
 #  drops its temporary read-write image. Stale mounts + rw.*.dmg cause bundle_dmg.sh
 #  to race / fail intermittently with "Not enough arguments".)
 if command -v hdiutil >/dev/null 2>&1; then
-  hdiutil info 2>/dev/null | grep -E '/dev/disk[0-9]+.*(Apple_HFS|Apple_APFS)' | awk '{print $1}' | while read -r dev; do
+  hdiutil info 2>/dev/null | { grep -E '/dev/disk[0-9]+.*(Apple_HFS|Apple_APFS)' || true; } | awk '{print $1}' | while read -r dev; do
     hdiutil detach "$dev" 2>/dev/null || true
   done
 fi

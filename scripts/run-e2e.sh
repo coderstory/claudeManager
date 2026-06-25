@@ -66,8 +66,8 @@ fi
 # we can pre-add to PATH: %TEMP% (where the edgedriver npm package drops it)
 # and ~/.cache/msedgedriver.
 MSEDGEDRIVER_CANDIDATES=(
-  "$LOCALAPPDATA/Temp"
-  "$TEMP"
+  "${LOCALAPPDATA:-}/Temp"
+  "${TEMP:-}"
   "$HOME/.cache/msedgedriver"
   "/c/Users/${USER:-e-Yunfei.Qian}/AppData/Local/Temp"
 )

@@ -131,8 +131,18 @@ echo ">>> renamed copy: $PROCNAME"
 echo ">>> expected title: $EXPECTED_TITLE"
 echo ""
 
-# Verify exe exists
-if [[ ! -f "$EXE_PATH" ]]; then
+# Verify exe exists.
+# - Windows: caller passes a .exe FILE → -f checks the file
+# - macOS .app bundle: caller passes the .app DIRECTORY (which `open` accepts
+#   but -f rejects). Accept the bundle if its inner MacOS binary exists.
+# - macOS bare Mach-O: caller passes a -x file → -f checks the file
+if [[ "$IS_DARWIN" == "true" && -n "$APP_BIN_PATH" ]]; then
+  if [[ ! -f "$APP_BIN_PATH" ]]; then
+    echo "FAIL: .app bundle's inner binary not found at $APP_BIN_PATH"
+    echo "      (smoke caller passed: $EXE_PATH)"
+    exit 1
+  fi
+elif [[ ! -f "$EXE_PATH" ]]; then
   echo "FAIL: exe not found at $EXE_PATH"
   exit 1
 fi
@@ -421,7 +431,13 @@ fi
 if [[ -z "$DIST_BUNDLE_PATTERN" ]]; then
   record "7_assets" "PASS" "skipped (no dist/assets/ found or no index-*.js bundle)"
 elif command -v strings >/dev/null 2>&1; then
-  EMBED_HIT=$(strings "$EXE_PATH" 2>/dev/null | grep -cE "${DIST_BUNDLE_PATTERN}\.js|${DIST_BUNDLE_PATTERN}\.css")
+  # On macOS the "exe" is a .app directory; `strings` on a directory recurses
+  # and is pathologically slow. Use the inner Mach-O binary instead.
+  STRINGS_TARGET="$EXE_PATH"
+  if [[ -n "$APP_BIN_PATH" && -f "$APP_BIN_PATH" ]]; then
+    STRINGS_TARGET="$APP_BIN_PATH"
+  fi
+  EMBED_HIT=$(strings "$STRINGS_TARGET" 2>/dev/null | grep -cE "${DIST_BUNDLE_PATTERN}\.js|${DIST_BUNDLE_PATTERN}\.css")
   if [[ "$EMBED_HIT" -ge 1 ]]; then
     record "7_assets" "PASS" "dist fingerprint found in exe (matches: ${DIST_BUNDLE_PATTERN}.{js,css}, hits=$EMBED_HIT)"
   else
@@ -429,7 +445,12 @@ elif command -v strings >/dev/null 2>&1; then
   fi
 elif command -v grep >/dev/null 2>&1; then
   # Fallback if `strings` isn't on PATH — treat exe as text and grep it.
-  if grep -aqE "${DIST_BUNDLE_PATTERN}\.js" "$EXE_PATH" 2>/dev/null; then
+  # Use inner Mach-O on macOS .app bundles (see comment above).
+  GREP_TARGET="$EXE_PATH"
+  if [[ -n "$APP_BIN_PATH" && -f "$APP_BIN_PATH" ]]; then
+    GREP_TARGET="$APP_BIN_PATH"
+  fi
+  if grep -aqE "${DIST_BUNDLE_PATTERN}\.js" "$GREP_TARGET" 2>/dev/null; then
     record "7_assets" "PASS" "dist fingerprint found in exe (grep fallback)"
   else
     record "7_assets" "FAIL" "dist fingerprint NOT found in exe (grep fallback; no strings cmd)"
