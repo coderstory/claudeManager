@@ -154,7 +154,11 @@ fi
 echo ">>> Pre-cleanup: killing any existing instances..."
 if [[ "$IS_DARWIN" == "true" ]]; then
   # macOS: pkill on the inner Mach-O binary (PE image name = SOURCE_PROCNAME).
-  osascript -e 'tell application "ClaudeConfigManager" to quit' 2>/dev/null || true
+  # AppleScript 'tell application "..."' resolves to CFBundleName from
+  # tauri.conf.json::productName = "ClaudeManager". Using the bundle
+  # identifier "ClaudeConfigManager" silently no-ops (AppleEvent name
+  # resolution uses CFBundleName, not the identifier).
+  osascript -e 'tell application "ClaudeManager" to quit' 2>/dev/null || true
   sleep 1
   pkill -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true
   sleep 1

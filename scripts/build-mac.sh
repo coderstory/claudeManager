@@ -79,7 +79,12 @@ echo ""
 
 # === Step 1: Pre-cleanup ===
 echo "[1/3] Pre-cleanup: killing any running ClaudeManager.app..."
-osascript -e 'tell application "ClaudeConfigManager" to quit' 2>/dev/null || true
+# 'tell application "ClaudeManager"' resolves to CFBundleName from
+# tauri.conf.json::productName. Using the bundle identifier
+# "ClaudeConfigManager" (or the AppData folder name) would make
+# AppleScript silently no-op because AppleEvent name resolution uses
+# CFBundleName, not the identifier.
+osascript -e 'tell application "ClaudeManager" to quit' 2>/dev/null || true
 sleep 1
 pkill -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true
 sleep 1
