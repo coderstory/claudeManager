@@ -97,6 +97,41 @@ fn migrations() -> Migrations<'static> {
             "#,
         )
         .down("DROP TABLE IF EXISTS backup_history; DROP TABLE IF EXISTS usage_history; DROP TABLE IF EXISTS schema_version;"),
+        // V2 — Phase 21 incremental aggregation cache.
+        //
+        // The history_service code (see `backfill_daily_stats` /
+        // `query_daily_stats` in `services/history_service.rs`)
+        // references `usage_daily_stats` for the F7 history view's
+        // daily-aggregate cache. The table was missing from V1,
+        // so fresh DBs threw `no such table: usage_daily_stats`
+        // on startup. The live DB happened to have the table
+        // from an out-of-band build, masking the regression.
+        //
+        // `IF NOT EXISTS` is safe on databases that already have
+        // the table (the live DB) — rusqlite_migration only runs
+        // V2 once anyway, but the guard makes the SQL idempotent
+        // for any future tooling that re-runs migrations.
+        //
+        // Columns and PRIMARY KEY match the queries in
+        // history_service.rs exactly (provider_id + stat_date is
+        // the dedup key for one bucket per provider per day).
+        M::up(
+            r#"
+            CREATE TABLE IF NOT EXISTS usage_daily_stats (
+                provider_id    TEXT    NOT NULL,
+                stat_date      TEXT    NOT NULL,
+                tokens_used    INTEGER NOT NULL DEFAULT 0,
+                snapshot_count INTEGER NOT NULL DEFAULT 0,
+                last_aggregated_recorded_at INTEGER NOT NULL,
+                updated_at     INTEGER NOT NULL,
+                PRIMARY KEY (provider_id, stat_date)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_daily_stats_date
+                ON usage_daily_stats(stat_date DESC);
+            "#,
+        )
+        .down("DROP TABLE IF EXISTS usage_daily_stats;"),
     ])
 }
 
@@ -236,6 +271,120 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    /// V2 migration must create the `usage_daily_stats` table
+    /// referenced by `history_service::backfill_daily_stats` /
+    /// `query_daily_stats` (Phase 21). Without this, a fresh DB
+    /// throws `no such table: usage_daily_stats` on first launch
+    /// and the service refuses to start.
+    ///
+    /// This test guards against:
+    /// 1. The migration being dropped or commented out.
+    /// 2. The schema drifting from what the service code uses.
+    /// 3. The index on `stat_date` (used by the F7 history view
+    ///    sort) being dropped.
+    #[test]
+    fn open_creates_usage_daily_stats_table() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("history.db");
+        let conn = open_history_db(&path).unwrap();
+        let guard = conn.lock().unwrap();
+
+        // Table exists.
+        let count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type='table' AND name='usage_daily_stats'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "usage_daily_stats table must exist");
+
+        // Index on stat_date DESC exists (used by F7 history view).
+        let idx_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type='index' AND name='idx_daily_stats_date'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(idx_count, 1, "idx_daily_stats_date index must exist");
+
+        // Schema columns match what history_service.rs inserts / selects.
+        let expected_cols = [
+            "provider_id",
+            "stat_date",
+            "tokens_used",
+            "snapshot_count",
+            "last_aggregated_recorded_at",
+            "updated_at",
+        ];
+        for col in expected_cols {
+            let present: i64 = guard
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('usage_daily_stats')
+                     WHERE name = ?1",
+                    [col],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(present, 1, "column {col} must exist on usage_daily_stats");
+        }
+
+        // PRAGMA user_version must reflect V2 being applied.
+        let user_version: i64 = guard
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert!(
+            user_version >= 2,
+            "PRAGMA user_version must be >= 2 after V2 migration (got {user_version})"
+        );
+
+        // Functional smoke test: the table accepts the exact INSERT
+        // that history_service::backfill_daily_stats runs, and the
+        // exact SELECT that history_service::query_daily_stats runs.
+        let now: i64 = 1_700_000_000;
+        guard
+            .execute(
+                "INSERT INTO usage_daily_stats
+                    (provider_id, stat_date, tokens_used, snapshot_count,
+                     last_aggregated_recorded_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params!["p1", "2026-06-25", 42_i64, 3_i64, now, now],
+            )
+            .expect("INSERT into usage_daily_stats must succeed");
+
+        let read_back: (String, String, i64, i64, i64) = guard
+            .query_row(
+                "SELECT provider_id, stat_date, tokens_used, snapshot_count,
+                        last_aggregated_recorded_at
+                 FROM usage_daily_stats WHERE provider_id = ?1",
+                ["p1"],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .expect("SELECT from usage_daily_stats must succeed");
+        assert_eq!(read_back.0, "p1");
+        assert_eq!(read_back.1, "2026-06-25");
+        assert_eq!(read_back.2, 42);
+        assert_eq!(read_back.3, 3);
+        assert_eq!(read_back.4, now);
+
+        // PRIMARY KEY (provider_id, stat_date) — duplicate insert
+        // must conflict (not silently double-write).
+        let dup = guard.execute(
+            "INSERT INTO usage_daily_stats
+                (provider_id, stat_date, tokens_used, snapshot_count,
+                 last_aggregated_recorded_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params!["p1", "2026-06-25", 99_i64, 1_i64, now, now],
+        );
+        assert!(
+            dup.is_err(),
+            "duplicate (provider_id, stat_date) must violate PRIMARY KEY"
+        );
     }
 
     #[test]
