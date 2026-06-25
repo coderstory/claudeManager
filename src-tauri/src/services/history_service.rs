@@ -36,9 +36,7 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::UsageSnapshot;
-#[cfg(test)]
-use crate::domain::UsageWindow;
+use crate::domain::{UsageSnapshot, UsageWindow};
 use crate::infrastructure::backup_scanner;
 use crate::infrastructure::sqlite::error::HistoryError;
 
@@ -185,17 +183,28 @@ impl HistoryService {
         // raw persistence; a future Plan C UI can JOIN against
         // `providers.json` to enrich the label.
         let provider_name = &snap.provider_id;
+        // M4.6 (Phase 21-C) — derive `used_pct` from `tokens_used`
+        // and a per-window default quota. The schema requires a
+        // non-null REAL; the previous version hardcoded 0.0, which
+        // produced a misleading "全 0%" rendering on the History
+        // page. `UsageSnapshot` does not carry a quota field (M3.8+
+        // uses tokens-based reporting), so we use these defaults as
+        // a stand-in until a per-provider quota field ships. The
+        // raw JSON is preserved so the percentage can be recomputed
+        // later from authoritative provider metadata.
+        let used_pct = compute_used_pct(snap.tokens_used, snap.window);
         let guard = self.db.lock().map_err(|_| HistoryError::MutexPoisoned)?;
         guard.execute(
             "INSERT OR IGNORE INTO usage_history
                 (snapshot_id, provider_id, provider_name, window, used_pct,
                  reset_at, raw_json, recorded_at, active_root)
-             VALUES (?1, ?2, ?3, ?4, 0.0, NULL, ?5, ?6, ?7)",
+             VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8)",
             params![
                 snapshot_id,
                 snap.provider_id,
                 provider_name,
                 window,
+                used_pct,
                 raw_json,
                 snap.timestamp,
                 active_root,
@@ -553,6 +562,33 @@ fn now_unix_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// M4.6 (Phase 21-C) — per-window default token quota. These are
+/// stand-in values: `UsageSnapshot` carries cumulative `tokens_used`
+/// but no authoritative quota (M3.8+ uses tokens-only reporting).
+/// Each window maps to an approximate Claude Code quota tier so the
+/// History page renders a meaningful percentage. Values are
+/// deliberately conservative — the raw JSON snapshot is preserved
+/// so a per-provider quota field can recompute later.
+fn default_quota_for_window(window: UsageWindow) -> u64 {
+    match window {
+        UsageWindow::FiveHours => 20_000, // 5h tier (~Claude Pro default)
+        UsageWindow::OneWeek => 200_000,   // 7d tier
+        UsageWindow::OneMonth => 1_000_000, // 30d tier
+    }
+}
+
+/// Convert `tokens_used` into a percentage of the window's default
+/// quota. Clamped to [0, 100] so wild over-quota spikes don't break
+/// the progress bar rendering.
+fn compute_used_pct(tokens_used: u64, window: UsageWindow) -> f64 {
+    let quota = default_quota_for_window(window);
+    if quota == 0 {
+        return 0.0;
+    }
+    let pct = (tokens_used as f64) / (quota as f64) * 100.0;
+    pct.clamp(0.0, 100.0)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -771,6 +807,31 @@ mod tests {
         assert_eq!(
             build_backup_id_from_path(&p),
             "settings.json.bak.20260619-120000"
+        );
+    }
+
+    /// Regression — M4.6 bug: `record_usage` hardcoded `used_pct = 0.0`
+    /// in the INSERT, so every historical row showed 0% regardless of
+    /// the snapshot's actual `tokens_used`. The fix derives a
+    /// meaningful `used_pct` from `tokens_used` and a per-window
+    /// default quota at write time. See CLAUDE.md §2.4.
+    #[test]
+    fn record_usage_records_used_pct_from_tokens_not_zero() {
+        let (_tmp, svc) = open_fresh();
+        // Half of the 5h quota (20_000 tokens) → 50.0%.
+        let snap = build_snap("p1", UsageWindow::FiveHours, 1_700_000_000, 10_000);
+        svc.record_usage(&snap, None).unwrap();
+        let rows = svc.query_usage(&UsageHistoryFilter::default()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0].used_pct > 0.0,
+            "used_pct must reflect tokens_used, was {}",
+            rows[0].used_pct,
+        );
+        assert!(
+            (rows[0].used_pct - 50.0).abs() < 0.01,
+            "10_000 / 20_000 = 50.0%, got {}",
+            rows[0].used_pct,
         );
     }
 }
