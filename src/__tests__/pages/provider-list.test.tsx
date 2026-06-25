@@ -534,4 +534,213 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
       expect(screen.queryByTestId('provider-generate-preview-modal')).toBeNull();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // M3.6 (清单 22) — CRUD USER FLOW E2E TESTS
+  // 这些不是单元测试 — 它们模拟真实用户点击 + 输入 + 提交,验证完整流程.
+  // 之前的"啥也干不了"是分析层发现, 现在的测试确保它真的能用.
+  // -----------------------------------------------------------------------
+
+  it('+ Add 按钮 → 打开 form → 填表 → 保存 → 调用 addProvider → 刷新列表', async () => {
+    mockInvoke.mockResolvedValueOnce([]);  // initial list (empty)
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-empty')).toBeInTheDocument();
+    });
+
+    // 1. 用户点 [+ Add]
+    fireEvent.click(screen.getByTestId('provider-list-add'));
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('provider-form-save')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-form-cancel')).toBeInTheDocument();
+
+    // 2. 用户填表 (5 个字段)
+    fireEvent.change(screen.getByTestId('provider-form-name'), { target: { value: 'Test Add' } });
+    fireEvent.change(screen.getByTestId('provider-form-base-url'), { target: { value: 'https://api.add.example' } });
+    fireEvent.change(screen.getByTestId('provider-form-api-key'), { target: { value: 'sk-add-12345' } });
+    fireEvent.change(screen.getByTestId('provider-form-model'), { target: { value: 'add-model' } });
+    fireEvent.change(screen.getByTestId('provider-form-notes'), { target: { value: 'e2e test' } });
+
+    // 3. mock addProvider 成功 + reload
+    mockInvoke.mockResolvedValueOnce({
+      id: 'test-add', name: 'Test Add', provider_type: 'anthropic',
+      api_base: 'https://api.add.example', api_key: 'sk-add-12345',
+      models: ['add-model'], is_active: false,
+      created_at: 1700000000, last_used_at: null, notes: 'e2e test',
+    });
+    mockInvoke.mockResolvedValueOnce([{  // reload 后
+      id: 'system', name: 'System', provider_type: 'anthropic',
+      api_base: 'https://api.system', api_key: 'sk-system',
+      models: ['claude-sonnet-4-6'], is_active: true,
+      created_at: 1, last_used_at: null, notes: null,
+    }, {
+      id: 'test-add', name: 'Test Add', provider_type: 'anthropic',
+      api_base: 'https://api.add.example', api_key: 'sk-add-12345',
+      models: ['add-model'], is_active: false,
+      created_at: 1700000000, last_used_at: null, notes: 'e2e test',
+    }]);
+
+    // 4. 用户点 [保存]
+    fireEvent.click(screen.getByTestId('provider-form-save'));
+
+    // 5. 验证 addProvider 被调用
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'add_provider');
+      expect(calls.length).toBe(1);
+    });
+    // 6. 验证 form modal 关闭 + 列表更新
+    await waitFor(() => {
+      expect(screen.queryByTestId('provider-form-modal')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-test-add')).toBeInTheDocument();
+    });
+  });
+
+  it('[View] 按钮 → 打开 details modal → 显示完整字段 (含 api_key)', async () => {
+    const target = {
+      id: 'glm', name: 'GLM-4.6', provider_type: 'custom',
+      api_base: 'https://api.glm.example', api_key: 'sk-glm-secret',
+      models: ['glm-4-6'], is_active: false,
+      created_at: 1700000000, last_used_at: 1700000500, notes: 'GLM notes',
+    };
+    mockInvoke.mockResolvedValueOnce([
+      { id: 'system', name: 'System', provider_type: 'anthropic',
+        api_base: 'https://api.system', api_key: 'sk-sys',
+        models: ['claude-sonnet-4-6'], is_active: true,
+        created_at: 1, last_used_at: null, notes: null },
+      target,
+    ]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-glm')).toBeInTheDocument();
+    });
+
+    // 用户点 [View]
+    mockInvoke.mockResolvedValueOnce(target);  // get_provider_details 返回
+    fireEvent.click(screen.getByTestId('provider-view-glm'));
+
+    // details modal 出现 + 所有字段可见
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-details-modal')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      const content = screen.getByTestId('provider-details-content');
+      expect(content).toBeInTheDocument();
+      expect(content.textContent).toContain('GLM-4.6');
+      expect(content.textContent).toContain('custom');
+      expect(content.textContent).toContain('https://api.glm.example');
+      expect(content.textContent).toContain('sk-glm-secret');
+      expect(content.textContent).toContain('glm-4-6');
+      expect(content.textContent).toContain('GLM notes');
+    });
+  });
+
+  it('[Edit] 按钮 → 打开 form prefilled → 修改 → 保存 → 调用 updateProvider → 刷新', async () => {
+    const target = {
+      id: 'glm', name: 'GLM-OLD', provider_type: 'custom',
+      api_base: 'https://api.old.example', api_key: 'sk-old',
+      models: ['old-model'], is_active: false,
+      created_at: 1700000000, last_used_at: null, notes: 'old',
+    };
+    mockInvoke.mockResolvedValueOnce([target]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-glm')).toBeInTheDocument();
+    });
+
+    // 1. 用户点 [Edit]
+    fireEvent.click(screen.getByTestId('provider-edit-glm'));
+
+    // 2. form modal 出现, 字段 prefilled
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+    const nameInput = screen.getByTestId('provider-form-name') as HTMLInputElement;
+    expect(nameInput.value).toBe('GLM-OLD');  // 预填
+
+    // 3. 用户改 name
+    fireEvent.change(nameInput, { target: { value: 'GLM-NEW' } });
+
+    // 4. mock updateProvider 成功 + reload
+    const updated = { ...target, name: 'GLM-NEW' };
+    mockInvoke.mockResolvedValueOnce(updated);
+    mockInvoke.mockResolvedValueOnce([updated]);
+    fireEvent.click(screen.getByTestId('provider-form-save'));
+
+    // 5. 验证 updateProvider 被调用 (with new name)
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(([cmd, args]) => cmd === 'update_provider');
+      expect(calls.length).toBe(1);
+      expect(calls[0][1].input.name).toBe('GLM-NEW');
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('provider-form-modal')).toBeNull();
+    });
+  });
+
+  it('[Delete] 按钮 (is_active=false 时) → 弹确认 → 确认 → 调用 deleteProvider', async () => {
+    const target = {
+      id: 'deletable', name: 'ToDelete', provider_type: 'custom',
+      api_base: 'https://api.del.example', api_key: 'sk-del',
+      models: ['m'], is_active: false,
+      created_at: 1, last_used_at: null, notes: null,
+    };
+    mockInvoke.mockResolvedValueOnce([target]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-deletable')).toBeInTheDocument();
+    });
+
+    // 1. 用户点 [Delete] (is_active=false, 所以按钮启用)
+    const delBtn = screen.getByTestId('provider-delete-deletable') as HTMLButtonElement;
+    expect(delBtn.disabled).toBe(false);
+    fireEvent.click(delBtn);
+
+    // 2. ConfirmDialog 出现
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-dialog-overlay')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('confirm-dialog-confirm')).toBeInTheDocument();
+
+    // 3. mock deleteProvider 成功 + reload (在点 confirm 前设)
+    mockInvoke.mockResolvedValueOnce(undefined);  // deleteProvider
+    mockInvoke.mockResolvedValueOnce([]);         // reload
+
+    // 4. 用户点 [删除] (确认按钮)
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+
+    // 5. 验证 deleteProvider 被调用
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(([cmd, args]) => cmd === 'delete_provider');
+      expect(calls.length).toBe(1);
+      expect(calls[0][1].providerId).toBe('deletable');
+    });
+    // 6. ConfirmDialog 关闭
+    await waitFor(() => {
+      expect(screen.queryByTestId('confirm-dialog-overlay')).toBeNull();
+    });
+  });
+
+  it('[Delete] 按钮 (is_active=true 时) 禁用 — CannotDeleteActive 业务规则', async () => {
+    const active = {
+      id: 'active-p', name: 'Active', provider_type: 'anthropic',
+      api_base: 'https://api.a', api_key: 'sk-a',
+      models: ['m'], is_active: true,  // 当前激活
+      created_at: 1, last_used_at: null, notes: null,
+    };
+    mockInvoke.mockResolvedValueOnce([active]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-active-p')).toBeInTheDocument();
+    });
+
+    // 删除按钮在 is_active=true 时应禁用 (UI 层面防止误操作)
+    const delBtn = screen.getByTestId('provider-delete-active-p') as HTMLButtonElement;
+    expect(delBtn.disabled).toBe(true);
+    // tooltip 应说明原因
+    expect(delBtn.title).toContain('无法删除');
+  });
 });
