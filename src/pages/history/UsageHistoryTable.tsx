@@ -7,7 +7,12 @@
  *
  * Empty state: shows a friendly placeholder so users understand
  * "0 rows" doesn't mean the page is broken (vs a crash).
+ *
+ * 0% rows: hidden (post cda8b8a bug fix, but legacy DB rows may
+ * still carry used_pct = 0 from the buggy insert path — those
+ * rows are not meaningful to display).
  */
+import { useMemo } from 'react';
 import type { ReactElement } from 'react';
 import type { UsageHistoryRow } from '../../types/history';
 
@@ -50,6 +55,17 @@ export function UsageHistoryTable({
   rows,
   loading,
 }: UsageHistoryTableProps): ReactElement {
+  // Filter out rows with used_pct === 0 (legacy DB artifact from
+  // pre-cda8b8a `record_usage` hardcoded-zero bug). 0.0001 is kept
+  // visible since it represents a real (tiny) snapshot. Memoized so
+  // the filter doesn't re-run on every parent re-render.
+  // NOTE: hooks must run unconditionally, so this stays above any
+  // early-return below.
+  const visibleRows = useMemo(
+    () => rows.filter((r) => r.used_pct > 0),
+    [rows],
+  );
+
   if (loading) {
     return (
       <div
@@ -85,10 +101,32 @@ export function UsageHistoryTable({
     );
   }
 
+  // All rows were 0% → nothing meaningful to show.
+  if (visibleRows.length === 0) {
+    return (
+      <div
+        data-testid="usage-history-filtered-empty"
+        style={{
+          padding: 32,
+          color: 'var(--text-muted)',
+          fontSize: 13,
+          textAlign: 'center',
+          borderRadius: 'var(--radius-card)',
+          border: '1px dashed var(--border)',
+          background: 'var(--bg-elevated)',
+        }}
+      >
+        暂无可见用量记录(全部为 0%)。
+      </div>
+    );
+  }
+
   // Defensive sort: timestamp descending (newest first). Backend
   // already returns in this order but we re-sort in case a future
   // refactor changes the ORDER BY.
-  const sorted = [...rows].sort((a, b) => b.recorded_at - a.recorded_at);
+  const sorted = [...visibleRows].sort(
+    (a, b) => b.recorded_at - a.recorded_at,
+  );
 
   return (
     <div

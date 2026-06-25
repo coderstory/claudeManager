@@ -313,3 +313,77 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     expect(container.firstChild).toMatchSnapshot();
   });
 });
+
+// ---------------------------------------------------------------------------
+// UsageHistoryTable — hide 0% rows (M4.x fix)
+//
+// Context (M4.x postmortem):
+//   - Pre cda8b8a, `record_usage` hardcoded used_pct = 0.0 on insert.
+//   - Post cda8b8a the bug is fixed for new rows (pct derived from
+//     tokens_used), but old DB rows still have 0.0.
+//   - These tests pin the "hide 0% rows" behavior so legacy rows
+//     don't pollute the table.
+// ---------------------------------------------------------------------------
+
+describe('UsageHistoryTable — hide 0% rows', () => {
+  it('does not render rows with used_pct === 0 (only non-zero rows visible)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'get_usage_history_rows') {
+        return [
+          sampleUsageRow(1, { used_pct: 0, provider_name: 'Provider Zero' }),
+          sampleUsageRow(2, { used_pct: 50.0, provider_name: 'Provider Half' }),
+        ];
+      }
+      return null;
+    });
+    render(<HistoryPage />);
+    await waitFor(() => {
+      const rows = screen.getAllByTestId('usage-history-row');
+      // Only the 50.0% row should render; the 0% row is hidden.
+      expect(rows.length).toBe(1);
+      expect(rows[0].getAttribute('data-usage-id')).toBe('2');
+    });
+    expect(screen.queryByText('Provider Zero')).not.toBeInTheDocument();
+    expect(screen.getByText('Provider Half')).toBeInTheDocument();
+  });
+
+  it('renders all rows when every used_pct > 0', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'get_usage_history_rows') {
+        return [
+          sampleUsageRow(1, { used_pct: 12.5 }),
+          sampleUsageRow(2, { used_pct: 67.8 }),
+          sampleUsageRow(3, { used_pct: 0.0001 }),
+        ];
+      }
+      return null;
+    });
+    render(<HistoryPage />);
+    await waitFor(() => {
+      const rows = screen.getAllByTestId('usage-history-row');
+      expect(rows.length).toBe(3);
+    });
+  });
+
+  it('shows the filtered-empty placeholder when all rows are 0%', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'get_usage_history_rows') {
+        return [
+          sampleUsageRow(1, { used_pct: 0 }),
+          sampleUsageRow(2, { used_pct: 0 }),
+        ];
+      }
+      return null;
+    });
+    render(<HistoryPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('usage-history-filtered-empty'),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryAllByTestId('usage-history-row').length).toBe(0);
+  });
+});
