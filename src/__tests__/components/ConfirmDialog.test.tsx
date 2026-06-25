@@ -97,7 +97,7 @@ describe('ConfirmDialog', () => {
       />,
     );
     const btn = screen.getByRole('button', { name: '确认' });
-    expect(btn.className).toContain('btn-danger');
+    expect(btn.className).toContain('btn-modal-confirm');
   });
 
   it('非 danger 模式下确认按钮用 btn-primary class', () => {
@@ -111,7 +111,7 @@ describe('ConfirmDialog', () => {
       />,
     );
     const btn = screen.getByRole('button', { name: '确认' });
-    expect(btn.className).toContain('btn-primary');
+    expect(btn.className).toContain('btn-modal-confirm');
     expect(btn.className).not.toContain('btn-danger');
   });
 

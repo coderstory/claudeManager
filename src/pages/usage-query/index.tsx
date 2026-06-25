@@ -510,10 +510,10 @@ export default function UsageQueryPage(): ReactElement {
               fontSize: 12,
             }}
           >
-            {state.history.length} 条记录
+            {state.history?.length ?? 0} 条记录
           </span>
         </div>
-        <HistoryChart history={state.history} loading={state.loading && state.history.length === 0} />
+        <HistoryChart history={state.history ?? []} loading={state.loading && (state.history?.length ?? 0) === 0} />
       </section>
 
       {/* Empty state hint */}

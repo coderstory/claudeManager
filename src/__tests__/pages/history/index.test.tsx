@@ -88,7 +88,7 @@ beforeEach(() => {
   // Default: empty rows + minimal stats.
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_history_stats') return sampleStats;
-    if (cmd === 'get_usage_history') return [];
+    if (cmd === 'get_usage_history_rows') return [];
     if (cmd === 'get_backup_history') return [];
     if (cmd === 'export_history')
       return { path: 'C:/export.json', count: 0, format: 'json' };
@@ -120,7 +120,7 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     });
     await waitFor(() => {
       const usageCalls = mockInvoke.mock.calls.filter(
-        (c) => c[0] === 'get_usage_history',
+        (c) => c[0] === 'get_usage_history_rows',
       );
       expect(usageCalls.length).toBeGreaterThanOrEqual(1);
     });
@@ -137,7 +137,7 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
   it('renders usage rows in the active tab', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'get_history_stats') return sampleStats;
-      if (cmd === 'get_usage_history') {
+      if (cmd === 'get_usage_history_rows') {
         return [
           sampleUsageRow(1, { used_pct: 12.5, window: '5h' }),
           sampleUsageRow(2, { used_pct: 67.8, window: '7d' }),

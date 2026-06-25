@@ -152,7 +152,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   it('shows the InfoBar on IPC error', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'get_current_usage') {
-        throw new Error('未知窗口');
+        throw new Error('查询失败：未知错误');
       }
       return null;
     });
@@ -161,7 +161,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       expect(screen.getByTestId('usage-error')).toBeInTheDocument();
     });
     expect(screen.getByTestId('usage-error').textContent).toContain(
-      '未知窗口',
+      '查询失败：未知错误',
     );
   });
 
@@ -181,14 +181,14 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       expect(screen.getByTestId('usage-empty-hint')).toBeInTheDocument();
     });
     expect(screen.getByTestId('usage-empty-hint').textContent).toContain(
-      'usage.json',
+      '*.jsonl',
     );
   });
 
   it('renders the sparkline svg', async () => {
     render(<UsageQueryPage />);
     await waitFor(() => {
-      expect(screen.getByTestId('usage-sparkline')).toBeInTheDocument();
+      expect(screen.getByTestId('usage-history-chart')).toBeInTheDocument();
     });
   });
 

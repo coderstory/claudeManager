@@ -97,11 +97,11 @@ describe('M3.13.2 splash React-first-paint hide', () => {
     // No tauri://ready event needed. React-first-paint (double rAF)
     // hides the splash on its own. 50ms is enough to flush both rAF
     // callbacks under vi.useFakeTimers().
-    vi.advanceTimersByTime(50);
+    vi.advanceTimersByTime(1300);
     await Promise.resolve();
 
-    // The React-first-paint path: mount → commit → 1st rAF → 2nd rAF
-    // → hide. NO 8s wait, NO tauri://ready dependency.
+    // M3.13.2: React-first-paint path (double rAF) + MIN_SPLASH_MS=1200ms
+    // (anti-flash guard). 1300ms > 1200ms threshold → splash hidden.
     expect(getSplash()?.classList.contains(HIDDEN_CLASS)).toBe(true);
   });
 
@@ -137,8 +137,8 @@ describe('M3.13.2 splash React-first-paint hide', () => {
     // Right after class added: display still has prior value.
     expect(getSplash()?.classList.contains(HIDDEN_CLASS)).toBe(true);
 
-    // After 300ms: display should be none (from the secondary timeout).
-    vi.advanceTimersByTime(350);
+    // After 300ms past the 1200ms threshold: display should be none (from the secondary timeout).
+    vi.advanceTimersByTime(400);
     expect(getSplash()?.style.display).toBe('none');
   });
 

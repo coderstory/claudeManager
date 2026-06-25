@@ -60,12 +60,17 @@ describe('base.css — 项目级 base class 系统', () => {
     el.remove();
   });
 
-  it('.sidebar 有 height:100% + overflow-y:auto 约束(关键 — 让滚动条收敛)', () => {
+  it('.sidebar 有 height:100% 约束 + 子 ul overflow-y:auto (滚动条收敛)', () => {
+    // .sidebar 自身有 height:100% + overflow:hidden (容器);
+    // 子 .sidebar > ul 才有 overflow-y:auto (实际滚动元素).
+    // 测两侧确保契约.
     const el = document.createElement('nav');
     el.className = 'sidebar';
+    const ul = document.createElement('ul');
+    el.appendChild(ul);
     document.body.appendChild(el);
     expect(getComputedStyle(el).height).toBe('100%');
-    expect(getComputedStyle(el).overflowY).toBe('auto');
+    expect(getComputedStyle(ul).overflowY).toBe('auto');
     el.remove();
   });
 
