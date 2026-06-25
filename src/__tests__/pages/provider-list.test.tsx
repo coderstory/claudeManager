@@ -43,7 +43,7 @@ function p(id: string, name: string, opts: Partial<Provider> = {}): Provider {
     provider_type: opts.provider_type ?? 'anthropic',
     api_base: opts.api_base ?? `https://${id}.example.com`,
     api_key: opts.api_key ?? `key-${id}`,
-    models: opts.models ?? ['claude-sonnet-4-6'],
+    models: opts.models ?? { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
     is_active: opts.is_active ?? false,
     created_at: opts.created_at ?? 1_700_000_000,
     last_used_at: opts.last_used_at ?? null,
@@ -567,18 +567,18 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     mockInvoke.mockResolvedValueOnce({
       id: 'test-add', name: 'Test Add', provider_type: 'anthropic',
       api_base: 'https://api.add.example', api_key: 'sk-add-12345',
-      models: ['add-model'], is_active: false,
+      models: { default: 'add-model', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: false,
       created_at: 1700000000, last_used_at: null, notes: 'e2e test',
     });
     mockInvoke.mockResolvedValueOnce([{  // reload 后
       id: 'system', name: 'System', provider_type: 'anthropic',
       api_base: 'https://api.system', api_key: 'sk-system',
-      models: ['claude-sonnet-4-6'], is_active: true,
+      models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: true,
       created_at: 1, last_used_at: null, notes: null,
     }, {
       id: 'test-add', name: 'Test Add', provider_type: 'anthropic',
       api_base: 'https://api.add.example', api_key: 'sk-add-12345',
-      models: ['add-model'], is_active: false,
+      models: { default: 'add-model', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: false,
       created_at: 1700000000, last_used_at: null, notes: 'e2e test',
     }]);
 
@@ -603,13 +603,13 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     const target = {
       id: 'glm', name: 'GLM-4.6', provider_type: 'custom',
       api_base: 'https://api.glm.example', api_key: 'sk-glm-secret',
-      models: ['glm-4-6'], is_active: false,
+      models: { default: 'glm-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: false,
       created_at: 1700000000, last_used_at: 1700000500, notes: 'GLM notes',
     };
     mockInvoke.mockResolvedValueOnce([
       { id: 'system', name: 'System', provider_type: 'anthropic',
         api_base: 'https://api.system', api_key: 'sk-sys',
-        models: ['claude-sonnet-4-6'], is_active: true,
+        models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: true,
         created_at: 1, last_used_at: null, notes: null },
       target,
     ]);
@@ -642,7 +642,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     const target = {
       id: 'glm', name: 'GLM-OLD', provider_type: 'custom',
       api_base: 'https://api.old.example', api_key: 'sk-old',
-      models: ['old-model'], is_active: false,
+      models: { default: 'old-model', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: false,
       created_at: 1700000000, last_used_at: null, notes: 'old',
     };
     mockInvoke.mockResolvedValueOnce([target]);
@@ -685,7 +685,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     const target = {
       id: 'deletable', name: 'ToDelete', provider_type: 'custom',
       api_base: 'https://api.del.example', api_key: 'sk-del',
-      models: ['m'], is_active: false,
+      models: { default: 'm', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: false,
       created_at: 1, last_used_at: null, notes: null,
     };
     mockInvoke.mockResolvedValueOnce([target]);
@@ -728,7 +728,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     const active = {
       id: 'active-p', name: 'Active', provider_type: 'anthropic',
       api_base: 'https://api.a', api_key: 'sk-a',
-      models: ['m'], is_active: true,  // 当前激活
+      models: { default: 'm', haiku: null, sonnet: null, opus: null, by_tier: {} }, is_active: true,  // 当前激活
       created_at: 1, last_used_at: null, notes: null,
     };
     mockInvoke.mockResolvedValueOnce([active]);

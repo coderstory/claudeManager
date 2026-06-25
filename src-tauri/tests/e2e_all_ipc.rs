@@ -102,7 +102,7 @@ async fn e2e_read_current_claude_config_api_key_format() {
     let res = providers::read_current_claude_config(s_).await.unwrap();
     if let Some(cfg) = res {
         // Either key is acceptable; base_url may or may not exist
-        assert!(cfg.base_url.is_some() || cfg.auth_token.is_some() || cfg.model.is_some());
+        assert!(cfg.base_url.is_some() || cfg.auth_token.is_some() || !cfg.models.default.is_empty());
     }
 }
 
@@ -152,7 +152,7 @@ async fn e2e_get_provider_details_not_found() {
 #[tokio::test]
 async fn e2e_add_provider() {
     use claude_config_manager_lib::commands::providers;
-    use claude_config_manager_lib::domain::ProviderInput;
+    use claude_config_manager_lib::domain::{ProviderInput, ProviderModels};
     let state = test_state();
     let s_ = s(&state);
     let input = ProviderInput {
@@ -160,7 +160,10 @@ async fn e2e_add_provider() {
         name: "Test-Provider-E2E".into(),
         base_url: "https://api.test.example.com".into(),
         api_key: "sk-test-12345".into(),
-        model: "test-model".into(),
+        models: ProviderModels {
+            default: "test-model".into(),
+            ..Default::default()
+        },
         notes: Some("e2e test".into()),
     };
     let result = providers::add_provider(s_.clone(), input).await;
@@ -181,7 +184,7 @@ async fn e2e_add_provider() {
 #[tokio::test]
 async fn e2e_add_provider_empty_name_rejected() {
     use claude_config_manager_lib::commands::providers;
-    use claude_config_manager_lib::domain::ProviderInput;
+    use claude_config_manager_lib::domain::{ProviderInput, ProviderModels};
     let state = test_state();
     let s_ = s(&state);
     let input = ProviderInput {
@@ -189,7 +192,10 @@ async fn e2e_add_provider_empty_name_rejected() {
         name: "".into(),
         base_url: "https://api.test.example.com".into(),
         api_key: "sk-test".into(),
-        model: "m".into(),
+        models: ProviderModels {
+            default: "m".into(),
+            ..Default::default()
+        },
         notes: None,
     };
     let err = providers::add_provider(s_, input).await.unwrap_err();
@@ -200,7 +206,7 @@ async fn e2e_add_provider_empty_name_rejected() {
 #[tokio::test]
 async fn e2e_update_provider_not_found() {
     use claude_config_manager_lib::commands::providers;
-    use claude_config_manager_lib::domain::ProviderInput;
+    use claude_config_manager_lib::domain::{ProviderInput, ProviderModels};
     let state = test_state();
     let s_ = s(&state);
     let input = ProviderInput {
@@ -208,7 +214,10 @@ async fn e2e_update_provider_not_found() {
         name: "Updated".into(),
         base_url: "https://api.updated.example.com".into(),
         api_key: "sk-updated".into(),
-        model: "m".into(),
+        models: ProviderModels {
+            default: "m".into(),
+            ..Default::default()
+        },
         notes: None,
     };
     let err = providers::update_provider(s_, "nonexistent-xyz".to_string(), input).await.unwrap_err();

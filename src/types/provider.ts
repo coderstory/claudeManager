@@ -22,7 +22,14 @@ export interface Provider {
   provider_type: string;
   api_base: string;
   api_key: string;
-  models: string[];
+  /** 4-tier model mapping (ANTHROPIC_MODEL + DEFAULT_HAIKU/SONNET/OPUS + by_tier). */
+  models: {
+    default: string;
+    haiku: string | null;
+    sonnet: string | null;
+    opus: string | null;
+    by_tier: Record<string, string>;
+  };
   is_active: boolean;
   created_at: number;
   last_used_at: number | null;
@@ -115,10 +122,31 @@ export interface ImportSkip {
  * Note: `id` is NOT in this struct — `update_provider` takes id as a
  * separate path argument (it's the filename stem and immutable after creation).
  */
+/**
+ * 2026-06-25 — 4-tier model mapping (Claude Code ANTHROPIC_*_MODEL env keys).
+ * `default` → ANTHROPIC_MODEL, `haiku`/`sonnet`/`opus` → 3 tier overrides,
+ * `by_tier` map for custom tier names (e.g. `fable` → ANTHROPIC_DEFAULT_FABLE_MODEL).
+ * Mirrors `src-tauri/src/domain/provider.rs::ProviderModels`.
+ */
+export interface ProviderModels {
+  default: string;
+  haiku: string | null;
+  sonnet: string | null;
+  opus: string | null;
+  by_tier: Record<string, string>;
+}
+
+/**
+ * ProviderInput — mirror of `src-tauri/src/domain/provider.rs::ProviderInput`.
+ * Used by add_provider and update_provider IPC commands (M3.6 清单 22 CRUD).
+ * Note: `id` is NOT in this struct — `update_provider` takes id as a
+ * separate path argument (it's the filename stem and immutable after creation).
+ */
 export interface ProviderInput {
   name: string;
   base_url: string;
   api_key: string;
-  model: string;
+  /** 4-tier model mapping (ANTHROPIC_MODEL + DEFAULT_HAIKU/SONNET/OPUS + by_tier). */
+  models: ProviderModels;
   notes: string | null;
 }

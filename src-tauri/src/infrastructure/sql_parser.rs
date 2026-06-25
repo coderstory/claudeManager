@@ -56,7 +56,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::domain::{is_valid_id, Provider};
+use crate::domain::{is_valid_id, Provider, ProviderModels};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -782,10 +782,15 @@ fn parse_provider_row(
                     .anthropic_auth_token()
                     .map(|s| s.to_string())
                     .unwrap_or_default();
-                let mdls = s
-                    .anthropic_model()
-                    .map(|m| vec![m])
-                    .unwrap_or_default();
+                // M4.6.1 — sql dump only carries the primary model name
+                // (env.ANTHROPIC_MODEL or top-level `model`); map it to
+                // `ProviderModels.default`. Haiku/sonnet/opus/by_tier
+                // stay unset (None) — the user can fill them later via
+                // the JSON edit modal (F5).
+                let mdls = ProviderModels {
+                    default: s.anthropic_model().unwrap_or_default(),
+                    ..Default::default()
+                };
                 (base, key, mdls)
             }
             // claude 系但 settings_config 为空 → 无法提取 base_url。
@@ -799,7 +804,7 @@ fn parse_provider_row(
         // 非 claude 系：保留 raw，不强解析。api_base 留空——下游
         // Provider::validate 不在此路径调用（import_providers_from_sql
         // 用 serde_json::to_string_pretty 直写，不经 validate）。
-        (String::new(), String::new(), Vec::new())
+        (String::new(), String::new(), ProviderModels::default())
     };
 
     // line 只用于 skip 消息；Provider 不存储。

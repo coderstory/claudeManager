@@ -55,7 +55,7 @@ function p(id: string, name: string): Provider {
     provider_type: 'anthropic',
     api_base: `https://${id}.example.com`,
     api_key: `key-${id}`,
-    models: ['claude-sonnet-4-6'],
+    models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
     is_active: false,
     created_at: 1_700_000_000,
     last_used_at: null,

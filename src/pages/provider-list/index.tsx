@@ -873,8 +873,8 @@ function ProviderRow({
         <div className="list-row-header">
           <span className="name">{provider.name}</span>
           <span className="badge badge-type">{provider.provider_type}</span>
-          {provider.models.length > 0 && (
-            <span className="meta">· {provider.models.length} 个模型</span>
+          {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(provider.models.by_tier).length) > 0 && (
+            <span className="meta">· {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(provider.models.by_tier).length)} 个模型</span>
           )}
         </div>
         <div className="mono api-base">{provider.api_base}</div>
@@ -1012,21 +1012,29 @@ function ProviderFormModal({
   const failure = formState.kind === 'failure' ? formState.message : null;
   const existing = isEdit ? formState.provider : null;
 
-  // Form state
+  // Form state — 4-tier model mapping (default + haiku + sonnet + opus)
   const [name, setName] = useState(existing?.name ?? '');
   const [baseUrl, setBaseUrl] = useState(existing?.api_base ?? '');
   const [apiKey, setApiKey] = useState(existing?.api_key ?? '');
-  const [model, setModel] = useState(existing?.models[0] ?? '');
+  const [modelDefault, setModelDefault] = useState(existing?.models.default ?? '');
+  const [modelHaiku, setModelHaiku] = useState(existing?.models.haiku ?? '');
+  const [modelSonnet, setModelSonnet] = useState(existing?.models.sonnet ?? '');
+  const [modelOpus, setModelOpus] = useState(existing?.models.opus ?? '');
   const [notes, setNotes] = useState(existing?.notes ?? '');
   // Reset form when modal reopens with a different provider
   useEffect(() => {
     if (formState.kind === 'add') {
-      setName(''); setBaseUrl(''); setApiKey(''); setModel(''); setNotes('');
+      setName(''); setBaseUrl(''); setApiKey('');
+      setModelDefault(''); setModelHaiku(''); setModelSonnet(''); setModelOpus('');
+      setNotes('');
     } else if (formState.kind === 'edit') {
       setName(formState.provider.name);
       setBaseUrl(formState.provider.api_base);
       setApiKey(formState.provider.api_key);
-      setModel(formState.provider.models[0] ?? '');
+      setModelDefault(formState.provider.models.default);
+      setModelHaiku(formState.provider.models.haiku ?? '');
+      setModelSonnet(formState.provider.models.sonnet ?? '');
+      setModelOpus(formState.provider.models.opus ?? '');
       setNotes(formState.provider.notes ?? '');
     }
   }, [formState]);
@@ -1036,7 +1044,13 @@ function ProviderFormModal({
       name: name.trim(),
       base_url: baseUrl.trim(),
       api_key: apiKey.trim(),
-      model: model.trim(),
+      models: {
+        default: modelDefault.trim(),
+        haiku: modelHaiku.trim() || null,
+        sonnet: modelSonnet.trim() || null,
+        opus: modelOpus.trim() || null,
+        by_tier: {},  // Custom tiers UI (TODO: 后续支持动态添加)
+      },
       notes: notes.trim() || null,
     };
     void onSubmit(input, existing?.id ?? null);
@@ -1076,9 +1090,20 @@ function ProviderFormModal({
         <Field label="API Key">
           <input data-testid="provider-form-api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={inputStyle} disabled={isSubmitting} />
         </Field>
-        <Field label="Model (主)">
-          <input data-testid="provider-form-model" value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle} disabled={isSubmitting} />
+        <Field label="Default Model (ANTHROPIC_MODEL)">
+          <input data-testid="provider-form-model-default" value={modelDefault} onChange={(e) => setModelDefault(e.target.value)} style={inputStyle} disabled={isSubmitting} placeholder="claude-sonnet-4-6" />
         </Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
+          <Field label="Haiku Tier">
+            <input data-testid="provider-form-model-haiku" value={modelHaiku} onChange={(e) => setModelHaiku(e.target.value)} style={inputStyle} disabled={isSubmitting} placeholder="claude-haiku-4-5 (可选)" />
+          </Field>
+          <Field label="Sonnet Tier">
+            <input data-testid="provider-form-model-sonnet" value={modelSonnet} onChange={(e) => setModelSonnet(e.target.value)} style={inputStyle} disabled={isSubmitting} placeholder="claude-sonnet-4-6 (可选)" />
+          </Field>
+          <Field label="Opus Tier">
+            <input data-testid="provider-form-model-opus" value={modelOpus} onChange={(e) => setModelOpus(e.target.value)} style={inputStyle} disabled={isSubmitting} placeholder="claude-opus-4 (可选)" />
+          </Field>
+        </div>
         <Field label="Notes (可选)">
           <textarea data-testid="provider-form-notes" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 60 }} disabled={isSubmitting} />
         </Field>
@@ -1148,7 +1173,23 @@ function ProviderDetailsModal({ detailsState, onClose }: ProviderDetailsModalPro
             <DetailRow label="Type" value={detailsState.provider.provider_type} />
             <DetailRow label="Base URL" value={detailsState.provider.api_base} />
             <DetailRow label="API Key" value={detailsState.provider.api_key} mono />
-            <DetailRow label="Models" value={detailsState.provider.models.join(', ') || '(server default)'} />
+            <DetailRow
+              label="Default Model (ANTHROPIC_MODEL)"
+              value={detailsState.provider.models.default || '(server default)'}
+              mono
+            />
+            {detailsState.provider.models.haiku && (
+              <DetailRow label="Haiku Tier" value={detailsState.provider.models.haiku} mono />
+            )}
+            {detailsState.provider.models.sonnet && (
+              <DetailRow label="Sonnet Tier" value={detailsState.provider.models.sonnet} mono />
+            )}
+            {detailsState.provider.models.opus && (
+              <DetailRow label="Opus Tier" value={detailsState.provider.models.opus} mono />
+            )}
+            {Object.entries(detailsState.provider.models.by_tier).map(([tier, model]) => (
+              <DetailRow key={tier} label={`${tier} Tier`} value={model} mono />
+            ))}
             <DetailRow label="Created" value={new Date(detailsState.provider.created_at * 1000).toISOString()} />
             <DetailRow label="Last Used" value={detailsState.provider.last_used_at ? new Date(detailsState.provider.last_used_at * 1000).toISOString() : '从未'} />
             <DetailRow label="Notes" value={detailsState.provider.notes || '(无)'} />

@@ -419,9 +419,14 @@ function ImportConfirmModal({
         <Field label="类型" value={provider.provider_type} />
         <Field label="API Base" value={provider.api_base} mono />
         <Field label="API Key" value="********" muted />
-        {provider.models.length > 0 && (
-          <Field label="Models" value={provider.models.join(', ')} mono />
-        )}
+        {(((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(provider.models.by_tier).length) > 0) ? (
+          <>
+            <Field label="Default Model" value={provider.models.default || "(server default)"} mono />
+            {provider.models.haiku ? <Field label="Haiku" value={provider.models.haiku ?? ""} mono /> : null}
+            {provider.models.sonnet ? <Field label="Sonnet" value={provider.models.sonnet ?? ""} mono /> : null}
+            {provider.models.opus ? <Field label="Opus" value={provider.models.opus ?? ""} mono /> : null}
+          </>
+        ) : null}
         {provider.notes && <Field label="备注" value={provider.notes} />}
 
         {error && (

@@ -26,7 +26,7 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
-use crate::domain::{ParsedMcpServer, Provider};
+use crate::domain::{ParsedMcpServer, Provider, ProviderModels};
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
 use crate::services::provider_service::{ImportResult, ImportSkip};
@@ -532,13 +532,11 @@ impl From<&Provider> for ExportedProvider {
             "ANTHROPIC_AUTH_TOKEN".into(),
             serde_json::Value::String(p.api_key.clone()),
         );
-        if let Some(first_model) = p.models.first() {
-            if !first_model.is_empty() {
-                env.insert(
-                    "ANTHROPIC_MODEL".into(),
-                    serde_json::Value::String(first_model.clone()),
-                );
-            }
+        // M4.6.1 — write all 5 ANTHROPIC_*_MODEL env keys from the
+        // 4-tier + by_tier mapping (ProviderModels::to_env_json skips
+        // empty/None entries).
+        for (k, v) in p.models.to_env_json() {
+            env.insert(k, v);
         }
         let settings_config = serde_json::json!({
             "env": serde_json::Value::Object(env),
@@ -586,37 +584,37 @@ pub async fn read_current_claude_config(
         Some(e) => e,
         None => return Ok(None),
     };
+    // Accept both ANTHROPIC_API_KEY (current standard) and
+    // ANTHROPIC_AUTH_TOKEN (legacy). ANTHROPIC_API_KEY preferred if both.
     let base_url = env
-        .get("ANTHROPIC_BASE_URL")
+        .and_then(|m| m.get("ANTHROPIC_BASE_URL"))
         .and_then(|v| v.as_str())
         .map(String::from);
     let auth_token = env
-        .get("ANTHROPIC_AUTH_TOKEN")
+        .and_then(|m| {
+            m.get("ANTHROPIC_API_KEY")
+                .or_else(|| m.get("ANTHROPIC_AUTH_TOKEN"))
+        })
         .and_then(|v| v.as_str())
         .map(String::from);
-    let model = env
-        .get("ANTHROPIC_MODEL")
-        .and_then(|v| v.as_str())
-        .map(String::from);
-
-    if base_url.is_none() && auth_token.is_none() {
-        return Ok(None);
-    }
-
+    let models = crate::domain::ProviderModels::from_env(env);
     Ok(Some(CurrentClaudeConfig {
         base_url,
         auth_token,
-        model,
+        models,
     }))
 }
 
 /// Current Claude config extracted from `~/.claude/settings.json`.
 #[derive(Debug, serde::Serialize)]
+/// 2026-06-25 — 4-tier model mapping. `models.default` is the raw
+/// `ANTHROPIC_MODEL`; the rest mirror the 4 canonical ANTHROPIC_DEFAULT_*_MODEL
+/// env keys (haiku/sonnet/opus + custom by_tier).
 #[serde(rename_all = "snake_case")]
 pub struct CurrentClaudeConfig {
     pub base_url: Option<String>,
     pub auth_token: Option<String>,
-    pub model: Option<String>,
+    pub models: ProviderModels,
 }
 
 // ---------------------------------------------------------------------------
@@ -723,7 +721,10 @@ mod tests {
             provider_type: "anthropic".into(),
             api_base: "https://api.anthropic.com".into(),
             api_key: "sk-ant-test".into(),
-            models: vec!["claude-sonnet-4-6".into()],
+            models: ProviderModels {
+                default: "claude-sonnet-4-6".into(),
+                ..Default::default()
+            },
             is_active: true, // 刻意 true,验证 is_active 不进导出 JSON
             created_at: 1_700_000_000,
             last_used_at: Some(1_800_000_000), // 刻意 Some,验证不进导出
@@ -754,8 +755,8 @@ mod tests {
         assert_eq!(env["ANTHROPIC_BASE_URL"], "https://api.anthropic.com");
         assert_eq!(env["ANTHROPIC_AUTH_TOKEN"], "sk-ant-test");
         assert_eq!(env["ANTHROPIC_MODEL"], "claude-sonnet-4-6");
-        // models 列表保留
-        assert_eq!(v["settings_config"]["models"][0], "claude-sonnet-4-6");
+        // models 4-tier 结构保留
+        assert_eq!(v["settings_config"]["models"]["default"], "claude-sonnet-4-6");
     }
 
     /// 空 models 的 provider 导出时不应写 ANTHROPIC_MODEL 键
@@ -768,7 +769,7 @@ mod tests {
             provider_type: "custom".into(),
             api_base: "https://bare.example".into(),
             api_key: "k".into(),
-            models: vec![],
+            models: ProviderModels::default(),
             is_active: false,
             created_at: 1,
             last_used_at: None,

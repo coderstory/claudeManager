@@ -40,9 +40,10 @@ pub struct Provider {
     pub api_base: String,
     /// `ANTHROPIC_AUTH_TOKEN`. **Never log this**; UI masks it in M2.5+.
     pub api_key: String,
-    /// Model list (main + sub + quick). Empty Vec = "unknown, will use server default".
+    /// 4-tier + custom model mapping (ANTHROPIC_MODEL + DEFAULT_HAIKU/SONNET/OPUS + by_tier).
+    /// See [`ProviderModels`] for the structured representation.
     #[serde(default)]
-    pub models: Vec<String>,
+    pub models: ProviderModels,
     /// Cached flag — see module docs. Re-computed by [`ProviderService::list_providers`].
     #[serde(default)]
     pub is_active: bool,
@@ -104,14 +105,137 @@ pub enum ProviderError {
 ///
 /// 不包含 `is_active` / `created_at` / `last_used_at` —— 这 3 个由
 /// service 层管理(见 [`crate::services::provider_service`] 的 CRUD method)。
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+/// M4.6.1 — 4-tier Claude Code model mapping.
+///
+/// Claude Code `~/.claude/settings.json` env has 5 ANTHROPIC model keys:
+///   - `ANTHROPIC_MODEL`                    → default  (required)
+///   - `ANTHROPIC_DEFAULT_HAIKU_MODEL`      → haiku
+///   - `ANTHROPIC_DEFAULT_SONNET_MODEL`     → sonnet
+///   - `ANTHROPIC_DEFAULT_OPUS_MODEL`       → opus
+///   - `ANTHROPIC_DEFAULT_<CUSTOM>_MODEL`   → e.g. fable (user-defined, see by_tier)
+///
+/// `Provider.models` stores the structured mapping. `default` is
+/// serialized to `ANTHROPIC_MODEL`; `by_tier` keys (lowercase) are
+/// serialized to `ANTHROPIC_DEFAULT_<UPPER>_MODEL`. switch_provider
+/// writes all present fields back to settings.json.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct ProviderModels {
+    /// Primary model id (ANTHROPIC_MODEL). Required.
+    #[serde(default)]
+    pub default: String,
+    /// Haiku tier (ANTHROPIC_DEFAULT_HAIKU_MODEL).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub haiku: Option<String>,
+    /// Sonnet tier (ANTHROPIC_DEFAULT_SONNET_MODEL).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sonnet: Option<String>,
+    /// Opus tier (ANTHROPIC_DEFAULT_OPUS_MODEL).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opus: Option<String>,
+    /// User-defined tiers (lowercase key → model id), serialized to
+    /// `ANTHROPIC_DEFAULT_<UPPER>_<KEY>_MODEL`. Used for custom
+    /// Claude Code builds with extra model slots (e.g. "fable").
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub by_tier: std::collections::HashMap<String, String>,
+}
+
+impl ProviderModels {
+    /// Read all 5 ANTHROPIC_*_MODEL env keys from a parsed settings.json
+    /// `env` object. `default` is the raw `ANTHROPIC_MODEL`; each tier
+    /// key is the lowercase part after `ANTHROPIC_DEFAULT_` and before
+    /// `_MODEL` (e.g. "haiku" from `ANTHROPIC_DEFAULT_HAIKU_MODEL`).
+    pub fn from_env(env: &serde_json::Map<String, serde_json::Value>) -> Self {
+        let default = env
+            .get("ANTHROPIC_MODEL")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let mut models = Self {
+            default,
+            ..Default::default()
+        };
+        for (k, v) in env {
+            if let Some(tier) = k
+                .strip_prefix("ANTHROPIC_DEFAULT_")
+                .and_then(|s| s.strip_suffix("_MODEL"))
+            {
+                if let Some(s) = v.as_str() {
+                    let tier_lc = tier.to_lowercase();
+                    match tier_lc.as_str() {
+                        "haiku" => models.haiku = Some(s.to_string()),
+                        "sonnet" => models.sonnet = Some(s.to_string()),
+                        "opus" => models.opus = Some(s.to_string()),
+                        _ => {
+                            models.by_tier.insert(tier_lc, s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        models
+    }
+
+    /// Serialize to the same env shape (ANTHROPIC_MODEL + ANTHROPIC_DEFAULT_*_MODEL).
+    /// Returns a `serde_json::Value::Object` for merging into settings.json
+    /// `env`. Skips empty / None values.
+    pub fn to_env_json(&self) -> serde_json::Map<String, serde_json::Value> {
+        let mut m = serde_json::Map::new();
+        if !self.default.is_empty() {
+            m.insert(
+                "ANTHROPIC_MODEL".into(),
+                serde_json::Value::String(self.default.clone()),
+            );
+        }
+        if let Some(v) = &self.haiku {
+            m.insert(
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL".into(),
+                serde_json::Value::String(v.clone()),
+            );
+        }
+        if let Some(v) = &self.sonnet {
+            m.insert(
+                "ANTHROPIC_DEFAULT_SONNET_MODEL".into(),
+                serde_json::Value::String(v.clone()),
+            );
+        }
+        if let Some(v) = &self.opus {
+            m.insert(
+                "ANTHROPIC_DEFAULT_OPUS_MODEL".into(),
+                serde_json::Value::String(v.clone()),
+            );
+        }
+        for (tier, model) in &self.by_tier {
+            if !model.is_empty() {
+                m.insert(
+                    format!("ANTHROPIC_DEFAULT_{}_MODEL", tier.to_uppercase()),
+                    serde_json::Value::String(model.clone()),
+                );
+            }
+        }
+        m
+    }
+
+    /// Total count of populated model slots.
+    pub fn count(&self) -> usize {
+        let mut n = if self.default.is_empty() { 0 } else { 1 };
+        if self.haiku.is_some() { n += 1; }
+        if self.sonnet.is_some() { n += 1; }
+        if self.opus.is_some() { n += 1; }
+        n + self.by_tier.len()
+    }
+}
+
+/// M3.6 (清单 22) — 新增 / 修改 provider 的输入。
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ProviderInput {
     pub id: String,
     pub name: String,
     pub base_url: String,
     pub api_key: String,
-    pub model: String,
+    /// 4-tier + custom model mapping (ANTHROPIC_MODEL + DEFAULT_HAIKU/SONNET/OPUS + by_tier).
+    pub models: ProviderModels,
     pub notes: Option<String>,
 }
 
@@ -132,7 +256,7 @@ impl Provider {
             provider_type: provider_type.into(),
             api_base: api_base.into(),
             api_key: api_key.into(),
-            models: Vec::new(),
+            models: ProviderModels::default(),
             is_active: false,
             created_at: now_unix_secs(),
             last_used_at: None,
@@ -226,7 +350,11 @@ mod tests {
             provider_type: "anthropic".into(),
             api_base: "https://api.anthropic.com".into(),
             api_key: "sk-ant-test-token".into(),
-            models: vec!["claude-opus-4".into(), "claude-sonnet-4-6".into()],
+            models: ProviderModels {
+                default: "claude-opus-4".into(),
+                sonnet: Some("claude-sonnet-4-6".into()),
+                ..Default::default()
+            },
             is_active: false,
             created_at: 1_700_000_000,
             last_used_at: None,
@@ -247,7 +375,8 @@ mod tests {
         assert_eq!(loaded.provider_type, "anthropic");
         assert_eq!(loaded.api_base, "https://api.anthropic.com");
         assert_eq!(loaded.api_key, "sk-ant-test-token");
-        assert_eq!(loaded.models, vec!["claude-opus-4", "claude-sonnet-4-6"]);
+        assert_eq!(loaded.models.default, "claude-opus-4");
+        assert_eq!(loaded.models.sonnet.as_deref(), Some("claude-sonnet-4-6"));
         assert_eq!(loaded.created_at, 1_700_000_000);
         assert_eq!(loaded.notes.as_deref(), Some("官方默认"));
     }
@@ -314,7 +443,7 @@ mod tests {
         let p = Provider::from_json_file(&path).unwrap();
         assert_eq!(p.id, "minimal");
         assert_eq!(p.created_at, 42);
-        assert_eq!(p.models, Vec::<String>::new());
+        assert_eq!(p.models, ProviderModels::default());
         assert_eq!(p.is_active, false);
         assert_eq!(p.last_used_at, None);
         assert_eq!(p.notes, None);
@@ -341,7 +470,7 @@ mod tests {
         assert_eq!(p.is_active, false);
         assert_eq!(p.last_used_at, None);
         assert_eq!(p.notes, None);
-        assert_eq!(p.models, Vec::<String>::new());
+        assert_eq!(p.models, ProviderModels::default());
         // created_at must be > 2020-01-01 (1700000000) and within the next minute.
         assert!(p.created_at > 1_700_000_000);
         assert!(p.created_at < 1_700_000_000 + 3_600);

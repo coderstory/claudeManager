@@ -162,7 +162,14 @@ export function exportProvider(
 export interface CurrentClaudeConfig {
   base_url: string | null;
   auth_token: string | null;
-  model: string | null;
+  /** 4-tier model mapping (ANTHROPIC_MODEL + DEFAULT_HAIKU/SONNET/OPUS + by_tier). */
+  models: {
+    default: string;
+    haiku: string | null;
+    sonnet: string | null;
+    opus: string | null;
+    by_tier: Record<string, string>;
+  };
 }
 
 export function readCurrentClaudeConfig(): Promise<CurrentClaudeConfig | null> {

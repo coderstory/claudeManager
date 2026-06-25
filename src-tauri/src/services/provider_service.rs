@@ -228,12 +228,11 @@ impl ProviderService {
         let env_obj = ensure_object(&mut settings, "env");
         env_obj["ANTHROPIC_BASE_URL"] = Value::String(provider.api_base.clone());
         env_obj["ANTHROPIC_AUTH_TOKEN"] = Value::String(provider.api_key.clone());
-        // Set ANTHROPIC_MODEL if provider declares models. We use the
-        // first entry as "primary"; if it's empty, leave existing.
-        if let Some(first_model) = provider.models.first() {
-            if !first_model.is_empty() {
-                env_obj["ANTHROPIC_MODEL"] = Value::String(first_model.clone());
-            }
+        // M4.6.1 — write all 5 ANTHROPIC_*_MODEL env keys from the
+        // 4-tier + by_tier mapping (ProviderModels::to_env_json skips
+        // empty/None entries).
+        for (k, v) in provider.models.to_env_json() {
+            env_obj.insert(k, v);
         }
 
         let json = serde_json::to_string_pretty(&settings)
@@ -296,10 +295,9 @@ impl ProviderService {
         let env_obj = ensure_object(&mut settings, "env");
         env_obj["ANTHROPIC_BASE_URL"] = Value::String(provider.api_base.clone());
         env_obj["ANTHROPIC_AUTH_TOKEN"] = Value::String(provider.api_key.clone());
-        if let Some(first_model) = provider.models.first() {
-            if !first_model.is_empty() {
-                env_obj["ANTHROPIC_MODEL"] = Value::String(first_model.clone());
-            }
+        // M4.6.1 — same 5-key fan-out as the legacy switch_provider.
+        for (k, v) in provider.models.to_env_json() {
+            env_obj.insert(k, v);
         }
 
         let json = serde_json::to_string_pretty(&settings)
@@ -523,9 +521,9 @@ impl ProviderService {
                 "api_key must not be empty",
             )));
         }
-        if input.model.is_empty() {
+        if input.models.default.is_empty() {
             return Err(ProviderError::Json(serde_json::Error::custom(
-                "model must not be empty",
+                "at least one model required (default)",
             )));
         }
 
@@ -541,7 +539,7 @@ impl ProviderService {
             provider_type: "anthropic".to_string(), // M3.6 范围单类型
             api_base: input.base_url,
             api_key: input.api_key,
-            models: vec![input.model],
+            models: input.models.clone(),
             is_active: false,
             created_at: now,
             last_used_at: None,
@@ -585,9 +583,9 @@ impl ProviderService {
                 "api_key must not be empty",
             )));
         }
-        if input.model.is_empty() {
+        if input.models.default.is_empty() {
             return Err(ProviderError::Json(serde_json::Error::custom(
-                "model must not be empty",
+                "at least one model required (default)",
             )));
         }
 
@@ -612,7 +610,7 @@ impl ProviderService {
             provider_type: old.provider_type, // 保留旧 type
             api_base: input.base_url,
             api_key: input.api_key,
-            models: vec![input.model],
+            models: input.models.clone(),
             is_active: old.is_active,    // 保留 is_active
             created_at: old.created_at,  // 保留创建时间
             last_used_at: old.last_used_at, // 保留最后使用时间
@@ -1099,7 +1097,10 @@ mod tests {
 
     fn sample_provider(id: &str, name: &str, base: &str) -> Provider {
         let mut p = Provider::new(id, name, "anthropic", base, format!("key-for-{id}"));
-        p.models = vec!["claude-sonnet-4-6".into()];
+        p.models = ProviderModels {
+            default: "claude-sonnet-4-6".into(),
+            ..Default::default()
+        };
         p
     }
 
@@ -1379,7 +1380,10 @@ mod tests {
         let p_dir = tmp.path().join("providers");
         let settings = tmp.path().join("settings.json");
         let mut p = sample_provider("p", "P", "https://p.example");
-        p.models = vec!["my-model".into()];
+        p.models = ProviderModels {
+            default: "my-model".into(),
+            ..Default::default()
+        };
         write_provider(&p_dir, &p);
         let svc = ProviderService::new(test_paths(tmp.path(), &settings));
 
@@ -1405,7 +1409,7 @@ mod tests {
         let body = json!({"env": {"ANTHROPIC_MODEL": "old-model"}});
         std::fs::write(&settings, serde_json::to_string_pretty(&body).unwrap()).unwrap();
         let mut p = sample_provider("p", "P", "https://p.example");
-        p.models = vec![];
+        p.models = ProviderModels::default();
         write_provider(&p_dir, &p);
         let svc = ProviderService::new(test_paths(tmp.path(), &settings));
 
@@ -1789,7 +1793,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "GLM-4.6 官方".into(),
             base_url: "https://api.anthropic.com".into(),
             api_key: "sk-ant-test".into(),
-            model: "claude-sonnet-4-6".into(),
+            models: ProviderModels {
+                default: "claude-sonnet-4-6".into(),
+                ..Default::default()
+            },
             notes: Some("官方默认".into()),
         };
         let p = svc.add_provider(input).unwrap();
@@ -1798,7 +1805,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         assert_eq!(p.provider_type, "anthropic"); // M3.6 范围固定
         assert_eq!(p.api_base, "https://api.anthropic.com");
         assert_eq!(p.api_key, "sk-ant-test");
-        assert_eq!(p.models, vec!["claude-sonnet-4-6"]);
+        assert_eq!(p.models.default, "claude-sonnet-4-6");
         assert!(!p.is_active);
         assert!(p.last_used_at.is_none());
         assert_eq!(p.notes.as_deref(), Some("官方默认"));
@@ -1824,7 +1831,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "OVERWRITE".into(),
             base_url: "https://other.example".into(),
             api_key: "k2".into(),
-            model: "m2".into(),
+            models: ProviderModels {
+                default: "m2".into(),
+                ..Default::default()
+            },
             notes: None,
         };
         let err = svc.add_provider(input).unwrap_err();
@@ -1848,7 +1858,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "x".into(),
             base_url: "https://x".into(),
             api_key: "k".into(),
-            model: "m".into(),
+            models: ProviderModels {
+                default: "m".into(),
+                ..Default::default()
+            },
             notes: None,
         };
         let err = svc.add_provider(input).unwrap_err();
@@ -1867,7 +1880,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "OK".into(),
             base_url: "".into(),
             api_key: "k".into(),
-            model: "m".into(),
+            models: ProviderModels { default: "m".into(), ..Default::default() },
             notes: None,
         };
         let err = svc.add_provider(input).unwrap_err();
@@ -1891,7 +1904,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "NEW".into(),
             base_url: "https://new.example".into(),
             api_key: "new-key".into(),
-            model: "new-model".into(),
+            models: ProviderModels {
+                default: "new-model".into(),
+                ..Default::default()
+            },
             notes: Some("new note".into()),
         };
         let updated = svc.update_provider("a", input).unwrap();
@@ -1899,7 +1915,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         assert_eq!(updated.name, "NEW");
         assert_eq!(updated.api_base, "https://new.example");
         assert_eq!(updated.api_key, "new-key");
-        assert_eq!(updated.models, vec!["new-model"]);
+        assert_eq!(updated.models.default, "new-model");
         assert_eq!(updated.notes.as_deref(), Some("new note"));
         // 时间戳保留
         assert_eq!(updated.last_used_at, Some(1_700_000_000));
@@ -1922,7 +1938,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             name: "X".into(),
             base_url: "https://x".into(),
             api_key: "k".into(),
-            model: "m".into(),
+            models: ProviderModels { default: "m".into(), ..Default::default() },
             notes: None,
         };
         let err = svc.update_provider("ghost", input).unwrap_err();
