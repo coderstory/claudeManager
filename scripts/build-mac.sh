@@ -40,6 +40,22 @@ set -eo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# === sccache (shared compile cache, optional) ===
+# sccache 不是硬依赖——未装就 fallback 到普通 cargo 编译,build 不会失败。
+# 路径用项目专属目录,避免与本机其他项目共享缓存(混淆 + 体积叠加)。
+# 缓存上限 5G:sccache 默认 10G 容易把磁盘撑爆,这里主动限。
+# 若已装 ~/.cargo/bin/sccache,这两行 export 会在每次 cargo 链上生效。
+if command -v sccache >/dev/null 2>&1; then
+  export SCCACHE_DIR="${HOME}/Library/Caches/sccache-claude-config-manager"
+  export SCCACHE_CACHE_SIZE="5G"
+  echo "[sccache] enabled (dir: $SCCACHE_DIR, size cap: $SCCACHE_CACHE_SIZE)"
+  echo "[sccache] run 'sccache --show-stats' after build to inspect hit rate"
+else
+  echo "[sccache] not installed, skipping (build will still work, just no shared cache)"
+  echo "[sccache] install: brew install sccache   # or: cargo install sccache --locked"
+fi
+echo ""
+
 MODE="release"
 EXTRA_ARGS=()
 NO_DMG=0

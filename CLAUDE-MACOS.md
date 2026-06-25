@@ -77,3 +77,23 @@ smoke test 在 macOS 上无法用 `EnumChildWindows` 枚举 WKWebView 子窗口�
 - §9.7.3 "桌面交付" flow：仅 Windows 适用；mac dev 走 `scripts/build-mac.sh --debug` 自取
 
 **详细 reasoning**：`docs/macos-p2-backlog.md` §「🚫 已砍清单」段。
+
+## 15.9 sccache 共享编译缓存（dev 加速）
+
+重复 build 时复用上一次编译的 crate `.rlib` 输出，避免 `wry` / `tao` / `tauri` 等 C/C++ 重链。**dev 工具，非硬依赖**——未装 sccache 也能 build（fallback 到普通 cargo 编译，build 不会失败）。
+
+- ✅ **wrapper**：项目级 `src-tauri/.cargo/config.toml` 已加 `[build] rustc-wrapper = "sccache"`（覆盖全局 `~/.cargo/config.toml` 同名段；只影响本 crate，不污染其他项目）
+- ✅ **缓存目录**：`$SCCACHE_DIR = ~/Library/Caches/sccache-claude-config-manager`（`scripts/build-mac.sh` 顶部 export，项目专属，不与其他项目共享）
+- ✅ **容量上限**：`SCCACHE_CACHE_SIZE=5G`（sccache 默认 10G 容易把磁盘撑爆，主动限）
+- ⚠️ **范围**：`scripts/build-mac.sh` 顶部 self-check 检测 sccache 是否安装；装了则 echo INFO 行 + 设环境变量；未装则 echo WARN 行 + 跳过（不阻断 build，跟 `scripts/clean-cache.sh` 容忍 `cargo-sweep` 缺失的哲学一致）
+
+**验证方法**：
+```bash
+cd src-tauri
+cargo check                # 第一次：Cache writes > 0（冷启）
+cargo check                # 第二次：Cache hits  > 0（暖启，证明 wrapper 真生效）
+sccache --show-stats        # 看 Cache hits rate (Rust) 是否 100%
+```
+注意：仅看 `Compile requests executed = 0` 不够——若 cargo incremental 命中 `target/`，sccache 可能不介入。**用 `cargo clean` 后再 build** 才能完整触发 sccache 写入。
+
+**回滚**：删 `src-tauri/.cargo/config.toml` 即停用 sccache wrapper（全局 `~/.cargo/config.toml` 不动；本机其他项目不受影响）。

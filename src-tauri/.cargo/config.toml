@@ -1,0 +1,23 @@
+# src-tauri/.cargo/config.toml — project-local cargo config (sccache wrapper)
+#
+# 把 rustc-wrapper 钉到项目级,而不是全局 ~/.cargo/config.toml:
+#   - 不污染全局:开 / 关 / 调参都在 src-tauri/.cargo/config.toml 里,
+#     其他项目不受影响。
+#   - 项目级 [build] 段会 merge / override 全局同名段(cargo 文档:
+#     https://doc.rust-lang.org/cargo/reference/config.html#configuration-format
+#     → "Merging" 节)。
+#   - 配套环境变量 (SCCACHE_DIR / SCCACHE_CACHE_SIZE) 在
+#     scripts/build-mac.sh 顶部 export,手动跑 `cargo check` /
+#     `cargo build` 也走相同 wrapper。
+#
+# 验证:
+#   cd src-tauri && cargo check    # 第一次: Cache writes > 0
+#   cd src-tauri && cargo check    # 第二次: Cache hits  > 0
+#   sccache --show-stats
+#
+# 回滚: 删本文件即停用 sccache,无需动 ~/.cargo/config.toml。
+#
+# 参考: CLAUDE.md §2(工程纪律) + CLAUDE-MACOS.md §15(sccache 节)
+
+[build]
+rustc-wrapper = "sccache"
