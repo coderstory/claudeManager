@@ -1,6 +1,6 @@
-# v4.0 端到端用户行为测试 — PLAN
+# M4 e2e 端到端用户行为测试 — PLAN
 
-> **Milestone**: v4.0 (2026-06-25 启动)
+> **Milestone**: M4 (2026-06-25 启动)
 > **Phase**: planning
 > **Status**: 待用户拍板进 Phase 1
 > **Owner**: 主 session
@@ -24,7 +24,7 @@
 - **走 vite dev server mock**(`PLAYWRIGHT_BASE_URL`)→ 验 DOM 但**不验真 .app + 真文件系统副作用**
 - **覆盖范围**: tray/关闭/主题/UI 布局/模糊搜索/资源浏览/备份恢复 → **没碰 F1-F7 核心业务流**(列 provider/切换/拖放/JSON 编辑/MCP toggle/用量)
 
-### 1.3 v4.0 设计目标
+### 1.3 M4 设计目标
 **black-box 端到端**:
 1. 启动**真 .app**(release build,装到 /Applications/)
 2. 用 **OS-level 驱动** 模拟用户操作(AppleScript + System Events on macOS,UI Automation on Windows)
@@ -37,8 +37,8 @@
 |---|---|---|
 | Q1 场景范围 | 14 场景全收 | 跟 SPEC.md F1-F24 高频+高风险对齐 + 4 跨 F 业务流 |
 | Q2 macOS 路径 | AppleScript + 真 .app | macOS 不走 webview,直接 System Events 发键鼠 + 读 settings.json |
-| Q3 ship gate | 14 hard-fail | 跟 smoke test 10 项同级严格度,v4.0 ship 必须 14/14 PASS |
-| Q4 计划阶段 | 主 session 写 v4-PLAN.md | 刚刚废弃 worktree workflow,subagent 写不可靠;主 session 写 = 可审计 |
+| Q3 ship gate | 14 hard-fail | 跟 smoke test 10 项同级严格度,M4 ship 必须 14/14 PASS |
+| Q4 计划阶段 | 主 session 写 M4-PLAN.md | 刚刚废弃 worktree workflow,subagent 写不可靠;主 session 写 = 可审计 |
 
 ---
 
@@ -46,7 +46,7 @@
 
 ### 2.1 三层
 ```
-tests/v4-e2e/
+tests/M4-e2e/
 ├── lib/
 │   ├── driver-mac.sh        # macOS: osascript + System Events + pgrep
 │   ├── driver-win.ps1       # Windows: UI Automation PowerShell module
@@ -122,7 +122,7 @@ tests/v4-e2e/
 
 ### 2.4 fixture 隔离
 - **不**用真实 `~/.claude/settings.json`(污染)
-- **用** `tests/v4-e2e/fixtures/3-providers.json` → 测试启动前 `cp` 到 `~/.claude/settings.json` + 备份原文件
+- **用** `tests/M4-e2e/fixtures/3-providers.json` → 测试启动前 `cp` 到 `~/.claude/settings.json` + 备份原文件
 - 测试结束 `mv` 备份回来 + `kill-app.sh --force`
 
 ---
@@ -131,7 +131,7 @@ tests/v4-e2e/
 
 ### 3.1 通用约定
 - 每个 spec = 一个 `.sh` 脚本,exit 0 = PASS,exit ≠0 = FAIL
-- 入口:`./tests/v4-e2e/scenarios/NN-name.sh`
+- 入口:`./tests/M4-e2e/scenarios/NN-name.sh`
 - 输出格式:`[PASS] 03_switch_provider: env.ANTHROPIC_BASE_URL 改从 X 到 Y, 备份 +1`
 - 串行跑(CLAUDE.md §10: 不要并行 tauri / e2e)
 
@@ -239,13 +239,13 @@ exit 0
 按 §2.2 "不要超过 1 小时不 commit" + 任务依赖,分 4 phase:
 
 ### Phase 1: 基础设施(估 1-2 天)
-- `tests/v4-e2e/lib/driver-mac.sh` (osascript + System Events wrappers)
-- `tests/v4-e2e/lib/driver-win.ps1` (UI Automation helpers)
-- `tests/v4-e2e/lib/fs-fixtures.sh` (prepare/restore)
-- `tests/v4-e2e/lib/shell.sh` (assert_*)
-- `tests/v4-e2e/fixtures/3-providers.json` (3 个 provider 样本)
-- `tests/v4-e2e/fixtures/cc-switch-sample.sql` (F3 测试用)
-- `tests/v4-e2e/run-all.sh` (串行调度)
+- `tests/M4-e2e/lib/driver-mac.sh` (osascript + System Events wrappers)
+- `tests/M4-e2e/lib/driver-win.ps1` (UI Automation helpers)
+- `tests/M4-e2e/lib/fs-fixtures.sh` (prepare/restore)
+- `tests/M4-e2e/lib/shell.sh` (assert_*)
+- `tests/M4-e2e/fixtures/3-providers.json` (3 个 provider 样本)
+- `tests/M4-e2e/fixtures/cc-switch-sample.sql` (F3 测试用)
+- `tests/M4-e2e/run-all.sh` (串行调度)
 - **验证标准**: 1 个 stub spec 跑通(exit 0)
 
 ### Phase 2: 核心 4 场景(估 1-2 天)
@@ -269,34 +269,34 @@ exit 0
 - 11 主题
 - 12 快捷键
 - 14 资源浏览
-- **验证标准**: 4/4 PASS,整合 `test-all.sh` 加 `v4-e2e` stage(14 hard-fail,Q3-A)
+- **验证标准**: 4/4 PASS,整合 `test-all.sh` 加 `M4-e2e` stage(14 hard-fail,Q3-A)
 
 ### Phase 5: Windows 对称 + CI
 - 在 Windows dev box 跑同样 14 spec
-- 加 `.github/workflows/v4-e2e.yml` matrix (macos-arm64 + windows-11)
+- 加 `.github/workflows/M4-e2e.yml` matrix (macos-arm64 + windows-11)
 - **验证标准**: CI 全过
 
 ---
 
 ## 5. ship gate(Q3-A 集成位置)
 
-修改 `scripts/test-all.sh`,在 stage 5 (smoke) 之后加 stage 6 (v4-e2e):
+修改 `scripts/test-all.sh`,在 stage 5 (smoke) 之后加 stage 6 (M4-e2e):
 
 ```bash
-# === Stage 6: v4.0 端到端(14 hard-fail per CLAUDE.md v4.0) ===
-if [[ -x "$SCRIPT_DIR/v4-e2e/run-all.sh" ]]; then
-  run_stage "v4-e2e" "v4.0 端到端 14 场景 (AppleScript/UI Automation)" \
-    "$SCRIPT_DIR/v4-e2e/run-all.sh" \
+# === Stage 6: M4 端到端(14 hard-fail per CLAUDE.md M4) ===
+if [[ -x "$SCRIPT_DIR/M4-e2e/run-all.sh" ]]; then
+  run_stage "M4-e2e" "M4 端到端 14 场景 (AppleScript/UI Automation)" \
+    "$SCRIPT_DIR/M4-e2e/run-all.sh" \
     || true
 else
-  say_info "[v4-e2e] SKIP (v4.0 not yet built)"
-  stage_set "$(stage_index v4-e2e)" "$WARN" "v4.0 not implemented"
+  say_info "[M4-e2e] SKIP (M4 not yet built)"
+  stage_set "$(stage_index M4-e2e)" "$WARN" "M4 not implemented"
 fi
 ```
 
 **14 hard-fail**:任一场景 FAIL → test-all exit 1(Q3-A)
 
-**dev box skip**:`./scripts/test-all.sh --skip-v4-e2e` 跳过(日常 dev loop 不跑 14 spec,大概 5-10 分钟/轮)
+**dev box skip**:`./scripts/test-all.sh --skip-M4-e2e` 跳过(日常 dev loop 不跑 14 spec,大概 5-10 分钟/轮)
 
 ---
 
@@ -308,17 +308,17 @@ fi
 | 真 .app 启动慢(~2-3s 冷启动) | 14 spec 总耗时翻倍 | 14 spec 复用 1 个长跑 .app(启动一次,关 14 次),省 14 * 3s = 42s |
 | 用户 settings.json 状态被测试污染 | 真实数据丢失 | `fs-fixtures.sh` 必须先备份 `~/.claude/.test-backup` 再覆盖,trap EXIT 还原 |
 | UI Automation 在 Windows headless CI 跑不起来 | CI 红 | macOS 用 osascript,Windows 用 UI Automation 都需要有 display 接入,CI runner 必须是有头(macos-latest / windows-11 runner) |
-| tauri-driver 装过但 v4.0 完全不用,白装 | 浪费 ~5min | 不修,v4.0 不需要;未来 M5 修 e2e 还能用 |
+| tauri-driver 装过但 M4 完全不用,白装 | 浪费 ~5min | 不修,M4 不需要;未来 M5 修 e2e 还能用 |
 
 ---
 
-## 7. 不做(v4.0 scope 排除)
+## 7. 不做(M4 scope 排除)
 
 - ❌ **修 tauri-driver macOS 支持** — 上游限制,M5 工作
 - ❌ **Linux 支持** — CLAUDE.md §15 不支持
-- ❌ **性能基准测试** — 不是 v4.0 scope,M5 单独 phase
+- ❌ **性能基准测试** — 不是 M4 scope,M5 单独 phase
 - ❌ **可视化回归测试**(pixel diff)— 需要 Screenshot test 框架,量级超过 14 场景,M5+
-- ❌ **F18 优化建议 / F23 优化导出** — v4.0 不覆盖(SPEC §3.5 范围大)
+- ❌ **F18 优化建议 / F23 优化导出** — M4 不覆盖(SPEC §3.5 范围大)
 - ❌ **F8 单文件部署 / F20 单实例+文件关联** — 已是 ship-time 验证(Windows MSI/NSIS),e2e 不重做
 
 ---
@@ -326,17 +326,17 @@ fi
 ## 8. 验证 / 成功标准
 
 ### Phase 1 完成标志
-- [ ] `tests/v4-e2e/run-all.sh --scenario=stub` 跑通(exit 0)
+- [ ] `tests/M4-e2e/run-all.sh --scenario=stub` 跑通(exit 0)
 - [ ] 14 spec 模板占位文件存在
 - [ ] 1 fixture 文件就位
 
-### Phase 4 完成标志 (= v4.0 完成)
-- [ ] `test-all.sh` 加 v4-e2e stage,dev box 上 14/14 PASS
+### Phase 4 完成标志 (= M4 完成)
+- [ ] `test-all.sh` 加 M4-e2e stage,dev box 上 14/14 PASS
 - [ ] CI workflow 在 macos-latest + windows-latest 都过
-- [ ] 写进 STATE.md "v4.0 完成" 段
-- [ ] tag v4.0
+- [ ] 写进 STATE.md "M4 完成" 段
+- [ ] tag M4
 
-### 不在 v4.0 scope(M5+)
+### 不在 M4 scope(M5+)
 - M5.1: 修 tauri-driver macOS 支持
 - M5.2: 性能基准 (启动时间 / 切换延迟 / 内存峰值)
 - M5.3: 可视化回归 (pixel diff)
@@ -377,7 +377,7 @@ fi
 
 **前置检查**:Tauri app 是否真读 `XDG_CONFIG_HOME`?这需要看 src-tauri/src/lib.rs 的 AppPaths 实现(platform traits,CLAUDE.md §3.2 `IPlatformPaths`)。Phase 1 开始时**必须先验证**这条假设 — 如果 app 不读 XDG_CONFIG_HOME,fall back 到方案 1。
 
-**验证方式**:在 `tests/v4-e2e/lib/check-fixture.sh` 写 1 个 stub spec,启动 app 前 `export XDG_CONFIG_HOME=/tmp/...`,启动后让 app 读 settings.json,**验证 app 读的是 /tmp/... 里的文件,不是真实 ~/.claude/settings.json**。
+**验证方式**:在 `tests/M4-e2e/lib/check-fixture.sh` 写 1 个 stub spec,启动 app 前 `export XDG_CONFIG_HOME=/tmp/...`,启动后让 app 读 settings.json,**验证 app 读的是 /tmp/... 里的文件,不是真实 ~/.claude/settings.json**。
 
 **spec 骨架调整**(以 03 切换为例):
 
@@ -387,7 +387,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # === Fixture 隔离(D=2) ===
-export XDG_CONFIG_HOME="/tmp/cc-v4-e2e-$$"
+export XDG_CONFIG_HOME="/tmp/cc-M4-e2e-$$"
 mkdir -p "$XDG_CONFIG_HOME/claude"   # Tauri 派生 ~/.claude/ 路径
 cp "$SCRIPT_DIR/../fixtures/3-providers.json" "$XDG_CONFIG_HOME/claude/settings.json"
 
@@ -398,7 +398,7 @@ NEW_URL=$(jq -r '.env.ANTHROPIC_BASE_URL' "$XDG_CONFIG_HOME/claude/settings.json
 assert_equal "$NEW_URL" "https://api.provider-b.com"
 ```
 
-**trap EXIT**: `rm -rf "/tmp/cc-v4-e2e-$$"` 清理临时目录(不需要还原真实 settings.json,**因为从头到尾没碰过**)。
+**trap EXIT**: `rm -rf "/tmp/cc-M4-e2e-$$"` 清理临时目录(不需要还原真实 settings.json,**因为从头到尾没碰过**)。
 
 ### 10.4 风险(必须 Phase 1 验证)
 

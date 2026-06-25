@@ -1,11 +1,11 @@
 {
   "version": "3.0",
   "timestamp": "2026-06-25T23:05:00+08:00",
-  "phase": "v4.0",
+  "phase": "M4",
   "phase_name": "端到端用户行为测试 (E2E black-box via AppleScript + UI Automation)",
-  "phase_dir": ".planning/phases/v4.0-e2e-tests/",
+  "phase_dir": ".planning/phases/M4-e2e-framework/",
   "plan": null,
-  "task": "v4-PLAN.md (write)",
+  "task": "M4-PLAN.md (write)",
   "total_tasks": 1,
   "status": "in_progress",
   "m1_actual_state": {
