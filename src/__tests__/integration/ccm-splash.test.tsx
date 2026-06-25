@@ -31,6 +31,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 
 describe('M2.16 ccm-splash', () => {
   beforeEach(() => {
@@ -48,6 +49,10 @@ describe('M2.16 ccm-splash', () => {
       <ThemeProvider>
         <App />
       </ThemeProvider>,
+      // useViewState throws if called outside <ViewStateProvider>
+      // (fail-fast contract). Production mounts the provider in
+      // main.tsx; tests have to do it themselves.
+      { wrapper: ViewStateProvider },
     );
 
     // Pre-hide sanity: the splash exists and is not yet hidden.

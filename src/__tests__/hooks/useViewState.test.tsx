@@ -169,20 +169,14 @@ describe('useViewState', () => {
     expect(bView).toBe('history');
   });
 
-  it('falls back to a per-call useState when no <ViewStateProvider> is mounted', () => {
-    // M3.0.3 lesson: integration tests and individual page tests
-    // render <App /> or <Page /> without an explicit provider, so
-    // the hook must NOT throw — it returns a fresh local state
-    // matching pre-M4.6 behaviour. The Provider remains the
-    // production path (mounted in main.tsx); this is just the
-    // safety net for code that forgot to mount it.
-    const { result } = renderHook(() => useViewState());
-    expect(result.current.view).toBe('home');
-    act(() => {
-      result.current.setView('mcp-management');
-    });
-    expect(result.current.view).toBe('mcp-management');
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('mcp-management');
+  it('throws when useViewState is called outside a <ViewStateProvider>', () => {
+    // Fail-fast contract: a missing provider is a developer error,
+    // not a runtime condition to silently absorb. Callers MUST
+    // mount <ViewStateProvider> in their tree; the production app
+    // does this in main.tsx.
+    expect(() => renderHook(() => useViewState())).toThrow(
+      /must be called inside a <ViewStateProvider>/,
+    );
   });
 
   it('every plugin view in ALL_VIEWS is a valid kebab-case id', () => {

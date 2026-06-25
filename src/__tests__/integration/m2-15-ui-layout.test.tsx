@@ -51,6 +51,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 import { QuickSearchModal } from '../../components/QuickSearchModal';
 
 // Mock the Tauri window API so WindowControls can render without
@@ -118,6 +119,10 @@ function renderAppWithView(view: string): void {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 

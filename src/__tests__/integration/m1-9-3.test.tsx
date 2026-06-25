@@ -33,6 +33,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 
 // Mock the Tauri window API the same way m1-9-2 does so React
 // imports of WindowControls resolve. The M1.9.3 changes do not
@@ -97,6 +98,10 @@ function renderApp(): void {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 

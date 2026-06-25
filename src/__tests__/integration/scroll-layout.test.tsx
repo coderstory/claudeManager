@@ -24,6 +24,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 
 // Vite's `?raw` query returns an empty string inside vitest, so we
 // read tokens.css off disk instead. The path is computed at module
@@ -63,6 +64,10 @@ function renderApp(): void {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 

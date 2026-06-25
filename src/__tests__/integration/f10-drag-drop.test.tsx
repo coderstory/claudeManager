@@ -25,6 +25,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 
 // ---------------------------------------------------------------------------
 // Mock Tauri IPC 层
@@ -92,6 +93,10 @@ function renderApp(): ReturnType<typeof render> {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 

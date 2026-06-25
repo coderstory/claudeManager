@@ -35,6 +35,15 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 import { render } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
+
+// Wrap <App /> in <ViewStateProvider> — useViewState throws if
+// called outside the provider (fail-fast contract, see
+// src/hooks/useViewState.tsx). Production mounts the provider in
+// main.tsx; tests have to do it themselves.
+function wrap({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <ViewStateProvider>{children}</ViewStateProvider>;
+}
 
 // M3.1 — jsdom has no Tauri runtime. App.tsx's useEffect calls
 // `listen('import-sql-file', ...)` which goes through
@@ -88,6 +97,7 @@ describe('M3.13.2 splash React-first-paint hide', () => {
       <ThemeProvider>
         <App />
       </ThemeProvider>,
+      { wrapper: wrap },
     );
 
     // Sanity: splash is present and not hidden initially.
@@ -110,6 +120,7 @@ describe('M3.13.2 splash React-first-paint hide', () => {
       <ThemeProvider>
         <App />
       </ThemeProvider>,
+      { wrapper: wrap },
     );
 
     expect(getSplash()?.classList.contains(HIDDEN_CLASS)).toBe(false);
@@ -128,6 +139,7 @@ describe('M3.13.2 splash React-first-paint hide', () => {
       <ThemeProvider>
         <App />
       </ThemeProvider>,
+      { wrapper: wrap },
     );
 
     // MIN_SPLASH_MS=1200ms anti-flash guard; advance past it so
@@ -149,6 +161,7 @@ describe('M3.13.2 splash React-first-paint hide', () => {
       <ThemeProvider>
         <App />
       </ThemeProvider>,
+      { wrapper: wrap },
     );
 
     // Fire tauri://ready before rAF. The React path also queues hide

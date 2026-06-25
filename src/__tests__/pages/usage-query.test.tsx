@@ -13,7 +13,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import UsageQueryPage from '../../pages/usage-query';
+import { ViewStateProvider } from '../../hooks/useViewState';
 import type { UsageSnapshot } from '../../types/usage';
+
+// Wrap every <Page /> render in <ViewStateProvider> — the hook
+// throws if called outside the provider (fail-fast contract, see
+// src/hooks/useViewState.tsx). Production code mounts the provider
+// in main.tsx; tests have to do it themselves.
+function wrap({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <ViewStateProvider>{children}</ViewStateProvider>;
+}
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -57,7 +66,7 @@ beforeEach(() => {
 
 describe('UsageQueryPage — F7 (M2.7)', () => {
   it('renders the page title, window toggle, and refresh button', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     expect(screen.getByTestId('usage-query-page')).toBeInTheDocument();
     expect(screen.getByTestId('usage-window-5h')).toBeInTheDocument();
     expect(screen.getByTestId('usage-window-1w')).toBeInTheDocument();
@@ -66,7 +75,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   });
 
   it('fires get_current_usage on mount with window=5h', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       const calls = mockInvoke.mock.calls.filter(
         (c) => c[0] === 'get_current_usage',
@@ -77,7 +86,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   });
 
   it('renders snapshot values into the 3 cards', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-tokens-value').textContent).toContain(
         '12,345',
@@ -92,7 +101,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   });
 
   it('marks the active window with aria-pressed=true', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(
         screen.getByTestId('usage-window-5h').getAttribute('aria-pressed'),
@@ -116,7 +125,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       }
       return null;
     });
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-window-5h')).toBeInTheDocument();
     });
@@ -140,7 +149,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   });
 
   it('clicking the refresh button invokes refresh_usage', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-refresh-btn')).toBeInTheDocument();
     });
@@ -163,7 +172,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       }
       return null;
     });
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-error')).toBeInTheDocument();
     });
@@ -183,7 +192,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       }
       return null;
     });
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-empty-hint')).toBeInTheDocument();
     });
@@ -193,14 +202,14 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   });
 
   it('renders the sparkline svg', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-history-chart')).toBeInTheDocument();
     });
   });
 
   it('renders the last-fetched timestamp after a successful fetch', async () => {
-    render(<UsageQueryPage />);
+    render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-last-fetched')).toBeInTheDocument();
     });

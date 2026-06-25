@@ -27,6 +27,7 @@ import {
   HOME_VIEW,
   STORAGE_KEY,
   ALL_VIEWS,
+  ViewStateProvider,
   type ViewId,
 } from '../../hooks/useViewState';
 
@@ -39,6 +40,10 @@ function renderApp(): ReturnType<typeof render> {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 
@@ -307,6 +312,10 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
         <ThemeProvider>
           <App />
         </ThemeProvider>,
+        // useViewState throws if called outside <ViewStateProvider>
+        // (fail-fast contract). Production mounts the provider in
+        // main.tsx; tests have to do it themselves.
+        { wrapper: ViewStateProvider },
       );
 
       // Forward assertion: the real page mounts.
@@ -334,6 +343,10 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
         <ThemeProvider>
           <App />
         </ThemeProvider>,
+        // useViewState throws if called outside <ViewStateProvider>
+        // (fail-fast contract). Production mounts the provider in
+        // main.tsx; tests have to do it themselves.
+        { wrapper: ViewStateProvider },
       );
 
       // Inverse: until a real page ships for this view, App.tsx must

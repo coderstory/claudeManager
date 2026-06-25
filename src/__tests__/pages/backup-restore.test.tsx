@@ -13,7 +13,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import BackupRestorePage from '../../pages/backup-restore';
+import { ViewStateProvider } from '../../hooks/useViewState';
 import type { BackupEntry, DiffEntry } from '../../types/backup';
+
+// Wrap every <Page /> render in <ViewStateProvider> — the hook
+// throws if called outside the provider (fail-fast contract, see
+// src/hooks/useViewState.tsx). Production code mounts the provider
+// in main.tsx; tests have to do it themselves.
+function wrap({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <ViewStateProvider>{children}</ViewStateProvider>;
+}
 
 const mockInvoke = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({
@@ -45,7 +54,7 @@ beforeEach(() => {
 
 describe('BackupRestorePage — F13 (M2.6)', () => {
   it('renders the page title and toolbar', async () => {
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     expect(screen.getByTestId('backup-restore-page')).toBeInTheDocument();
     expect(screen.getByTestId('backup-now-btn')).toBeInTheDocument();
     expect(screen.getByTestId('backup-compare-btn')).toBeInTheDocument();
@@ -53,7 +62,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
   });
 
   it('shows the empty state when there are no backups', async () => {
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-empty')).toBeInTheDocument();
     });
@@ -69,7 +78,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       const rows = screen.getAllByTestId('backup-row');
       expect(rows.length).toBe(2);
@@ -82,7 +91,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'list_backups') throw new Error('disk fail');
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-message')).toBeInTheDocument();
     });
@@ -97,7 +106,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'read_backup_content') return '{"env":{"URL":"x"}}';
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -118,7 +127,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
@@ -151,7 +160,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'diff_backups') return diffEntries;
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
@@ -175,7 +184,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'restore_backup') return null;
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -195,7 +204,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -219,7 +228,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-empty')).toBeInTheDocument();
     });
@@ -242,7 +251,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
@@ -263,7 +272,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'delete_backup') return null;
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
@@ -289,7 +298,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -308,7 +317,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'delete_backup') throw new Error('permission denied');
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -337,7 +346,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       // 2 unique paths → 2 rows (not 3).
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
@@ -349,7 +358,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
   // ===== M4.6.13 — fullscreen overlay =====
 
   it('fullscreen toggle button is disabled when neither detail nor diff', () => {
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     const btn = screen.getByTestId('backup-fullscreen-toggle') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
@@ -362,7 +371,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'read_backup_content') return '{"k":1}';
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -395,7 +404,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'read_backup_content') return '{"k":1}';
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -422,7 +431,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       if (cmd === 'read_backup_content') return '{"k":1}';
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
@@ -460,7 +469,7 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       }
       return null;
     });
-    render(<BackupRestorePage />);
+    render(<BackupRestorePage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });

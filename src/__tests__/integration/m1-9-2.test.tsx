@@ -39,6 +39,7 @@ import { resolve } from 'node:path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App from '../../App';
 import { ThemeProvider } from '../../design-system/ThemeProvider';
+import { ViewStateProvider } from '../../hooks/useViewState';
 
 // Mock the Tauri window API BEFORE the component imports it. The
 // mock surface matches @tauri-apps/api/window — we only stub the
@@ -103,6 +104,10 @@ function renderApp(): void {
     <ThemeProvider>
       <App />
     </ThemeProvider>,
+    // useViewState throws if called outside <ViewStateProvider>
+    // (fail-fast contract). Production mounts the provider in
+    // main.tsx; tests have to do it themselves.
+    { wrapper: ViewStateProvider },
   );
 }
 
