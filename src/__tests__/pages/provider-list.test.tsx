@@ -682,6 +682,44 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     });
   });
 
+  // M5 bug #6 regression — update_provider invoke payload must include `input.id`.
+  // The Rust `ProviderInput` struct (src-tauri/src/domain/provider.rs:235) has
+  // `pub id: String` as a required field. The frontend MUST pass `id` inside
+  // the `input` object (not just as the separate path argument), otherwise
+  // serde fails with "missing field `id`" and the edit flow 100% fails.
+  it('[Edit] invoke payload must include input.id (M5 bug #6 regression)', async () => {
+    const target = {
+      id: 'glm', name: 'GLM', provider_type: 'anthropic',
+      api_base: 'https://api.anthropic.com', api_key: 'sk-old',
+      models: { default: 'm', haiku: null, sonnet: null, opus: null, by_tier: {} },
+      is_active: false, created_at: 1, last_used_at: null, notes: null,
+    };
+    mockInvoke.mockResolvedValueOnce([target]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-glm')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('provider-edit-glm'));
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+
+    mockInvoke.mockResolvedValueOnce(target);
+    mockInvoke.mockResolvedValueOnce([target]);
+    fireEvent.click(screen.getByTestId('provider-form-save'));
+
+    // The bug: input.id was missing → Rust returns "missing field `id`".
+    // After the fix, both the path arg `id` AND input.id must be present.
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'update_provider');
+      expect(calls.length).toBe(1);
+      const args = calls[0][1] as { id: string; input: Record<string, unknown> };
+      expect(args.id).toBe('glm');
+      expect(args.input.id).toBe('glm');
+    });
+  });
+
   it('[Delete] 按钮 (is_active=false 时) → 弹确认 → 确认 → 调用 deleteProvider', async () => {
     const target = {
       id: 'deletable', name: 'ToDelete', provider_type: 'custom',

@@ -139,10 +139,14 @@ export interface ProviderModels {
 /**
  * ProviderInput — mirror of `src-tauri/src/domain/provider.rs::ProviderInput`.
  * Used by add_provider and update_provider IPC commands (M3.6 清单 22 CRUD).
- * Note: `id` is NOT in this struct — `update_provider` takes id as a
- * separate path argument (it's the filename stem and immutable after creation).
+ *
+ * M5 bug #6: the Rust `ProviderInput` requires `id` as a deserialization
+ * field (not just the separate `update_provider` path argument). Without
+ * `id` in the payload, serde returns "missing field `id`" and the edit
+ * flow 100% fails. The frontend MUST mirror the Rust struct shape exactly.
  */
 export interface ProviderInput {
+  id: string;
   name: string;
   base_url: string;
   api_key: string;

@@ -1046,7 +1046,13 @@ function ProviderFormModal({
   }, [formState]);
 
   const handleSubmit = () => {
+    // M5 bug #6 fix: include `id` in the ProviderInput payload — Rust's
+    // ProviderInput struct requires it (serde fails with "missing field `id`"
+    // otherwise). For add, we generate id from the name (kebab-case) so the
+    // user doesn't see an id field in the UI; for edit, we re-use the existing id.
+    const idForInput = existing?.id ?? generateIdFromName(name.trim());
     const input: ProviderInput = {
+      id: idForInput,
       name: name.trim(),
       base_url: baseUrl.trim(),
       api_key: apiKey.trim(),
@@ -1061,6 +1067,16 @@ function ProviderFormModal({
     };
     void onSubmit(input, existing?.id ?? null);
   };
+
+  // M5 bug #6 fix: derive a kebab-case id from the user-typed name for the
+  // add path. The Rust side validates this against `is_valid_id`.
+  function generateIdFromName(raw: string): string {
+    return raw
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      || 'new-provider';
+  }
 
   return (
     <div
