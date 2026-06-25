@@ -1,34 +1,48 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3 + M4.6)
-status: awaiting_user_review
-last_updated: 2026-06-23T12:30:00.000Z
-last_activity: 2026-06-23 -- 8/8 tasks ship (M3.13.x bug fix 4/4 + Phase 21 SQLite history 4/4) + 主 session merge conflict 收尾
+milestone: v4.0
+milestone_name: 端到端用户行为测试 (E2E black-box via AppleScript + UI Automation)
+status: planning
+last_updated: 2026-06-25T23:05:00.000Z
+last_activity: 2026-06-25 -- v3.0 收尾 (5 commit scripts/rust 修复) + v4.0 启动 (4 决策拍板) + .app 装到 /Applications/
 progress:
-  total_phases: 10
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 19
-  percent: 100
-stopped_at: 8/8 tasks ship 完成, 等用户醒来核定 exe (M3.13.2/3/4/5 + M4.6-sqlite-history)
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+stopped_at: v4.0 规划阶段 — 待 v4-PLAN.md 写完 commit,等用户拍板进 Phase 1
 ---
 
 <!--
-  v2.0 milestone closure summary (auto-synced by doc-sync subagent 2026-06-22).
-  原 M1.x / M2.x 详细历史保留在下半部 (line 150+),作为审计痕迹。
+  v2.0 / v3.0 milestone closure summary (auto-synced 2026-06-25).
+  原 M1.x / M2.x / M3.x 详细历史保留在下半部 (line 150+), 作为审计痕迹。
   本顶部段为 gsd chain + 主 session 决策 + 当前状态的总览入口。
+  v4.0 启动: 14 场景全收 / AppleScript + 真 .app / 14 hard-fail / 主 session 规划。
 -->
 
-# Claude 配置管理器 — STATE.md (v2.0 milestone 闭环 + v3.0 round 1 进展)
+# Claude 配置管理器 — STATE.md (v3.0 收尾 + v4.0 启动)
 
 ## Current Position
 
-Phase: 21
+Phase: v4.0 (planning)
 Plan: Not started
-Status: Awaiting user decision on 3 gates (crate / 存储位置 / 启用时机)
-Last activity: 2026-06-22
-Next: Phase 21 SQLite research 已 ship (21-RESEARCH.md + 21-CONTEXT.md, commit `0ca4c5f`),L-M2.02 已 ship (commit `f94e27d`),等用户拍板后另派 gsd-plan-phase
+Status: 4 决策已拍板,待主 session 写 v4-PLAN.md
+Last activity: 2026-06-25
+Next: 写 v4-PLAN.md → commit → push → 等用户拍板进 Phase 1 实现
+
+**v3.0 → v4.0 交接 (2026-06-25) 一句话总结**: v3.0 round 1 (M3.11~M3.15 + M4.3 Phase 1 + M4.6 SQLite history) 已 ship,本会话做 v3.0 收尾:
+- scripts/ 跨平台修 5 处 (commit 090f2c8 + 7c07924 + 7721520 + 00bb480)
+- rust warning 清 5 处 (commit dd1a54d)
+- AGENTS.md 重写 (worktree workflow discontinued)
+- test-all 5 阶段: ui-check + frontend (500/500) + rust + smoke (10/10) 全 PASS;e2e WARN 是 tauri-driver 不支持 macOS (上游架构限制,非 scripts bug)
+- ClaudeManager.app 装到 /Applications/,launch + 窗口验证 OK
+
+**v4.0 启动 (2026-06-25) 4 决策**:
+- Q1 场景范围: 14 场景全收 (F1-F24 高频+高风险 + 4 跨 F 业务流)
+- Q2 macOS 路径: AppleScript + 真 .app 启动 (不走 webview,不走 tauri-driver,直接 System Events + 验证 settings.json 副作用)
+- Q3 ship gate: 14 hard-fail (跟 smoke test 10 项同级,严格 ship gate)
+- Q4 计划阶段: 主 session 写 v4-PLAN.md (subagent 派会撞 worktree workflow 顾虑)
 
 **v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）+ L-M2.02 详情页 max-width 统一（9 页 ship, smoke 7/7）+ Phase 21 SQLite research 完成（21-RESEARCH.md + 21-CONTEXT.md, 3 待拍板）。
 
