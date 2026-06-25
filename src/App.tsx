@@ -31,11 +31,12 @@
  *     a. The `src/__tests__/plugin-registry.test.ts` covers it.
  *        Removing the registry would orphan that test.
  *     b. In M2+ when the project DOES need real URL-based
- *        routing (e.g. deeplink import → jump to /import),
- *        we'll wire <HashRouter> here without rewriting every
- *        page. The plugin stub files (src/plugins/stubs/*.tsx)
- *        will become thin shims that re-export the page
- *        components from src/pages/.
+ *        routing (e.g. deeplink import was the planned entry
+ *        point — now removed in F4 cleanup), we'll wire
+ *        <HashRouter> here without rewriting every page. The
+ *        plugin stub files (src/plugins/stubs/*.tsx) will
+ *        become thin shims that re-export the page components
+ *        from src/pages/.
  *
  *   If you ever revert to react-router, delete this comment
  *   block, replace `useViewState()` with `useLocation()` +
@@ -55,7 +56,6 @@ import { QuickSearchModal } from './components/QuickSearchModal';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ImportSqlPage } from './pages/import-sql';
-import DeeplinkImportPage from './pages/deeplink-import';
 import JsonEditorPage from './pages/json-editor';
 import McpManagementPage from './pages/mcp-management';
 import OptimizerPage from './pages/optimizer';
@@ -97,10 +97,6 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
     title: 'SQL导入配置',
     // M3.9 — 清单 21: 描述补 "schema 校验" 环节
     description: '校验 .sql(SQLite dump) schema → 预览将导入的 provider/MCP → 批量导入。',
-  },
-  'deeplink-import': {
-    title: 'Deeplink 导入',
-    description: '从 ccswitch://v1/import?... URL 解析单个 provider 配置。',
   },
   'json-editor': {
     title: 'JSON 编辑器',
@@ -579,8 +575,6 @@ export default function App(): ReactElement {
               <ProviderListPage />
             ) : view === 'import-sql' ? (
               <ImportSqlPage initialFilePath={pendingSqlFile} />
-            ) : view === 'deeplink-import' ? (
-              <DeeplinkImportPage />
             ) : view === 'json-editor' ? (
               <JsonEditorPage />
             ) : view === 'mcp-management' ? (

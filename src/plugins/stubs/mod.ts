@@ -8,7 +8,6 @@
 
 export { providerListPlugin } from './provider-list';
 export { importSqlPlugin } from './import-sql';
-export { deeplinkImportPlugin } from './deeplink-import';
 export { jsonEditorPlugin } from './json-editor';
 export { mcpManagementPlugin } from './mcp-management';
 export { usageQueryPlugin } from './usage-query';
