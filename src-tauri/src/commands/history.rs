@@ -37,8 +37,8 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::services::history_service::{
-    BackupHistoryFilter, BackupHistoryRow, HistoryService, HistoryStats, PurgeReport,
-    UsageHistoryFilter, UsageHistoryRow,
+    BackupHistoryFilter, BackupHistoryRow, DailyStatsFilter, DailyStatRow, HistoryService,
+    HistoryStats, PurgeReport, UsageHistoryFilter, UsageHistoryRow,
 };
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
@@ -93,6 +93,17 @@ pub struct ExportReport {
 // Pure helpers — the testable surface (no Tauri runtime needed).
 // Each command's body is a 2-line shim: state lookup + helper call.
 // ---------------------------------------------------------------------------
+
+/// `get_daily_stats_history` implementation — no Tauri State.
+///
+/// Wraps [`HistoryService::query_daily_stats`] and stringifies the
+/// error for the IPC boundary.
+pub fn get_daily_stats_history_impl(
+    svc: &HistoryService,
+    filter: DailyStatsFilter,
+) -> Result<Vec<DailyStatRow>, String> {
+    svc.query_daily_stats(&filter).map_err(|e| e.to_string())
+}
 
 /// `get_usage_history` implementation — no Tauri State.
 pub fn get_usage_history_impl(
@@ -307,6 +318,21 @@ pub async fn get_usage_history_rows(
     get_usage_history_impl(state.history_service.as_ref(), filter)
 }
 
+/// F21 / Phase 21 — read daily-aggregated usage stats (from
+/// `usage_daily_stats` table, sorted by `stat_date DESC`).
+///
+/// This is the "按天汇总" view: one row per (provider, date),
+/// `tokens_used` is the day's incremental delta (not the cumulative
+/// raw counter). The frontend renders a compact date / tokens / cost
+/// table instead of the per-snapshot `usage_history` rows.
+#[tauri::command]
+pub async fn get_daily_stats_history(
+    state: State<'_, AppState>,
+    filter: DailyStatsFilter,
+) -> CmdResult<Vec<DailyStatRow>> {
+    get_daily_stats_history_impl(state.history_service.as_ref(), filter)
+}
+
 /// F21 / Phase 21 — read backup_history rows.
 #[tauri::command]
 pub async fn get_backup_history(
@@ -402,6 +428,88 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].provider_id, "p1");
         assert_eq!(rows[0].active_root.as_deref(), Some("/root-a"));
+    }
+
+    #[test]
+    fn get_daily_stats_history_impl_aggregates_same_day_snapshots() {
+        // Two snapshots on the same day for the same provider — the
+        // daily aggregation should produce one row with snapshot_count=2
+        // and tokens_used = today's incremental delta.
+        let (_tmp, svc) = open_svc();
+        let snap1 = crate::domain::UsageSnapshot {
+            provider_id: "p1".into(),
+            window: crate::domain::UsageWindow::OneMonth,
+            tokens_used: 100,
+            cost_usd: None,
+            balance_usd: None,
+            timestamp: 1_700_000_000, // 2023-11-14T22:13:20Z
+            breakdown: Vec::new(),
+            model_count: 0,
+        };
+        // Same provider, same UTC day (timestamp + 3600 = still same day).
+        let snap2 = crate::domain::UsageSnapshot {
+            provider_id: "p1".into(),
+            window: crate::domain::UsageWindow::OneMonth,
+            tokens_used: 200,
+            cost_usd: None,
+            balance_usd: None,
+            timestamp: 1_700_000_000 + 3600,
+            breakdown: Vec::new(),
+            model_count: 0,
+        };
+        svc.record_usage(&snap1, None).unwrap();
+        svc.record_usage(&snap2, None).unwrap();
+
+        // Backfill must be called explicitly (same path as startup).
+        svc.backfill_daily_stats().unwrap();
+
+        let filter = DailyStatsFilter {
+            provider_id: Some("p1".into()),
+            ..Default::default()
+        };
+        let rows = get_daily_stats_history_impl(svc.as_ref(), filter).unwrap();
+        assert_eq!(rows.len(), 1, "same-day snapshots should aggregate into one row");
+        assert_eq!(rows[0].provider_id, "p1");
+        assert_eq!(rows[0].snapshot_count, 2);
+        // tokens_used = today_max (200) − prev_day_max (0, first day) = 200
+        assert_eq!(rows[0].tokens_used, 200);
+    }
+
+    #[test]
+    fn get_daily_stats_history_impl_filters_by_provider() {
+        let (_tmp, svc) = open_svc();
+        let snap_a = crate::domain::UsageSnapshot {
+            provider_id: "a".into(),
+            window: crate::domain::UsageWindow::OneMonth,
+            tokens_used: 50,
+            cost_usd: None,
+            balance_usd: None,
+            timestamp: 1_700_000_000,
+            breakdown: Vec::new(),
+            model_count: 0,
+        };
+        let snap_b = crate::domain::UsageSnapshot {
+            provider_id: "b".into(),
+            window: crate::domain::UsageWindow::OneMonth,
+            tokens_used: 99,
+            cost_usd: None,
+            balance_usd: None,
+            timestamp: 1_700_000_000,
+            breakdown: Vec::new(),
+            model_count: 0,
+        };
+        svc.record_usage(&snap_a, None).unwrap();
+        svc.record_usage(&snap_b, None).unwrap();
+        svc.backfill_daily_stats().unwrap();
+
+        let filter = DailyStatsFilter {
+            provider_id: Some("b".into()),
+            ..Default::default()
+        };
+        let rows = get_daily_stats_history_impl(svc.as_ref(), filter).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].provider_id, "b");
+        assert_eq!(rows[0].tokens_used, 99);
     }
 
     #[test]
@@ -580,6 +688,16 @@ mod tests {
         s: State<'_, AppState>,
         filter: UsageHistoryFilter,
     ) -> CmdResult<Vec<UsageHistoryRow>> {
+        let _ = (s, filter);
+        unimplemented!()
+    }
+
+    /// Compile-time check: `get_daily_stats_history` signature.
+    #[allow(dead_code)]
+    fn _get_daily_stats_history_signature(
+        s: State<'_, AppState>,
+        filter: DailyStatsFilter,
+    ) -> CmdResult<Vec<DailyStatRow>> {
         let _ = (s, filter);
         unimplemented!()
     }

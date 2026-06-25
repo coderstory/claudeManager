@@ -189,6 +189,7 @@ pub fn run() {
             commands::updater::check_update,
             // M4.6 / Phase 21 — history page commands (Plan B).
             commands::history::get_usage_history_rows,
+            commands::history::get_daily_stats_history,
             commands::history::get_backup_history,
             commands::history::get_history_stats,
             commands::history::export_history,
@@ -215,9 +216,9 @@ pub fn run() {
             let state = AppState::build();
             app.manage(state);
 
-            // M2.17 — wire the 12 plugin stubs into the running app.
+            // M2.17 — wire the 11 plugin stubs into the running app.
             //
-            // M1.3 created `plugins::init_all` (registers the 12 stubs and
+            // M1.3 created `plugins::init_all` (registers the 11 stubs and
             // runs their `init`) but never wired it from `lib.rs::run`. As
             // a result the PluginHost existed only on paper: it was never
             // constructed at runtime, the `init` hooks never fired, and

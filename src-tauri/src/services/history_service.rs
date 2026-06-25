@@ -125,6 +125,39 @@ pub struct PurgeReport {
 }
 
 // ---------------------------------------------------------------------------
+// DTOs — Phase 21 增量聚合缓存 (usage_daily_stats)
+// ---------------------------------------------------------------------------
+
+/// Filter for [`HistoryService::query_daily_stats`]. All fields
+/// optional; `None` means "no constraint on this column".
+///
+/// `from_date` / `to_date` are inclusive on both ends, in
+/// `'YYYY-MM-DD'` UTC. `limit` defaults to 1000, capped at 10 000.
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DailyStatsFilter {
+    pub provider_id: Option<String>,
+    pub from_date: Option<String>,
+    pub to_date: Option<String>,
+    pub limit: Option<u32>,
+}
+
+/// Row returned by [`HistoryService::query_daily_stats`]. Mirrors
+/// `usage_daily_stats` columns. `tokens_used` is the day's
+/// incremental delta (MAX(today) − prev_day_max), NOT the raw
+/// cumulative counter. `snapshot_count` is the number of raw
+/// `usage_history` rows aggregated into this day's bucket.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DailyStatRow {
+    pub provider_id: String,
+    pub stat_date: String,
+    pub tokens_used: i64,
+    pub snapshot_count: i64,
+    pub last_aggregated_recorded_at: i64,
+}
+
+// ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
@@ -515,6 +548,139 @@ impl HistoryService {
     #[allow(dead_code)]
     pub fn backfill_jsonl(&self, _jsonl_path: &Path) -> Result<usize, HistoryError> {
         Ok(0)
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 21 — 增量聚合缓存 (usage_daily_stats)
+    // -----------------------------------------------------------------------
+
+    /// Public entry point: re-aggregate `usage_daily_stats` from the
+    /// raw `usage_history` table. Skips when the aggregation table
+    /// is non-empty (idempotent first-launch behavior; concurrent
+    /// starts that race to insert new rows are picked up by the
+    /// per-row `upsert_daily_stat` path in `record_usage`).
+    ///
+    /// Designed to be called once at startup, on a background
+    /// thread (see `app_state.rs::build`).
+    pub fn backfill_daily_stats(&self) -> Result<usize, HistoryError> {
+        let guard = self.db.lock().map_err(|_| HistoryError::MutexPoisoned)?;
+        // Idempotency: only run when the aggregation table is empty.
+        let existing: i64 = guard.query_row(
+            "SELECT COUNT(*) FROM usage_daily_stats",
+            [],
+            |r| r.get(0),
+        )?;
+        if existing > 0 {
+            return Ok(0);
+        }
+        // 1. Derive all (provider_id, stat_date) buckets with their
+        //    today_max + snapshot_count + max_recorded_at. We GROUP
+        //    BY both keys so the day boundary is implicit.
+        //    `tokens_used` is not a column on `usage_history`; we
+        //    pull it from the raw JSON blob with json_extract.
+        let mut stmt = guard.prepare(
+            "SELECT provider_id,
+                    strftime('%Y-%m-%d', recorded_at, 'unixepoch') AS stat_date,
+                    MAX(CAST(json_extract(raw_json, '$.tokens_used') AS INTEGER)) AS today_max,
+                    COUNT(*) AS snapshot_count,
+                    MAX(recorded_at) AS last_recorded
+             FROM usage_history
+             GROUP BY provider_id, stat_date
+             ORDER BY provider_id, stat_date",
+        )?;
+        let mut rows: Vec<(String, String, i64, i64, i64)> = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if rows.is_empty() {
+            return Ok(0);
+        }
+
+        let now = now_unix_secs();
+        let mut prev_max: std::collections::HashMap<String, i64> =
+            std::collections::HashMap::new();
+        let mut inserted: i64 = 0;
+        for (provider_id, stat_date, today_max, snapshot_count, last_recorded) in
+            rows.drain(..)
+        {
+            let prev = prev_max.get(&provider_id).copied().unwrap_or(0);
+            let delta = today_max - prev;
+            guard.execute(
+                "INSERT INTO usage_daily_stats
+                    (provider_id, stat_date, tokens_used, snapshot_count,
+                     last_aggregated_recorded_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    provider_id,
+                    stat_date,
+                    delta,
+                    snapshot_count,
+                    last_recorded,
+                    now
+                ],
+            )?;
+            // Carry the latest `today_max` forward as the next day's
+            // `prev_max` for this provider.
+            prev_max.insert(provider_id, today_max);
+            inserted += 1;
+        }
+        Ok(inserted as usize)
+    }
+
+    /// Public read API: select daily aggregate rows with optional
+    /// provider/date/limit filters. Sorted by `stat_date DESC` so
+    /// the most recent day comes first (matches the F7 history UI).
+    pub fn query_daily_stats(
+        &self,
+        filter: &DailyStatsFilter,
+    ) -> Result<Vec<DailyStatRow>, HistoryError> {
+        let mut sql = String::from(
+            "SELECT provider_id, stat_date, tokens_used, snapshot_count,
+                    last_aggregated_recorded_at
+             FROM usage_daily_stats WHERE 1=1",
+        );
+        let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(p) = &filter.provider_id {
+            sql.push_str(" AND provider_id = ?");
+            args.push(Box::new(p.clone()));
+        }
+        if let Some(d) = &filter.from_date {
+            sql.push_str(" AND stat_date >= ?");
+            args.push(Box::new(d.clone()));
+        }
+        if let Some(d) = &filter.to_date {
+            sql.push_str(" AND stat_date <= ?");
+            args.push(Box::new(d.clone()));
+        }
+        sql.push_str(" ORDER BY stat_date DESC");
+        let limit = filter.limit.unwrap_or(1000).min(10_000) as i64;
+        sql.push_str(" LIMIT ?");
+        args.push(Box::new(limit));
+
+        let guard = self.db.lock().map_err(|_| HistoryError::MutexPoisoned)?;
+        let mut stmt = guard.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            args.iter().map(|b| b.as_ref() as &dyn rusqlite::ToSql).collect();
+        let rows = stmt
+            .query_map(param_refs.as_slice(), |r| {
+                Ok(DailyStatRow {
+                    provider_id: r.get(0)?,
+                    stat_date: r.get(1)?,
+                    tokens_used: r.get(2)?,
+                    snapshot_count: r.get(3)?,
+                    last_aggregated_recorded_at: r.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 }
 
