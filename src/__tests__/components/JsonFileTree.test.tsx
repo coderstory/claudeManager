@@ -120,11 +120,41 @@ describe('JsonFileTree — F5 (M3.11 / A4#12)', () => {
     expect(filtered[0].getAttribute('data-path')).toBe('/proj/.claude/agents/coder.json');
   });
 
+  // M5 #33 — user report: "JSON 编辑器列表里怎么搜索不到 settings.json"
+  // Filter is case-insensitive on `relative_path`. With two
+  // settings.json entries (one user-scope, one project-scope),
+  // searching "settings" must surface both rows.
+  it('search "settings" surfaces BOTH user + project scope settings.json', () => {
+    render(
+      <JsonFileTree
+        entries={sampleEntries}
+        selectedPath={null}
+        onSelect={() => {}}
+      />,
+    );
+    const search = screen.getByTestId('json-file-tree-search') as HTMLInputElement;
+    fireEvent.change(search, { target: { value: 'settings' } });
+
+    const filtered = screen.getAllByTestId('json-file-tree-entry');
+    expect(filtered.length).toBe(2);
+    const paths = filtered.map((e) => e.getAttribute('data-path')).sort();
+    expect(paths).toEqual([
+      '/home/u/.claude/settings.json',
+      '/proj/.claude/settings.json',
+    ]);
+  });
+
   it('clearing the search restores all entries', () => {
     render(<JsonFileTree entries={sampleEntries} selectedPath={null} onSelect={() => {}} />);
     const search = screen.getByTestId('json-file-tree-search') as HTMLInputElement;
-    fireEvent.change(search, { target: { value: 'a' } });
-    expect(screen.getAllByTestId('json-file-tree-entry').length).toBeLessThan(4);
+    // Pick a query that yields ≥1 row but <4 so the post-clear jump is
+    // observable. M5 #33 broadened the filter to absolute path +
+    // basename, so picking a literal substring of one entry's path
+    // (and not the others') is necessary.
+    fireEvent.change(search, { target: { value: 'agents' } });
+    const filteredCount = screen.getAllByTestId('json-file-tree-entry').length;
+    expect(filteredCount).toBeGreaterThan(0);
+    expect(filteredCount).toBeLessThan(4);
 
     fireEvent.change(search, { target: { value: '' } });
     expect(screen.getAllByTestId('json-file-tree-entry').length).toBe(4);

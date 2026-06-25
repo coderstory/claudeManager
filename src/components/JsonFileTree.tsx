@@ -188,12 +188,20 @@ export function JsonFileTree(props: JsonFileTreeProps): ReactElement {
   const [query, setQuery] = useState('');
   const [collapsedScopes, setCollapsedScopes] = useState<Set<string>>(new Set());
 
-  // 过滤:query 对 relative_path 做 case-insensitive contains。
-  // 空 query = 不过滤。
+  // 过滤:query 对 relative_path / path / basename 做 case-insensitive
+  // contains。M5 #33 — 用户报告"搜索不到 settings.json"。相对路径
+  // 匹配是主路径(用户看树就是按这个走的);但兜底也匹配绝对路径 +
+  // basename,以防后端相对路径格式异常(例如返回空字符串 / scope 名)
+  // 时仍能找到文件。
   const filteredEntries = useMemo<JsonFileEntry[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return entries;
-    return entries.filter((e) => e.relative_path.toLowerCase().includes(q));
+    return entries.filter((e) => {
+      const rel = e.relative_path.toLowerCase();
+      const abs = e.path.toLowerCase();
+      const base = (rel.split('/').pop() ?? '').toLowerCase();
+      return rel.includes(q) || abs.includes(q) || base.includes(q);
+    });
   }, [entries, query]);
 
   const rows = useMemo(
