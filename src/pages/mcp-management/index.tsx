@@ -471,9 +471,8 @@ export default function McpManagementPage(): ReactElement {
             fontSize: 13,
           }}
         >
-          未配置 MCP server。点击「新增 MCP server」开始配置,或粘贴一个
-          <code style={{ background: 'var(--bg-primary)', padding: '1px 4px', borderRadius: 'var(--radius-button)' }}>ccswitch://v1/import?resource=mcp&...</code>
-          URL 到剪贴板后点「从剪贴板导入」。
+          未配置 MCP server。点击「新增 MCP server」开始配置,或粘贴一段 MCP server
+          JSON 配置到剪贴板后点「从剪贴板导入」。
         </div>
       ) : (
         <div

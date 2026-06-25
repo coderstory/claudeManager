@@ -352,6 +352,24 @@ describe('McpManagementPage — F6 (M2.5)', () => {
     });
   });
 
+  // M5 bug #13 — empty-state hint must not mention ccswitch:// (the
+  // protocol was removed). Hint now points users at JSON clipboard
+  // content instead.
+  it('empty-state hint does not mention ccswitch protocol (bug #13)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') return [];
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mcp-empty').textContent).not.toContain(
+      'ccswitch',
+    );
+    expect(screen.getByTestId('mcp-empty').textContent).toContain('JSON');
+  });
+
   // M2.17 — F15 batch3: InfoBar 改用共享 ErrorBanner。
   // 保留对外 testid `mcp-message` + data-message-kind,新增断言 banner 内部
   // 走 kind=success (role="status") / kind=error (role="alert")。
