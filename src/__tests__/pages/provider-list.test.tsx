@@ -745,3 +745,38 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     expect(delBtn.title).toContain('无法删除');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M3.0.4 — `models.by_tier` field dropped by Rust `skip_serializing_if`
+// when empty. Frontend must tolerate the missing field (defensive default
+// to `{}` so Object.keys() doesn't throw and break the entire row render).
+// ---------------------------------------------------------------------------
+
+describe('ProviderListPage — M3.0.4 defensive handling of missing models.by_tier', () => {
+  it('row still renders [查看]/[编辑]/[删除]/[导出] when backend omits by_tier (empty hashmap skipped via serde)', async () => {
+    // Simulate the real IPC payload: ProviderModels with by_tier absent
+    // because HashMap::is_empty skips serialization (provider.rs:141).
+    // This is the production shape for any provider that has no custom
+    // tiers — the common case (>=99% of providers).
+    const rawProvider: Record<string, unknown> = {
+      id: 'glm', name: 'GLM-4.6', provider_type: 'anthropic',
+      api_base: 'https://api.anthropic.com', api_key: 'sk-x',
+      models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null /* by_tier missing */ },
+      is_active: false, created_at: 1, last_used_at: null, notes: null,
+    };
+    mockInvoke.mockResolvedValueOnce([rawProvider]);
+
+    render(<ProviderListPage />);
+
+    // The row MUST render despite the missing by_tier field.
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-glm')).toBeInTheDocument();
+    });
+    // All 4 buttons must be present (查看/编辑/删除/导出/激活).
+    expect(screen.getByTestId('provider-view-glm')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-edit-glm')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-delete-glm')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-export-glm')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-activate-glm')).toBeInTheDocument();
+  });
+});

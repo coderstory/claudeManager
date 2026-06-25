@@ -862,6 +862,12 @@ function ProviderRow({
   onDelete,
 }: ProviderRowProps): ReactElement {
   const isActive = provider.is_active;
+  // M3.0.4 — `ProviderModels.by_tier` uses `#[serde(skip_serializing_if =
+  // "HashMap::is_empty")]` on the Rust side (provider.rs:141), so when a
+  // provider has no custom tiers the JSON payload omits `by_tier` entirely.
+  // `Object.keys(undefined)` throws and breaks the entire row render,
+  // which is why 编辑/删除/查看/导出/激活 按钮会"集体消失"。Read defensively.
+  const byTier: Record<string, string> = provider.models.by_tier ?? {};
   return (
     <li
       data-testid={`provider-row-${provider.id}`}
@@ -873,8 +879,8 @@ function ProviderRow({
         <div className="list-row-header">
           <span className="name">{provider.name}</span>
           <span className="badge badge-type">{provider.provider_type}</span>
-          {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(provider.models.by_tier).length) > 0 && (
-            <span className="meta">· {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(provider.models.by_tier).length)} 个模型</span>
+          {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(byTier).length) > 0 && (
+            <span className="meta">· {((provider.models.default ? 1 : 0) + (provider.models.haiku ? 1 : 0) + (provider.models.sonnet ? 1 : 0) + (provider.models.opus ? 1 : 0) + Object.keys(byTier).length)} 个模型</span>
           )}
         </div>
         <div className="mono api-base">{provider.api_base}</div>
@@ -1187,7 +1193,7 @@ function ProviderDetailsModal({ detailsState, onClose }: ProviderDetailsModalPro
             {detailsState.provider.models.opus && (
               <DetailRow label="Opus Tier" value={detailsState.provider.models.opus} mono />
             )}
-            {Object.entries(detailsState.provider.models.by_tier).map(([tier, model]) => (
+            {Object.entries(detailsState.provider.models.by_tier ?? {}).map(([tier, model]) => (
               <DetailRow key={tier} label={`${tier} Tier`} value={model} mono />
             ))}
             <DetailRow label="Created" value={new Date(detailsState.provider.created_at * 1000).toISOString()} />
