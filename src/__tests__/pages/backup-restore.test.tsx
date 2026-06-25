@@ -246,6 +246,65 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     });
   });
 
+  // M5 #29 — multi-select delete (≥1 selection triggers batch delete).
+  it('batch delete button is enabled only when ≥1 backup is selected', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_backups') {
+        return [
+          sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385),
+          sampleEntry('C:\\bak.bak.20260618-142305', 1_781_842_985),
+        ];
+      }
+      if (cmd === 'delete_backup') return null;
+      return null;
+    });
+    render(<BackupRestorePage />, { wrapper: wrap });
+    const batchBtn = await screen.findByTestId('backup-batch-delete-btn');
+    expect(batchBtn).toBeDisabled();
+    fireEvent.click(screen.getAllByTestId('backup-row-check')[0]);
+    await waitFor(() => {
+      expect(batchBtn).not.toBeDisabled();
+    });
+    // Click to delete (confirm already mocked to true).
+    fireEvent.click(batchBtn);
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'delete_backup',
+      );
+      expect(calls.length).toBe(1);
+      expect(calls[0][1]).toMatchObject({
+        path: 'C:\\bak.bak.20260619-142305',
+      });
+    });
+  });
+
+  // M5 #29 — selection no longer caps at 2 (was capped for diff). The
+  // diff action still requires exactly 2; multi-select delete works on any count.
+  it('user can select more than 2 backups (no longer capped)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_backups') {
+        return [
+          sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385),
+          sampleEntry('C:\\bak.bak.20260618-142305', 1_781_842_985),
+          sampleEntry('C:\\bak.bak.20260617-142305', 1_781_756_585),
+        ];
+      }
+      return null;
+    });
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[1]);
+    fireEvent.click(checks[2]);
+    // All three checkboxes remain checked (no cap drop).
+    expect((checks[0] as HTMLInputElement).checked).toBe(true);
+    expect((checks[1] as HTMLInputElement).checked).toBe(true);
+    expect((checks[2] as HTMLInputElement).checked).toBe(true);
+  });
+
   it('backup now button triggers backup_now and refreshes', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') return [];

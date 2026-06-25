@@ -65,6 +65,7 @@ import {
 } from '../../types/backup';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useViewState } from '../../hooks/useViewState';
+import { Pagination } from '../../components/Pagination';
 
 // ---------------------------------------------------------------------------
 // Page state
@@ -73,7 +74,7 @@ import { useViewState } from '../../hooks/useViewState';
 interface PageState {
   loading: boolean;
   entries: BackupEntry[];
-  selected: string[]; // up to 2 selected paths
+  selected: string[]; // M5 #29 — any number (was capped at 2 for diff). Diff still needs exactly 2, but multi-select delete works on any count.
   detail: { path: string; content: string } | null;
   diff: DiffEntry[] | null;
   diffing: boolean;
@@ -82,6 +83,8 @@ interface PageState {
    *  detail panel. Persists only for the current view (re-renders
    *  reset it). */
   detailFullscreen: boolean;
+  /** M5 #29 — pagination state for the timeline. */
+  page: number;
 }
 
 const INITIAL_STATE: PageState = {
@@ -93,6 +96,7 @@ const INITIAL_STATE: PageState = {
   diffing: false,
   message: null,
   detailFullscreen: false,
+  page: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -130,25 +134,55 @@ export default function BackupRestorePage(): ReactElement {
   }, [refresh]);
 
   // ---- selection ----
+  //
+  // M5 #29 — selection is no longer capped at 2 entries. The diff
+  // action (`handleCompare`) still requires exactly 2, but multi-select
+  // delete can act on any number. We drop the old "drop oldest" cap
+  // so a user can pre-select N backups for batch deletion.
 
   const toggleSelect = useCallback((path: string): void => {
     setState((prev) => {
       const has = prev.selected.includes(path);
       if (has) {
-        return { ...prev, selected: prev.selected.filter((p) => p !== path) };
-      }
-      // Cap at 2 — newest selection wins the second slot.
-      if (prev.selected.length >= 2) {
+        // Invalidate diff when removing a participant.
+        const nextSelected = prev.selected.filter((p) => p !== path);
+        const wasInDiff =
+          prev.diff !== null && nextSelected.length !== 2;
         return {
           ...prev,
-          selected: [prev.selected[1], path],
-          diff: null, // selection changed → invalidate diff
+          selected: nextSelected,
+          diff: wasInDiff ? null : prev.diff,
         };
       }
       return {
         ...prev,
         selected: [...prev.selected, path],
-        diff: prev.selected.length === 1 ? null : prev.diff,
+        // Adding a 3rd selection invalidates any existing diff
+        // (diff only makes sense at exactly 2 participants).
+        diff: prev.selected.length === 2 ? null : prev.diff,
+      };
+    });
+  }, []);
+
+  // M5 #29 — select-all on the current page.
+  const toggleSelectAllPage = useCallback((pagePaths: string[]): void => {
+    setState((prev) => {
+      const allSelected = pagePaths.every((p) => prev.selected.includes(p));
+      if (allSelected) {
+        // Deselect all on this page (keep selections from other pages).
+        return {
+          ...prev,
+          selected: prev.selected.filter((p) => !pagePaths.includes(p)),
+          diff: null,
+        };
+      }
+      // Select all on this page (union with existing from other pages).
+      const merged = Array.from(new Set([...prev.selected, ...pagePaths]));
+      return {
+        ...prev,
+        selected: merged,
+        // Diff becomes invalid once we cross 2.
+        diff: merged.length === 2 ? prev.diff : null,
       };
     });
   }, []);
@@ -285,12 +319,50 @@ export default function BackupRestorePage(): ReactElement {
     [refresh],
   );
 
+  // M5 #29 — batch delete for the multi-selected backups. Iterates
+  // the existing single-delete IPC; the backend's allow-list + .trash
+  // safety applies per-call, so the user is never at risk of wiping
+  // unrelated files even if some deletions fail mid-loop.
+  const handleBatchDelete = useCallback(
+    async (paths: string[]): Promise<void> => {
+      if (paths.length === 0) return;
+      const ok = window.confirm(
+        `将永久删除选中的 ${paths.length} 个备份(每个会先移入 .trash/,再删除 trash 副本)。\n\n此操作无法撤销,确认继续?`,
+      );
+      if (!ok) return;
+      // Optimistic UI: remove all from entries/selected/detail.
+      setState((prev) => ({
+        ...prev,
+        entries: prev.entries.filter((e) => !paths.includes(e.path)),
+        selected: prev.selected.filter((p) => !paths.includes(p)),
+        detail:
+          prev.detail && paths.includes(prev.detail.path) ? null : prev.detail,
+        message: { kind: 'success', text: `已删除 ${paths.length} 个备份` },
+      }));
+      // Per-path backend delete; surface the first failure.
+      let failed: string | null = null;
+      for (const p of paths) {
+        try {
+          await deleteBackup(p);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          failed = msg;
+          break;
+        }
+      }
+      if (failed !== null) {
+        setState((prev) => ({
+          ...prev,
+          message: { kind: 'error', text: `部分删除失败: ${failed}` },
+        }));
+      }
+      // Re-sync with disk so any externally removed files disappear.
+      await refresh();
+    },
+    [refresh],
+  );
+
   // ---- M4.6.13 — frontend dedupe safeguard ----
-  //
-  // 后端 `list_backups` 在 M4.6.13 已经按 canonical path 去重
-  // （同一 inode 只出现一次）。但 React strict mode 会双调用某些
-  // 副作用,未来若后端 dedupe 出 bug,前端也兜底一次,避免 UI 上
-  // 出现重复行。用 useMemo 缓存,只在 entries 引用变化时重算。
   const dedupedEntries = useMemo<BackupEntry[]>(() => {
     const seen = new Set<string>();
     const out: BackupEntry[] = [];
@@ -301,6 +373,15 @@ export default function BackupRestorePage(): ReactElement {
     }
     return out;
   }, [state.entries]);
+
+  // M5 #29 — paginate the deduped timeline. Page size 20 matches the
+  // history tables (#31) so the UX is consistent across pages.
+  const PAGE_SIZE = 20;
+  const pageStart = state.page * PAGE_SIZE;
+  const pageEntries = dedupedEntries.slice(
+    pageStart,
+    pageStart + PAGE_SIZE,
+  );
 
   // ---- render ----
 
@@ -416,6 +497,27 @@ export default function BackupRestorePage(): ReactElement {
           <ArrowLeftRight size={14} />
           {state.diffing ? '比对中…' : '比对选中的 2 个'}
         </button>
+        {/* M5 #29 — multi-select delete. Works on any number of selected
+            backups (≥1). Diff still requires exactly 2 — this button is
+            independent of that constraint. */}
+        <button
+          onClick={() => {
+            void handleBatchDelete(state.selected);
+          }}
+          disabled={state.selected.length === 0}
+          data-testid="backup-batch-delete-btn"
+          style={{
+            ...toolbarBtn(),
+            borderColor: 'var(--danger)',
+            color: 'var(--danger)',
+            opacity: state.selected.length > 0 ? 1 : 0.5,
+            cursor: state.selected.length > 0 ? 'pointer' : 'not-allowed',
+          }}
+          title="删除选中的所有备份（不可撤销）"
+        >
+          <Trash2 size={14} />
+          删除选中 ({state.selected.length})
+        </button>
         <button
           onClick={() => {
             void refresh();
@@ -517,7 +619,7 @@ export default function BackupRestorePage(): ReactElement {
               </div>
             </div>
           ) : (
-            dedupedEntries.map((e) => {
+            pageEntries.map((e) => {
               // M4.6.13 — `dedupedEntries` is a useMemo that
               // collapses `state.entries` by `path` (defense in
               // depth on top of the backend's canonical-path
@@ -631,6 +733,16 @@ export default function BackupRestorePage(): ReactElement {
               );
             })
           )}
+          {/* M5 #29 — pagination control for the timeline. */}
+          <Pagination
+            total={dedupedEntries.length}
+            page={state.page}
+            pageSize={PAGE_SIZE}
+            onPageChange={(next) => {
+              setState((prev) => ({ ...prev, page: next }));
+            }}
+            testIdPrefix="backup-timeline-pagination"
+          />
         </div>
 
         {/* Right detail panel */}
