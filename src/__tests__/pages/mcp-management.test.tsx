@@ -293,6 +293,65 @@ describe('McpManagementPage — F6 (M2.5)', () => {
     });
   });
 
+  // M5 bug #12 — 剪贴板里是 MCP server JSON 时,不应该走 deeplink URL
+  // 解析(会因 'relative URL without a base' 报错),而应该直接解析
+  // JSON 并填入 modal。
+  it('import button parses JSON clipboard content (not URL)', async () => {
+    const json = JSON.stringify({
+      name: 'MyMCP',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@my/mcp'],
+      env: { TOKEN: 'k' },
+    });
+    const readText = vi.fn().mockResolvedValue(json);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { readText },
+      configurable: true,
+    });
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') return [];
+      // 关键断言:不应调 parse_mcp_deeplink(JSON 不该走 URL 解析)。
+      if (cmd === 'parse_mcp_deeplink') {
+        throw new Error('parse_mcp_deeplink should NOT be called for JSON');
+      }
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-import-btn')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('mcp-import-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-modal')).toBeInTheDocument();
+      expect(
+        (screen.getByTestId('mcp-form-name') as HTMLInputElement).value,
+      ).toBe('MyMCP');
+      expect(
+        (screen.getByTestId('mcp-form-command') as HTMLInputElement).value,
+      ).toBe('npx');
+    });
+  });
+
+  it('import button reports error for non-JSON non-URL clipboard content', async () => {
+    const readText = vi.fn().mockResolvedValue('just some random text');
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { readText },
+      configurable: true,
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-import-btn')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('mcp-import-btn'));
+    await waitFor(() => {
+      const msg = screen.getByTestId('mcp-message');
+      expect(msg).toBeInTheDocument();
+      expect(msg.getAttribute('data-message-kind')).toBe('error');
+      expect(msg.textContent).toContain('既不是 JSON 也不是');
+    });
+  });
+
   // M2.17 — F15 batch3: InfoBar 改用共享 ErrorBanner。
   // 保留对外 testid `mcp-message` + data-message-kind,新增断言 banner 内部
   // 走 kind=success (role="status") / kind=error (role="alert")。

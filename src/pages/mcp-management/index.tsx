@@ -212,21 +212,91 @@ export default function McpManagementPage(): ReactElement {
         }));
         return;
       }
-      const parsed = await parseMcpDeeplink(trimmed);
-      if (parsed.action.kind !== 'import_mcp' || !parsed.mcp_server) {
+      // M5 bug #12 — 智能判别 JSON vs deeplink URL。
+      // 旧逻辑无条件调 parseMcpDeeplink,粘贴 MCP server JSON 配置时
+      // 会因 'invalid URL: relative URL without a base' 报错。两条路径
+      // 都接受:JSON 直接解析为本页需要的 McpServer shape;URL 走原
+      // deeplink 解析(保留向后兼容)。
+      if (trimmed.startsWith('{')) {
+        // JSON 路径:解析为 McpServer,填入 import modal。
+        try {
+          const obj = JSON.parse(trimmed) as Record<string, unknown>;
+          // 期望 shape: { name, command/transport+args+env, ... }
+          const name = typeof obj.name === 'string' ? obj.name : '';
+          if (!name) {
+            setState((prev) => ({
+              ...prev,
+              message: {
+                kind: 'error',
+                text: 'JSON 缺少 `name` 字段',
+              },
+            }));
+            return;
+          }
+          // 兼容 stdio / http / sse 三种 transport。
+          const transport =
+            (obj.transport as string) ??
+            (typeof obj.url === 'string' ? 'http' : 'stdio');
+          const server: McpServer = {
+            id: cryptoRandomId(),
+            name,
+            transport: transport as McpTransport,
+            command: typeof obj.command === 'string' ? obj.command : '',
+            args: Array.isArray(obj.args)
+              ? (obj.args as unknown[]).map(String)
+              : [],
+            env:
+              typeof obj.env === 'object' && obj.env !== null
+                ? (obj.env as Record<string, string>)
+                : {},
+            url: typeof obj.url === 'string' ? obj.url : undefined,
+            enabled: true,
+            created_at: Math.floor(Date.now() / 1000),
+          };
+          setState((prev) => ({
+            ...prev,
+            modal: { kind: 'import', server },
+            message: { kind: 'success', text: '已从剪贴板导入 (JSON)' },
+          }));
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setState((prev) => ({
+            ...prev,
+            message: {
+              kind: 'error',
+              text: `JSON 解析失败: ${msg}`,
+            },
+          }));
+        }
+        return;
+      }
+      // URL 路径:走 deeplink parser(向后兼容)。
+      if (trimmed.startsWith('ccswitch://')) {
+        const parsed = await parseMcpDeeplink(trimmed);
+        if (parsed.action.kind !== 'import_mcp' || !parsed.mcp_server) {
+          setState((prev) => ({
+            ...prev,
+            message: {
+              kind: 'error',
+              text: 'URL 不是 MCP deeplink (ccswitch://v1/import?resource=mcp&...)',
+            },
+          }));
+          return;
+        }
         setState((prev) => ({
           ...prev,
-          message: {
-            kind: 'error',
-            text: 'URL 不是 MCP deeplink (ccswitch://v1/import?resource=mcp&...)',
-          },
+          modal: { kind: 'import', server: parsed.mcp_server! },
+          message: { kind: 'success', text: '已从剪贴板导入' },
         }));
         return;
       }
+      // 既不是 JSON 也不是已知 URL
       setState((prev) => ({
         ...prev,
-        modal: { kind: 'import', server: parsed.mcp_server! },
-        message: { kind: 'success', text: '已从剪贴板导入' },
+        message: {
+          kind: 'error',
+          text: '剪贴板内容既不是 JSON 也不是 ccswitch:// deeplink URL',
+        },
       }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -902,4 +972,20 @@ function formInput(): React.CSSProperties {
     outline: 'none',
     fontFamily: 'inherit',
   };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function cryptoRandomId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
