@@ -215,6 +215,37 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     expect(calls).not.toContain('restore_backup');
   });
 
+  // M5 #30 — backup selected for restore must STAY in the list after restore.
+  // User report: "文件选择恢复后 不应该从列表里删除"
+  // The user wants to be able to compare current vs previous via the
+  // same timeline (backup file on disk is preserved by the backend).
+  // Frontend must not optimistically remove the entry.
+  it('after restore, restored backup entry remains in the list', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_backups') {
+        return [
+          sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385),
+          sampleEntry('C:\\bak.bak.20260618-142305', 1_781_842_985),
+        ];
+      }
+      if (cmd === 'restore_backup') return null;
+      return null;
+    });
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    const restoreBtn = screen.getAllByTestId('backup-restore-btn')[0];
+    fireEvent.click(restoreBtn);
+    // After restore + refresh, the list still contains both entries.
+    await waitFor(() => {
+      const rows = screen.getAllByTestId('backup-row');
+      expect(rows.length).toBe(2);
+      const paths = rows.map((r) => r.getAttribute('data-backup-path'));
+      expect(paths).toContain('C:\\bak.bak.20260619-142305');
+    });
+  });
+
   it('backup now button triggers backup_now and refreshes', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') return [];
