@@ -234,12 +234,14 @@ export default function AboutPage(): ReactElement {
         title="许可证"
         description="本项目采用 MIT 许可证,允许自由使用 / 修改 / 分发。"
       >
+        {/* M5 bug #32 — 项目主页单独一行展示.
+         * 原来用 2 列 grid 把 "许可证" 和 "项目主页" 并排, 视觉混乱.
+         * 改为单列纵向, 每项独占一行, 项目主页 URL 单独占据完整宽度. */}
         <dl
           style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-            columnGap: 24,
-            rowGap: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
             margin: 0,
           }}
         >

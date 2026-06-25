@@ -134,4 +134,28 @@ describe('AboutPage — M3.7 (清单 18)', () => {
       'IPC failed',
     );
   });
+
+  // M5 bug #32 — 许可证区"项目主页"必须单独一行, 不能跟"许可证 MIT"并排.
+  // 验证 grid 改成 flex-direction: column, 两个 dt 在不同 row 上.
+  it('M5 bug #32: 许可证区用单列布局, 项目主页与许可证各占一行', () => {
+    render(<AboutPage />);
+    const section = screen.getByTestId('about-license-section');
+    // 找包裹 dl 的容器
+    const dl = section.querySelector('dl');
+    expect(dl).not.toBeNull();
+    // 布局是 flex column (单列), 不是 grid 2 列.
+    expect(dl!.style.display).toBe('flex');
+    expect(dl!.style.flexDirection).toBe('column');
+    // 验证旧 grid 2 列布局已被替换 (CSS 字符串里不能含 'grid')
+    expect(dl!.style.cssText).not.toContain('grid');
+    // 项目主页 testid 存在
+    expect(screen.getByTestId('about-license-homepage')).toBeInTheDocument();
+    // 两个 dt 在不同的父 div 里 (即两个独立 flex item)
+    const licenseTypeRow = screen.getByTestId('about-license-type').parentElement as HTMLElement;
+    const homepageRow = screen.getByTestId('about-license-homepage').parentElement as HTMLElement;
+    expect(licenseTypeRow).not.toBe(homepageRow);
+    // 两者都是 dl 的直接子元素, 验证单列布局
+    expect(dl!.contains(licenseTypeRow)).toBe(true);
+    expect(dl!.contains(homepageRow)).toBe(true);
+  });
 });
