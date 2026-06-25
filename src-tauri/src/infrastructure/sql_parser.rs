@@ -587,6 +587,38 @@ fn parse_value_list(s: &str) -> Result<Vec<SqlValue>, String> {
             i += 2;
             continue;
         }
+        // M3.13 — UTF-8 多字节字符解码:
+        // 进入字符串字面量后,如果遇到 high bit 置位的字节(0x80+),
+        // 不能按 byte 单独 push(`b as char` 会把每个字节当成 Latin-1
+        // code point,导致 "中文" 0xE4 0xB8 0xAD 变成 U+00E4 U+00B8
+        // U+00AD 三个 mojibake 字符)。需要按 UTF-8 字符边界消费完整
+        // multi-byte sequence。
+        //
+        // 此分支必须在所有 ASCII 分支之后、fallback 之前,且要求当前
+        // 处于字符串内(in_single || in_double),因为 SQL 关键字 /
+        // NULL / whitespace 都是 ASCII,不会走到这里。
+        if (in_single || in_double) && b >= 0x80 {
+            // 找到下一个 UTF-8 字符边界;`from_utf8` 返回首个完整 char
+            // 及其字节长度。`s` 已经是合法 &str(从 Rust 端传入),所以
+            // 这里总是能解码成功,无需处理 InvalidSequence 错误。
+            match std::str::from_utf8(&bytes[i..]) {
+                Ok(rest) => {
+                    let ch = rest.chars().next().expect("non-empty bytes => one char");
+                    buf_is_set = true;
+                    buf.push(ch);
+                    i += ch.len_utf8();
+                    continue;
+                }
+                Err(_) => {
+                    // 理论不可达:调用方传 &str,字节一定是合法 UTF-8。
+                    // 防御性 fallback:按字节 push(老行为,避免无限循环)。
+                    buf_is_set = true;
+                    buf.push(b as char);
+                    i += 1;
+                    continue;
+                }
+            }
+        }
         // Non-quoted character: append (but only if it doesn't spell NULL).
         if !in_single && !in_double {
             if b == b'N' || b == b'n' {
@@ -1344,5 +1376,51 @@ COMMIT;
         assert_eq!(parsed.command, "");
         assert!(parsed.args.is_empty());
         assert!(parsed.env.is_empty());
+    }
+
+    // ----- M3.13 — UTF-8 中文 / 多字节字符在字符串字面量中的正确解码 -----
+
+    /// H1 RED: `parse_value_list` 之前用 `buf.push(b as char)` 按字节
+    /// 切分,UTF-8 多字节被当成多个独立 Latin-1 字符("中" 0xE4 0xB8 0xAD
+    /// 变成 U+00E4 U+00B8 U+00AD 三个 mojibake 字符)。此测试应当失败
+    /// 直到 parser 改为按 UTF-8 字符消费。
+    #[test]
+    fn parse_chinese_provider_name_preserves_utf8() {
+        let settings = claude_settings("https://x", "k", "m");
+        let sql = format!(
+            "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p1', 'claude', '中文测试', '{}');",
+            settings
+        );
+        let parsed = parse_sql_dump(&sql).unwrap();
+        assert_eq!(parsed.providers.len(), 1);
+        assert_eq!(
+            parsed.providers[0].name, "中文测试",
+            "中文 provider name must round-trip as UTF-8 (got mojibake: {:?})",
+            parsed.providers[0].name
+        );
+    }
+
+    /// 同 H1,混合 ASCII + 中文 + 日文,确保非 ASCII 段不被切碎。
+    #[test]
+    fn parse_mixed_ascii_and_cjk_provider_name_preserves_utf8() {
+        let settings = claude_settings("https://x", "k", "m");
+        let sql = format!(
+            "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p2', 'claude', 'Claude-中文-日本語', '{}');",
+            settings
+        );
+        let parsed = parse_sql_dump(&sql).unwrap();
+        assert_eq!(parsed.providers.len(), 1);
+        assert_eq!(parsed.providers[0].name, "Claude-中文-日本語");
+    }
+
+    /// 同 H1,无列名 cc-switch dump 形式中的中文 provider name(更接近
+    /// 真实 .dump 文件,settings_config JSON 内也可能含中文)。
+    #[test]
+    fn parse_chinese_provider_name_in_positional_insert() {
+        let sql = "INSERT INTO providers VALUES('p3','claude','深度求索公司','{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://api.deepseek.com\",\"ANTHROPIC_AUTH_TOKEN\":\"k\",\"ANTHROPIC_MODEL\":\"deepseek-chat\"},\"model\":\"deepseek-chat\"}',NULL,'official',NULL,0,NULL,NULL,NULL,'{}',0,0,'1.0',NULL,NULL,NULL);";
+        let parsed = parse_sql_dump(sql).unwrap();
+        assert_eq!(parsed.providers.len(), 1);
+        assert_eq!(parsed.providers[0].name, "深度求索公司");
+        assert_eq!(parsed.providers[0].api_base, "https://api.deepseek.com");
     }
 }
