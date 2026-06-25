@@ -170,7 +170,6 @@ fn sub2_encoding_broken_line_skipped_with_counter() {
     assert_eq!(res.snapshot.tokens_used, 0);
     assert_eq!(res.snapshot.breakdown.len(), 0);
     assert_eq!(res.snapshot.model_count, 0);
-    assert!(res.snapshot.cost_usd.is_none());
 }
 
 // ===========================================================================
@@ -186,13 +185,6 @@ fn sub3_aggregate_breakdown_and_history_from_valid_5rec() {
     // breakdown 排序: by total_tokens desc
     assert_eq!(res.snapshot.breakdown[0].model, "claude-sonnet-4");
     assert_eq!(res.snapshot.breakdown[1].model, "claude-opus-4");
-    // per-model cost: sonnet-4 / opus-4 都不在 builtin_pricing()(只有
-    // 带日期的 `claude-sonnet-4-20250514` 等在表里),所以 cost=None。
-    // 这跟 SUMMARY 提到的 "unknown models → cost=None" 行为一致。
-    // 这里验证 unknown model 的 cost 行为。
-    assert!(res.snapshot.breakdown[0].cost_usd.is_none());
-    assert!(res.snapshot.breakdown[1].cost_usd.is_none());
-    assert!(res.snapshot.cost_usd.is_none());
     // history: 5 条记录全在 2026-06-22,但分 2 个 model,所以
     // (date, model) bucket = 2 个
     assert_eq!(res.history.len(), 2);
@@ -304,7 +296,6 @@ fn sub5_empty_jsonl_returns_zero_tokens_no_panic() {
     assert_eq!(res.snapshot.tokens_used, 0);
     assert_eq!(res.snapshot.breakdown.len(), 0);
     assert_eq!(res.snapshot.model_count, 0);
-    assert!(res.snapshot.cost_usd.is_none());
     assert!(res.history.is_empty());
     assert_eq!(res.stats.files_scanned, 1);
     assert_eq!(res.stats.lines_total, 0);

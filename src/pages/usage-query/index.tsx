@@ -122,16 +122,6 @@ export default function UsageQueryPage(): ReactElement {
     return state.snapshot.tokens_used.toLocaleString();
   }, [state.snapshot]);
 
-  const costLabel = useMemo(() => {
-    if (!state.snapshot || state.snapshot.cost_usd == null) return null;
-    return `$${state.snapshot.cost_usd.toFixed(2)}`;
-  }, [state.snapshot]);
-
-  const balanceLabel = useMemo(() => {
-    if (!state.snapshot || state.snapshot.balance_usd == null) return null;
-    return `$${state.snapshot.balance_usd.toFixed(2)}`;
-  }, [state.snapshot]);
-
   const breakdown: UsageBreakdownEntry[] = state.snapshot?.breakdown ?? [];
   const isEmpty =
     !!state.snapshot && state.snapshot.tokens_used === 0 && !state.error;
@@ -331,12 +321,12 @@ export default function UsageQueryPage(): ReactElement {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(1, minmax(0, 1fr))',
           gap: 16,
         }}
       >
         <Card
-          title="已用 Tokens"
+          title="总 Token"
           testId="usage-card-tokens"
           loading={state.loading && !state.snapshot}
         >
@@ -350,40 +340,6 @@ export default function UsageQueryPage(): ReactElement {
             data-testid="usage-tokens-value"
           >
             {tokensLabel}
-          </div>
-        </Card>
-        <Card
-          title="费用 (USD)"
-          testId="usage-card-cost"
-          loading={state.loading && !state.snapshot}
-        >
-          <div
-            style={{
-              color: 'var(--text-primary)',
-              fontSize: 30,
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-            data-testid="usage-cost-value"
-          >
-            {costLabel ?? '—'}
-          </div>
-        </Card>
-        <Card
-          title="余额 (USD)"
-          testId="usage-card-balance"
-          loading={state.loading && !state.snapshot}
-        >
-          <div
-            style={{
-              color: 'var(--text-primary)',
-              fontSize: 30,
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-            data-testid="usage-balance-value"
-          >
-            {balanceLabel ?? '—'}
           </div>
         </Card>
       </div>
@@ -441,7 +397,6 @@ export default function UsageQueryPage(): ReactElement {
                 <Th align="right">Cache Read</Th>
                 <Th align="right">Cache Create</Th>
                 <Th align="right">Total</Th>
-                <Th align="right">Cost (USD)</Th>
                 <Th align="right"># Msgs</Th>
               </tr>
             </thead>
@@ -463,9 +418,6 @@ export default function UsageQueryPage(): ReactElement {
                   <Td align="right">{row.cache_creation_tokens.toLocaleString()}</Td>
                   <Td align="right">
                     <strong>{row.total_tokens.toLocaleString()}</strong>
-                  </Td>
-                  <Td align="right">
-                    {row.cost_usd != null ? `$${row.cost_usd.toFixed(4)}` : '—'}
                   </Td>
                   <Td align="right">{row.message_count}</Td>
                 </tr>

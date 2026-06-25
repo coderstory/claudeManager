@@ -203,14 +203,6 @@ pub struct UsageSnapshot {
     pub window: UsageWindow,
     /// Cumulative tokens used in this window.
     pub tokens_used: u64,
-    /// Optional cost in USD. Providers without cost reporting
-    /// (e.g. local Ollama) leave this as `None`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost_usd: Option<f64>,
-    /// Optional remaining balance in USD. Paid providers only.
-    /// M3.8 always None (Admin API excluded by D14).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub balance_usd: Option<f64>,
     /// Unix seconds when the snapshot was taken.
     pub timestamp: i64,
     /// Per-model token breakdown (M3.8). Sorted by tokens desc
@@ -239,9 +231,6 @@ pub struct UsageBreakdownEntry {
     pub cache_read_tokens: u64,
     pub cache_creation_tokens: u64,
     pub total_tokens: u64,
-    /// Per-model cost (USD). None if model not in pricing table.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost_usd: Option<f64>,
     /// Number of distinct message IDs aggregated into this row.
     pub message_count: u32,
 }
@@ -255,8 +244,6 @@ pub struct UsageHistoryEntry {
     pub date: String,
     pub model: String,
     pub tokens: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost_usd: Option<f64>,
 }
 
 impl UsageSnapshot {
@@ -267,8 +254,6 @@ impl UsageSnapshot {
             provider_id: provider_id.into(),
             window,
             tokens_used: 0,
-            cost_usd: None,
-            balance_usd: None,
             timestamp: now_unix_secs(),
             breakdown: Vec::new(),
             model_count: 0,
@@ -383,8 +368,6 @@ mod tests {
             provider_id: "anthropic-prod".into(),
             window: UsageWindow::OneWeek,
             tokens_used: 123_456,
-            cost_usd: Some(12.34),
-            balance_usd: Some(987.66),
             timestamp: 1_700_000_000,
             breakdown: vec![UsageBreakdownEntry {
                 model: "claude-sonnet-4-20250514".into(),
@@ -393,7 +376,6 @@ mod tests {
                 cache_read_tokens: 0,
                 cache_creation_tokens: 0,
                 total_tokens: 123_456,
-                cost_usd: Some(12.34),
                 message_count: 17,
             }],
             model_count: 1,
@@ -405,21 +387,16 @@ mod tests {
 
     #[test]
     fn roundtrip_usage_snapshot_omits_none_fields() {
-        // The skip_serializing_if on cost_usd/balance_usd keeps
-        // the wire payload small when those fields are absent.
         let snap = UsageSnapshot {
             provider_id: "x".into(),
             window: UsageWindow::FiveHours,
             tokens_used: 0,
-            cost_usd: None,
-            balance_usd: None,
             timestamp: 1,
             breakdown: Vec::new(),
             model_count: 0,
         };
         let v = serde_json::to_value(&snap).unwrap();
-        assert!(v.get("cost_usd").is_none());
-        assert!(v.get("balance_usd").is_none());
+        assert!(v.get("breakdown").is_some());
         assert!(v.get("breakdown").is_none());
         assert!(v.get("model_count").is_none());
         assert_eq!(v["tokens_used"], 0);
@@ -433,8 +410,6 @@ mod tests {
             provider_id: "a".into(),
             window: UsageWindow::FiveHours,
             tokens_used: 1,
-            cost_usd: None,
-            balance_usd: None,
             timestamp: 1,
             breakdown: Vec::new(),
             model_count: 0,
@@ -454,8 +429,6 @@ mod tests {
         assert_eq!(snap.provider_id, "p");
         assert_eq!(snap.window, UsageWindow::FiveHours);
         assert_eq!(snap.tokens_used, 0);
-        assert!(snap.cost_usd.is_none());
-        assert!(snap.balance_usd.is_none());
         assert!(snap.breakdown.is_empty());
         assert_eq!(snap.model_count, 0);
         // timestamp is now-ish (within the last few seconds).

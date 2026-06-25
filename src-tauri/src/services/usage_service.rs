@@ -537,7 +537,6 @@ mod tests {
         let (snap, history) = svc.get_usage("p1", UsageWindow::OneMonth).unwrap();
         assert_eq!(snap.provider_id, "p1");
         assert_eq!(snap.tokens_used, 0);
-        assert!(snap.cost_usd.is_none());
         assert!(snap.breakdown.is_empty());
         assert_eq!(snap.model_count, 0);
         assert!(history.is_empty());

@@ -770,8 +770,6 @@ mod tests {
             provider_id: provider.into(),
             window,
             tokens_used: tokens,
-            cost_usd: None,
-            balance_usd: None,
             timestamp: ts,
             breakdown: Vec::new(),
             model_count: 0,

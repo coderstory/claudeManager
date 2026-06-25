@@ -40,8 +40,6 @@ const sampleSnapshot = (
   provider_id: 'active-abcdef',
   window,
   tokens_used: 12345,
-  cost_usd: 1.23,
-  balance_usd: 98.77,
   timestamp: 1_700_000_000,
   ...overrides,
 });
@@ -85,19 +83,18 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     });
   });
 
-  it('renders snapshot values into the 3 cards', async () => {
+  it('renders snapshot tokens value', async () => {
     render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
       expect(screen.getByTestId('usage-tokens-value').textContent).toContain(
         '12,345',
       );
     });
-    expect(screen.getByTestId('usage-cost-value').textContent).toContain(
-      '$1.23',
-    );
-    expect(screen.getByTestId('usage-balance-value').textContent).toContain(
-      '$98.77',
-    );
+    // M5 bug #15 — 费用 / 余额卡片已删除。
+    expect(screen.queryByTestId('usage-cost-value')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('usage-balance-value'),
+    ).not.toBeInTheDocument();
   });
 
   it('marks the active window with aria-pressed=true', async () => {
@@ -186,8 +183,6 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
         return sampleSnapshot('5h', {
           tokens_used: 0,
-          cost_usd: undefined,
-          balance_usd: undefined,
         });
       }
       return null;

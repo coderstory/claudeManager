@@ -44,8 +44,6 @@ fn make_snap(provider: &str, ts: i64, tokens: u64) -> claude_config_manager_lib:
         provider_id: provider.into(),
         window: claude_config_manager_lib::domain::UsageWindow::OneMonth,
         tokens_used: tokens,
-        cost_usd: None,
-        balance_usd: None,
         timestamp: ts,
         breakdown: Vec::new(),
         model_count: 0,

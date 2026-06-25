@@ -148,9 +148,6 @@ pub fn compute_usage_from_jsonl(
         .into_iter()
         .map(|(model, acc)| {
             let total = acc.input + acc.output + acc.cache_read + acc.cache_creation;
-            let cost_usd = lookup_pricing(&model).map(|p| {
-                p.cost(acc.input, acc.output, acc.cache_read, acc.cache_creation)
-            });
             UsageBreakdownEntry {
                 model,
                 input_tokens: acc.input,
@@ -158,7 +155,6 @@ pub fn compute_usage_from_jsonl(
                 cache_read_tokens: acc.cache_read,
                 cache_creation_tokens: acc.cache_creation,
                 total_tokens: total,
-                cost_usd,
                 message_count: acc.messages,
             }
         })
@@ -166,19 +162,11 @@ pub fn compute_usage_from_jsonl(
     breakdown.sort_by(|a, b| b.total_tokens.cmp(&a.total_tokens));
 
     let tokens_used: u64 = breakdown.iter().map(|e| e.total_tokens).sum();
-    let total_cost: f64 = breakdown.iter().filter_map(|e| e.cost_usd).sum();
-    let cost_usd = if breakdown.iter().any(|e| e.cost_usd.is_some()) {
-        Some(total_cost)
-    } else {
-        None
-    };
 
     let snapshot = UsageSnapshot {
         provider_id: provider_id.to_string(),
         window,
         tokens_used,
-        cost_usd,
-        balance_usd: None,
         timestamp: now,
         breakdown,
         model_count: stats.messages_after_dedup.min(u32::MAX as u64) as u32,
@@ -187,15 +175,10 @@ pub fn compute_usage_from_jsonl(
     // Build history (sorted by date asc, model asc).
     let mut history: Vec<UsageHistoryEntry> = history_by_day_model
         .into_iter()
-        .map(|((date, model), acc)| {
-            let cost_usd = lookup_pricing(&model)
-                .map(|p| p.cost(acc.input, acc.output, acc.cache_read, acc.cache_creation));
-            UsageHistoryEntry {
-                date,
-                model,
-                tokens: acc.tokens,
-                cost_usd,
-            }
+        .map(|((date, model), acc)| UsageHistoryEntry {
+            date,
+            model,
+            tokens: acc.tokens,
         })
         .collect();
     history.sort_by(|a, b| a.date.cmp(&b.date).then_with(|| a.model.cmp(&b.model)));
@@ -555,7 +538,6 @@ mod tests {
         assert_eq!(res.snapshot.breakdown[0].model, "claude-sonnet-4-20250514");
         assert_eq!(res.snapshot.breakdown[0].total_tokens, 4500);
         assert_eq!(res.snapshot.breakdown[0].message_count, 2);
-        assert!(res.snapshot.cost_usd.is_some());
     }
 
     #[test]
@@ -593,8 +575,6 @@ mod tests {
         write_assistant_line(&main, "future-model-2099", 1000, 500, "m1", "2026-06-22T10:00:00Z");
         let res = compute_usage_from_jsonl(&projects, UsageWindow::OneMonth, "p1").unwrap();
         assert_eq!(res.snapshot.tokens_used, 1500);
-        assert!(res.snapshot.cost_usd.is_none());
-        assert!(res.snapshot.breakdown[0].cost_usd.is_none());
     }
 
     #[test]
