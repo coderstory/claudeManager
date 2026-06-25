@@ -98,6 +98,7 @@ export type ViewId =
   | 'json-editor'
   | 'mcp-management'
   | 'usage-query'
+  | 'single-file-deploy'
   | 'resource-browser'
   | 'marketplace'
   | 'optimizer'
@@ -123,6 +124,7 @@ export const ALL_VIEWS: readonly ViewId[] = [
   'json-editor',
   'mcp-management',
   'usage-query',
+  'single-file-deploy',
   'resource-browser',
   'marketplace',
   'optimizer',

@@ -35,7 +35,6 @@ import {
   Home,
   Info,
   Layers,
-  Link2,
   Package,
   PencilLine,
   Rocket,
@@ -64,10 +63,6 @@ const VIEW_META: Record<
     icon: <Database size={18} aria-hidden="true" />,
     // M3.9 — 清单 2: 菜单/页面命名 P1 修复: ".sql 导入" → "SQL导入配置"
     short: 'SQL导入配置',
-  },
-  'deeplink-import': {
-    icon: <Link2 size={18} aria-hidden="true" />,
-    short: 'Deeplink 导入',
   },
   'json-editor': {
     icon: <PencilLine size={18} aria-hidden="true" />,

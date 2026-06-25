@@ -1,16 +1,16 @@
-//! Integration test: `plugins::init_all` wires all 12 plugin stubs.
+//! Integration test: `plugins::init_all` wires all 11 plugin stubs.
 //!
 //! This is the M1.3 → M2.17 wiring test. It guards the contract that
 //! `plugins::init_all(ctx)` returns a [`PluginHost`] pre-populated with
-//! the 12 F1..F8 + F16..F19 stubs, and that each stub reports the
-//! expected kebab-case id.
+//! the 11 F1..F8 (minus F4) + F16..F19 stubs, and that each stub reports
+//! the expected kebab-case id.
 //!
 //! It does NOT exercise the Tauri runtime — `PluginContext::for_tests`
 //! leaves `app = None`, which is the test-only path that doesn't touch
 //! Tauri's `AppHandle`. Real wiring into `lib.rs::run` is verified by
 //! `scripts/smoke-test.sh` (see CLAUDE.md §9.4).
 //!
-//! The 12 stub ids in this file are the contract that
+//! The 11 stub ids in this file are the contract that
 //! `mod.rs::init_all` must preserve. If you add/remove/rename a stub,
 //! update BOTH this list AND the registration block in
 //! `src-tauri/src/plugins/mod.rs::init_all` — the assertion below
@@ -59,16 +59,16 @@ fn ctx<'a>() -> PluginContext<'a> {
     PluginContext { app: None, paths }
 }
 
-/// The canonical 12 plugin ids. Mirrors the F1..F8 + F16..F19 feature
-/// mapping in CLAUDE.md §3.3. The order is the expected `init_all`
+/// The canonical 11 plugin ids. Mirrors the F1..F8 (minus F4) + F16..F19
+/// feature mapping in CLAUDE.md §3.3. The order is the expected `init_all`
 /// registration order (which doubles as `init_all` call order and
-/// `shutdown_all` reverse order).
+/// `shutdown_all` reverse order). F4 deeplink-import was removed in
+/// cleanup commit 0ff5b86.
 const EXPECTED_IDS: &[&str] = &[
-    // F1..F8 core
+    // F1..F8 core (F4 deeplink-import removed)
     "provider-list",
     "provider-switch",
     "import-sql",
-    "deeplink-import",
     "json-editor",
     "mcp-management",
     "usage-query",
@@ -85,7 +85,7 @@ const EXPECTED_IDS: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 #[test]
-fn init_all_returns_host_with_twelve_registered_plugins() {
+fn init_all_returns_host_with_eleven_registered_plugins() {
     let host = init_all(&ctx()).expect("init_all must succeed against the empty test context");
     assert_eq!(
         host.count(),
@@ -137,17 +137,22 @@ fn init_all_each_plugin_has_non_empty_name_and_matches_id() {
 
 #[test]
 fn init_all_aggregates_routes_from_every_route_contributing_stub() {
-    // F1, F2 (action-only), F3..F8 each contribute 1 route, F9/F16..F19
-    // each contribute 1 route. F2 (provider-switch) is action-only — no
-    // route. So 12 - 1 = 11 routes is the expected count.
+    // Of the 11 registered stubs, only 7 contribute a route:
+    //   provider-list, import-sql, mcp-management, resource-browser,
+    //   marketplace, optimizer, backup-restore.
+    // The other 4 contribute none: provider-switch (F2, action-only),
+    // json-editor, usage-query, single-file-deploy (F8, build-time
+    // concern). F4 deeplink-import was removed in cleanup commit
+    // 0ff5b86 — it previously contributed a route, hence the count
+    // dropped from 8 to 7.
     // (If a stub adds/removes a route, update this assertion + this
     // comment.)
     let host = init_all(&ctx()).expect("init_all must succeed");
     let routes = host.all_routes();
     assert_eq!(
         routes.len(),
-        11,
-        "expected 11 routes aggregated across 12 plugins (F2 is action-only), got {}",
+        7,
+        "expected 7 routes aggregated across 11 plugins, got {}",
         routes.len()
     );
     // Every route must point to a registered plugin id.

@@ -12,6 +12,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "./design-system/ThemeProvider";
+// M4.6-fix — useViewState now reads from a React Context, so it
+// must be mounted once above <App /> (the consumer) in the tree.
+// See src/hooks/useViewState.tsx for the full rationale (pre-M4.6
+// each component had its own useState, so setView in usage-query
+// updated a DIFFERENT copy than App's router copy and the page
+// never rendered).
+import { ViewStateProvider } from "./hooks/useViewState";
 
 // v3.0 (M3.0.2 fix) — `@tauri-apps/api/core`'s `invoke` reaches for
 // `window.__TAURI_INTERNALS__.transformCallback` which is undefined in
@@ -86,7 +93,9 @@ if (typeof window !== "undefined") {
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      <ViewStateProvider>
+        <App />
+      </ViewStateProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );

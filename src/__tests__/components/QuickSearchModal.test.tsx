@@ -108,13 +108,15 @@ describe('QuickSearchModal', () => {
     expect(screen.queryByTestId('quick-search-modal')).toBeNull();
   });
 
-  it('renders the 11 plugin entries when opened with no query', async () => {
+  it('renders the 10 plugin entries when opened with no query', async () => {
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
-    // M3.7: was 12 plugins (home excluded); +1 utility 'about' → 13.
-    // M4.6 / Phase 21-C: +1 utility 'history' → 14.
-    // F2 redirect shim removed (action moved to F1 [激活] button) → 13.
+    // home excluded from buildPluginResults → ALL_VIEWS minus 'home'.
+    // M3.7: +1 utility 'about'. M4.6: +1 'history'.
+    // F2 redirect shim removed (action moved to F1 [激活] button).
+    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins
+    // + 2 utility views = 12 entries.
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(13);
+    expect(results.length).toBe(12);
   });
 
   it('typing filters the result list', async () => {
@@ -257,9 +259,10 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     await act(async () => {
       fireEvent.change(input, { target: { value: 'p' } });
     });
-    // Get current highlight row 0.
+    // 'p' matches 2 plugin labels (Provider 列表 + MCP 管理) after the
+    // F4 deeplink-import removal — enough for a single Ctrl+N step.
     const rows = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(rows.length).toBeGreaterThan(2);
+    expect(rows.length).toBeGreaterThan(1);
     expect(rows[0]!.getAttribute('data-highlighted')).toBe('true');
     await act(async () => {
       fireEvent.keyDown(input, { key: 'n', ctrlKey: true });
@@ -275,19 +278,18 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     await act(async () => {
       fireEvent.change(input, { target: { value: 'p' } });
     });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: 'n', ctrlKey: true });
-    });
+    // 'p' matches 2 labels → max highlight index is 1. Ctrl+N once to
+    // reach index 1, then Ctrl+P back to index 0.
     await act(async () => {
       fireEvent.keyDown(input, { key: 'n', ctrlKey: true });
     });
     let rows = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(rows[2]!.getAttribute('data-highlighted')).toBe('true');
+    expect(rows[1]!.getAttribute('data-highlighted')).toBe('true');
     await act(async () => {
       fireEvent.keyDown(input, { key: 'p', ctrlKey: true });
     });
     rows = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(rows[1]!.getAttribute('data-highlighted')).toBe('true');
+    expect(rows[0]!.getAttribute('data-highlighted')).toBe('true');
   });
 
   it('Enter on a non-zero highlight navigates to that view, not the first', async () => {

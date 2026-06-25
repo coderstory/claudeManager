@@ -238,6 +238,9 @@ trait IPlugin {
 ## 12. 编译性能 (M3.0.3 调研产出，2026-06-24；macOS 适配 2026-06-25)
 
 ### 12.1 当前基线 (跨平台)
+
+**冷启动 (无 sccache)**：
+
 | 步骤 | Windows | macOS |
 |---|---|---|
 | `cargo build --release` | ~3m30s (windows-gnu toolchain + 30+ Rust crate) | ~2m30s (apple-darwin clang + wry/wkwebview 链略轻) |
@@ -245,34 +248,64 @@ trait IPlugin {
 | `cp + smoke test` | ~5s (10/10) | N/A (smoke test 待 M4 改造) |
 | **合计** | **~3m40s** | **~2m40s** |
 
-调研报告: `tmp/build-perf-investigation.md`
+**sccache 启用后实测** (macOS dev box, 2026-06-25)：
+
+| 场景 | 耗时 | vs 冷启动 |
+|---|---|---|
+| Cold cache（清缓存首次 build） | 51.0s | 基线 |
+| Warm cache（复用缓存二次 build） | 40.4s | **-21%** |
+| 增量 build（改 1-2 行 Rust） | 1.82s | **-96%** |
+
+> 注：实测是 `cargo check` 而非 `cargo build --release`（避免 link 阶段混入噪音），trend 与调研报告预测的 -50~70% 一致方向但更保守——WIP 仍把调研报告数字作为"理想上限"参考。Windows / Linux 实测待补。
+
+**跨平台 sccache 配置**（统一走项目级，macOS / Windows 行为一致）：见 §12.2 + CLAUDE-MACOS.md §15.9。
 
 ### 12.2 加速方案 A — sccache (推荐，已实施)
 **原理**：rustc-wrapper 把每次 cargo 编译的 .rlib 输出 hash 到磁盘缓存，重复 crate 链直接命中。
 
-**步骤**（跨平台，macOS 路径是 `~/.cargo/config.toml`，Windows Git Bash 是 `/c/Users/<user>/.cargo/config.toml`）：
-```bash
-cargo install sccache --locked
-# 用户级 config（macOS / Linux）
-cat >> ~/.cargo/config.toml << 'EOF'
+**配置**（项目级，跨平台统一路径）：
+- `src-tauri/.cargo/config.toml` 配 `[build] rustc-wrapper = "sccache"`（项目级 → merge / override 全局 `~/.cargo/config.toml` 同名段，不污染其他项目）
+- 缓存目录：`$SCCACHE_DIR = ~/Library/Caches/sccache-claude-config-manager`（macOS 默认 `~/Library/Caches/sccache`；项目专属避免跨项目混淆 + 体积叠加）
+- 容量上限：`SCCACHE_CACHE_SIZE=5G`（sccache 默认 10G 容易把磁盘撑爆，主动限；当前实测缓存 ~155 MiB / 5 GiB 上限）
+- `scripts/build-mac.sh` 顶部 self-check：装了 sccache 则 export env + echo INFO 行；未装 echo WARN 行 + 跳过（**不阻断 build**，跟 `scripts/clean-cache.sh` 容忍 `cargo-sweep` 缺失的哲学一致）
+- 手动跑 `cargo check` / `cargo build` 也走相同 wrapper（环境变量在脚本顶部 export，shell session 内全程生效）
 
-[build]
-rustc-wrapper = "sccache"
-EOF
+**步骤**（跨平台，首次启用）：
+```bash
+# 1. 装 sccache (sccache 0.16.0+)
+cargo install sccache --locked
+# 或 macOS: brew install sccache
+
+# 2. 项目级 config 已就位 (src-tauri/.cargo/config.toml),
+#    不用再动 ~/.cargo/config.toml。
+
+# 3. 预热缓存 (首次 cargo build 即写入,无需手动预热)
+cd src-tauri && cargo build --release
+
+# 4. 验证 (Cache hits rate (Rust) 应接近 100%)
+sccache --show-stats
 ```
 
-**预期收益**：
-- 首次 build (cold cache)：不变（需预热）
-- 二次起 build (warm cache)：**-50~70%**（Win 3m30s → 90-120s；mac 2m30s → 60-90s）
-- 改 1-2 行 Rust 后的增量 build：**-80%+**（只重编译变更 crate + 下游）
+**实测收益** (macOS, 2026-06-25)：
+- 首次 build (cold cache)：51.0s（基线无加速）
+- 二次 build (warm cache)：40.4s（**-21%**）
+- 改 1-2 行 Rust 后的增量 build：1.82s（**-96%**，仅重编译变更 crate + 下游）
 
-**回滚**（30 秒回原状，跨平台）：
+**回滚**（10 秒回原状）：
 ```bash
-# 编辑 ~/.cargo/config.toml，注释 [build] 块，或设 RUSTC_WRAPPER=""
+# 删项目级 config 即停用 wrapper,不动全局 ~/.cargo/config.toml,
+# 本机其他项目不受影响。
+rm src-tauri/.cargo/config.toml
+# 或临时绕过 (单次 build):
 RUSTC_WRAPPER="" cargo build --release
 ```
 
-**风险**：低（用户级配置，零项目污染；Windows 兼容 sccache 0.7+；macOS 兼容 sccache 0.7+，但 Apple Silicon 注意 sandbox 缓存路径 `~/Library/Caches/sccache`）。
+**风险**：低
+- 项目级 config 不污染全局；本机其他项目可独立配自己的 `~/.cargo/config.toml` wrapper
+- sccache 0.7+ 跨 Windows / macOS / Linux 兼容（macOS Apple Silicon 注意用 sccache 0.7+ 解决 sandbox 缓存路径问题）
+- 未装 sccache 也能 build（wrapper 不存在 → cargo 退化为普通编译，self-check 容忍缺失）
+
+**反事故**：sccache 启用后，**改 sccache 配置前需 `pkill sccache`**——server 启动时读 `SCCACHE_DIR` / `SCCACHE_CACHE_SIZE`，运行中改 env 不会被旧 server 拾取（详见 §12.4 末条 + CLAUDE-MACOS.md §15.9）。
 
 ### 12.3 加速方案 B — lld linker (Windows link.exe / macOS ld64 替换)
 **原理**：用 lld 替换默认 link.exe（Win）或 ld64（mac），跳过 OS 自带链接器瓶颈。
@@ -295,6 +328,7 @@ RUSTC_WRAPPER="" cargo build --release
   - ❌ 不要用 `sudo xcode-select` 改 CLT 默认值，会破坏其他项目
   - ❌ 不要在 macOS 跑 cargo build 时手动 `RUST_LOG=trace`（性能掉 50%，仅 debug 用）
   - ✅ macOS 上 `cargo build --release` 默认用 Apple clang，不需额外装 gcc/clang
+  - ❌ **不要在 sccache server 已在跑时改 `SCCACHE_DIR` / `SCCACHE_CACHE_SIZE` env** — server 启动时一次性读 env，运行时改不会被旧 server 拾取，导致新配置"看似生效"但实际仍写旧路径。要么改前 `pkill sccache` 重启 server，要么确认新 build 触发了 server 重启（详见 CLAUDE-MACOS.md §15.9）
 
 ## 13. Build Pipeline Regression Classes (smoke test 10 项的 why)
 

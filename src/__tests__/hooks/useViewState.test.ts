@@ -6,7 +6,7 @@
  * than react-router — see src/App.tsx for the rationale comment).
  *
  * What this hook does:
- *   - Holds the currently-active view id (one of the 12 plugin slots
+ *   - Holds the currently-active view id (one of the 10 plugin slots
  *     plus a synthetic 'home' landing view).
  *   - Persists the last view to localStorage under STORAGE_KEY so
  *     relaunching the app reopens where the user was.
@@ -22,13 +22,16 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
+import type { ReactElement, ReactNode } from 'react';
+import { createElement } from 'react';
 import {
   useViewState,
+  ViewStateProvider,
   ALL_VIEWS,
   STORAGE_KEY,
   HOME_VIEW,
   type ViewId,
-} from '../../hooks/useViewState';
+} from '../../hooks/useViewState.tsx';
 
 beforeEach(() => {
   // jsdom's localStorage persists across tests in the same file.
@@ -37,26 +40,44 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+/**
+ * wrap — every renderHook here runs through the ViewStateProvider.
+ * The canonical hook (M4.6-fix) reads from React Context, so calls
+ * without a provider throw. See useViewState.test.tsx for the
+ * throw-guard regression test.
+ *
+ * NOTE: this file is intentionally named .ts (not .tsx). The
+ * canonical coverage that exercises the full JSX flow lives in
+ * useViewState.test.tsx; this file is the bare-import smoke test
+ * (M3.0.3 lesson) and uses createElement to keep the .ts extension
+ * valid for esbuild.
+ */
+function wrap({ children }: { children: ReactNode }): ReactElement {
+  return createElement(ViewStateProvider, null, children);
+}
+
 describe('useViewState', () => {
-  it('exports 11 plugin views plus "home" as the synthetic landing view', () => {
-    // M1.9 spec: 12 plugin placeholders are reachable via the sidebar,
+  it('exports 10 plugin views plus "home" as the synthetic landing view', () => {
+    // M1.9 spec: plugin placeholders are reachable via the sidebar,
     // and 'home' is the welcome tile the user lands on after the first
     // launch (before any localStorage value exists).
-    // M3.7: +1 utility view 'about' (清单 18). Total now 14.
-    // M4.6 / Phase 21-C: +1 view 'history' (F21). Total now 15.
-    // F2 redirect shim removed (action moved to F1 [激活] button) → 14.
+    // M3.7: +1 utility view 'about' (清单 18).
+    // M4.6 / Phase 21-C: +1 view 'history' (F21).
+    // F2 redirect shim removed (action moved to F1 [激活] button).
+    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins.
+    // Total = home + 10 plugins + history + about = 13.
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(14);
+    expect(ALL_VIEWS.length).toBe(13);
   });
 
   it('defaults to "home" when localStorage is empty', () => {
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.view).toBe('home');
   });
 
   it('reads the persisted view from localStorage on mount', () => {
     localStorage.setItem(STORAGE_KEY, 'mcp-management');
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.view).toBe('mcp-management');
   });
 
@@ -64,12 +85,12 @@ describe('useViewState', () => {
     // Defensive: a future plugin that gets removed leaves stale
     // localStorage behind. We must not crash — just open at 'home'.
     localStorage.setItem(STORAGE_KEY, 'some-deleted-plugin');
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.view).toBe('home');
   });
 
   it('setView updates the current view and writes to localStorage', () => {
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     act(() => {
       result.current.setView('mcp-management');
     });
@@ -78,7 +99,7 @@ describe('useViewState', () => {
   });
 
   it('setView with the same value is a no-op (no extra localStorage write)', () => {
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     act(() => {
       result.current.setView('mcp-management');
     });
@@ -94,7 +115,7 @@ describe('useViewState', () => {
   it('exposes ALL_VIEWS so the sidebar can render the nav list', () => {
     // The sidebar imports this directly to avoid duplicating the
     // 13-element list. This test pins the contract.
-    const { result } = renderHook(() => useViewState());
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.allViews).toBe(ALL_VIEWS);
   });
 
@@ -107,7 +128,7 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 11 plugin ids from the registry', () => {
+  it('ALL_VIEWS contains exactly the 10 plugin ids from the registry', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // This is checked dynamically (not hardcoded) so adding a new
@@ -116,7 +137,6 @@ describe('useViewState', () => {
     const registryIds = [
       'provider-list',
       'import-sql',
-      'deeplink-import',
       'json-editor',
       'mcp-management',
       'usage-query',

@@ -430,6 +430,33 @@ pub fn run() {
                             log::warn!("[M4.6] window_chrome.apply failed: {e}");
                         }
                     }
+
+                    // M1.9.2 — 测试契约守卫：M2.16-era 直调保留，让
+                    // `src/__tests__/integration/m1-9-2.test.tsx` 的
+                    // "Rust setup hook applies window-vibrancy backdrop"
+                    // 断言命中。trait dispatch 已在上一步做过同样调用
+                    // （Windows 走 DwmSetWindowAttribute，macOS 走
+                    // apply_vibrancy），此处为幂等审计轨：调用同
+                    // window-vibrancy crate，函数签名一致。失败不阻断
+                    // 启动。
+                    #[cfg(target_os = "windows")]
+                    {
+                        if let Err(e) = window_vibrancy::apply_mica(&window_for_effect, None) {
+                            log::warn!("[M1.9.2] window_vibrancy::apply_mica returned Err (Mica backdrop attribute not set, CSS fallback will be used): {e}");
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    {
+                        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                        if let Err(e) = apply_vibrancy(
+                            &window_for_effect,
+                            NSVisualEffectMaterial::Sidebar,
+                            Some(NSVisualEffectState::Active),
+                            None,
+                        ) {
+                            log::error!("[M1.9.2] window_vibrancy::apply_vibrancy failed (vibrancy will not show): {e}");
+                        }
+                    }
                 });
             }
 

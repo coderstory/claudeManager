@@ -261,18 +261,51 @@ describe('M1.9.2 — effects bootstrap', () => {
   // 此前 main.tsx 同时调 JS setEffects，晚到的 JS 调用可能重置 DWM
   // 合成状态，遮住已设好的 Mica。详见 main.tsx 注释 + lib.rs setup。
   it('Rust setup hook applies window-vibrancy backdrop (apply_mica / apply_vibrancy)', () => {
-    // 读 lib.rs 源码，断言 setup hook 调用了 window_vibrancy 的
-    // apply_mica（Windows）/ apply_vibrancy（macOS）。这是 backdrop
-    // 应用的唯一入口 —— 如果被删掉，Mica / vibrancy 会静默失效。
+    // 读 lib.rs 源码, 断言 setup hook 通过 IPlatformWindowChrome trait
+    // 派发 backdrop 应用 (M4.6 架构统一 — lib.rs 不再直接调
+    // window_vibrancy::apply_*, 而是通过 trait 派发, 实现在
+    // platform/{windows,macos}/window_chrome.rs)。
+    //
+    // 这是 backdrop 应用的唯一入口 — 如果 trait dispatch 被删,
+    // Mica / vibrancy 会静默失效。
     const libRs = readFileSync(
       resolve(__dirname, '../../../src-tauri/src/lib.rs'),
       'utf-8',
     );
-    // accept either Win apply_mica OR Mac apply_vibrancy — code path
-    // uses apply_vibrancy for macOS. The test ensures some window-vibrancy
-    // call exists in setup hook.
-    expect(libRs).toMatch(/(window_vibrancy::apply_(?:mica|vibrancy))|(apply_vibrancy\(.*?\))|(use window_vibrancy)/);
-    expect(libRs).toMatch(/NSVisualEffectMaterial/);
+    // M4.6+: lib.rs uses trait dispatch (`window_chrome(...).apply(...)`)
+    // instead of direct `window_vibrancy::apply_*` calls. The actual
+    // apply_mica / apply_vibrancy implementations live in the
+    // platform/macos/window_chrome.rs and platform/windows/window_chrome.rs
+    // modules. We accept either the new trait-dispatch form OR the
+    // legacy direct-call form (still accepted so older macOS impls
+    // keep working during the cross-platform migration).
+    const usesTraitDispatch =
+      /window_chrome\s*\(/.test(libRs) && /\.apply\s*\(\s*&?opts\s*\)/.test(libRs);
+    const usesLegacyDirectCall =
+      /(window_vibrancy::apply_(?:mica|vibrancy))|(apply_vibrancy\(.*?\))|(use window_vibrancy)/.test(
+        libRs,
+      );
+    expect(
+      usesTraitDispatch || usesLegacyDirectCall,
+      'lib.rs must apply window-vibrancy backdrop via either ' +
+        'IPlatformWindowChrome trait dispatch (M4.6+) or direct ' +
+        'window_vibrancy::apply_* call (legacy)',
+    ).toBe(true);
+    // NSVisualEffectMaterial is a macOS-side constant used by the
+    // macOS vibrancy path — it's in platform/macos/window_chrome.rs
+    // after M4.6, so we look there for it (lib.rs no longer references
+    // it directly after the trait-dispatch refactor).
+    const macosChrome = readFileSync(
+      resolve(
+        __dirname,
+        '../../../src-tauri/src/platform/macos/window_chrome.rs',
+      ),
+      'utf-8',
+    );
+    expect(
+      macosChrome,
+      'NSVisualEffectMaterial must be referenced in the macOS vibrancy impl',
+    ).toMatch(/NSVisualEffectMaterial/);
   });
 
   it('main.tsx no longer calls JS applyWindowEffects (Rust is single source)', () => {

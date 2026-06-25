@@ -72,7 +72,6 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   home: '欢迎页',
   'provider-list': 'Provider 列表',
   'import-sql': '.sql 导入',
-  'deeplink-import': 'Deeplink 导入',
   'json-editor': 'JSON 编辑器',
   'mcp-management': 'MCP 管理',
   'usage-query': '用量查询',
