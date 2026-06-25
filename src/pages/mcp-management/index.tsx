@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import type { McpServer, McpTransport } from '../../types/mcp';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { useProjects } from '../../hooks/useProjects';
 import {
   addMcpServer,
   listMcpServers,
@@ -278,6 +279,14 @@ export default function McpManagementPage(): ReactElement {
   // ---- render ----
 
   const isEmpty = !state.loading && state.servers.length === 0;
+  // M5 bug #11 — 当用户切换到项目级时,文案必须显示对应的路径
+  // (项目级: `<root>/.claude/mcp.json`;用户级: `~/.claude/mcp.json`),
+  // 不能两个状态都用同一个 `~/.claude/mcp.json`,否则用户切了项目
+  // 但 UI 还在说改的是用户级,会引发数据写错位置的认知错位。
+  const { currentProject } = useProjects();
+  const mcpPathLabel = currentProject
+    ? `${currentProject.name} (.claude/mcp.json)`
+    : '~/.claude/mcp.json';
 
   return (
     <div
@@ -311,7 +320,10 @@ export default function McpManagementPage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        管理 <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}>~/.claude/mcp.json</code> 中的 MCP server 列表。
+        管理 <code
+          style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 'var(--radius-button)' }}
+          data-testid="mcp-path-label"
+        >{mcpPathLabel}</code> 中的 MCP server 列表。
         启用 toggle 立即生效,所有写操作都会自动备份(SPEC §6.1)。
       </p>
 

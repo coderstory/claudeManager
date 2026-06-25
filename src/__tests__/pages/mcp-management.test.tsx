@@ -343,3 +343,62 @@ describe('McpManagementPage — F6 (M2.5)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// M5 bug #11 — path label switches between user-level and project-level
+// ---------------------------------------------------------------------------
+
+describe('McpManagementPage — M5 bug #11 scope-aware path label', () => {
+  it('shows ~/.claude/mcp.json at user level (no current project)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') return [];
+      if (cmd === 'list_projects') return { projects: [], current_project_id: null };
+      if (cmd === 'current_project') return null;
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-path-label').textContent).toBe(
+        '~/.claude/mcp.json',
+      );
+    });
+  });
+
+  it('shows project name in path label when a project is active', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') return [];
+      if (cmd === 'list_projects') {
+        return {
+          projects: [
+            {
+              id: 'p1',
+              name: 'MyApp',
+              root_dir: '/x/y',
+              created_at: 0,
+              last_used_at: null,
+              is_system: false,
+            },
+          ],
+          current_project_id: 'p1',
+        };
+      }
+      if (cmd === 'current_project') {
+        return {
+          id: 'p1',
+          name: 'MyApp',
+          root_dir: '/x/y',
+          created_at: 0,
+          last_used_at: null,
+          is_system: false,
+        };
+      }
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      const label = screen.getByTestId('mcp-path-label').textContent;
+      expect(label).toContain('MyApp');
+      expect(label).toContain('.claude/mcp.json');
+    });
+  });
+});

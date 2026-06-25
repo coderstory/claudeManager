@@ -180,6 +180,41 @@ describe('F10 — 拖放 .sql 导入', () => {
           ],
           preview_mcp: [],
           skipped_samples: [],
+          validated_providers: [
+            {
+              provider: {
+                id: 'a',
+                name: 'A',
+                provider_type: 'anthropic',
+                api_base: 'https://a.example.com',
+                api_key: 'key-a',
+                models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
+                is_active: false,
+                created_at: 1_700_000_000,
+                last_used_at: null,
+                notes: null,
+              },
+              missing: [],
+            },
+          ],
+          dedup_outcomes: [
+            {
+              provider: {
+                id: 'a',
+                name: 'A',
+                provider_type: 'anthropic',
+                api_base: 'https://a.example.com',
+                api_key: 'key-a',
+                models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
+                is_active: false,
+                created_at: 1_700_000_000,
+                last_used_at: null,
+                notes: null,
+              },
+              is_duplicate: false,
+              duplicate_of: null,
+            },
+          ],
         };
       }
       return undefined;
