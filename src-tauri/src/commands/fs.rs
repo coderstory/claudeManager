@@ -1125,7 +1125,6 @@ mod tests {
     #[test]
     fn scan_root_caps_at_max_entries() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let mut tree: Vec<(String, bool)> = Vec::with_capacity(250);
         let mut tree = Vec::with_capacity(250);
         for i in 0..250 {
             tree.push((format!("f{i:04}.json"), true));

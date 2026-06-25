@@ -255,7 +255,7 @@ async fn e2e_delete_provider_cannot_delete_active() {
 async fn e2e_provider_parse_sql() {
     use claude_config_manager_lib::commands::providers;
     let state = test_state();
-    let s_ = s(&state);
+    let _ = s(&state);
     let _ = providers::parse_sql_preview(b"INSERT INTO ...".to_vec()).await;
 }
 
@@ -263,7 +263,7 @@ async fn e2e_provider_parse_sql() {
 async fn e2e_provider_parse_deeplink() {
     use claude_config_manager_lib::commands::providers;
     let state = test_state();
-    let s_ = s(&state);
+    let _ = s(&state);
     let _ = providers::parse_deeplink_url("ccswitch://v1/import?id=test".to_string()).await;
 }
 
@@ -292,7 +292,7 @@ async fn e2e_project_current() {
 async fn e2e_project_validate_path() {
     use claude_config_manager_lib::commands::project;
     let state = test_state();
-    let s_ = s(&state);
+    let _ = s(&state);
     let _ = project::validate_project_path("/tmp".to_string()).await;
 }
 
@@ -359,7 +359,7 @@ async fn e2e_mcp_list_with_warnings() {
 async fn e2e_mcp_parse_deeplink() {
     use claude_config_manager_lib::commands::mcp;
     let state = test_state();
-    let s_ = s(&state);
+    let _ = s(&state);
     let _ = mcp::parse_mcp_deeplink("ccswitch://v1/import-mcp?name=test".to_string()).await;
 }
 

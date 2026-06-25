@@ -26,7 +26,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use claude_config_manager_lib::domain::{OptimizationFinding, Severity};
+use claude_config_manager_lib::domain::OptimizationFinding;
 use claude_config_manager_lib::platform::AppPaths;
 use claude_config_manager_lib::services::optimizer_service::OptimizerService;
 use serde_json::Value;
