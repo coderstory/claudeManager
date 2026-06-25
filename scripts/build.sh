@@ -145,8 +145,16 @@ case "$MODE" in
     fi
     ;;
   release)
-    say_info "[build] -> $BUILD_SCRIPT --release"
-    "$BUILD_SCRIPT" --release
+    # Windows build-only.sh accepts --release; macOS build-mac.sh defaults to
+    # release (no --release flag), so we omit the flag there to avoid
+    # "Unknown arg" error.
+    if [[ "$PLATFORM" == "windows" ]]; then
+      say_info "[build] -> $BUILD_SCRIPT --release"
+      "$BUILD_SCRIPT" --release
+    else
+      say_info "[build] -> $BUILD_SCRIPT (default release mode)"
+      "$BUILD_SCRIPT"
+    fi
     ;;
   check)
     # cargo check is the cheapest gate. Windows build-only.sh has a `--check`
