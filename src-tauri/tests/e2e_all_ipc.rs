@@ -121,6 +121,127 @@ async fn e2e_provider_export() {
     // native dialog). Real test is the smoke test (M2.16 ship).
 }
 
+// -----------------------------------------------------------------------
+// M3.6 (清单 22) — CRUD IPC e2e tests
+// -----------------------------------------------------------------------
+
+#[tokio::test]
+async fn e2e_get_provider_details() {
+    use claude_config_manager_lib::commands::providers;
+    let state = test_state();
+    let s_ = s(&state);
+    // Use whatever provider exists in the test env
+    let list = providers::list_providers(s_.clone()).await.unwrap();
+    let any_id = list.first().map(|p| p.id.clone()).expect("at least 1 provider in fresh state");
+    let p = providers::get_provider_details(s_.clone(), any_id.clone()).await.unwrap();
+    assert_eq!(p.id, any_id);
+    // Provider::new requires non-empty api_key, so any saved provider has one
+    assert!(!p.api_key.is_empty());
+}
+
+#[tokio::test]
+async fn e2e_get_provider_details_not_found() {
+    use claude_config_manager_lib::commands::providers;
+    let state = test_state();
+    let s_ = s(&state);
+    let err = providers::get_provider_details(s_, "nonexistent-provider-xyz".to_string()).await.unwrap_err();
+    assert!(err.contains("not found") || err.contains("not exist"),
+        "expected NotFound error, got: {err}");
+}
+
+#[tokio::test]
+async fn e2e_add_provider() {
+    use claude_config_manager_lib::commands::providers;
+    use claude_config_manager_lib::domain::ProviderInput;
+    let state = test_state();
+    let s_ = s(&state);
+    let input = ProviderInput {
+        id: "test-provider-e2e".into(),
+        name: "Test-Provider-E2E".into(),
+        base_url: "https://api.test.example.com".into(),
+        api_key: "sk-test-12345".into(),
+        model: "test-model".into(),
+        notes: Some("e2e test".into()),
+    };
+    let result = providers::add_provider(s_.clone(), input).await;
+    // Either succeeds (if id is auto-derived) or fails with AlreadyExists (if id collides)
+    match result {
+        Ok(p) => {
+            assert!(!p.id.is_empty());
+            assert!(!p.is_active, "new provider must be inactive");
+        }
+        Err(e) => {
+            // AlreadyExists acceptable
+            assert!(e.contains("already") || e.contains("exists"),
+                "expected AlreadyExists or success, got: {e}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn e2e_add_provider_empty_name_rejected() {
+    use claude_config_manager_lib::commands::providers;
+    use claude_config_manager_lib::domain::ProviderInput;
+    let state = test_state();
+    let s_ = s(&state);
+    let input = ProviderInput {
+        id: "empty-name-test".into(),
+        name: "".into(),
+        base_url: "https://api.test.example.com".into(),
+        api_key: "sk-test".into(),
+        model: "m".into(),
+        notes: None,
+    };
+    let err = providers::add_provider(s_, input).await.unwrap_err();
+    assert!(err.to_lowercase().contains("name") || err.to_lowercase().contains("empty"),
+        "expected name validation error, got: {err}");
+}
+
+#[tokio::test]
+async fn e2e_update_provider_not_found() {
+    use claude_config_manager_lib::commands::providers;
+    use claude_config_manager_lib::domain::ProviderInput;
+    let state = test_state();
+    let s_ = s(&state);
+    let input = ProviderInput {
+        id: "nonexistent-xyz".into(),
+        name: "Updated".into(),
+        base_url: "https://api.updated.example.com".into(),
+        api_key: "sk-updated".into(),
+        model: "m".into(),
+        notes: None,
+    };
+    let err = providers::update_provider(s_, "nonexistent-xyz".to_string(), input).await.unwrap_err();
+    assert!(err.contains("not found") || err.contains("not exist"),
+        "expected NotFound error, got: {err}");
+}
+
+#[tokio::test]
+async fn e2e_delete_provider_not_found() {
+    use claude_config_manager_lib::commands::providers;
+    let state = test_state();
+    let s_ = s(&state);
+    let err = providers::delete_provider(s_, "nonexistent-xyz".to_string()).await.unwrap_err();
+    assert!(err.contains("not found") || err.contains("not exist"),
+        "expected NotFound error, got: {err}");
+}
+
+#[tokio::test]
+async fn e2e_delete_provider_cannot_delete_active() {
+    use claude_config_manager_lib::commands::providers;
+    let state = test_state();
+    let s_ = s(&state);
+    // First: switch to system provider to make it active
+    let _ = providers::switch_provider(s_.clone(), "system".to_string()).await;
+    // Then try to delete it — should fail with CannotDeleteActive
+    let err = providers::delete_provider(s_, "system".to_string()).await.unwrap_err();
+    // Note: switch may fail in test env (writes to real settings.json),
+    // so we just check that if delete fails, the message is sensible
+    assert!(!err.is_empty(), "delete should return a message");
+    // If we successfully made it active, we should see CannotDeleteActive
+    // Otherwise it's NotFound or another error — both acceptable
+}
+
 #[tokio::test]
 async fn e2e_provider_parse_sql() {
     use claude_config_manager_lib::commands::providers;

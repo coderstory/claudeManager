@@ -338,7 +338,14 @@ impl ProviderService {
     /// - [`ProviderError::Json`] — the file is present but malformed.
     pub fn get_provider(&self, provider_id: &str) -> Result<Provider, ProviderError> {
         let path = self.provider_path(provider_id);
-        Provider::from_json_file(&path)
+        Provider::from_json_file(&path).map_err(|e| match e {
+            // 业务层 NotFound — 区分磁盘层 Io(NotFound).
+            // M3.6 之前没转换,导致 e2e 测试期望 "not found" 却拿到 Io error.
+            ProviderError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound => {
+                ProviderError::NotFound(provider_id.to_string())
+            }
+            other => other,
+        })
     }
 
     /// Generate a `Provider` from the current `~/.claude/settings.json`.

@@ -34,9 +34,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { listProviders, switchProvider, exportProvider, generateFromCurrentConfig, importSingleProvider } from '../../lib/api/providers';
+import {
+  listProviders, switchProvider, exportProvider, generateFromCurrentConfig, importSingleProvider,
+  getProviderDetails, addProvider, updateProvider, deleteProvider,
+} from '../../lib/api/providers';
+import type { ProviderInput } from '../../types/provider';
 import type { Provider } from '../../types/provider';
 import type { GenerateFromCurrentConfigResult } from '../../lib/api/providers';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ErrorBanner } from '../../components/ErrorBanner';
 
 type LoadState =
@@ -86,11 +91,55 @@ type GenerateState =
   | { kind: 'imported'; id: string }
   | { kind: 'failure'; message: string };
 
+/**
+ * M3.6 (清单 22) — ProviderFormModal 状态机 (add / edit 共用).
+ * - `idle` — 无表单打开
+ * - `add` — 用户点 [+ Add], 空白表单
+ * - `edit` — 用户点 [Edit] (带 prefilled provider), 现有 provider
+ * - `submitting` — 用户点 [Save], 后端写盘中
+ * - `failure` — 后端返回错 (id 重名 / 字段非空校验失败)
+ */
+type FormState =
+  | { kind: 'idle' }
+  | { kind: 'add' }
+  | { kind: 'edit'; provider: Provider }
+  | { kind: 'submitting' }
+  | { kind: 'failure'; message: string };
+
+/**
+ * M3.6 — Details modal 状态机.
+ * - `idle` — 无
+ * - `loading` — 用户点 [View], 后端查 details 中
+ * - `loaded` — 后端返回完整 provider
+ * - `failure` — NotFound / 其他错
+ */
+type DetailsState =
+  | { kind: 'idle' }
+  | { kind: 'loading'; id: string }
+  | { kind: 'loaded'; provider: Provider }
+  | { kind: 'failure'; id: string; message: string };
+
+/**
+ * M3.6 — Delete 确认状态机.
+ * - `idle` — 无
+ * - `confirming` — 用户点 [Delete], 弹确认
+ * - `deleting` — 用户点 [Yes], 后端删中
+ * - `failure` — CannotDeleteActive / 其他错
+ */
+type DeleteState =
+  | { kind: 'idle' }
+  | { kind: 'confirming'; provider: Provider }
+  | { kind: 'deleting'; id: string }
+  | { kind: 'failure'; id: string; message: string };
+
 export function ProviderListPage(): ReactElement {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [switchState, setSwitchState] = useState<SwitchState>({ kind: 'idle' });
   const [exportState, setExportState] = useState<ExportState>({ kind: 'idle' });
   const [generateState, setGenerateState] = useState<GenerateState>({ kind: 'idle' });
+  const [formState, setFormState] = useState<FormState>({ kind: 'idle' });
+  const [detailsState, setDetailsState] = useState<DetailsState>({ kind: 'idle' });
+  const [deleteState, setDeleteState] = useState<DeleteState>({ kind: 'idle' });
 
   const reload = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -203,6 +252,88 @@ export function ProviderListPage(): ReactElement {
     setGenerateState({ kind: 'idle' });
   }, []);
 
+  // -----------------------------------------------------------------------
+  // M3.6 (清单 22) — CRUD handlers: View details / Add / Edit / Delete.
+  // -----------------------------------------------------------------------
+
+  /** [View] 按钮 → 打开 details modal, 后端查完整 provider (含 api_key). */
+  const handleOpenDetails = useCallback(async (id: string) => {
+    setDetailsState({ kind: 'loading', id });
+    try {
+      const provider = await getProviderDetails(id);
+      setDetailsState({ kind: 'loaded', provider });
+    } catch (e) {
+      setDetailsState({ kind: 'failure', id, message: stringifyError(e) });
+    }
+  }, []);
+
+  /** 关闭 details modal. */
+  const handleCloseDetails = useCallback(() => {
+    setDetailsState({ kind: 'idle' });
+  }, []);
+
+  /** [+ Add] 按钮 → 打开空白 form. */
+  const handleOpenAdd = useCallback(() => {
+    setFormState({ kind: 'add' });
+  }, []);
+
+  /** 行内 [Edit] 按钮 → 打开 form prefilled with current values. */
+  const handleOpenEdit = useCallback((provider: Provider) => {
+    setFormState({ kind: 'edit', provider });
+  }, []);
+
+  /** 关闭 form modal (cancel). */
+  const handleCloseForm = useCallback(() => {
+    setFormState({ kind: 'idle' });
+  }, []);
+
+  /** Form [Save] → 调 addProvider 或 updateProvider. */
+  const handleSubmitForm = useCallback(
+    async (input: ProviderInput, existingId: string | null) => {
+      setFormState({ kind: 'submitting' });
+      try {
+        if (existingId === null) {
+          // Add path: id is in input (M3.6 允许 add 时也传 id, service 验证)
+          // Actually ProviderInput doesn't have id, so we use add_provider with id derived from name
+          // The Rust add_provider takes ProviderInput which has no id;
+          // it generates id from name. We don't need to pass id.
+          await addProvider(input);
+        } else {
+          await updateProvider(existingId, input);
+        }
+        await reload();
+        setFormState({ kind: 'idle' });
+      } catch (e) {
+        setFormState({ kind: 'failure', message: stringifyError(e) });
+      }
+    },
+    [reload],
+  );
+
+  /** 行内 [Delete] → 弹确认. */
+  const handleOpenDelete = useCallback((provider: Provider) => {
+    setDeleteState({ kind: 'confirming', provider });
+  }, []);
+
+  /** 取消 delete. */
+  const handleCancelDelete = useCallback(() => {
+    setDeleteState({ kind: 'idle' });
+  }, []);
+
+  /** 确认 delete → 调 deleteProvider. */
+  const handleConfirmDelete = useCallback(async () => {
+    if (deleteState.kind !== 'confirming') return;
+    const id = deleteState.provider.id;
+    setDeleteState({ kind: 'deleting', id });
+    try {
+      await deleteProvider(id);
+      await reload();
+      setDeleteState({ kind: 'idle' });
+    } catch (e) {
+      setDeleteState({ kind: 'failure', id, message: stringifyError(e) });
+    }
+  }, [deleteState, reload]);
+
   return (
     <div
       data-testid="provider-list-page"
@@ -217,7 +348,9 @@ export function ProviderListPage(): ReactElement {
       <HeaderBar
         onRefresh={reload}
         onGenerateFromCurrentConfig={handleGenerateFromCurrentConfig}
+        onAdd={handleOpenAdd}
         generateDisabled={generateState.kind === 'generating' || generateState.kind === 'importing'}
+        formOpen={formState.kind === 'add' || formState.kind === 'edit' || formState.kind === 'submitting'}
       />
       <GenerateInfoBar
         generateState={generateState}
@@ -233,12 +366,29 @@ export function ProviderListPage(): ReactElement {
         exportState={exportState}
         onDismiss={() => setExportState({ kind: 'idle' })}
       />
+      <ProviderFormModal
+        formState={formState}
+        onSubmit={handleSubmitForm}
+        onCancel={handleCloseForm}
+      />
+      <ProviderDetailsModal
+        detailsState={detailsState}
+        onClose={handleCloseDetails}
+      />
+      <DeleteConfirmDialog
+        deleteState={deleteState}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
       <Body
         state={state}
         switchState={switchState}
         exportState={exportState}
         onActivate={handleActivate}
         onExport={handleExport}
+        onViewDetails={handleOpenDetails}
+        onEdit={handleOpenEdit}
+        onDelete={handleOpenDelete}
       />
     </div>
   );
@@ -251,13 +401,18 @@ export function ProviderListPage(): ReactElement {
 interface HeaderBarProps {
   onRefresh: () => void;
   onGenerateFromCurrentConfig: () => void;
+  onAdd: () => void;
   generateDisabled: boolean;
+  /** When form modal is open, disable Add to avoid double-modal. */
+  formOpen: boolean;
 }
 
 function HeaderBar({
   onRefresh,
   onGenerateFromCurrentConfig,
+  onAdd,
   generateDisabled,
+  formOpen,
 }: HeaderBarProps): ReactElement {
   return (
     <div
@@ -300,6 +455,21 @@ function HeaderBar({
           title="重新加载列表"
         >
           刷新
+        </button>
+        <button
+          type="button"
+          data-testid="provider-list-add"
+          onClick={onAdd}
+          disabled={formOpen}
+          style={{
+            ...btnStyle,
+            background: 'var(--accent)',
+            color: 'white',
+            opacity: formOpen ? 0.6 : 1,
+          }}
+          title="手动添加新 provider"
+        >
+          + Add
         </button>
       </div>
     </div>
@@ -588,6 +758,9 @@ interface BodyProps {
   exportState: ExportState;
   onActivate: (id: string) => void;
   onExport: (provider: Provider) => void;
+  onViewDetails: (id: string) => void;
+  onEdit: (provider: Provider) => void;
+  onDelete: (provider: Provider) => void;
 }
 
 function Body({
@@ -596,6 +769,9 @@ function Body({
   exportState,
   onActivate,
   onExport,
+  onViewDetails,
+  onEdit,
+  onDelete,
 }: BodyProps): ReactElement {
   if (state.kind === 'loading') {
     return (
@@ -624,6 +800,9 @@ function Body({
           exporting={exportState.kind === 'exporting' && exportState.id === p.id}
           onActivate={onActivate}
           onExport={onExport}
+          onViewDetails={onViewDetails}
+          onEdit={onEdit}
+          onDelete={onDelete}
         />
       ))}
     </ul>
@@ -667,6 +846,9 @@ interface ProviderRowProps {
   exporting: boolean;
   onActivate: (id: string) => void;
   onExport: (provider: Provider) => void;
+  onViewDetails: (id: string) => void;
+  onEdit: (provider: Provider) => void;
+  onDelete: (provider: Provider) => void;
 }
 
 function ProviderRow({
@@ -675,6 +857,9 @@ function ProviderRow({
   exporting,
   onActivate,
   onExport,
+  onViewDetails,
+  onEdit,
+  onDelete,
 }: ProviderRowProps): ReactElement {
   const isActive = provider.is_active;
   return (
@@ -706,6 +891,37 @@ function ProviderRow({
           ● 已激活
         </span>
       )}
+      <button
+        type="button"
+        className="btn"
+        data-testid={`provider-view-${provider.id}`}
+        onClick={() => onViewDetails(provider.id)}
+        title="查看完整详情 (含 api_key)"
+        style={{ opacity: exporting ? 0.6 : 1 }}
+      >
+        查看
+      </button>
+      <button
+        type="button"
+        className="btn"
+        data-testid={`provider-edit-${provider.id}`}
+        onClick={() => onEdit(provider)}
+        title="编辑 provider 配置"
+        style={{ opacity: exporting ? 0.6 : 1 }}
+      >
+        编辑
+      </button>
+      <button
+        type="button"
+        className="btn"
+        data-testid={`provider-delete-${provider.id}`}
+        disabled={isActive}
+        onClick={() => onDelete(provider)}
+        title={isActive ? '无法删除当前激活的 provider' : '删除此 provider'}
+        style={{ opacity: isActive ? 0.4 : (exporting ? 0.6 : 1) }}
+      >
+        删除
+      </button>
       <button
         type="button"
         className="btn"
@@ -772,6 +988,233 @@ function stringifyError(e: unknown): string {
   } catch {
     return String(e);
   }
+}
+
+// ---------------------------------------------------------------------------
+// M3.6 (清单 22) — ProviderFormModal (add + edit 共用)
+// ---------------------------------------------------------------------------
+
+interface ProviderFormModalProps {
+  formState: FormState;
+  onSubmit: (input: ProviderInput, existingId: string | null) => void | Promise<void>;
+  onCancel: () => void;
+}
+
+function ProviderFormModal({
+  formState,
+  onSubmit,
+  onCancel,
+}: ProviderFormModalProps): ReactElement | null {
+  const isOpen = formState.kind === 'add' || formState.kind === 'edit' || formState.kind === 'submitting' || formState.kind === 'failure';
+  if (!isOpen) return null;
+  const isEdit = formState.kind === 'edit';
+  const isSubmitting = formState.kind === 'submitting';
+  const failure = formState.kind === 'failure' ? formState.message : null;
+  const existing = isEdit ? formState.provider : null;
+
+  // Form state
+  const [name, setName] = useState(existing?.name ?? '');
+  const [baseUrl, setBaseUrl] = useState(existing?.api_base ?? '');
+  const [apiKey, setApiKey] = useState(existing?.api_key ?? '');
+  const [model, setModel] = useState(existing?.models[0] ?? '');
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  // Reset form when modal reopens with a different provider
+  useEffect(() => {
+    if (formState.kind === 'add') {
+      setName(''); setBaseUrl(''); setApiKey(''); setModel(''); setNotes('');
+    } else if (formState.kind === 'edit') {
+      setName(formState.provider.name);
+      setBaseUrl(formState.provider.api_base);
+      setApiKey(formState.provider.api_key);
+      setModel(formState.provider.models[0] ?? '');
+      setNotes(formState.provider.notes ?? '');
+    }
+  }, [formState]);
+
+  const handleSubmit = () => {
+    const input: ProviderInput = {
+      name: name.trim(),
+      base_url: baseUrl.trim(),
+      api_key: apiKey.trim(),
+      model: model.trim(),
+      notes: notes.trim() || null,
+    };
+    void onSubmit(input, existing?.id ?? null);
+  };
+
+  return (
+    <div
+      data-testid="provider-form-modal"
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-elevated)', borderRadius: 'var(--radius-card)',
+          padding: 'var(--space-6)', minWidth: 480, maxWidth: 600,
+          border: '1px solid var(--border)',
+        }}
+      >
+        <h2 style={{ margin: 0, marginBottom: 'var(--space-4)', fontSize: 'var(--fs-heading)' }}>
+          {isEdit ? '编辑 Provider' : '添加 Provider'}
+        </h2>
+        {failure && (
+          <div data-testid="provider-form-error" style={{ color: 'var(--danger)', marginBottom: 'var(--space-2)' }}>
+            {failure}
+          </div>
+        )}
+        <Field label="Name">
+          <input data-testid="provider-form-name" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} disabled={isSubmitting} />
+        </Field>
+        <Field label="Base URL">
+          <input data-testid="provider-form-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={inputStyle} disabled={isSubmitting} />
+        </Field>
+        <Field label="API Key">
+          <input data-testid="provider-form-api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={inputStyle} disabled={isSubmitting} />
+        </Field>
+        <Field label="Model (主)">
+          <input data-testid="provider-form-model" value={model} onChange={(e) => setModel(e.target.value)} style={inputStyle} disabled={isSubmitting} />
+        </Field>
+        <Field label="Notes (可选)">
+          <textarea data-testid="provider-form-notes" value={notes} onChange={(e) => setNotes(e.target.value)} style={{ ...inputStyle, minHeight: 60 }} disabled={isSubmitting} />
+        </Field>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
+          <button type="button" data-testid="provider-form-cancel" onClick={onCancel} style={btnStyle} disabled={isSubmitting}>
+            取消
+          </button>
+          <button type="button" data-testid="provider-form-save" onClick={handleSubmit} style={{ ...btnStyle, background: 'var(--accent)', color: 'white' }} disabled={isSubmitting}>
+            {isSubmitting ? '保存中…' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactElement }): ReactElement {
+  return (
+    <div style={{ marginBottom: 'var(--space-3)' }}>
+      <label style={{ display: 'block', fontSize: 'var(--fs-caption)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '6px 8px', border: '1px solid var(--border)',
+  borderRadius: 'var(--radius-button)', fontSize: 'var(--fs-body)',
+  fontFamily: 'inherit', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+};
+
+
+
+// ---------------------------------------------------------------------------
+// M3.6 — ProviderDetailsModal
+// ---------------------------------------------------------------------------
+
+interface ProviderDetailsModalProps {
+  detailsState: DetailsState;
+  onClose: () => void;
+}
+
+function ProviderDetailsModal({ detailsState, onClose }: ProviderDetailsModalProps): ReactElement | null {
+  if (detailsState.kind === 'idle') return null;
+  return (
+    <div
+      data-testid="provider-details-modal"
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+      onClick={onClose}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-card)', padding: 'var(--space-6)', minWidth: 480, maxWidth: 600, border: '1px solid var(--border)' }}>
+        <h2 style={{ margin: 0, marginBottom: 'var(--space-4)', fontSize: 'var(--fs-heading)' }}>
+          Provider 详情
+        </h2>
+        {detailsState.kind === 'loading' && <div data-testid="provider-details-loading">加载中…</div>}
+        {detailsState.kind === 'failure' && (
+          <div data-testid="provider-details-error" style={{ color: 'var(--danger)' }}>
+            {detailsState.message}
+          </div>
+        )}
+        {detailsState.kind === 'loaded' && (
+          <div data-testid="provider-details-content">
+            <DetailRow label="ID" value={detailsState.provider.id} />
+            <DetailRow label="Name" value={detailsState.provider.name} />
+            <DetailRow label="Type" value={detailsState.provider.provider_type} />
+            <DetailRow label="Base URL" value={detailsState.provider.api_base} />
+            <DetailRow label="API Key" value={detailsState.provider.api_key} mono />
+            <DetailRow label="Models" value={detailsState.provider.models.join(', ') || '(server default)'} />
+            <DetailRow label="Created" value={new Date(detailsState.provider.created_at * 1000).toISOString()} />
+            <DetailRow label="Last Used" value={detailsState.provider.last_used_at ? new Date(detailsState.provider.last_used_at * 1000).toISOString() : '从未'} />
+            <DetailRow label="Notes" value={detailsState.provider.notes || '(无)'} />
+            <DetailRow label="Active" value={detailsState.provider.is_active ? '✓ 当前激活' : '否'} />
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
+          <button type="button" data-testid="provider-details-close" onClick={onClose} style={btnStyle}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }): ReactElement {
+  return (
+    <div style={{ display: 'flex', marginBottom: 6, fontSize: 'var(--fs-body)' }}>
+      <span style={{ minWidth: 100, color: 'var(--text-secondary)' }}>{label}:</span>
+      <span style={{ fontFamily: mono ? 'var(--font-mono)' : 'inherit', color: 'var(--text-primary)', wordBreak: 'break-all' }}>{value}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// M3.6 — DeleteConfirmDialog (uses existing ConfirmDialog component)
+// ---------------------------------------------------------------------------
+
+interface DeleteConfirmDialogProps {
+  deleteState: DeleteState;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function DeleteConfirmDialog({ deleteState, onConfirm, onCancel }: DeleteConfirmDialogProps): ReactElement | null {
+  if (deleteState.kind === 'idle') return null;
+  const provider = deleteState.kind === 'confirming' ? deleteState.provider :
+                   deleteState.kind === 'failure' ? { id: deleteState.id, name: deleteState.id } as Provider : null;
+  const failure = deleteState.kind === 'failure' ? deleteState.message : null;
+  return (
+    <>
+      {deleteState.kind === 'confirming' && (
+        <ConfirmDialog
+          open
+          danger
+          title="删除 Provider"
+          message={`确认删除 provider "${provider?.name}" (${provider?.id})? 此操作不可撤销 (service 会先做 F13 备份).`}
+          confirmLabel="删除"
+          cancelLabel="取消"
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        />
+      )}
+      {deleteState.kind === 'deleting' && (
+        <div data-testid="provider-deleting" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'var(--bg-elevated)', padding: 'var(--space-6)', borderRadius: 'var(--radius-card)' }}>
+            正在删除 {provider?.name}…
+          </div>
+        </div>
+      )}
+      {deleteState.kind === 'failure' && (
+        <div data-testid="provider-delete-error" style={{ position: 'fixed', bottom: 20, right: 20, background: 'var(--danger)', color: 'white', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-card)', zIndex: 1000 }}>
+          删除失败: {failure}
+        </div>
+      )}
+    </>
+  );
 }
 
 export default ProviderListPage;

@@ -108,3 +108,17 @@ export interface ImportSkip {
   id: string | null;
   reason: string;
 }
+
+/**
+ * ProviderInput — mirror of `src-tauri/src/domain/provider.rs::ProviderInput`.
+ * Used by add_provider and update_provider IPC commands (M3.6 清单 22 CRUD).
+ * Note: `id` is NOT in this struct — `update_provider` takes id as a
+ * separate path argument (it's the filename stem and immutable after creation).
+ */
+export interface ProviderInput {
+  name: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  notes: string | null;
+}

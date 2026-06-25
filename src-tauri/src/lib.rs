@@ -118,6 +118,11 @@ pub fn run() {
             // 2026-06-24 — Provider 列表"从当前配置生成"按钮 (b6aa402)
             commands::providers::read_current_claude_config,
             commands::providers::generate_from_current_config,
+            // 2026-06-25 — Provider 列表 CRUD IPC (清单 22: add/update/delete/get_details)
+            commands::providers::get_provider_details,
+            commands::providers::add_provider,
+            commands::providers::update_provider,
+            commands::providers::delete_provider,
             commands::fs::read_file,
             commands::fs::write_file_atomic,
             // F20 — 读取任意路径 .sql 文件(文件关联双击导入用)

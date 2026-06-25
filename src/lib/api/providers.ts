@@ -18,6 +18,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ImportResult,
+  ProviderInput,
   McpServer as F3McpServer,
   Provider,
   ListProvidersResult,
@@ -189,3 +190,42 @@ export function generateFromCurrentConfig(): Promise<GenerateFromCurrentConfigRe
 // The F6 write-side `McpServer` lives in `../../types/mcp` and is
 // imported directly by F6 modules.
 export type { F3McpServer as McpServer };
+
+// ---------------------------------------------------------------------------
+// M3.6 (清单 22) — CRUD IPC wrappers. Frontend previously had no add/edit/
+// delete/details — see dimensions audit D-product-ux §2 for the gap.
+// ---------------------------------------------------------------------------
+
+/**
+ * Get full details of a single provider (including api_key — UI is
+ * responsible for masking in the display).
+ */
+export function getProviderDetails(providerId: string): Promise<Provider> {
+  return invoke<Provider>('get_provider_details', { providerId });
+}
+
+/**
+ * Manually add a new provider (NOT from settings.json — for custom
+ * configs). Service validates id/name/base_url/api_key non-empty.
+ */
+export function addProvider(input: ProviderInput): Promise<Provider> {
+  return invoke<Provider>('add_provider', { input });
+}
+
+/**
+ * Update an existing provider. `id` is the path argument (immutable
+ * filename stem); `input` carries the mutable fields. Service refuses
+ * to update a non-existent id (`NotFound`).
+ */
+export function updateProvider(id: string, input: ProviderInput): Promise<Provider> {
+  return invoke<Provider>('update_provider', { id, input });
+}
+
+/**
+ * Delete a provider. Service refuses to delete the currently active
+ * provider (user must switch to another first); error surfaces as
+ * `CannotDeleteActive` in the message.
+ */
+export function deleteProvider(providerId: string): Promise<void> {
+  return invoke<void>('delete_provider', { providerId });
+}

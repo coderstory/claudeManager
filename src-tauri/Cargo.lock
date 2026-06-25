@@ -631,6 +631,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "thiserror 1.0.69",
+ "tokio",
  "url",
  "uuid",
  "window-vibrancy",
