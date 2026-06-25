@@ -29,7 +29,7 @@ import {
   STORAGE_KEY,
   HOME_VIEW,
   type ViewId,
-} from '../../hooks/useViewState';
+} from '../../hooks/useViewState.tsx';
 import type { ReactNode, ReactElement } from 'react';
 
 beforeEach(() => {

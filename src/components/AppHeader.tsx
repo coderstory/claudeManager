@@ -112,7 +112,20 @@ export function AppHeader({
           past the 48px header height (theme at y=-40.4, close at
           y=55.6). Fix: inline the structural rules on the same
           element so they don't depend on Tailwind being present. */}
-      <div className="titlebar-title">
+      <div
+        className="titlebar-title"
+        style={{
+          maxWidth: 'calc(100% - 280px)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          minWidth: 0,
+          flexShrink: 1,
+          background: 'var(--glass-bg)',
+          WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(160%)',
+          backdropFilter: 'blur(var(--blur-md)) saturate(160%)',
+        } as React.CSSProperties}
+      >
         {!isHome && (
           <button
             type="button"
@@ -122,7 +135,14 @@ export function AppHeader({
             data-app-control-hover="true"
             aria-label="返回主页"
             title="返回主页"
-            style={noDragStyle}
+            style={{
+              ...noDragStyle,
+              width: '32px',
+              height: '32px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <ArrowLeft size={16} />
           </button>

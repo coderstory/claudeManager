@@ -129,8 +129,12 @@ export function AppSidebar({
       className="sidebar"
       aria-label="主导航"
       style={{
-        // macOS vibrancy sidebar: 让 backdrop-filter 生效
+        overflowY: 'auto',
+        minHeight: 0,
         WebkitAppRegion: 'drag',
+        background: 'var(--glass-bg)',
+        WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(160%)',
+        backdropFilter: 'blur(var(--blur-md)) saturate(160%)',
       } as React.CSSProperties}
     >
       <ul>

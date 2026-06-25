@@ -130,8 +130,10 @@ describe('M3.13.2 splash React-first-paint hide', () => {
       </ThemeProvider>,
     );
 
-    // Trigger the React-first-paint path.
-    vi.advanceTimersByTime(50);
+    // MIN_SPLASH_MS=1200ms anti-flash guard; advance past it so
+    // the hidden class lands. 1300ms matches the threshold used in
+    // the other React-first-paint test in this file.
+    vi.advanceTimersByTime(1300);
     await Promise.resolve();
 
     // Right after class added: display still has prior value.

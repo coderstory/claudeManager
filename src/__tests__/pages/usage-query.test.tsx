@@ -39,10 +39,17 @@ const sampleSnapshot = (
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  // Default: 5h snapshot.
-  mockInvoke.mockImplementation(async (cmd: string) => {
+  // Default: 5h snapshot + a single history bucket so the per-day
+  // chart renders the `usage-history-chart` testid wrapper (the
+  // sparkline regression test relies on this). The original mock
+  // returned null for `get_usage_history`, which made
+  // `state.history` null and skipped the chart entirely.
+  mockInvoke.mockImplementation(async (cmd: string, args?: { window?: string }) => {
     if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
-      return sampleSnapshot('5h');
+      return sampleSnapshot((args?.window as '5h' | '1w' | '1m') ?? '5h');
+    }
+    if (cmd === 'get_usage_history') {
+      return [{ date: '2026-06-25', model: 'claude-sonnet-4', tokens: 1234 }];
     }
     return null;
   });
