@@ -37,6 +37,17 @@ thiserror = "1"
 # / 繁中 / Windows 记事本 UTF-16 编码。0.8.35 是 stable,API 稳定。
 # 见 `infrastructure::encoding::decode_sql_bytes`。
 encoding_rs = "=0.8.35"
+# Phase 2 — 字节空间歧义消解(Big5 vs GB18030 抢占问题)。
+# chardetng 是 Mozilla / Firefox / chardet 维护者基于 WHATWG
+# Encoding Standard 实现的纯 Rust encoding 探测库;与 encoding_rs
+# 同源(同一作者 Jan Holthuis)。仅在 strict UTF-8 fast path 失败后
+# 调用,O(n) 喂一遍数据 → guess() 返回 1 个 `&'static Encoding`,
+# 再用 encoding_rs 同一份 `&'static Encoding` 解码(无双重解析)。
+# 注: 主 session 白名单列的 =0.7.2 在 crates.io 不存在(实际版本线
+# 0.1.17 / 1.0.0);1.0.0 是 2026-03-30 stable,与 0.1.x API 兼容
+# (EncodingDetector::new(iso2022jp) → feed(buf, last) → guess(tld, utf8)),
+# 故精确锁 =1.0.0。CLAUDE.md §2.3 例外需记理由:白名单版本号失效。
+chardetng = "=1.0.0"
 # M2.3 — url crate for ccswitch://v1/import?... deeplink parsing.
 # Version locked to the existing transitive (=2.5.8, see Cargo.lock) so
 # we don't pull a second copy into the dep graph. Per CLAUDE.md §2.3.

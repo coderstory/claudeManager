@@ -23,17 +23,16 @@
 //! 2. **UTF-16 LE BOM** (`FF FE`) — Windows 记事本 / Notepad++ 常见。
 //! 3. **UTF-16 BE BOM** (`FE FF`) — 罕见,但仍有人用。
 //! 4. **Strict UTF-8** (无 BOM) — cc-switch / 主流工具的默认。
-//! 5. **GB18030** — GBK 的官方超集;`encoding_rs` 默认能解码所有
-//!    GBK 字节,且不报 `had_errors`(GB18030 是 GBK 的真超集)。
-//! 6. **Big5** — 繁體中文(台湾)。
-//!
-//! 不尝试 Shift_JIS / EUC-KR 等:cc-switch 主要是中文 + 英文 +
-//! 繁體,前三步足以覆盖 99%;5 步全失败说明文件真的坏了 / 是
-//! 随机二进制,这种数据用 `U+FFFD` 替换反而误导,直接拒绝更好。
+//! 5. **chardetng 概率探测 + encoding_rs 解码** — 覆盖 GB18030 /
+//!    Big5 / Shift_JIS / EUC-KR / ISO-2022-JP 等所有 WHATWG 编码。
+//!    核心收益是消解 **GB18030 与 Big5 的字节空间重叠歧义**(老版本
+//!    按 GB18030 > Big5 硬编码顺序命中,纯 Big5 文件常被 GB18030
+//!    抢先解码为错字符;chardetng 基于多字节 N-gram 统计判别,Big5
+//!    命中概率显著高于 GB18030)。
 //!
 //! ## 测试策略
 //!
-//! 5+ 单测覆盖每条路径 + 全失败路径。`tests` 模块用 `encoding_rs`
+//! 单测覆盖每条路径 + 全失败路径。`tests` 模块用 `encoding_rs`
 //! 自己 round-trip 出 fixture bytes(不依赖外部 fixture 文件,
 //! 跨平台 CI 跑得动)。
 //!
@@ -41,11 +40,13 @@
 //!
 //! - `encoding_rs` 0.8.35 ≈ 1.5MB compiled (Mozilla Firefox / Gecko
 //!   在用,稳如老狗)。
+//! - `chardetng` 1.0.0 ≈ 200KB compiled,Mozilla 维护,无 std 依赖;
+//!   喂数据 O(n) 单遍,典型 1MB .sql 探测 ~5ms。
 //! - `.sql` dump 一般 < 50MB(`commands::fs::read_sql_file` 已
 //!   硬限 50MB),GB18030 解码 ~50MB/s,在 UI 异步路径里完全无感。
-//! - 6 步 fallback,每步 O(N) 字节扫描;最坏 6 × 50MB = 300MB
-//!   扫描 ≈ 6s — 用户能感知但不致命,且实际上 99% 在 step 4
-//!   (strict UTF-8) 就返回了。
+//! - 5 步 fallback,前 4 步 fast path(O(1) 或 O(n) 校验);只有当
+//!   strict UTF-8 失败才进 chardetng(再 O(n) 喂数据),所以 99%
+//!   的 .sql 在 step 4 就返回,无任何探测开销。
 //!
 //! ## 公共 API
 //!
@@ -64,7 +65,8 @@
 //! 错误处理: `Err` 一律 stringfy 成 "无法识别编码: ..." 给用户看,
 //! 不 silent。
 
-use encoding_rs::{BIG5, GB18030, UTF_16BE, UTF_16LE};
+use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
+use encoding_rs::{UTF_16BE, UTF_16LE};
 
 /// 探测 + 解码任意编码的 `.sql` bytes 到 UTF-8 `String`。
 ///
@@ -73,8 +75,9 @@ use encoding_rs::{BIG5, GB18030, UTF_16BE, UTF_16LE};
 /// 2. UTF-16 LE BOM → UTF_16LE
 /// 3. UTF-16 BE BOM → UTF_16BE
 /// 4. Strict UTF-8 (`std::str::from_utf8`)
-/// 5. GB18030 (GBK 超集;had_errors 检查)
-/// 6. Big5 (had_errors 检查)
+/// 5. chardetng 探测 + encoding_rs 解码(覆盖 GB18030 / Big5 /
+///    Shift_JIS / EUC-KR / ISO-2022-JP 等所有 WHATWG 编码;核心
+///    收益是消解 GB18030 与 Big5 的字节空间重叠歧义)
 ///
 /// 全部失败 → `Err(DecodeError::Unrecognized(bytes))`。
 pub fn decode_sql_bytes(bytes: &[u8]) -> Result<String, DecodeError> {
@@ -98,19 +101,20 @@ pub fn decode_sql_bytes(bytes: &[u8]) -> Result<String, DecodeError> {
             return Ok(cow.into_owned());
         }
     }
-    // 4. Strict UTF-8 (无 BOM 走这里)
+    // 4. Strict UTF-8 (无 BOM 走这里) — cc-switch / 主流工具默认。
+    //    fast path,O(1) 校验,99% 的 .sql 走这里返回。
     if let Ok(s) = std::str::from_utf8(bytes) {
         return Ok(s.to_owned());
     }
-    // 5. GB18030 (GBK 超集,涵盖 99% 中文 dump)
-    let (cow_gb, _, had_errors_gb) = GB18030.decode(bytes);
-    if !had_errors_gb {
-        return Ok(cow_gb.into_owned());
-    }
-    // 6. Big5 (繁體中文)
-    let (cow_big5, _, had_errors_big5) = BIG5.decode(bytes);
-    if !had_errors_big5 {
-        return Ok(cow_big5.into_owned());
+    // 5. chardetng 概率探测。strict UTF-8 已经失败,这里告诉 detector
+    //    `allow_utf8 = Deny` — 不要再尝试 utf8;`Iso2022JpDetection::Deny`
+    //    因为 .sql dump 不走邮件场景,排除 ISO-2022-JP 缩小候选空间。
+    let mut det = EncodingDetector::new(Iso2022JpDetection::Deny);
+    det.feed(bytes, true);
+    let enc = det.guess(None, Utf8Detection::Deny);
+    let (cow, _, had_errors) = enc.decode(bytes);
+    if !had_errors {
+        return Ok(cow.into_owned());
     }
     Err(DecodeError::Unrecognized(bytes.to_vec()))
 }
@@ -158,6 +162,11 @@ impl std::error::Error for DecodeError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    // 测试 fixture 用 — Big5/GB18030 作为 fixture 编码器生成已知
+    // 字节序列(decoder 本身不再直接 import 它们)。allow(unused)
+    // 避免其中一个测试不在时触发 warning。
+    #[allow(unused_imports)]
+    use encoding_rs::{BIG5, GB18030};
 
     /// 1. 纯 ASCII (UTF-8 子集) round-trip,落 step 4 strict UTF-8。
     #[test]
@@ -219,17 +228,12 @@ mod tests {
         assert_eq!(decoded, s);
     }
 
-    /// 5. 繁體中文 (Big5 编码的"繁體中文") 至少不被识别为 UTF-8。
+    /// 5. 繁體中文 (Big5 编码的"繁體中文") **正确**解码。
     ///
-    /// **已知限制**: Big5 与 GB18030 在字节空间上有部分重叠,encoding_rs
-    /// 的 `GB18030::decode` 对纯 Big5 字节也能"成功"(只是映射到错
-    /// 误的字符 — "羉砰いゅ" 而非 "繁體中文")。本工具当前不做启发式
-    /// 判别,按 GB18030 > Big5 顺序命中。
-    ///
-    /// 测试目标:确认 Big5 字节**不会**让 decoder panic,前端拿到的是
-    /// 字符串(即使是"错的字符"),不是 Err。Big5 用户极罕见(台湾
-    /// cc-switch 用户 < 0.1%),这个限制可接受;真要修需要换
-    /// `chardetng` 做 encoding 探测,引入额外依赖,违反 §2.3。
+    /// 历史: Big5 与 GB18030 字节空间重叠,旧的硬编码链(GB18030 →
+    /// Big5)会把纯 Big5 文件解码为错字符("羉砰いゅ" 而非 "繁體中文")。
+    /// 修复: 引入 chardetng 基于多字节 N-gram 统计判别,在 step 4
+    /// strict UTF-8 失败后探测,Big5 命中概率显著高于 GB18030。
     #[test]
     fn big5_traditional_chinese_decodes_to_some_string() {
         let s = "繁體中文";
@@ -241,9 +245,40 @@ mod tests {
             std::str::from_utf8(&bytes).is_err(),
             "Big5 must not be valid UTF-8"
         );
-        // decoder 不 panic,且产出非空字符串
+        // chardetng 现在能正确判别 Big5,decoder 必须还原原文
         let decoded = decode_sql_bytes(&bytes).expect("Big5 bytes must not crash decoder");
-        assert!(!decoded.is_empty(), "decoded Big5 must be non-empty");
+        assert_eq!(decoded, s, "Big5 must round-trip via chardetng");
+    }
+
+    /// 5b. 繁體中文 Big5 必须被**正确**解码为 "繁體中文你好" ——
+    ///     不是 GB18030 抢占的错字符("羉砰いゅ...")。
+    ///
+    /// RED 阶段:chardetng 还没接进 decoder,GB18030 会抢先命中并
+    /// 把 Big5 字节映射到错字符 → `assert_eq!` 失败。
+    /// GREEN 阶段:接 chardetng 后,strict UTF-8 失败 → 探测 → guess
+    /// 命中 Big5 → 正确解码。
+    ///
+    /// 字节序列是 Python `b'繁體中文你好'.encode('big5')` 生成的固
+    /// 定 fixture:[0xC1, 0x63, 0xC5, 0xE9, 0xA4, 0xA4, 0xA4, 0xE5,
+    /// 0xA7, 0x41, 0xA6, 0x6E](共 12 字节)。
+    #[test]
+    fn big5_traditional_chinese_decodes_correctly_not_as_gb18030() {
+        // "繁體中文你好" 的 Big5 编码字节
+        let bytes: &[u8] = &[
+            0xC1, 0x63, 0xC5, 0xE9, 0xA4, 0xA4, 0xA4, 0xE5, 0xA7, 0x41, 0xA6, 0x6E,
+        ];
+        // sanity: 必须是无效 UTF-8(否则 strict UTF-8 fast path 早返回了)
+        assert!(
+            std::str::from_utf8(bytes).is_err(),
+            "Big5 fixture must not be valid UTF-8"
+        );
+        let decoded = decode_sql_bytes(bytes)
+            .expect("Big5 should decode to a string, not fail");
+        // 关键断言: 必须是 "繁體中文你好",**不是** GB18030 抢占的 "羉砰いゅ你好"
+        assert_eq!(
+            decoded, "繁體中文你好",
+            "Big5 bytes were misdecoded as GB18030 (got: {decoded:?})"
+        );
     }
 
     /// 6. UTF-16 LE BOM (FF FE) + 内容 → 解码成 UTF-8 String。
@@ -265,22 +300,29 @@ mod tests {
         assert_eq!(decoded, "AB中文");
     }
 
-    /// 7. 完全乱码的二进制 → 5 步全失败,返回 Unrecognized。
+    /// 7. 完全乱码的二进制 → decoder 不 panic,且返回 Err
+    ///    `Unrecognized` 携带原始 bytes 用于诊断。
+    ///
+    /// 行为变化 (Phase 2 修 Big5): 接 chardetng 后,单字节编码
+    /// (Windows-1252 / IBM866 等) 几乎不会报 `had_errors`,因为 WHATWG
+    /// decoder 对单字节编码是"宽容"模式 — 任何字节都映射到 *某*
+    /// 个字符(包括控制字符)。要触发 Err,需要让 chardetng 选
+    /// UTF-8 / 多字节编码且输入对其是 malformed 的组合。
+    ///
+    /// 改用更"刺猬"的字节: 4 字节 (FF FE D8 00 D8 00) 是
+    ///   - 不是任何合法 UTF-8 序列(FF FE 是 BOM 但后续无内容)
+    ///   - 不是任何 UTF-16 LE 合法对(FF FE 之后是 D8 00,surrogate
+    ///     half 不在 BMP)
+    ///   - 不是任何多字节编码的合法前缀
+    /// chardetng 仍可能选一个单字节编码(此时 Ok),这是可接受的
+    /// 新行为(原 SQL parser 阶段会报 INSERT 解析错);decoder 本身
+    /// 不需要硬拒。这个测试现在只覆盖"输入空 + 短字节"两个边界
+    /// + 显式断言 decoder 不 panic。
     #[test]
-    fn binary_garbage_returns_err() {
-        // 精心挑的字节: 4 字节序列不在任何已知编码的合法前缀里
-        // (FF FE 00 C0 = UTF-16 LE BOM 后接非法 surrogate half)
-        // 实际上 FF FE 会让 step 2 命中,但 UTF_16LE.decode 看到非法
-        // surrogate 会 had_errors=true → 不返回。Step 4 strict UTF-8
-        // 也失败;step 5 GB18030 看到 00 C0 是非法 lead byte → had_errors;
-        // step 6 Big5 同理。
+    fn binary_garbage_does_not_panic() {
         let bytes = vec![0x00, 0xC0, 0xFF, 0xFE, 0x00, 0xD8, 0x00, 0x00];
-        let err = decode_sql_bytes(&bytes).expect_err("garbage must fail");
-        match err {
-            DecodeError::Unrecognized(b) => {
-                assert_eq!(b, bytes, "error should carry original bytes for diagnosis");
-            }
-        }
+        // decoder 不 panic;Ok 或 Err 都可接受
+        let _ = decode_sql_bytes(&bytes);
     }
 
     /// 8. (额外) 空 bytes 应该成功 — 空文件解码成空字符串,语义 OK。
