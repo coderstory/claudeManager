@@ -141,4 +141,22 @@ describe('base.css — 项目级 base class 系统', () => {
     });
     expect(ruleFound).toBe(true);
   });
+
+  it('M5 bug #1: anime 主题下 .titlebar .titlebar-title 有独立背景色 + 白边 (chip 风格)', () => {
+    document.documentElement.dataset.theme = 'anime';
+    const wrap = document.createElement('div');
+    wrap.className = 'titlebar';
+    const title = document.createElement('div');
+    title.className = 'titlebar-title';
+    wrap.appendChild(title);
+    document.body.appendChild(wrap);
+    const cs = getComputedStyle(title);
+    // 白边 + 圆角 chip — 跟右侧按钮组呼应
+    expect(cs.borderRadius).toBe('12px');
+    expect(cs.borderStyle).toBe('solid');
+    // 背景非透明 (rgba 形式) — 与 titlebar 主底 (accent) 区分开
+    expect(cs.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(cs.backgroundColor).not.toBe('transparent');
+    wrap.remove();
+  });
 });
