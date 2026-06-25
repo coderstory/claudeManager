@@ -752,4 +752,64 @@ mod tests {
         assert_eq!(lsps.len(), 1);
         assert_eq!(lsps[0].name, "rust.json");
     }
+
+    // ----- M5 bug #21 — plugin scan should not dive into nested subdirs -----
+
+    /// Bug #21: 用户把 plugins 装到嵌套路径 (例如
+    /// `plugins/team-x/team-x-plugin/`),scanner 只看 `plugins/<name>/`
+    /// 顶层,返回 `team-x` 作为 plugin(不是 `team-x-plugin`)。本测试
+    /// 固定行为:plugin 的 `name` = `plugins/` 下的顶层目录名,不递归
+    /// 进入 `plugins/<name>/<sub>/`。
+    #[test]
+    fn scan_plugins_does_not_descend_into_nested_plugin_subdirs() {
+        let tmp = make_claude_dir();
+        // 顶层 plugin:应被列出。
+        fs::create_dir(tmp.path().join("plugins").join("code-review")).unwrap();
+        fs::write(
+            tmp.path().join("plugins")
+                .join("code-review")
+                .join("index.md"),
+            b"x",
+        )
+        .unwrap();
+        // 嵌套结构(`plugins/team-x/team-x-plugin/`):
+        // scanner 只看顶层,`team-x` 应作为 plugin 列出,
+        // 而 `team-x-plugin` 不应在结果里(它不是 `plugins/` 的直接子)。
+        let team_x = tmp.path().join("plugins").join("team-x");
+        fs::create_dir(&team_x).unwrap();
+        fs::create_dir(team_x.join("team-x-plugin")).unwrap();
+        fs::write(team_x.join("team-x-plugin").join("main.md"), b"x").unwrap();
+
+        let items = scan_resources(tmp.path(), ResourceKind::Plugin).unwrap();
+        let names: Vec<_> = items.iter().map(|i| i.name.as_str()).collect();
+        assert!(names.contains(&"code-review"));
+        assert!(
+            names.contains(&"team-x"),
+            "team-x (顶层) 应被列为 plugin, 实际: {names:?}"
+        );
+        assert!(
+            !names.contains(&"team-x-plugin"),
+            "嵌套子目录不应作为独立 plugin 出现: {names:?}"
+        );
+        // 总数 = 2(code-review + team-x),不是 3。
+        assert_eq!(items.len(), 2);
+    }
+
+    /// Bug #21 配套:顶层 plugin 的 `path` 必须是 `plugins/<name>`,
+    /// 不应是嵌套结构(`plugins/<name>/<sub>/`)。这是 resource_detail
+    /// 跳转 reveal 时需要的真实路径。
+    #[test]
+    fn scan_plugins_records_top_level_path_only() {
+        let tmp = make_claude_dir();
+        let top = tmp.path().join("plugins").join("alpha");
+        fs::create_dir(&top).unwrap();
+        fs::create_dir(top.join("v1")).unwrap();
+        fs::write(top.join("v1").join("plugin.md"), b"x").unwrap();
+
+        let items = scan_resources(tmp.path(), ResourceKind::Plugin).unwrap();
+        let alpha = items.iter().find(|i| i.name == "alpha").unwrap();
+        let path = std::path::Path::new(&alpha.path);
+        assert!(path.ends_with("plugins/alpha") || path.ends_with("plugins\\alpha"));
+        assert!(!alpha.path.contains("v1"));
+    }
 }
