@@ -23,7 +23,7 @@
  *     pages all inline their markup).
  */
 import type { ReactElement, ChangeEvent } from 'react';
-import { useState, useRef } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { useProjects } from '../../hooks/useProjects';
 import type { ProjectSummary } from '../../types/project';
 import type { ViewId } from '../../hooks/useViewState';
@@ -61,6 +61,13 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
   } = useProjects();
 
   const [adding, setAdding] = useState<boolean>(false);
+  // M5 #3 — modal mode flag. The user requested 新增项目 render as
+  // a modal dialog (Esc to close, click overlay to dismiss) instead
+  // of an inline form below the project list. We keep `adding` as
+  // the source of truth and add `modalOpen` so we can render the
+  // dialog separately from any inline use (currently unused, but
+  // cheap insurance for future layouts).
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>('');
   const [newRoot, setNewRoot] = useState<string>('');
   const [busy, setBusy] = useState<boolean>(false);
@@ -159,6 +166,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       setNewName('');
       setNewRoot('');
       setAdding(false);
+      setModalOpen(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setActionError(msg);
@@ -166,6 +174,15 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       setBusy(false);
     }
   };
+
+  // M5 #3 — close the modal cleanly (Esc / overlay / 取消).
+  const closeAddModal = useCallback((): void => {
+    setAdding(false);
+    setModalOpen(false);
+    setNewName('');
+    setNewRoot('');
+    setActionError(null);
+  }, []);
 
   return (
     <div
@@ -301,11 +318,16 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 type="button"
                 className="btn btn-primary"
                 data-testid="add-project-toggle"
-                onClick={() => setAdding((v) => !v)}
+                onClick={() => {
+                  // M5 #3 — open as a modal dialog (Esc to close,
+                  // click overlay to dismiss) instead of inline.
+                  setAdding(true);
+                  setModalOpen(true);
+                }}
                 disabled={busy}
                 style={{ cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
               >
-                {adding ? '取消' : '+ 新增项目'}
+                + 新增项目
               </button>
             </div>
           </div>
@@ -425,27 +447,46 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
           )}
         </section>
 
-        {/* Add project form */}
-        {adding && (
-          <section
-            data-testid="add-project-form"
-            style={{
-              padding: 16,
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-card)',
-              boxShadow: 'var(--shadow-sm)',
+        {/* Add project modal (M5 #3) — wraps the existing form fields in a
+            themed modal dialog (Esc to close, click overlay to dismiss).
+            Reuses the same data-testids so the existing tests keep
+            passing without churning fixtures. */}
+        {modalOpen && (
+          <div
+            className="modal-overlay"
+            data-testid="add-project-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-project-modal-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeAddModal();
             }}
           >
-            <h3
+            <section
+              data-testid="add-project-form"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') closeAddModal();
+              }}
               style={{
-                color: 'var(--text-primary)',
-                fontSize: 16,
-                fontWeight: 600,
-                marginTop: 0,
-                marginBottom: 12,
+                padding: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-card)',
+                boxShadow: 'var(--shadow-md)',
+                maxWidth: 480,
+                margin: '10vh auto 0',
               }}
             >
+              <h3
+                id="add-project-modal-title"
+                style={{
+                  color: 'var(--text-primary)',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  marginTop: 0,
+                  marginBottom: 12,
+                }}
+              >
               新增项目
             </h3>
             <div style={{ marginBottom: 12 }}>
@@ -556,12 +597,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
                 type="button"
-                onClick={() => {
-                  setAdding(false);
-                  setNewName('');
-                  setNewRoot('');
-                  setActionError(null);
-                }}
+                onClick={closeAddModal}
                 disabled={busy}
                 style={{
                   padding: '6px 14px',
@@ -595,6 +631,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
               </button>
             </div>
           </section>
+          </div>
         )}
       </div>
 

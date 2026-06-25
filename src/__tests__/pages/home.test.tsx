@@ -75,4 +75,20 @@ describe('HomeView — M3.10 + M3.13.4 project picker', () => {
       expect(screen.getByTestId('path-validation-hint')).toHaveTextContent('必须是绝对路径');
     });
   });
+
+  // M5 #3 — 新增项目 must render as a modal dialog (Esc + overlay
+  // dismiss). The form should NOT be in the DOM before the toggle is
+  // clicked.
+  it('add project renders inside a modal overlay (Esc closes it)', () => {
+    render(<HomeView />);
+    expect(screen.queryByTestId('add-project-modal-overlay')).toBeNull();
+    fireEvent.click(screen.getByTestId('add-project-toggle'));
+    const overlay = screen.getByTestId('add-project-modal-overlay');
+    expect(overlay).toBeInTheDocument();
+    expect(overlay.getAttribute('role')).toBe('dialog');
+    expect(overlay.getAttribute('aria-modal')).toBe('true');
+    // Press Escape inside the form — closes the modal.
+    fireEvent.keyDown(screen.getByTestId('add-project-form'), { key: 'Escape' });
+    expect(screen.queryByTestId('add-project-modal-overlay')).toBeNull();
+  });
 });
