@@ -222,7 +222,7 @@ describe('M1.9.2 — liquid glass tokens', () => {
       resolve(__dirname, '../../components/AppHeader.tsx'),
       'utf-8',
     );
-    expect(headerSrc).toMatch(WebkitAppRegion);
+    expect(headerSrc).toMatch(/WebkitAppRegion\s*:/);
     expect(headerSrc).toMatch(/WebkitBackdropFilter\s*:/);
     expect(headerSrc).toMatch(/var\(--glass-bg\)/);
     expect(headerSrc).toMatch(/var\(--blur-md\)/);

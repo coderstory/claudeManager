@@ -672,7 +672,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
 
     // 5. 验证 updateProvider 被调用 (with new name)
     await waitFor(() => {
-      const calls = mockInvoke.mock.calls.filter(([cmd, args]) => cmd === 'update_provider');
+      const calls = mockInvoke.mock.calls.filter(([cmd, _args]) => cmd === 'update_provider');
       expect(calls.length).toBe(1);
       expect(calls[0][1].input.name).toBe('GLM-NEW');
     });
@@ -714,7 +714,7 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
 
     // 5. 验证 deleteProvider 被调用
     await waitFor(() => {
-      const calls = mockInvoke.mock.calls.filter(([cmd, args]) => cmd === 'delete_provider');
+      const calls = mockInvoke.mock.calls.filter(([cmd, _args]) => cmd === 'delete_provider');
       expect(calls.length).toBe(1);
       expect(calls[0][1].providerId).toBe('deletable');
     });
