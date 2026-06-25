@@ -69,9 +69,14 @@ export interface McpServer {
  * `kind` is `"parse"` for parser-level rejections (bad JSON, invalid
  * id, missing field) or `"write"` for serialise / atomic-write failures.
  * `line` is 1-based in the original dump (0 for write errors).
+ *
+ * M5 bug #8: `name` is set when the parser could extract the provider /
+ * MCP name from the row before rejection. UI shows "name (line N)" so
+ * users can identify which provider failed at a glance.
  */
 export interface SkippedLine {
   line: number;
+  name?: string | null;
   reason: string;
 }
 

@@ -90,6 +90,11 @@ pub struct ParsedMcpServer {
 pub struct SkippedLine {
     /// 1-based line number in the original dump (best-effort).
     pub line: usize,
+    /// Provider / MCP name if extractable from the row (best-effort).
+    /// M5 bug #8: UI shows "name (line N)" instead of just "line N" so users
+    /// can identify which provider failed at a glance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Human-readable reason (e.g. "missing required field `name`").
     pub reason: String,
 }
@@ -229,6 +234,7 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
         None => {
             out.skipped_lines.push(SkippedLine {
                 line,
+                name: None,
                 reason: "could not detect table name in INSERT".into(),
             });
             return;
@@ -243,6 +249,7 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
         None => {
             out.skipped_lines.push(SkippedLine {
                 line,
+                name: None,
                 reason: format!("missing VALUES in INSERT INTO {table}"),
             });
             return;
@@ -252,7 +259,7 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
     let values = match parse_value_list(&values_block) {
         Ok(v) => v,
         Err(reason) => {
-            out.skipped_lines.push(SkippedLine { line, reason });
+            out.skipped_lines.push(SkippedLine { line, name: None, reason });
             return;
         }
     };
@@ -264,6 +271,7 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
     if explicit && values.len() != columns.len() {
         out.skipped_lines.push(SkippedLine {
             line,
+            name: None,
             reason: format!(
                 "INSERT INTO {table} has {} values but {} columns",
                 values.len(),
@@ -275,6 +283,7 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
     if !explicit && values.len() < columns.len() {
         out.skipped_lines.push(SkippedLine {
             line,
+            name: None,
             reason: format!(
                 "INSERT INTO {table} VALUES has {} values but table defines {} columns",
                 values.len(),
@@ -291,13 +300,19 @@ fn parse_one_insert(stmt: &str, line: usize, out: &mut ParsedSql) {
         .collect();
 
     match table.as_str() {
-        "providers" => match parse_provider_row(&row, line) {
+        "providers" => match parse_provider_row(&row) {
             Ok(p) => out.providers.push(p),
-            Err(reason) => out.skipped_lines.push(SkippedLine { line, reason }),
+            Err(reason) => {
+                let name = extract_row_name(&row);
+                out.skipped_lines.push(SkippedLine { line, name, reason });
+            }
         },
-        "mcp_servers" => match parse_mcp_row(&row, line) {
+        "mcp_servers" => match parse_mcp_row(&row) {
             Ok(m) => out.mcp_servers.push(m),
-            Err(reason) => out.skipped_lines.push(SkippedLine { line, reason }),
+            Err(reason) => {
+                let name = extract_row_name(&row);
+                out.skipped_lines.push(SkippedLine { line, name, reason });
+            }
         },
         _ => {
             // Unknown table — silently ignore. We don't want every
@@ -757,7 +772,6 @@ fn is_claude_family(app_type: &str) -> bool {
 
 fn parse_provider_row(
     row: &[(&str, &SqlValue)],
-    line: usize,
 ) -> Result<Provider, String> {
     let get = |col: &str| -> Option<String> {
         row.iter()
@@ -840,7 +854,6 @@ fn parse_provider_row(
     };
 
     // line 只用于 skip 消息；Provider 不存储。
-    let _ = line;
     let now = now_unix_secs();
     Ok(Provider {
         id,
@@ -856,7 +869,7 @@ fn parse_provider_row(
     })
 }
 
-fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<ParsedMcpServer, String> {
+fn parse_mcp_row(row: &[(&str, &SqlValue)]) -> Result<ParsedMcpServer, String> {
     let get = |col: &str| -> Option<String> {
         row.iter()
             .find(|(c, _)| c.eq_ignore_ascii_case(col))
@@ -900,7 +913,6 @@ fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<ParsedMcpServ
         }
     };
 
-    let _ = line;
     Ok(ParsedMcpServer {
         id,
         name,
@@ -909,6 +921,18 @@ fn parse_mcp_row(row: &[(&str, &SqlValue)], line: usize) -> Result<ParsedMcpServ
         env: server_obj.env.unwrap_or_default(),
         description,
     })
+}
+
+/// Best-effort extract of the provider/MCP `name` from a parsed row, so
+/// the SkippedLine UI can show "name (line N)" instead of just "line N".
+/// Returns None if the column isn't present or is NULL.
+fn extract_row_name(row: &[(&str, &SqlValue)]) -> Option<String> {
+    row.iter()
+        .find(|(c, _)| c.eq_ignore_ascii_case("name"))
+        .and_then(|(_, v)| match v {
+            SqlValue::Str(s) if !s.is_empty() => Some(s.clone()),
+            _ => None,
+        })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1320,7 +1344,7 @@ COMMIT;
             ("name", &name),
             ("server_config", &cfg),
         ];
-        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        let parsed = parse_mcp_row(&row).expect("parse");
         assert_eq!(parsed.command, "npx");
         assert_eq!(parsed.args, vec!["fs-server".to_string()]);
     }
@@ -1341,7 +1365,7 @@ COMMIT;
             ("name", &name),
             ("server_config", &cfg),
         ];
-        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        let parsed = parse_mcp_row(&row).expect("parse");
         assert_eq!(parsed.command, "uvx");
         assert_eq!(parsed.args, vec!["mcp-fetch".to_string()]);
     }
@@ -1357,7 +1381,7 @@ COMMIT;
             ("name", &name),
             ("server_config", &cfg),
         ];
-        let err = parse_mcp_row(&row, 1).unwrap_err();
+        let err = parse_mcp_row(&row).unwrap_err();
         assert!(err.contains("server_config invalid JSON"), "got: {err}");
     }
 
@@ -1372,7 +1396,7 @@ COMMIT;
             ("name", &name),
             ("server_config", &cfg),
         ];
-        let parsed = parse_mcp_row(&row, 1).expect("parse");
+        let parsed = parse_mcp_row(&row).expect("parse");
         assert_eq!(parsed.command, "");
         assert!(parsed.args.is_empty());
         assert!(parsed.env.is_empty());
@@ -1422,5 +1446,47 @@ COMMIT;
         assert_eq!(parsed.providers.len(), 1);
         assert_eq!(parsed.providers[0].name, "深度求索公司");
         assert_eq!(parsed.providers[0].api_base, "https://api.deepseek.com");
+    }
+
+    // ----- M5 bug #8 — SkippedLine.name 暴露 provider/MCP name 供 UI 显示 -----
+
+    /// Bug #8 RED: 当 INSERT INTO providers 被拒绝(如 id 含 `.`),UI 应能
+    /// 从 row 里挑出 name 用于 "Test (line N): invalid id" 形式提示。
+    /// 修前:`SkippedLine.name` 字段不存在 / UI 只能显示行号。
+    #[test]
+    fn skipped_line_carries_provider_name_for_id_rejection() {
+        let settings = claude_settings("https://x", "k", "m");
+        let sql = format!(
+            "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', 'Test Provider', '{}');",
+            settings
+        );
+        let parsed = parse_sql_dump(&sql).unwrap();
+        assert_eq!(parsed.skipped_lines.len(), 1);
+        assert_eq!(parsed.skipped_lines[0].name.as_deref(), Some("Test Provider"));
+        assert_eq!(parsed.skipped_lines[0].line, 1);
+        assert!(parsed.skipped_lines[0].reason.contains("invalid id"));
+    }
+
+    /// Bug #8: 缺 name 的 row(name 列 NULL/缺失)不应崩,UI 退化为纯行号显示。
+    #[test]
+    fn skipped_line_without_name_is_none() {
+        // id 不合法 → name 没机会填,但 row 没 name 列,extract_row_name 返回 None。
+        let sql = "INSERT INTO providers (id, app_type, settings_config) VALUES ('Bad.ID', 'claude', '{}');";
+        let parsed = parse_sql_dump(sql).unwrap();
+        assert_eq!(parsed.skipped_lines.len(), 1);
+        assert!(parsed.skipped_lines[0].name.is_none());
+    }
+
+    /// Bug #8: 空字符串 name 也视为无 name(避免显示空括弧)。
+    #[test]
+    fn skipped_line_with_empty_name_is_none() {
+        let settings = claude_settings("https://x", "k", "m");
+        let sql = format!(
+            "INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', '', '{}');",
+            settings
+        );
+        let parsed = parse_sql_dump(&sql).unwrap();
+        assert_eq!(parsed.skipped_lines.len(), 1);
+        assert!(parsed.skipped_lines[0].name.is_none());
     }
 }

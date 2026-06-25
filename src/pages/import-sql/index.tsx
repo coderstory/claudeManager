@@ -711,7 +711,9 @@ function SkippedDetails({
             data-testid={`import-sql-skip-${i}`}
             style={{ fontFamily: 'var(--font-mono, monospace)', marginBottom: 2 }}
           >
-            行 {s.line}: {s.reason}
+            {s.name
+              ? `${s.name} (行 ${s.line}): ${s.reason}`
+              : `行 ${s.line}: ${s.reason}`}
           </li>
         ))}
         {total > samples.length && (
