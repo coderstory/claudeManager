@@ -1170,7 +1170,7 @@ pub fn all_rules() -> Vec<Box<dyn OptimizerRule>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{McpServer, McpTransport, Provider};
+    use crate::domain::{McpServer, McpTransport, Provider, ProviderModels};
     use std::collections::HashMap;
     use std::fs;
     use tempfile::TempDir;
@@ -1216,7 +1216,7 @@ mod tests {
             provider_type: "anthropic".into(),
             api_base: base.into(),
             api_key: key.into(),
-            models: vec![],
+            models: ProviderModels::default(),
             is_active: false,
             created_at: 1_700_000_000,
             last_used_at: None,

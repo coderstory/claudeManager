@@ -556,11 +556,12 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     expect(screen.getByTestId('provider-form-save')).toBeInTheDocument();
     expect(screen.getByTestId('provider-form-cancel')).toBeInTheDocument();
 
-    // 2. 用户填表 (5 个字段)
+    // 2. 用户填表 (5 个字段: name / base_url / api_key / default model / notes)
     fireEvent.change(screen.getByTestId('provider-form-name'), { target: { value: 'Test Add' } });
     fireEvent.change(screen.getByTestId('provider-form-base-url'), { target: { value: 'https://api.add.example' } });
     fireEvent.change(screen.getByTestId('provider-form-api-key'), { target: { value: 'sk-add-12345' } });
-    fireEvent.change(screen.getByTestId('provider-form-model'), { target: { value: 'add-model' } });
+    // M4.6.1 — 4-tier model mapping: default / haiku / sonnet / opus
+    fireEvent.change(screen.getByTestId('provider-form-model-default'), { target: { value: 'add-model' } });
     fireEvent.change(screen.getByTestId('provider-form-notes'), { target: { value: 'e2e test' } });
 
     // 3. mock addProvider 成功 + reload

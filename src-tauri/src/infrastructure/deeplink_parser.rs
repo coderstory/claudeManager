@@ -39,7 +39,9 @@ use crate::domain::{McpServer, McpTransport, Provider};
 /// `action` discriminates between provider-import and mcp-import.
 /// Exactly one of `provider` / `mcp_server` is populated, matching
 /// the `resource=` query parameter.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+// Eq not derived: Provider contains ProviderModels which contains a HashMap.
+// PartialEq is enough for round-trip serialise tests.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ParsedDeeplink {
     pub action: DeeplinkAction,
     /// Present iff `action == Import`. The provider fields are
@@ -204,14 +206,19 @@ fn parse_provider_deeplink(url: &Url) -> Result<ParsedDeeplink, DeeplinkParseErr
         _ => slugify(&name),
     };
 
-    let models = model
-        .map(|m| {
-            m.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
+    // M4.6.1 — deeplink only carries a primary model name; map it to
+    // `ProviderModels.default`. Comma-separated extras from older
+    // senders are silently ignored (the simple deeplink protocol
+    // doesn't carry 4-tier mappings; users fill haiku/sonnet/opus
+    // later via the F5 JSON edit modal).
+    let models = crate::domain::ProviderModels {
+        default: model
+            .as_deref()
+            .and_then(|m| m.split(',').map(str::trim).find(|s| !s.is_empty()))
+            .unwrap_or("")
+            .to_string(),
+        ..Default::default()
+    };
 
     let provider = Provider {
         id,
@@ -458,7 +465,7 @@ mod tests {
         assert_eq!(p.provider_type, "claude");
         assert_eq!(p.api_base, "https://api.anthropic.com");
         assert_eq!(p.api_key, "sk-xxx");
-        assert_eq!(p.models, vec!["claude-sonnet-4-6".to_string()]);
+        assert_eq!(p.models.default, "claude-sonnet-4-6");
         assert_eq!(p.notes.as_deref(), Some("official"));
         // id auto-slugged from name
         assert_eq!(p.id, "glm-4-6");
@@ -507,10 +514,10 @@ mod tests {
         let url = "ccswitch://v1/import?resource=provider&app=claude&name=x&endpoint=e&apiKey=k&model=claude-opus-4%2Cclaude-sonnet-4-6";
         let parsed = parse_deeplink_url(url).unwrap();
         let p = parsed.provider.unwrap();
-        assert_eq!(
-            p.models,
-            vec!["claude-opus-4".to_string(), "claude-sonnet-4-6".to_string()]
-        );
+        // M4.6.1 — deeplink model CSV is collapsed to `default`; only the
+        // first non-empty entry is kept (extras ignored to preserve the
+        // simple deeplink semantics — 4-tier fields live in F5 JSON edit).
+        assert_eq!(p.models.default, "claude-opus-4");
     }
 
     #[test]

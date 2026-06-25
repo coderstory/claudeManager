@@ -165,7 +165,8 @@ describe('F10 — 拖放 .sql 导入', () => {
               provider_type: 'anthropic',
               api_base: 'https://a.example.com',
               api_key: 'key-a',
-              models: ['claude-sonnet-4-6'],
+              // M4.6.1 — 4-tier ProviderModels shape
+              models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
               is_active: false,
               created_at: 1_700_000_000,
               last_used_at: null,

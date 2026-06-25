@@ -46,7 +46,8 @@ const SAMPLE_PARSED = {
     provider_type: 'claude',
     api_base: 'https://api.anthropic.com',
     api_key: 'sk-test-should-not-leak',
-    models: ['claude-sonnet-4-6'],
+    // M4.6.1 — 4-tier ProviderModels shape
+    models: { default: 'claude-sonnet-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
     is_active: false,
     created_at: 1700000000,
     last_used_at: null,

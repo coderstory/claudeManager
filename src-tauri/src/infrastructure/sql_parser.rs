@@ -954,7 +954,8 @@ COMMIT;
         assert_eq!(p.api_base, "https://api.anthropic.com");
         assert_eq!(p.api_key, "sk-test");
         assert_eq!(p.provider_type, "claude");
-        assert_eq!(p.models, vec!["claude-sonnet-4-6"]);
+        assert_eq!(p.models.default, "claude-sonnet-4-6");
+        assert!(p.models.haiku.is_none());
         assert!(parsed.mcp_servers.is_empty());
         assert!(parsed.skipped_lines.is_empty());
     }
@@ -971,7 +972,7 @@ COMMIT;
         assert_eq!(p.provider_type, "claude-desktop");
         assert_eq!(p.api_base, "https://api.deepseek.com");
         assert_eq!(p.api_key, "sk-2");
-        assert_eq!(p.models, vec!["deepseek-chat"]);
+        assert_eq!(p.models.default, "deepseek-chat");
     }
 
     #[test]
@@ -984,7 +985,7 @@ COMMIT;
         );
         let parsed = parse_sql_dump(&sql).unwrap();
         assert_eq!(parsed.providers.len(), 1);
-        assert_eq!(parsed.providers[0].models, vec!["fallback-model"]);
+        assert_eq!(parsed.providers[0].models.default, "fallback-model");
     }
 
     #[test]
@@ -1025,7 +1026,7 @@ COMMIT;
         assert_eq!(p.provider_type, "codex");
         assert_eq!(p.api_base, "", "非 claude 系 api_base 留空");
         assert_eq!(p.api_key, "");
-        assert!(p.models.is_empty());
+        assert_eq!(p.models, ProviderModels::default());
     }
 
     #[test]

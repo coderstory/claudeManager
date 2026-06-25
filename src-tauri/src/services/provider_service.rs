@@ -226,8 +226,11 @@ impl ProviderService {
         // Patch env.ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN.
         // Create the env map if missing.
         let env_obj = ensure_object(&mut settings, "env");
-        env_obj["ANTHROPIC_BASE_URL"] = Value::String(provider.api_base.clone());
-        env_obj["ANTHROPIC_AUTH_TOKEN"] = Value::String(provider.api_key.clone());
+        // Use insert() (not IndexMut) — env_obj starts empty after
+        // ensure_object, so `env_obj["X"] = ...` panics with
+        // "no entry found for key". insert() auto-creates the slot.
+        env_obj.insert("ANTHROPIC_BASE_URL".into(), Value::String(provider.api_base.clone()));
+        env_obj.insert("ANTHROPIC_AUTH_TOKEN".into(), Value::String(provider.api_key.clone()));
         // M4.6.1 — write all 5 ANTHROPIC_*_MODEL env keys from the
         // 4-tier + by_tier mapping (ProviderModels::to_env_json skips
         // empty/None entries).
@@ -293,8 +296,9 @@ impl ProviderService {
         let mut settings = load_settings(&settings_path)?;
 
         let env_obj = ensure_object(&mut settings, "env");
-        env_obj["ANTHROPIC_BASE_URL"] = Value::String(provider.api_base.clone());
-        env_obj["ANTHROPIC_AUTH_TOKEN"] = Value::String(provider.api_key.clone());
+        // Use insert() not IndexMut — env_obj starts empty.
+        env_obj.insert("ANTHROPIC_BASE_URL".into(), Value::String(provider.api_base.clone()));
+        env_obj.insert("ANTHROPIC_AUTH_TOKEN".into(), Value::String(provider.api_key.clone()));
         // M4.6.1 — same 5-key fan-out as the legacy switch_provider.
         for (k, v) in provider.models.to_env_json() {
             env_obj.insert(k, v);
@@ -1070,6 +1074,7 @@ fn is_provider_active(settings_path: &Path, provider: &Provider) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::ProviderModels;
     use std::fs;
     use std::time::SystemTime;
     use tempfile::TempDir;
@@ -1143,7 +1148,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let p_dir = tmp.path().join("providers");
         let settings = tmp.path().join("settings.json");
-        write_settings(&settings, "https://api.anthropic.com", "key-glm");
+        // settings.json: 模拟当前激活的是 glm-46(provider key 是
+        // sample_provider 生成的 "key-for-glm-46",不是 "key-glm")。
+        write_settings(&settings, "https://api.anthropic.com", "key-for-glm-46");
         write_provider(
             &p_dir,
             &sample_provider("glm-46", "GLM-4.6", "https://api.anthropic.com"),
@@ -1676,8 +1683,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
     }
 
     #[test]
-    fn get_provider_unknown_id_errors_io() {
-        // 不存在的 id → Io error(同 switch_provider 的未知 id 行为)。
+    fn get_provider_unknown_id_errors_not_found() {
+        // 不存在的 id → NotFound error (M3.6 清单 22: 与磁盘层 Io(NotFound)
+        // 区分,这里返回业务层 NotFound,前端可以据此显示
+        // "provider X 未找到")。
         let tmp = TempDir::new().unwrap();
         let p_dir = tmp.path().join("providers");
         let settings = tmp.path().join("settings.json");
@@ -1685,7 +1694,7 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         let svc = ProviderService::new(test_paths(tmp.path(), &settings));
 
         let err = svc.get_provider("does-not-exist").unwrap_err();
-        assert!(matches!(err, ProviderError::Io(_)));
+        assert!(matches!(err, ProviderError::NotFound(_)));
     }
 
     #[test]
@@ -2124,7 +2133,9 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         let tmp = TempDir::new().unwrap();
         let p_dir = tmp.path().join("providers");
         let settings = tmp.path().join("settings.json");
-        write_settings(&settings, "https://api.anthropic.com", "key-glm");
+        // sample_provider 生成的 key 是 "key-for-glm-46" —— 必须
+        // 与 settings.json 的 ANTHROPIC_AUTH_TOKEN 一致,is_active 才为 true。
+        write_settings(&settings, "https://api.anthropic.com", "key-for-glm-46");
         write_provider(
             &p_dir,
             &sample_provider("glm-46", "GLM-4.6", "https://api.anthropic.com"),

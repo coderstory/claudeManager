@@ -25,7 +25,7 @@ use thiserror::Error;
 ///
 /// One JSON file per provider at `<app-data>/providers/<id>.json`. The
 /// `id` field is the on-disk filename stem.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Provider {
     /// Unique kebab-case id; matches the filename stem.
@@ -119,6 +119,8 @@ pub enum ProviderError {
 /// serialized to `ANTHROPIC_DEFAULT_<UPPER>_MODEL`. switch_provider
 /// writes all present fields back to settings.json.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+// Eq not derived: by_tier is HashMap which doesn't impl Eq.
+// Use PartialEq for == checks; for exact equality use serde_json.
 #[serde(rename_all = "snake_case")]
 pub struct ProviderModels {
     /// Primary model id (ANTHROPIC_MODEL). Required.

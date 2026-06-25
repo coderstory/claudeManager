@@ -385,6 +385,7 @@ fn parse_mcp_entry(name: &str, value: &Value) -> Option<McpServer> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::ProviderModels;
     use std::fs;
     use tempfile::TempDir;
 
@@ -408,7 +409,7 @@ mod tests {
             provider_type: "anthropic".into(),
             api_base: base.into(),
             api_key: key.into(),
-            models: vec![],
+            models: ProviderModels::default(),
             is_active: false,
             created_at: 1_700_000_000,
             last_used_at: None,

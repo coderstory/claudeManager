@@ -587,14 +587,12 @@ pub async fn read_current_claude_config(
     // Accept both ANTHROPIC_API_KEY (current standard) and
     // ANTHROPIC_AUTH_TOKEN (legacy). ANTHROPIC_API_KEY preferred if both.
     let base_url = env
-        .and_then(|m| m.get("ANTHROPIC_BASE_URL"))
+        .get("ANTHROPIC_BASE_URL")
         .and_then(|v| v.as_str())
         .map(String::from);
     let auth_token = env
-        .and_then(|m| {
-            m.get("ANTHROPIC_API_KEY")
-                .or_else(|| m.get("ANTHROPIC_AUTH_TOKEN"))
-        })
+        .get("ANTHROPIC_API_KEY")
+        .or_else(|| env.get("ANTHROPIC_AUTH_TOKEN"))
         .and_then(|v| v.as_str())
         .map(String::from);
     let models = crate::domain::ProviderModels::from_env(env);
