@@ -1371,6 +1371,57 @@ mod tests {
         assert!(reloaded.last_used_at.is_some());
     }
 
+    // M5 bug #4 regression — `switch_provider_with_active_root(None)`
+    // must write to the same settings.json that
+    // `list_providers_with_active_root(None)` reads. Pre-fix, on
+    // macOS the platform shim always returned active_root=None (D6
+    // stub — fixed in bug #19), but the user-level fall-through
+    // relied on this exact invariant: if the write target and read
+    // target diverge, the is_active badge stays stale.
+    //
+    // This test asserts the invariant: after switching via the
+    // "with_active_root" path (the real IPC entrypoint), the
+    // subsequent "with_active_root" list reflects the change.
+    #[test]
+    fn switch_then_list_with_active_root_none_round_trips() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+
+        write_provider(
+            &p_dir,
+            &sample_provider("a", "A", "https://a.example"),
+        );
+        write_provider(
+            &p_dir,
+            &sample_provider("b", "B", "https://b.example"),
+        );
+        // Initial: b is the active one.
+        write_settings(&settings, "https://b.example", "key-for-b");
+
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // Switch to a using the with_active_root(None) variant —
+        // mirrors what the IPC command does at runtime.
+        svc.switch_provider_with_active_root("a", None).unwrap();
+
+        // Re-list with the same active_root=None — the is_active
+        // recomputation must see the just-written env.
+        let (list, _) = svc
+            .list_providers_with_active_root(None)
+            .expect("list should succeed");
+        let a = list.iter().find(|p| p.id == "a").expect("a in list");
+        let b = list.iter().find(|p| p.id == "b").expect("b in list");
+        assert!(
+            a.is_active,
+            "M5 bug #4: just-switched provider must show is_active=true after list reload"
+        );
+        assert!(
+            !b.is_active,
+            "M5 bug #4: previously-active provider must show is_active=false after list reload"
+        );
+    }
+
     #[test]
     fn switch_provider_unknown_id_errors() {
         let tmp = TempDir::new().unwrap();
