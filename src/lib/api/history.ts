@@ -15,6 +15,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   BackupHistoryFilter,
   BackupHistoryRow,
+  DailyStatsFilter,
+  DailyStatRow,
   ExportFormat,
   ExportReport,
   HistoryStats,
@@ -44,6 +46,19 @@ export function getUsageHistory(
   // error: "command get_usage_history missing required key window".
   const args = filter === undefined ? {} : { filter };
   return invoke<UsageHistoryRow[]>('get_usage_history_rows', args);
+}
+
+/**
+ * F21 — return daily-aggregated usage stats from the SQLite
+ * `usage_daily_stats` table. One row per (provider, date), sorted by
+ * `stat_date DESC` (most recent first). `tokens_used` is the day's
+ * incremental delta — see Rust `DailyStatRow` docs.
+ */
+export function getDailyStatsHistory(
+  filter?: DailyStatsFilter,
+): Promise<DailyStatRow[]> {
+  const args = filter === undefined ? {} : { filter };
+  return invoke<DailyStatRow[]>('get_daily_stats_history', args);
 }
 
 /**

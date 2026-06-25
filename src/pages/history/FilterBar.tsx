@@ -33,7 +33,7 @@ import type {
 } from '../../types/history';
 import { DatePicker } from '../../components/DatePicker';
 
-export type HistoryTab = 'usage' | 'backup';
+export type HistoryTab = 'usage' | 'daily' | 'backup';
 export type HistoryFilter = UsageHistoryFilter & BackupHistoryFilter;
 
 export interface FilterBarProps {
@@ -157,7 +157,7 @@ export function FilterBar({
       </label>
 
       {/* Tab-specific fields */}
-      {tab === 'usage' ? (
+      {tab === 'usage' || tab === 'daily' ? (
         <label style={labelBaseStyle} data-testid="history-filter-provider">
           <span>Provider</span>
           <select

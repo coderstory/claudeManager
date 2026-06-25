@@ -42,11 +42,13 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   exportHistory,
   getBackupHistory,
+  getDailyStatsHistory,
   getHistoryStats,
   getUsageHistory,
 } from '../../lib/api/history';
 import type {
   BackupHistoryRow,
+  DailyStatRow,
   ExportFormat,
   HistoryStats,
   UsageHistoryRow,
@@ -59,6 +61,7 @@ import {
   type HistoryTab,
 } from './FilterBar';
 import { UsageHistoryTable } from './UsageHistoryTable';
+import { DailyStatsTable } from './DailyStatsTable';
 
 // ---------------------------------------------------------------------------
 // Trigger kind options — shared between FilterBar dropdowns and tests
@@ -126,6 +129,7 @@ export default function HistoryPage(): ReactElement {
   const [tab, setTab] = useState<HistoryTab>('usage');
   const [filter, setFilter] = useState<HistoryFilter>({});
   const [usageRows, setUsageRows] = useState<UsageHistoryRow[]>([]);
+  const [dailyRows, setDailyRows] = useState<DailyStatRow[]>([]);
   const [backupRows, setBackupRows] = useState<BackupHistoryRow[]>([]);
   const [stats, setStats] = useState<HistoryStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,6 +163,11 @@ export default function HistoryPage(): ReactElement {
           filter as Parameters<typeof getUsageHistory>[0],
         );
         setUsageRows(rows);
+      } else if (tab === 'daily') {
+        const rows = await getDailyStatsHistory(
+          filter as Parameters<typeof getDailyStatsHistory>[0],
+        );
+        setDailyRows(rows);
       } else {
         const rows = await getBackupHistory(
           filter as Parameters<typeof getBackupHistory>[0],
@@ -257,6 +266,16 @@ export default function HistoryPage(): ReactElement {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'daily'}
+          onClick={() => handleTabChange('daily')}
+          data-testid="tab-daily"
+          style={tabButtonStyle(tab === 'daily')}
+        >
+          按天汇总
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'backup'}
           onClick={() => handleTabChange('backup')}
           data-testid="tab-backup"
@@ -302,6 +321,8 @@ export default function HistoryPage(): ReactElement {
       {/* Active tab table */}
       {tab === 'usage' ? (
         <UsageHistoryTable rows={usageRows} loading={loading} />
+      ) : tab === 'daily' ? (
+        <DailyStatsTable rows={dailyRows} loading={loading} />
       ) : (
         <BackupHistoryTable rows={backupRows} loading={loading} />
       )}

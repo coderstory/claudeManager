@@ -60,6 +60,15 @@ exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty
     </button>
     <button
       aria-selected="false"
+      data-testid="tab-daily"
+      role="tab"
+      style="padding: 10px 16px; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: var(--text-secondary); font-size: 14px; font-weight: 400; cursor: pointer; font-family: inherit;"
+      type="button"
+    >
+      按天汇总
+    </button>
+    <button
+      aria-selected="false"
       data-testid="tab-backup"
       role="tab"
       style="padding: 10px 16px; border-bottom: 2px solid transparent; margin-bottom: -1px; background: transparent; color: var(--text-secondary); font-size: 14px; font-weight: 400; cursor: pointer; font-family: inherit;"

@@ -43,6 +43,32 @@ export interface BackupHistoryFilter {
 }
 
 // ---------------------------------------------------------------------------
+// Daily aggregation (usage_daily_stats table)
+// ---------------------------------------------------------------------------
+
+/** Filter for `getDailyStatsHistory`. */
+export interface DailyStatsFilter {
+  provider_id?: string | null;
+  /** Lower bound on `stat_date` ('YYYY-MM-DD', inclusive). */
+  from_date?: string | null;
+  /** Upper bound on `stat_date` ('YYYY-MM-DD', inclusive). */
+  to_date?: string | null;
+  /** Cap on rows returned. Default = 1000 if undefined. */
+  limit?: number | null;
+}
+
+/** Mirrors `DailyStatRow` in Rust (`usage_daily_stats` table). */
+export interface DailyStatRow {
+  provider_id: string;
+  stat_date: string;
+  /** Day's incremental token delta (MAX(today) − prev_day_max). */
+  tokens_used: number;
+  /** Number of raw `usage_history` snapshots aggregated into this bucket. */
+  snapshot_count: number;
+  last_aggregated_recorded_at: number;
+}
+
+// ---------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------
 
