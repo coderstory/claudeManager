@@ -35,7 +35,7 @@ import {
 import type { ReactElement } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-import { getCurrentUsage, getUsageHistory, refreshUsage } from '../../lib/api/usage';
+import { getCurrentUsage, getDailyStatsHistory, getUsageHistory, refreshUsage, type DailyStatRow } from '../../lib/api/usage';
 import {
   classifyUsageError,
   USAGE_ERROR_MESSAGES,
@@ -60,6 +60,12 @@ interface PageState {
   window: UsageWindow;
   snapshot: UsageSnapshot | null;
   history: UsageHistoryEntry[];
+  /**
+   * M5 bug #16 — past 7 days of aggregated usage from SQLite
+   * `usage_daily_stats`. Drives the trend chart; falls back to
+   * today's `history` when empty.
+   */
+  trend: DailyStatRow[];
   loading: boolean;
   refreshing: boolean;
   error: { kind: string; message: string } | null;
@@ -69,6 +75,7 @@ const INITIAL_STATE: PageState = {
   window: DEFAULT_WINDOW,
   snapshot: null,
   history: [],
+  trend: [],
   loading: true,
   refreshing: false,
   error: null,
@@ -468,6 +475,34 @@ export default function UsageQueryPage(): ReactElement {
         <HistoryChart history={state.history ?? []} loading={state.loading && (state.history?.length ?? 0) === 0} />
       </section>
 
+      {/* M5 bug #16 — 近 7 天趋势 (SQLite-backed daily stats). Renders
+          one bar per day (oldest → newest) so users see trends across
+          days instead of just "today's bucket". Falls back gracefully
+          when the SQLite table is empty (new install / no snapshots yet). */}
+      <section
+        data-testid="usage-trend-section"
+        style={{
+          marginTop: 24,
+          borderRadius: 'var(--radius-card)',
+          border: '1px solid var(--border)',
+          background: 'var(--bg-elevated)',
+          padding: 16,
+        }}
+      >
+        <h2
+          style={{
+            color: 'var(--text-secondary)',
+            fontSize: 14,
+            fontWeight: 500,
+            margin: 0,
+            marginBottom: 12,
+          }}
+        >
+          近 7 天趋势
+        </h2>
+        <TrendChart trend={state.trend} />
+      </section>
+
       {/* Empty state hint */}
       {isEmpty && (
         <p
@@ -586,6 +621,80 @@ function Td({ children, align }: { children: React.ReactNode; align?: 'left' | '
  * Per-day stacked bar chart. One column per day, stacked by model.
  * Hand-rolled SVG (~50 lines) — no chart lib.
  */
+/**
+ * M5 bug #16 — 7-day trend bar chart (one bar per day, oldest →
+ * newest). Hand-rolled SVG, ~30 lines. Shows dates on x-axis and
+ * tokens on y-axis. Falls back to a "暂无趋势" hint when the daily
+ * stats table is empty (e.g. fresh install before first refresh).
+ */
+function TrendChart({ trend }: { trend: DailyStatRow[] | null }): ReactElement {
+  const W = 600;
+  const H = 160;
+  const PAD = 24;
+
+  if (!trend || trend.length === 0) {
+    return (
+      <div
+        data-testid="usage-trend-empty"
+        style={{
+          color: 'var(--text-muted)',
+          fontSize: 12,
+          padding: '24px 0',
+          textAlign: 'center',
+        }}
+      >
+        暂无 7 天趋势数据 — 刷新用量后会写入 SQLite
+      </div>
+    );
+  }
+
+  // Rows come back sorted DESC by stat_date (newest first); reverse
+  // for left-to-right chronological display.
+  const ordered = [...trend].sort((a, b) =>
+    a.stat_date < b.stat_date ? -1 : a.stat_date > b.stat_date ? 1 : 0,
+  );
+  const maxTokens = Math.max(1, ...ordered.map((r) => r.tokens_used));
+  const barW = (W - PAD * 2) / ordered.length;
+
+  return (
+    <svg
+      data-testid="usage-trend-chart"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ width: '100%', height: 160, display: 'block' }}
+    >
+      {ordered.map((r, i) => {
+        const h = (r.tokens_used / maxTokens) * (H - PAD * 2);
+        const x = PAD + i * barW + barW * 0.15;
+        const y = H - PAD - h;
+        return (
+          <g key={r.stat_date}>
+            <rect
+              data-testid={`usage-trend-bar-${r.stat_date}`}
+              x={x}
+              y={y}
+              width={barW * 0.7}
+              height={h}
+              rx={2}
+              fill="var(--accent)"
+              opacity={0.85}
+            />
+            <text
+              x={x + barW * 0.35}
+              y={H - 8}
+              textAnchor="middle"
+              fontSize={10}
+              fill="var(--text-muted)"
+            >
+              {r.stat_date.slice(5)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function HistoryChart({ history, loading }: { history: UsageHistoryEntry[]; loading: boolean }): ReactElement {
   const W = 800;
   const H = 200;
@@ -770,7 +879,15 @@ async function loadAll(
       // key so we re-fetch it too.
       const snap = await refreshUsage(window);
       const history = await getUsageHistory(window);
-      return { snapshot: snap, history, loading: false, refreshing: false, error: null };
+      const trend = await fetchSevenDayTrend(snap.provider_id);
+      return {
+        snapshot: snap,
+        history,
+        trend,
+        loading: false,
+        refreshing: false,
+        error: null,
+      };
     }
     // Concurrent — they hit the same (provider_id, window) cache
     // key on the Rust side; only one JSONL scan happens.
@@ -778,11 +895,44 @@ async function loadAll(
       getCurrentUsage(window),
       getUsageHistory(window),
     ]);
-    return { snapshot: snap, history, loading: false, refreshing: false, error: null };
+    const trend = await fetchSevenDayTrend(snap.provider_id);
+    return {
+      snapshot: snap,
+      history,
+      trend,
+      loading: false,
+      refreshing: false,
+      error: null,
+    };
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     const kind = classifyUsageError(raw);
     const message = USAGE_ERROR_MESSAGES[kind] ?? `查询失败: ${raw}`;
     return { loading: false, refreshing: false, error: { kind, message } };
+  }
+}
+
+/**
+ * M5 bug #16 — fetch the past 7 days of aggregated usage from the
+ * SQLite-backed `usage_daily_stats` table. Returns one row per day
+ * (oldest → newest) so the chart can render the trend without gaps.
+ * Failure is non-fatal — we fall back to an empty array and let the
+ * chart show only the in-memory history (today's data).
+ */
+async function fetchSevenDayTrend(
+  providerId: string,
+): Promise<DailyStatRow[]> {
+  const today = new Date();
+  const from = new Date(today.getTime() - 6 * 86400_000); // inclusive 7 days
+  const fmt = (d: Date): string => d.toISOString().slice(0, 10);
+  try {
+    return await getDailyStatsHistory({
+      provider_id: providerId,
+      from_date: fmt(from),
+      to_date: fmt(today),
+      limit: 7,
+    });
+  } catch {
+    return [];
   }
 }

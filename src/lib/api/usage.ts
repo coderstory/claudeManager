@@ -46,3 +46,27 @@ export function refreshUsage(window: UsageWindow): Promise<UsageSnapshot> {
 export function getUsageHistory(window: UsageWindow): Promise<UsageHistoryEntry[]> {
   return invoke<UsageHistoryEntry[]>('get_usage_history', { window });
 }
+
+/**
+ * M5 bug #16 — fetch the past N days of aggregated daily usage stats
+ * from the SQLite-backed `usage_daily_stats` table. Returns rows
+ * ordered by `stat_date DESC`. Used by the usage trend chart so
+ * users see the last 7 days even when the in-memory JSONL scan only
+ * covers "today".
+ */
+export interface DailyStatRow {
+  provider_id: string;
+  stat_date: string;
+  tokens_used: number;
+  snapshot_count: number;
+  last_aggregated_recorded_at: number;
+}
+
+export function getDailyStatsHistory(filter: {
+  provider_id?: string;
+  from_date?: string;
+  to_date?: string;
+  limit?: number;
+}): Promise<DailyStatRow[]> {
+  return invoke<DailyStatRow[]>('get_daily_stats_history', { filter });
+}

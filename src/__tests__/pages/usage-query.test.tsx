@@ -58,6 +58,29 @@ beforeEach(() => {
     if (cmd === 'get_usage_history') {
       return [{ date: '2026-06-25', model: 'claude-sonnet-4', tokens: 1234 }];
     }
+    // M5 bug #16 — daily stats mock returns a 7-day window so the
+    // trend chart can render.
+    if (cmd === 'get_daily_stats_history') {
+      const today = new Date();
+      const rows: Array<{
+        provider_id: string;
+        stat_date: string;
+        tokens_used: number;
+        snapshot_count: number;
+        last_aggregated_recorded_at: number;
+      }> = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today.getTime() - i * 86400_000);
+        rows.push({
+          provider_id: 'active-abcdef',
+          stat_date: d.toISOString().slice(0, 10),
+          tokens_used: 1000 + i * 100,
+          snapshot_count: 1,
+          last_aggregated_recorded_at: 1_700_000_000,
+        });
+      }
+      return rows;
+    }
     return null;
   });
 });
@@ -95,6 +118,37 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     expect(
       screen.queryByTestId('usage-balance-value'),
     ).not.toBeInTheDocument();
+  });
+
+  // M5 bug #16 — trend chart renders one bar per daily stats row.
+  it('renders 7-day trend chart with one bar per day', async () => {
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-trend-section')).toBeInTheDocument();
+    });
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 86400_000);
+      const dateStr = d.toISOString().slice(0, 10);
+      expect(
+        screen.getByTestId(`usage-trend-bar-${dateStr}`),
+      ).toBeInTheDocument();
+    }
+  });
+
+  it('trend chart shows empty hint when no daily stats', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage') {
+        return sampleSnapshot('5h');
+      }
+      if (cmd === 'get_usage_history') return [];
+      if (cmd === 'get_daily_stats_history') return [];
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-trend-empty')).toBeInTheDocument();
+    });
   });
 
   it('marks the active window with aria-pressed=true', async () => {
