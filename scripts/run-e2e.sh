@@ -61,40 +61,66 @@ if ! command -v tauri-driver >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- Prereq 2: msedgedriver.exe ---
-# tauri-driver looks up msedgedriver.exe in PATH. Common cache locations
-# we can pre-add to PATH: %TEMP% (where the edgedriver npm package drops it)
-# and ~/.cache/msedgedriver.
-MSEDGEDRIVER_CANDIDATES=(
-  "${LOCALAPPDATA:-}/Temp"
-  "${TEMP:-}"
-  "$HOME/.cache/msedgedriver"
-  "/c/Users/${USER:-e-Yunfei.Qian}/AppData/Local/Temp"
-)
-for c in "${MSEDGEDRIVER_CANDIDATES[@]}"; do
-  if [[ -n "$c" && -x "$c/msedgedriver.exe" ]] && ! command -v msedgedriver.exe >/dev/null 2>&1; then
-    export PATH="$c:$PATH"
-    echo ">>> Auto-added $c to PATH (msedgedriver.exe found)"
-    break
+# --- Prereq 2: WebDriver backend (platform-specific) ---
+# tauri-driver talks to the host's WebDriver implementation. The backend
+# differs by platform because Tauri uses different webview engines:
+#   - Windows: WebView2 (Edge Chromium)  → needs msedgedriver.exe
+#   - macOS:   WKWebView (Apple WebKit)  → needs safaridriver (built-in)
+# The rest of the script (cygpath / powershell / .exe path) is Windows-only
+# and is gated behind the non-Darwin branch.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if ! command -v safaridriver >/dev/null 2>&1; then
+    echo "FAIL: safaridriver not on PATH (macOS WebDriver backend)."
+    echo "      safaridriver ships with macOS; enable with: safaridriver --enable"
+    echo "      (System Settings → Privacy & Security → Developer Tools)"
+    echo "      (or set PLAYWRIGHT_BASE_URL=http://localhost:1420 for dev-server mode)"
+    exit 1
   fi
-done
-if ! command -v msedgedriver.exe >/dev/null 2>&1; then
-  echo "FAIL: msedgedriver.exe not on PATH."
-  echo "      Download from https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/"
-  echo "      matching your Edge version (run msedge --version to check)."
-  echo "      Drop msedgedriver.exe anywhere on PATH or in %TEMP%."
-  echo "      (or set PLAYWRIGHT_BASE_URL=http://localhost:1420 for dev-server mode)"
-  exit 1
+  echo ">>> Using safaridriver (macOS WKWebView backend)"
+else
+  # --- Windows / Git Bash: msedgedriver.exe ---
+  # tauri-driver looks up msedgedriver.exe in PATH. Common cache locations
+  # we can pre-add to PATH: %TEMP% (where the edgedriver npm package drops it)
+  # and ~/.cache/msedgedriver.
+  MSEDGEDRIVER_CANDIDATES=(
+    "${LOCALAPPDATA:-}/Temp"
+    "${TEMP:-}"
+    "$HOME/.cache/msedgedriver"
+    "/c/Users/${USER:-e-Yunfei.Qian}/AppData/Local/Temp"
+  )
+  for c in "${MSEDGEDRIVER_CANDIDATES[@]}"; do
+    if [[ -n "$c" && -x "$c/msedgedriver.exe" ]] && ! command -v msedgedriver.exe >/dev/null 2>&1; then
+      export PATH="$c:$PATH"
+      echo ">>> Auto-added $c to PATH (msedgedriver.exe found)"
+      break
+    fi
+  done
+  if ! command -v msedgedriver.exe >/dev/null 2>&1; then
+    echo "FAIL: msedgedriver.exe not on PATH."
+    echo "      Download from https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/"
+    echo "      matching your Edge version (run msedge --version to check)."
+    echo "      Drop msedgedriver.exe anywhere on PATH or in %TEMP%."
+    echo "      (or set PLAYWRIGHT_BASE_URL=http://localhost:1420 for dev-server mode)"
+    exit 1
+  fi
 fi
 
-# --- Prereq 3: release exe ---
-EXE_PATH="${EXE_PATH:-$PROJECT_ROOT/src-tauri/target/release/claude-config-manager.exe}"
-if [[ ! -f "$EXE_PATH" ]]; then
+# --- Prereq 3: release exe (path differs by platform) ---
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  EXE_PATH="${EXE_PATH:-$PROJECT_ROOT/src-tauri/target/release/bundle/macos/ClaudeManager.app}"
+else
+  EXE_PATH="${EXE_PATH:-$PROJECT_ROOT/src-tauri/target/release/claude-config-manager.exe}"
+fi
+if [[ ! -e "$EXE_PATH" ]]; then
   echo "FAIL: release exe not found at $EXE_PATH"
-  echo "      Build with: npm run tauri build -- --no-bundle"
+  echo "      Build with: ./scripts/build.sh --release (mac) or build-only.sh (win)"
   exit 1
 fi
-EXE_PATH_WIN=$(cygpath -w "$EXE_PATH" 2>/dev/null || echo "$EXE_PATH")
+# Convert to Windows-style path only on Windows; macOS keeps the .app path.
+EXE_PATH_WIN=""
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  EXE_PATH_WIN=$(cygpath -w "$EXE_PATH" 2>/dev/null || echo "$EXE_PATH")
+fi
 
 # --- Ports ---
 DRIVER_PORT="${TAURI_DRIVER_PORT:-4444}"
@@ -103,7 +129,11 @@ NATIVE_PORT="${TAURI_NATIVE_PORT:-4445}"
 # --- Kill stale instances ---
 echo ">>> Pre-cleanup: killing any stale app/driver instances..."
 ./scripts/kill-app.sh >/dev/null 2>&1 || true
-powershell.exe -NoProfile -Command "Get-Process -Name 'tauri-driver','msedgedriver' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  pkill -x tauri-driver 2>/dev/null || true
+else
+  powershell.exe -NoProfile -Command "Get-Process -Name 'tauri-driver','msedgedriver' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+fi
 sleep 1
 
 # --- Start tauri-driver in background ---
@@ -117,7 +147,11 @@ cleanup() {
   kill "$DRIVER_PID" 2>/dev/null || true
   wait "$DRIVER_PID" 2>/dev/null || true
   ./scripts/kill-app.sh >/dev/null 2>&1 || true
-  powershell.exe -NoProfile -Command "Get-Process -Name 'tauri-driver','msedgedriver' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    pkill -x tauri-driver 2>/dev/null || true
+  else
+    powershell.exe -NoProfile -Command "Get-Process -Name 'tauri-driver','msedgedriver' -ErrorAction SilentlyContinue | Stop-Process -Force" 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 

@@ -597,22 +597,33 @@ fi
 echo ""
 echo ">>> Test 3: Close minimizes to tray"
 if [[ "$IS_DARWIN" == "true" ]]; then
-  # === macOS branch: complementary semantic to Windows ===
-  # On macOS, the Tauri `window.close-requested` interception that keeps
-  # the app alive in the system tray behaves differently — sending
-  # `quit` to the application bundle typically causes the process to
-  # exit (unless the user has the app set to "stay in dock"). So
-  # instead of "close→survive", Test 3 on macOS verifies the dual:
-  # "send quit → process goes away within a short window". This is
-  # complementary to Test 4 (force kill); if quit fails, Test 4 still
-  # cleans up. We sleep 3s and assert zero matching processes.
-  osascript -e 'tell application "ClaudeManager" to quit' 2>/dev/null || true
-  sleep 3
-  PROC_AFTER_CLOSE=$(pgrep -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "$PROC_AFTER_CLOSE" == "0" ]]; then
-    record "3_tray" "PASS" "process exited after quit (Mac sem: quit→exit, complementary to Test 4)"
+  # === macOS branch: same semantic as Windows (close→survive) ===
+  # The Tauri `on_window_event(CloseRequested)` handler at
+  # src-tauri/src/lib.rs installs unconditionally (no #[cfg] gate), so
+  # macOS also intercepts close and hides the window to the tray. This
+  # means `osascript 'tell application "X" to quit'` actually gets
+  # translated by AppKit to "close last window", the handler fires
+  # `prevent_close() + hide()`, and the process stays alive. The old
+  # "quit → exit" assertion was therefore backwards — the Rust tray
+  # semantics are identical across platforms.
+  #
+  # Verify the same Windows semantic on macOS: send the standard
+  # close-window shortcut (Cmd+W via System Events), the handler
+  # intercepts, window hides, process survives 1s. Test 4 still does
+  # force kill cleanup; if the process somehow exited we treat that as
+  # FAIL (the tray handler must keep it alive).
+  osascript -e 'tell application "System Events" to tell process "ClaudeManager" to keystroke "w" using command down' 2>/dev/null || true
+  sleep 1
+  # Wrap pgrep in { ... || true; } to tolerate the "no match" exit 1
+  # under `set -e` + `set -o pipefail`. When tray handler correctly hides
+  # the window but the process keeps running, pgrep returns 1 and would
+  # break the script before we can record PASS. (See Test 4 for the same
+  # pattern.)
+  PROC_AFTER_CLOSE=$( { pgrep -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true; } | wc -l | tr -d ' ')
+  if [[ "$PROC_AFTER_CLOSE" -ge "1" ]]; then
+    record "3_tray" "PASS" "process survived Cmd+W (close intercepted by tray handler, app stays alive)"
   else
-    record "3_tray" "FAIL" "process still alive after quit (count=$PROC_AFTER_CLOSE)"
+    record "3_tray" "FAIL" "process exited after Cmd+W (count=$PROC_AFTER_CLOSE; tray handler should have kept it alive)"
   fi
 else
   powershell.exe -NoProfile -Command "
@@ -641,7 +652,11 @@ echo ">>> Test 4: Force kill"
 if [[ "$IS_DARWIN" == "true" ]]; then
   pkill -9 -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true
   sleep 2
-  PROC_AFTER_KILL=$(pgrep -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null | wc -l | tr -d ' ')
+  # pgrep returns 1 when no match — that breaks `set -e` + `set -o pipefail`
+  # under `$(...)` capture. Wrap pgrep itself in `... || true` so the
+  # pipeline always succeeds. When pgrep finds nothing, `wc -l` reads EOF
+  # and emits "0", which is exactly what we want.
+  PROC_AFTER_KILL=$( { pgrep -f "ClaudeManager.app/Contents/MacOS/claude-config-manager" 2>/dev/null || true; } | wc -l | tr -d ' ')
 else
   powershell.exe -NoProfile -Command "
     foreach (\$n in @('${SOURCE_PROCNAME}', '${EXE_NAME_NO_EXT}')) {
