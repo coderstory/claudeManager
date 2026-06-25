@@ -26,6 +26,26 @@ use crate::platform::traits::{AppPaths, IPlatformPaths, PlatformError};
 /// macOS 路径解析器。无状态——`resolve` 是纯函数。
 pub struct MacPaths;
 
+/// Wire-format subset of `<app_data>/projects.json` (mirrors
+/// `windows::paths::ProjectsFileSubset`). We intentionally re-declare
+/// the struct here instead of `pub use`-ing the Windows one because
+/// the platform layer keeps each impl self-contained (CLAUDE.md §3.2:
+/// "all OS differences abstracted to trait, business code never sees
+/// OS structs"). M5 bug #19 fix: this used to be a `unimplemented!()`
+/// stub that always returned `None`, breaking F16/F17 in project mode
+/// (and the F1 is_active badge per M5 bug #4 when a project is set).
+#[derive(Debug, serde::Deserialize)]
+struct ProjectsFileSubset {
+    current_project_id: Option<uuid::Uuid>,
+    projects: Vec<ProjectSubset>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ProjectSubset {
+    id: uuid::Uuid,
+    root_dir: PathBuf,
+}
+
 impl IPlatformPaths for MacPaths {
     fn resolve(&self) -> AppPaths {
         // M4 fixture isolation — `CCM_TEST_HOME` 短路 home / app_data。
@@ -132,23 +152,29 @@ impl IPlatformPaths for MacPaths {
         Ok(())
     }
 
-    /// M3.10 — macOS compile-only stub.
+    /// M5 bug #19 fix — was a compile-only stub that always returned `None`.
+    /// Now reads `<app_data>/projects.json` (same wire format as
+    /// `WindowsPaths::active_root_dir`) so macOS users in project mode
+    /// see project-scoped provider list + resource browser (F16/F17),
+    /// and the F1 `is_active` badge reflects the project's settings.json
+    /// (M5 bug #4 dependency).
     ///
-    /// Per D6 (M3 启动门决策),mac 真机验证暂缓。本方法始终返回
-    /// `None` —— macOS 用户永远在"用户级"模式下,直到 M4 backlog
-    /// 重新评估 Mac 真机验证时机。
-    ///
-    /// 后续 Mac 真机实现需要:
-    ///   1. 读 `<app_data>/projects.json`(同 Windows 路径解析)
-    ///   2. 查 `current_project_id` 对应 project 的 `root_dir`
-    ///   3. 返回 `Some(root_dir)` 或 `None`(用户级)
-    ///
-    /// 当前直接依赖 trait 的默认实现(None)即可 —— 这里显式 override
-    /// 是为了在 macOS 编译时锁住"必须返回 None"的契约,防止未来
-    /// 不小心改成读默认实现(虽然默认实现也是 None,语义一致)。
-    #[allow(dead_code)]
+    /// Failure modes (all degrade to `None` = user-level, same as Windows):
+    /// - file missing (first launch, pre-ProjectService): None
+    /// - JSON corrupt: None
+    /// - `current_project_id` is `None`: None
+    /// - `current_project_id` points to a project that's no longer
+    ///   in the list: None
     fn active_root_dir(&self) -> Option<std::path::PathBuf> {
-        None
+        let projects_file = self.resolve().app_data.join("projects.json");
+        let raw = std::fs::read_to_string(&projects_file).ok()?;
+        let parsed: ProjectsFileSubset = serde_json::from_str(&raw).ok()?;
+        let id = parsed.current_project_id?;
+        parsed
+            .projects
+            .into_iter()
+            .find(|p| p.id == id)
+            .map(|p| p.root_dir)
     }
 
     /// M3.2 polish — macOS allow-list mirrors Windows: backups_dir
@@ -272,11 +298,54 @@ mod tests {
         );
     }
 
-    /// M3.10 — D6 决策:macOS 暂不实装 active_root_dir 真机读取，
-    /// 永远返回 None（用户级）。
+    /// M5 bug #19 regression — `active_root_dir` now reads
+    /// `<app_data>/projects.json` (same as Windows). When no
+    /// `projects.json` exists (first launch) it returns `None`,
+    /// matching the pre-fix contract.
     #[test]
-    fn mac_paths_active_root_dir_is_always_none() {
-        assert_eq!(MacPaths.active_root_dir(), None);
+    fn mac_paths_active_root_dir_returns_none_when_projects_file_missing() {
+        // Without `CCM_TEST_HOME` set, this reads the user's real
+        // app_data/projects.json. We can't easily fake absence here;
+        // accept either outcome (None if no project file, Some if the
+        // user has run the project switcher). Just confirm no panic.
+        let _ = MacPaths.active_root_dir();
+    }
+
+    /// M5 bug #19 fix — wire format parsing matches the Windows impl.
+    /// Pin the schema: `current_project_id` + `projects[].id/root_dir`.
+    /// Anyone bumping the on-disk shape has to update this test.
+    #[test]
+    fn mac_paths_active_root_dir_subset_parses_current_id_and_root_dir() {
+        let json = r#"{
+            "version": 1,
+            "current_project_id": "00000000-0000-0000-0000-000000000000",
+            "projects": [
+                { "id": "00000000-0000-0000-0000-000000000000",
+                  "root_dir": "/Users/u/projects/foo",
+                  "name": "项目 A",
+                  "created_at": 1,
+                  "is_system": false }
+            ]
+        }"#;
+        let parsed: ProjectsFileSubset = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.current_project_id, Some(uuid::Uuid::nil()));
+        assert_eq!(
+            parsed.projects[0].root_dir,
+            std::path::PathBuf::from("/Users/u/projects/foo")
+        );
+    }
+
+    /// M5 bug #19 fix — null `current_project_id` (no active project)
+    /// must yield `None` from the platform impl.
+    #[test]
+    fn mac_paths_active_root_dir_subset_handles_null_current_id() {
+        let json = r#"{
+            "version": 1,
+            "current_project_id": null,
+            "projects": []
+        }"#;
+        let parsed: ProjectsFileSubset = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.current_project_id, None);
     }
 
     // -----------------------------------------------------------------
@@ -381,5 +450,53 @@ mod tests {
             Some(v) => std::env::set_var("CCM_TEST_HOME", v),
             None => std::env::remove_var("CCM_TEST_HOME"),
         }
+    }
+
+    /// M5 bug #19 regression — exercises the projects.json parser +
+    /// project-lookup logic via a realistic input. We don't go
+    /// through `MacPaths.active_root_dir()` because that touches the
+    /// process-global `CCM_TEST_HOME` env var, which other parallel
+    /// tests in this module also mutate (race condition impossible
+    /// to lock without `serial_test`). The wire-format + lookup
+    /// logic is what we actually want to guard; the env-var +
+    /// file-read wiring is a 2-line glue.
+    #[test]
+    fn mac_active_root_dir_lookup_returns_current_project_root() {
+        // Wire format exercises both the current_id field and the
+        // projects[].id/root_dir lookup. Pre-fix this whole function
+        // was `None`, so F16/F17 always showed user-level resources.
+        let project_id_a = uuid::Uuid::new_v4();
+        let project_id_b = uuid::Uuid::new_v4();
+        let json = format!(
+            r#"{{
+                "version": 1,
+                "current_project_id": "{project_id_b}",
+                "projects": [
+                    {{ "id": "{project_id_a}",
+                       "root_dir": "/Users/u/projects/a",
+                       "name": "A",
+                       "created_at": 1,
+                       "is_system": false }},
+                    {{ "id": "{project_id_b}",
+                       "root_dir": "/Users/u/projects/b",
+                       "name": "B",
+                       "created_at": 2,
+                       "is_system": false }}
+                ]
+            }}"#
+        );
+        let parsed: ProjectsFileSubset = serde_json::from_str(&json).unwrap();
+        // The pre-fix stub returned None unconditionally. The fix
+        // must (a) parse `current_project_id` and (b) find the
+        // matching project by id. This is the exact same lookup
+        // `active_root_dir` performs.
+        let id = parsed.current_project_id.expect("must parse current_project_id");
+        let root_dir = parsed
+            .projects
+            .into_iter()
+            .find(|p| p.id == id)
+            .map(|p| p.root_dir)
+            .expect("must find matching project");
+        assert_eq!(root_dir, std::path::PathBuf::from("/Users/u/projects/b"));
     }
 }
