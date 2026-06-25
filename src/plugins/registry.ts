@@ -19,7 +19,6 @@ import type { FrontendPlugin } from './types';
 import {
   providerListPlugin,
   importSqlPlugin,
-  deeplinkImportPlugin,
   jsonEditorPlugin,
   mcpManagementPlugin,
   usageQueryPlugin,
@@ -31,14 +30,13 @@ import {
 } from './stubs/mod';
 
 /**
- * The 12 frontend plugin stubs, in the same order as the Rust
+ * The 11 frontend plugin stubs, in the same order as the Rust
  * `init_all` registrations. Order is not load-bearing but it keeps
  * the two registries visually aligned for review.
  */
 export const ALL_PLUGINS: FrontendPlugin[] = [
   providerListPlugin,
   importSqlPlugin,
-  deeplinkImportPlugin,
   jsonEditorPlugin,
   mcpManagementPlugin,
   usageQueryPlugin,
