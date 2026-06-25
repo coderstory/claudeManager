@@ -7,7 +7,7 @@
  *   2. Page mount → 并发 invoke `getCurrentUsage(window)` + `getUsageHistory(window)`
  *      (共享同一 `(provider_id, window)` cache key,后端只扫一次 JSONL)。
  *   3. Snapshot 渲染 3 大数字卡片 (tokens / cost / balance)。
- *   4. Breakdown 表格:每行 = 一个 model,展示 input/output/cache_read/cache_creation +
+ *   4. Breakdown 表格:每行 = 一个 model,展示 input/output/cache_read +
  *      费用 (内置价格表查不到 → 显示 "—")。
  *   5. History 图表:手绘 SVG,per-day stacked bar (per-model color)。
  *   6. 错误 → 4 类本地化 banner (PermissionDenied / EncodingError / PathUnresolved / IO/JSON)。
@@ -402,7 +402,6 @@ export default function UsageQueryPage(): ReactElement {
                 <Th align="right">Input</Th>
                 <Th align="right">Output</Th>
                 <Th align="right">Cache Read</Th>
-                <Th align="right">Cache Create</Th>
                 <Th align="right">Total</Th>
                 <Th align="right"># Msgs</Th>
               </tr>
@@ -422,7 +421,6 @@ export default function UsageQueryPage(): ReactElement {
                   <Td align="right">{row.input_tokens.toLocaleString()}</Td>
                   <Td align="right">{row.output_tokens.toLocaleString()}</Td>
                   <Td align="right">{row.cache_read_tokens.toLocaleString()}</Td>
-                  <Td align="right">{row.cache_creation_tokens.toLocaleString()}</Td>
                   <Td align="right">
                     <strong>{row.total_tokens.toLocaleString()}</strong>
                   </Td>

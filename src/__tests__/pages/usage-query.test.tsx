@@ -151,6 +151,17 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     });
   });
 
+  // M5 bug #17 — CACHE CREATE 列在 JSONL 数据源里永远为 0,
+  // UI 删列;测试断言 table header 不再含 'Cache Create'。
+  it('breakdown table does not include Cache Create column (bug #17)', async () => {
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-breakdown-section')).toBeInTheDocument();
+    });
+    const section = screen.getByTestId('usage-breakdown-section');
+    expect(section.textContent).not.toContain('Cache Create');
+  });
+
   it('marks the active window with aria-pressed=true', async () => {
     render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
