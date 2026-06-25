@@ -522,3 +522,49 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// M5 bug #9 — fullscreen toggle (parity with backup-restore F19)
+// ---------------------------------------------------------------------------
+
+describe('JsonEditorPage — M5 bug #9 fullscreen', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it('renders the fullscreen toggle button', async () => {
+    render(<JsonEditorPage />);
+    expect(
+      screen.getByTestId('json-editor-fullscreen-toggle'),
+    ).toBeInTheDocument();
+  });
+
+  it('clicking the toggle opens the fullscreen overlay', async () => {
+    render(<JsonEditorPage />);
+    const btn = screen.getByTestId('json-editor-fullscreen-toggle');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('json-editor-fullscreen-overlay'),
+      ).toBeInTheDocument();
+    });
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('exit button closes the overlay', async () => {
+    render(<JsonEditorPage />);
+    fireEvent.click(screen.getByTestId('json-editor-fullscreen-toggle'));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('json-editor-fullscreen-overlay'),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('json-editor-fullscreen-exit'));
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId('json-editor-fullscreen-overlay'),
+      ).not.toBeInTheDocument();
+    });
+  });
+});

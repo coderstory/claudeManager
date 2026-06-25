@@ -59,6 +59,8 @@ import {
   EyeOff,
   FileJson,
   FolderOpen,
+  Maximize2,
+  Minimize2,
   RotateCcw,
   RotateCw,
   Save,
@@ -116,6 +118,10 @@ const INITIAL_STATE: PageState = {
 
 export default function JsonEditorPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M5 bug #9 — fullscreen toggle for the editor (parity with
+  // backup-restore F19 fullscreen overlay). When true, the two-col
+  // layout is hidden and the textarea fills the viewport.
+  const [fullscreen, setFullscreen] = useState(false);
   // M3.11 (A4#12) — 侧边文件树数据 + loading / error 状态。
   const [treeEntries, setTreeEntries] = useState<JsonFileEntry[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
@@ -547,6 +553,16 @@ export default function JsonEditorPage(): ReactElement {
           {state.masked ? <EyeOff size={14} /> : <Eye size={14} />}
           遮罩{state.masked ? '开' : '关'}
         </button>
+        <button
+          onClick={() => setFullscreen((prev) => !prev)}
+          data-testid="json-editor-fullscreen-toggle"
+          aria-pressed={fullscreen}
+          style={toolbarBtn()}
+          title={fullscreen ? '退出全屏 (Esc)' : '全屏查看编辑器'}
+        >
+          {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          {fullscreen ? '退出全屏' : '全屏'}
+        </button>
 
         {state.filePath && (
           <span
@@ -717,6 +733,98 @@ export default function JsonEditorPage(): ReactElement {
         {/* 右栏结束 */}
       </div>
       {/* 两栏布局结束 */}
+
+      {/* M5 bug #9 — fullscreen overlay. Mirrors the backup-restore
+          F19 pattern: fixed-position viewport, Escape to exit, auto-
+          focuses on mount so Esc-to-close works without prior click.
+          Renders an isolated toolbar + textarea so the user can edit
+          while in fullscreen mode (we don't just hide the existing
+          tree — we keep the editor's affordances). */}
+      {fullscreen && (
+        <div
+          data-testid="json-editor-fullscreen-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="JSON 编辑器全屏"
+          onKeyDown={(ev) => {
+            if (ev.key === 'Escape') {
+              ev.stopPropagation();
+              setFullscreen(false);
+            }
+          }}
+          tabIndex={-1}
+          ref={(el) => {
+            if (el) el.focus();
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'var(--bg-primary)',
+            zIndex: 1000,
+            padding: 24,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                flex: 1,
+              }}
+            >
+              全屏编辑 · 按 Esc 或点 [退出全屏] 关闭
+            </h3>
+            <button
+              onClick={() => setFullscreen(false)}
+              data-testid="json-editor-fullscreen-exit"
+              style={toolbarBtn()}
+            >
+              <Minimize2 size={14} />
+              退出全屏
+            </button>
+          </div>
+          <textarea
+            data-testid="json-editor-fullscreen-textarea"
+            value={displayContent}
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+              onRawChange(e.target.value)
+            }
+            spellCheck={false}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              width: '100%',
+              fontFamily:
+                '"Cascadia Code", "SF Mono", Menlo, Consolas, monospace',
+              fontSize: 13,
+              padding: 16,
+              borderRadius: 8,
+              border: state.error ? '1px solid var(--danger)' : '1px solid var(--border)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              outline: 'none',
+              resize: 'none',
+              whiteSpace: 'pre',
+              tabSize: 2,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
