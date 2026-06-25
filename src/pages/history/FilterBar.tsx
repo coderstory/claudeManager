@@ -11,10 +11,14 @@
  *   just with different field sets (usage has `provider_id`,
  *   backup has `scope` + `trigger_kind`). The `tab` prop selects
  *   the visible fields so we don't ship two near-duplicate files.
- * - **Date inputs use native `<input type="date">`**: it round-trips
- *   via ISO `YYYY-MM-DD` strings which we convert to unix seconds
- *   on the way out. No date-picker library — keeps the bundle
- *   small and matches the project's "no extra deps" rule.
+ * - **Date inputs use the in-house `<DatePicker>`** (M4.6-fix): the
+ *   native `<input type="date">` had two pain points — WebView2 /
+ *   WKWebView render an ugly, OS-locked picker, and the default
+ *   locale is `en-US` regardless of system settings. DatePicker
+ *   keeps the same ISO `YYYY-MM-DD` round-trip contract (no
+ *   date-picker library — keeps the bundle small and matches the
+ *   project's "no extra deps" rule) while rendering a themed
+ *   zh-CN calendar popover.
  * - **"Apply" is implicit**: the parent's `useEffect` re-runs on
  *   `filter` change, so every keystroke is a refetch. To avoid
  *   hammering IPC we debounce via a local "pending" state — but
@@ -27,6 +31,7 @@ import type {
   BackupHistoryFilter,
   UsageHistoryFilter,
 } from '../../types/history';
+import { DatePicker } from '../../components/DatePicker';
 
 export type HistoryTab = 'usage' | 'backup';
 export type HistoryFilter = UsageHistoryFilter & BackupHistoryFilter;
@@ -117,20 +122,18 @@ export function FilterBar({
       {/* Time range — from / to */}
       <label style={labelBaseStyle} data-testid="history-filter-from">
         <span>起始日期</span>
-        <input
-          type="date"
+        <DatePicker
           value={tsToDate(filter.from_ts ?? null)}
-          onChange={(e) => update({ from_ts: dateToTs(e.target.value) })}
-          style={inputBaseStyle}
+          onChange={(v) => update({ from_ts: dateToTs(v) })}
+          dataTestId="history-filter-from"
         />
       </label>
       <label style={labelBaseStyle} data-testid="history-filter-to">
         <span>结束日期</span>
-        <input
-          type="date"
+        <DatePicker
           value={tsToDate(filter.to_ts ?? null)}
-          onChange={(e) => update({ to_ts: dateToTs(e.target.value) })}
-          style={inputBaseStyle}
+          onChange={(v) => update({ to_ts: dateToTs(v) })}
+          dataTestId="history-filter-to"
         />
       </label>
 

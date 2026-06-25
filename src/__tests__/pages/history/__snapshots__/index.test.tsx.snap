@@ -81,11 +81,19 @@ exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty
       <span>
         起始日期
       </span>
-      <input
-        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
-        type="date"
-        value=""
-      />
+      <div
+        style="position: relative; display: inline-block;"
+      >
+        <button
+          aria-expanded="false"
+          aria-haspopup="dialog"
+          data-testid="history-filter-from-trigger"
+          style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-muted); font-size: 13px; font-family: inherit; cursor: pointer; min-width: 130px; text-align: left;"
+          type="button"
+        >
+          请选择日期
+        </button>
+      </div>
     </label>
     <label
       data-testid="history-filter-to"
@@ -94,11 +102,19 @@ exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty
       <span>
         结束日期
       </span>
-      <input
-        style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; font-family: inherit;"
-        type="date"
-        value=""
-      />
+      <div
+        style="position: relative; display: inline-block;"
+      >
+        <button
+          aria-expanded="false"
+          aria-haspopup="dialog"
+          data-testid="history-filter-to-trigger"
+          style="padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-button); background: var(--bg-elevated); color: var(--text-muted); font-size: 13px; font-family: inherit; cursor: pointer; min-width: 130px; text-align: left;"
+          type="button"
+        >
+          请选择日期
+        </button>
+      </div>
     </label>
     <label
       data-testid="history-filter-project"

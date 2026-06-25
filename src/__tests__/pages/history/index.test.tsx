@@ -262,22 +262,30 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('history-filter-reset')).toBeInTheDocument();
     });
-    // Set a date and verify reset clears it.
-    const fromInput = screen.getByTestId('history-filter-from').querySelector(
-      'input',
-    ) as HTMLInputElement;
+    // Set a date via DatePicker and verify reset clears it.
+    // M4.6-fix:触发器是 button[data-testid="history-filter-from-trigger"],点击打开日历后
+    // 再点具体某天,onChange 会发出 YYYY-MM-DD。
+    const fromTrigger = screen.getByTestId('history-filter-from-trigger') as HTMLButtonElement;
+    expect(fromTrigger.textContent).toMatch(/请选择/);
     await act(async () => {
-      fireEvent.change(fromInput, { target: { value: '2026-01-15' } });
+      fromTrigger.click();
     });
-    expect(fromInput.value).toBe('2026-01-15');
+    // 弹窗打开后点 "15" 这一天
+    const day15 = await waitFor(() => screen.getByTestId('date-picker-day-15'));
+    await act(async () => {
+      day15.click();
+    });
+    // 触发器现在应显示 2026 年 M 月 15 日 (M 取决于测试运行时月份)
+    expect(fromTrigger.textContent).toMatch(/2026/);
+    expect(fromTrigger.textContent).toMatch(/15/);
+    expect(fromTrigger.textContent).not.toMatch(/请选择/);
+    // 点 reset
     await act(async () => {
       fireEvent.click(screen.getByTestId('history-filter-reset'));
     });
-    // After reset, the input should be cleared.
-    const after = screen.getByTestId('history-filter-from').querySelector(
-      'input',
-    ) as HTMLInputElement;
-    expect(after.value).toBe('');
+    // 重置后应回到占位文
+    const after = screen.getByTestId('history-filter-from-trigger') as HTMLButtonElement;
+    expect(after.textContent).toMatch(/请选择/);
   });
 
   it('changing tab clears any previous error', async () => {
