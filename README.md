@@ -1,6 +1,17 @@
-# Claude Config Manager
+```
+ █████╗ ██╗      █████╗ ██╗   ██╗ ██████╗███████╗     ██████╗ ██████╗ ███╗   ██╗███████╗██╗   ██████╗     
+██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝    ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║  ██╔════╝ 
+██║     ██║     ███████║██║   ██║██║  ██║█████╗      ██║     ██║   ██║██╔██╗ ██║█████╗  ██║  ██║  ███╗
+██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝      ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║  ██║   ██║
+╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗    ╚██████╗╚██████╔╝██║ ╚████║██║     ██║  ╚██████╔╝
+ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝   ╚═════╝ 
 
-> 跨平台桌面工具，帮助用户在多个 Claude Code provider 配置之间**快速切换 / 安全管理 / 实时监控用量**。
+                          ⚔  Manager  ⚔
+         一念切换 Provider · 配置守护 · 用量监测
+        Win 11 + macOS 26 Tahoe · Tauri v2 + React 19 + Rust
+```
+
+# Claude Config Manager
 
 ---
 
@@ -125,15 +136,16 @@ CI 在 `.github/workflows/ci.yml` 跑全 3 层；release 流水线在 `release.y
 
 ---
 
-## 当前状态（2026-06-21）
+## 当前状态（2026-06-25）
 
 | Milestone | 状态 | 范围 |
 |---|---|---|
 | **M1 架构期** | ✅ Done（12 子任务 + 评审） | Tauri 骨架 / 8 traits / 12 plugin stub / 设计系统 / CI |
 | **M2 业务实现期** | ✅ Done to M2.16 | F1~F8 + F13 + F14 + F15 + F17 + F20~F23 + Mac 平台修复 |
-| **M2.17** | 🚧 启动中 | 文档收尾 + 集成 ship |
+| **M3 主题重构（v3.0）** | ✅ Done（2026-06-22） | 插件式主题系统（`light` 瓷白 / `anime` 薄荷汽水）+ 14 内页收束 + AppHeader 切换 |
+| **M4** | 🚧 WIP | 主 session 整流 + Mac 真机验真；4 个 M4.6 WIP 文件待解 merge conflict |
 
-历史里程碑报告：[`docs/milestones/`](docs/milestones/)（M1-final-report / M2-roadmap-draft / STATE）。
+历史里程碑报告：[`docs/milestones/`](docs/milestones/)（M1-final-report / M2-roadmap-draft / M3-issues-and-roadmap / STATE）。
 
 ---
 
@@ -146,16 +158,16 @@ CI 在 `.github/workflows/ci.yml` 跑全 3 层；release 流水线在 `release.y
 | [`CLAUDE.md`](CLAUDE.md) | **项目规则圣经**（§2 工程纪律 / §3 架构 / §6 评审 / §9 迭代 / §11 派单） |
 | [`SPEC.md`](SPEC.md) | 产品规格（F1~F24 + 设计规范 §5） |
 | [`docs/BUILD.md`](docs/BUILD.md) | 构建脚本 / WebView2 依赖 / 发布流水线 |
-| [`docs/SIGNING.md`](docs/SIGNING.md) | Windows 代码签名 / 公证 / macOS 公证 |
 | [`docs/milestones/STATE.md`](docs/milestones/STATE.md) | 迭代记录 / 用户反馈 / 已知限制 |
 | [`docs/milestones/M1-REVIEWS.md`](docs/milestones/M1-REVIEWS.md) | M1 阶段 4 阶段评审（自审 / 头脑风暴 / 同行 / 业务流程） |
 | [`docs/milestones/M2-REVIEWS.md`](docs/milestones/M2-REVIEWS.md) | M2 阶段评审汇总（M2.1~M2.16） |
+| [`docs/milestones/M3-issues-and-roadmap.md`](docs/milestones/M3-issues-and-roadmap.md) | M3 主题重构待办与路线 |
 
 ---
 
 ## 贡献
 
-本项目处于早期开发阶段（M2.16），不接受外部 PR。所有变更走"主 session 派单 → subagent 执行"流程。
+本项目处于 M3 主题重构已 ship / M4 业火中的阶段，不接受外部 PR。所有变更走"主 session 派单 → subagent 执行"流程。
 
 发现 bug / 提需求：直接在主 session 对话中描述，主 session 会拆成 subagent 任务派单。
 
