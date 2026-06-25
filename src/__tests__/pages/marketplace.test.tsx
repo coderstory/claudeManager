@@ -72,6 +72,16 @@ describe('MarketplacePage — F17 (M2.16)', () => {
     expect(screen.getByTestId('marketplace-custom-section')).toBeInTheDocument();
   });
 
+  // M5 #25 — 第三方仓库 section needs explanatory copy so new
+  // users know what the input does (粘贴 git URL → 预览 → 勾选).
+  it('third-party repo section explains its purpose', async () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<MarketplacePage />);
+    const section = screen.getByTestId('marketplace-custom-section');
+    expect(section.textContent).toContain('粘贴任意 git 仓库 URL');
+    expect(section.textContent).toContain('plugin / skill / command');
+  });
+
   it('fires list_marketplace_repos on mount', async () => {
     mockInvoke.mockResolvedValue([]);
     render(<MarketplacePage />);

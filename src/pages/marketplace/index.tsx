@@ -421,6 +421,20 @@ export default function MarketplacePage(): ReactElement {
           <GitBranch size={15} />
           第三方仓库
         </div>
+        {/* M5 #25 — 用户问"第三方仓库功能干啥的"。补充 1 行解释,
+            说明这个 input 的用途:贴 git URL → 预览 → 勾选装其内的
+            plugin / skill / command。原先只有 placeholder,新用户
+            看到会迷茫这功能能干啥。 */}
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.6,
+          }}
+        >
+          粘贴任意 git 仓库 URL(支持 https://*.git),克隆后扫描其内的
+          plugin / skill / command,弹窗勾选要安装到当前项目的项。
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             type="text"
