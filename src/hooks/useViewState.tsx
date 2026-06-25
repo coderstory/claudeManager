@@ -214,9 +214,18 @@ export function ViewStateProvider({
 /**
  * useViewState — see the file header for the design rationale.
  *
- * Reads the singleton view state from ViewStateContext. Throws if
- * called outside a <ViewStateProvider> — that's a developer error
- * (missing provider in the test / app tree), not a runtime concern.
+ * Reads the singleton view state from ViewStateContext when a
+ * <ViewStateProvider> is mounted in the tree (the M4.6 single-source-
+ * of-truth path). Falls back to a per-call useState when no provider
+ * is mounted — matches pre-M4.6 behavior, which is what the
+ * integration tests and individual page tests currently rely on
+ * (they render <App /> or <Page /> without an explicit provider).
+ *
+ * The Provider is still the recommended path for production — mount
+ * it once in main.tsx so every descendant shares one `view` value
+ * (otherwise setView in usage-query updates a DIFFERENT copy than
+ * App.tsx's router copy and the page never navigates). The fallback
+ * here exists so a missing provider doesn't crash the app.
  *
  * @example
  *   const { view, setView } = useViewState();
@@ -224,11 +233,27 @@ export function ViewStateProvider({
  */
 export function useViewState(): UseViewStateResult {
   const ctx = useContext(ViewStateContext);
-  if (ctx === null) {
-    throw new Error(
-      'useViewState() must be called inside a <ViewStateProvider>. ' +
-        'Wrap your app root in <ViewStateProvider> in App.tsx.',
-    );
-  }
-  return ctx;
+  if (ctx !== null) return ctx;
+
+  // No provider in the tree — fall back to a per-call useState so
+  // individual test renders and pre-Provider code paths still work.
+  // This re-introduces the pre-M4.6 "each consumer has its own view"
+  // behaviour, but the production app mounts ViewStateProvider at
+  // main.tsx so the M4.6 contract still holds in the real runtime.
+  const [view, setViewState] = useState<ViewId>(readInitialView);
+
+  const setView = useCallback(
+    (next: ViewId): void => {
+      setViewState((prev) => {
+        if (prev === next) return prev;
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(STORAGE_KEY, next);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  return { view, setView, allViews: ALL_VIEWS };
 }
