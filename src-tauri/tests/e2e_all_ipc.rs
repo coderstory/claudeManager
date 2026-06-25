@@ -256,7 +256,7 @@ async fn e2e_provider_parse_sql() {
     use claude_config_manager_lib::commands::providers;
     let state = test_state();
     let _ = s(&state);
-    let _ = providers::parse_sql_preview(b"INSERT INTO ...".to_vec()).await;
+    let _ = providers::parse_sql_preview(s(&state), b"INSERT INTO ...".to_vec()).await;
 }
 
 #[tokio::test]

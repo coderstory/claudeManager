@@ -935,6 +935,84 @@ fn extract_row_name(row: &[(&str, &SqlValue)]) -> Option<String> {
         })
 }
 
+// ---------------------------------------------------------------------------
+// M5 bug #7 — validate + deduplicate provider entries
+// ---------------------------------------------------------------------------
+
+/// Validation outcome for a single parsed provider. Surfaces the
+/// concrete reason(s) the row was rejected so the UI can present them
+/// as a skip reason next to the row's checkbox.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ProviderValidation {
+    pub provider: Provider,
+    /// Empty when the row is importable; one entry per missing field.
+    pub missing: Vec<&'static str>,
+}
+
+/// Validate a single parsed `Provider` for import-readiness.
+///
+/// M5 bug #7 — `.sql` dump import previously surfaced rows with empty
+/// `api_base` (claude-family hard-fail, already enforced by the parser)
+/// but accepted rows with empty `api_key` / `name` and silently
+/// collided with existing providers by id. This filter rejects:
+///
+/// - missing `name`            → "missing name"
+/// - missing `api_base`        → "missing base_url" (defensive; parser
+///                                already rejects claude-family empty base,
+///                                but non-claude types carry no base — we
+///                                want to surface those rows explicitly
+///                                instead of writing half-blank configs)
+/// - missing `api_key`         → "missing token"
+pub fn validate_provider_entry(provider: Provider) -> ProviderValidation {
+    let mut missing = Vec::new();
+    if provider.name.trim().is_empty() {
+        missing.push("missing name");
+    }
+    if provider.api_base.trim().is_empty() {
+        missing.push("missing base_url");
+    }
+    if provider.api_key.trim().is_empty() {
+        missing.push("missing token");
+    }
+    ProviderValidation { provider, missing }
+}
+
+/// Per-row dedup result against the live provider library. `existing`
+/// carries the existing provider's `api_base` for the user's reference.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct DedupOutcome {
+    pub provider: Provider,
+    /// True if the same `api_base` already exists in `existing`. UI
+    /// shows a "duplicate of {name}" skip reason.
+    pub is_duplicate: bool,
+    /// The existing provider's name when duplicated (None otherwise).
+    pub duplicate_of: Option<String>,
+}
+
+/// Deduplicate a parsed batch against the live library by `api_base`.
+///
+/// M5 bug #7 — previous SQL import only deduped by `id` (file path)
+/// which let users re-import the same provider under a different id
+/// and end up with two providers pointing at the same upstream. This
+/// flags any row whose `api_base` matches an existing provider (by id
+/// OR by another parsed row in the same batch — later wins / first wins
+/// is left to the UI's checkbox selection).
+pub fn deduplicate(entries: Vec<Provider>, existing: &[Provider]) -> Vec<DedupOutcome> {
+    entries
+        .into_iter()
+        .map(|p| {
+            let dup = existing
+                .iter()
+                .find(|e| !e.api_base.trim().is_empty() && e.api_base == p.api_base);
+            DedupOutcome {
+                duplicate_of: dup.map(|e| e.name.clone()),
+                is_duplicate: dup.is_some(),
+                provider: p,
+            }
+        })
+        .collect()
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct ServerConfigJson {
     #[serde(default)]
@@ -1488,5 +1566,76 @@ COMMIT;
         let parsed = parse_sql_dump(&sql).unwrap();
         assert_eq!(parsed.skipped_lines.len(), 1);
         assert!(parsed.skipped_lines[0].name.is_none());
+    }
+
+    // ----- M5 bug #7 — validate_provider_entry + deduplicate -----
+
+    fn provider_with(
+        id: &str,
+        name: &str,
+        base: &str,
+        key: &str,
+    ) -> Provider {
+        Provider {
+            id: id.into(),
+            name: name.into(),
+            provider_type: "claude".into(),
+            api_base: base.into(),
+            api_key: key.into(),
+            models: ProviderModels::default(),
+            is_active: false,
+            created_at: 0,
+            last_used_at: None,
+            notes: None,
+        }
+    }
+
+    /// Bug #7 RED: 完整 provider 应通过验证。
+    #[test]
+    fn validate_provider_entry_complete_is_importable() {
+        let p = provider_with("a", "A", "https://x", "k");
+        let v = validate_provider_entry(p);
+        assert!(v.missing.is_empty());
+    }
+
+    /// Bug #7: 缺 base_url / token / name 都要标出。
+    #[test]
+    fn validate_provider_entry_reports_all_missing_fields() {
+        let p = provider_with("a", "", "", "");
+        let v = validate_provider_entry(p);
+        assert!(v.missing.contains(&"missing name"));
+        assert!(v.missing.contains(&"missing base_url"));
+        assert!(v.missing.contains(&"missing token"));
+        assert_eq!(v.missing.len(), 3);
+    }
+
+    /// Bug #7: dedup 检测同 api_base,返回 existing provider 名字。
+    #[test]
+    fn deduplicate_flags_existing_api_base() {
+        let existing = vec![provider_with("old", "Old", "https://api.deepseek.com", "k")];
+        let incoming = vec![provider_with("new", "New", "https://api.deepseek.com", "k2")];
+        let out = deduplicate(incoming, &existing);
+        assert_eq!(out.len(), 1);
+        assert!(out[0].is_duplicate);
+        assert_eq!(out[0].duplicate_of.as_deref(), Some("Old"));
+    }
+
+    /// Bug #7: 不与 existing 重叠的 entry 不算 duplicate。
+    #[test]
+    fn deduplicate_unique_entry_not_flagged() {
+        let existing = vec![provider_with("old", "Old", "https://api.deepseek.com", "k")];
+        let incoming = vec![provider_with("new", "New", "https://api.anthropic.com", "k2")];
+        let out = deduplicate(incoming, &existing);
+        assert!(!out[0].is_duplicate);
+        assert!(out[0].duplicate_of.is_none());
+    }
+
+    /// Bug #7: dedup 不应拿空字符串 base_url 误判 (防止 empty base 被当作 duplicate)。
+    #[test]
+    fn deduplicate_ignores_empty_api_base() {
+        let existing = vec![provider_with("old", "Old", "", "k")];
+        let incoming = vec![provider_with("new", "New", "", "k2")];
+        let out = deduplicate(incoming, &existing);
+        assert!(!out[0].is_duplicate);
     }
 }

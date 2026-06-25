@@ -85,6 +85,12 @@ export interface SkippedLine {
  *
  * The page renders 3 cards from this: 原始行数 / 可导入数 / 跳过行数,
  * plus a preview list of the providers that will be imported.
+ *
+ * M5 bug #7 — `validated_providers` and `dedup_outcomes` are parallel
+ * arrays (one entry per `preview_providers` row, same order). Each
+ * row is unchecked by default if `missing.length > 0` or
+ * `is_duplicate = true`; the UI lets the user re-check after reading
+ * the skip reason.
  */
 export interface SqlPreview {
   total_lines: number;
@@ -93,6 +99,29 @@ export interface SqlPreview {
   preview_providers: Provider[];
   preview_mcp: McpServer[];
   skipped_samples: SkippedLine[];
+  validated_providers: ProviderValidation[];
+  dedup_outcomes: DedupOutcome[];
+}
+
+/**
+ * M5 bug #7 — per-row validation outcome. `missing` lists the human
+ * skip reasons (e.g. "missing base_url"). Empty array = importable.
+ */
+export interface ProviderValidation {
+  provider: Provider;
+  missing: string[];
+}
+
+/**
+ * M5 bug #7 — per-row dedup result against the live library. When
+ * `is_duplicate = true`, the row's `api_base` already maps to an
+ * existing provider; `duplicate_of` carries the existing provider's
+ * name for the skip reason.
+ */
+export interface DedupOutcome {
+  provider: Provider;
+  is_duplicate: boolean;
+  duplicate_of: string | null;
 }
 
 /**

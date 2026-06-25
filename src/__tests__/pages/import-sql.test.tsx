@@ -76,6 +76,16 @@ function samplePreview(overrides: Partial<SqlPreview> = {}): SqlPreview {
     preview_providers: [p('a', 'A'), p('b', 'B'), p('c', 'C')],
     preview_mcp: [],
     skipped_samples: [],
+    validated_providers: [
+      { provider: p('a', 'A'), missing: [] },
+      { provider: p('b', 'B'), missing: [] },
+      { provider: p('c', 'C'), missing: [] },
+    ],
+    dedup_outcomes: [
+      { provider: p('a', 'A'), is_duplicate: false, duplicate_of: null },
+      { provider: p('b', 'B'), is_duplicate: false, duplicate_of: null },
+      { provider: p('c', 'C'), is_duplicate: false, duplicate_of: null },
+    ],
     ...overrides,
   };
 }
@@ -371,6 +381,125 @@ describe('ImportSqlPage — F3 reset flow', () => {
     expect(banner!.getAttribute('role')).toBe('alert');
     // banner message 显示中文标题 "导入失败"
     expect(banner!.textContent).toContain('导入失败');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M5 bug #7 — checkbox selection + skip reasons
+// ---------------------------------------------------------------------------
+
+describe('ImportSqlPage — M5 bug #7 checkboxes', () => {
+  it('renders one checkbox per parsed provider row', async () => {
+    mockInvoke.mockResolvedValueOnce(samplePreview());
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('import-sql-checkbox-a')).toBeInTheDocument();
+    expect(screen.getByTestId('import-sql-checkbox-b')).toBeInTheDocument();
+    expect(screen.getByTestId('import-sql-checkbox-c')).toBeInTheDocument();
+  });
+
+  it('unchecks rows that fail validation (missing fields)', async () => {
+    // row 'a' is missing base_url, row 'b' is fine, row 'c' is dup
+    mockInvoke.mockResolvedValueOnce(
+      samplePreview({
+        importable: 3,
+        preview_providers: [p('a', 'A'), p('b', 'B'), p('c', 'C')],
+        validated_providers: [
+          { provider: p('a', 'A'), missing: ['missing base_url'] },
+          { provider: p('b', 'B'), missing: [] },
+          { provider: p('c', 'C'), missing: [] },
+        ],
+        dedup_outcomes: [
+          { provider: p('a', 'A'), is_duplicate: false, duplicate_of: null },
+          { provider: p('b', 'B'), is_duplicate: false, duplicate_of: null },
+          { provider: p('c', 'C'), is_duplicate: false, duplicate_of: null },
+        ],
+      }),
+    );
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    expect(
+      (screen.getByTestId('import-sql-checkbox-a') as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (screen.getByTestId('import-sql-checkbox-b') as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      screen.getByTestId('import-sql-skip-reason-a').textContent,
+    ).toContain('missing base_url');
+  });
+
+  it('unchecks duplicate rows and surfaces reason', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      samplePreview({
+        preview_providers: [p('a', 'A'), p('b', 'B')],
+        validated_providers: [
+          { provider: p('a', 'A'), missing: [] },
+          { provider: p('b', 'B'), missing: [] },
+        ],
+        dedup_outcomes: [
+          { provider: p('a', 'A'), is_duplicate: false, duplicate_of: null },
+          {
+            provider: p('b', 'B'),
+            is_duplicate: true,
+            duplicate_of: 'Existing',
+          },
+        ],
+      }),
+    );
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    expect(
+      (screen.getByTestId('import-sql-checkbox-a') as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId('import-sql-checkbox-b') as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      screen.getByTestId('import-sql-skip-reason-b').textContent,
+    ).toContain('Existing');
+  });
+
+  it('toggles a checkbox when clicked', async () => {
+    mockInvoke.mockResolvedValueOnce(samplePreview());
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    const cb = screen.getByTestId('import-sql-checkbox-a') as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+    fireEvent.click(cb);
+    expect(cb.checked).toBe(false);
+  });
+
+  it('disables confirm when no rows are selected', async () => {
+    mockInvoke.mockResolvedValueOnce(
+      samplePreview({
+        preview_providers: [p('a', 'A')],
+        validated_providers: [
+          { provider: p('a', 'A'), missing: ['missing token'] },
+        ],
+        dedup_outcomes: [
+          { provider: p('a', 'A'), is_duplicate: false, duplicate_of: null },
+        ],
+      }),
+    );
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('import-sql-confirm')).toBeDisabled();
   });
 });
 

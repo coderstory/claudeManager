@@ -29,7 +29,10 @@ use crate::app_state::AppState;
 use crate::domain::{ParsedMcpServer, Provider, ProviderModels};
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::infrastructure::encoding::decode_sql_bytes;
-use crate::infrastructure::sql_parser::{parse_sql_dump, SkippedLine};
+use crate::infrastructure::sql_parser::{
+    deduplicate, parse_sql_dump, validate_provider_entry, DedupOutcome, ProviderValidation,
+    SkippedLine,
+};
 use crate::services::provider_service::{ImportResult, ImportSkip};
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
@@ -151,6 +154,12 @@ pub struct SqlPreview {
     /// Up to 50 skip reasons — the full list is in ImportResult.errors
     /// after import. Capped to keep the preview payload small.
     pub skipped_samples: Vec<SkippedLine>,
+    /// M5 bug #7 — per-row validation outcome (which fields are missing
+    /// for non-importable rows; empty `missing` = importable).
+    pub validated_providers: Vec<ProviderValidation>,
+    /// M5 bug #7 — per-row dedup check against the existing library.
+    /// `is_duplicate = true` rows should be unchecked in the UI.
+    pub dedup_outcomes: Vec<DedupOutcome>,
 }
 
 /// Parse a SQL dump and return a preview without writing any files.
@@ -160,10 +169,32 @@ pub struct SqlPreview {
 /// Big5 / UTF-16 LE/BE BOM),支持用户从 cc-switch / Windows 记事本 /
 /// 第三方工具导出的非 UTF-8 .sql 文件。
 #[tauri::command]
-pub async fn parse_sql_preview(bytes: Vec<u8>) -> CmdResult<SqlPreview> {
+pub async fn parse_sql_preview(
+    state: State<'_, AppState>,
+    bytes: Vec<u8>,
+) -> CmdResult<SqlPreview> {
     let content = decode_sql_bytes(&bytes)
         .map_err(|e| format!("解析 SQL 失败 (编码问题): {e}"))?;
     let parsed = parse_sql_dump(&content).map_err(|e| format!("解析 SQL 失败: {e}"))?;
+    // M5 bug #7 — run validate + dedup so the UI can render the
+    // checkbox list with per-row skip reasons. The lists are parallel
+    // to `parsed.providers` (one entry per row, in order).
+    let validated_providers: Vec<ProviderValidation> = parsed
+        .providers
+        .iter()
+        .cloned()
+        .map(validate_provider_entry)
+        .collect();
+    // Fetch existing providers (user library) for dedup. Cheap on-disk
+    // scan; runs synchronously inside the command.
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let existing = state
+        .provider_service
+        .list_providers_with_active_root(active_root.as_deref())
+        .map(|(v, _)| v)
+        .unwrap_or_default();
+    let dedup_outcomes: Vec<DedupOutcome> =
+        deduplicate(parsed.providers.clone(), &existing);
     let total_lines =
         parsed.providers.len() + parsed.mcp_servers.len() + parsed.skipped_lines.len();
     let importable = parsed.providers.len();
@@ -177,6 +208,8 @@ pub async fn parse_sql_preview(bytes: Vec<u8>) -> CmdResult<SqlPreview> {
         preview_providers: parsed.providers,
         preview_mcp: parsed.mcp_servers,
         skipped_samples,
+        validated_providers,
+        dedup_outcomes,
     })
 }
 
@@ -702,6 +735,8 @@ mod tests {
             preview_providers: vec![],
             preview_mcp: vec![],
             skipped_samples: vec![],
+            validated_providers: vec![],
+            dedup_outcomes: vec![],
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["total_lines"], 5);
@@ -710,6 +745,8 @@ mod tests {
         assert!(v["preview_providers"].is_array());
         assert!(v["preview_mcp"].is_array());
         assert!(v["skipped_samples"].is_array());
+        assert!(v["validated_providers"].is_array());
+        assert!(v["dedup_outcomes"].is_array());
     }
 
     // ----- F14 — ExportedProvider (M2.16) -----

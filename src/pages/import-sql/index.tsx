@@ -43,6 +43,8 @@ import type {
   ImportSkip,
   McpServer,
   Provider,
+  ProviderValidation,
+  DedupOutcome,
   SkippedLine,
   SqlPreview,
 } from '../../types/provider';
@@ -386,6 +388,22 @@ function Preview({
   const importable = preview.importable;
   const skipped = preview.skipped;
   const mcp = preview.preview_mcp.length;
+  // M5 bug #7 — checkbox selection. By default, importable rows are
+  // checked; rows that fail validation (missing field) or are
+  // duplicates against the existing library start unchecked so the
+  // user explicitly opts in.
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const init = new Set<string>();
+    preview.preview_providers.forEach((p, i) => {
+      const v = preview.validated_providers[i];
+      const d = preview.dedup_outcomes[i];
+      const isValid = v ? v.missing.length === 0 : true;
+      const isDup = d ? d.is_duplicate : false;
+      if (isValid && !isDup) init.add(p.id);
+    });
+    return init;
+  });
+  const selectedCount = selected.size;
   return (
     <div data-testid="import-sql-preview" style={{ marginTop: 'var(--space-3)' }}>
       <div
@@ -432,7 +450,22 @@ function Preview({
         />
       </div>
 
-      {importable > 0 && <PreviewList providers={preview.preview_providers} />}
+      {importable > 0 && (
+        <PreviewList
+          providers={preview.preview_providers}
+          validated={preview.validated_providers}
+          dedup={preview.dedup_outcomes}
+          selected={selected}
+          onToggle={(id) => {
+            setSelected((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+        />
+      )}
 
       {mcp > 0 && <McpPreviewBanner count={mcp} mcp={preview.preview_mcp} />}
 
@@ -468,16 +501,16 @@ function Preview({
           type="button"
           data-testid="import-sql-confirm"
           onClick={onConfirm}
-          disabled={importable === 0}
+          disabled={selectedCount === 0}
           style={{
             ...btnStyle,
-            background: importable === 0 ? 'var(--bg-overlay)' : 'var(--accent)',
-            color: importable === 0 ? 'var(--text-muted)' : '#fff',
+            background: selectedCount === 0 ? 'var(--bg-overlay)' : 'var(--accent)',
+            color: selectedCount === 0 ? 'var(--text-muted)' : '#fff',
             border: 'none',
             fontWeight: 600,
             padding: '10px 20px',
-            opacity: importable === 0 ? 0.6 : 1,
-            cursor: importable === 0 ? 'not-allowed' : 'pointer',
+            opacity: selectedCount === 0 ? 0.6 : 1,
+            cursor: selectedCount === 0 ? 'not-allowed' : 'pointer',
           }}
         >
           <Upload
@@ -485,7 +518,7 @@ function Preview({
             aria-hidden="true"
             style={{ verticalAlign: 'middle', marginRight: 6 }}
           />
-          确认导入 {importable > 0 ? `(${importable} 个 provider)` : ''}
+          确认导入 {selectedCount > 0 ? `(${selectedCount} 个 provider)` : ''}
         </button>
       </div>
     </div>
@@ -548,7 +581,19 @@ function SummaryCard({
   );
 }
 
-function PreviewList({ providers }: { providers: Provider[] }): ReactElement {
+function PreviewList({
+  providers,
+  validated,
+  dedup,
+  selected,
+  onToggle,
+}: {
+  providers: Provider[];
+  validated: ProviderValidation[];
+  dedup: DedupOutcome[];
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+}): ReactElement {
   return (
     <div
       data-testid="import-sql-provider-list"
@@ -570,45 +615,81 @@ function PreviewList({ providers }: { providers: Provider[] }): ReactElement {
           fontWeight: 600,
         }}
       >
-        待导入 provider 预览
+        待导入 provider 预览（M5 勾选要导入的行）
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {providers.map((p) => (
-          <li
-            key={p.id}
-            data-testid={`import-sql-row-${p.id}`}
-            style={{
-              padding: '8px 16px',
-              borderBottom: '1px solid var(--border)',
-              fontSize: 'var(--fs-body)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontWeight: 600 }}>{p.name}</span>
-              <code style={codeStyle}>{p.id}</code>
-              <span
-                style={{
-                  fontSize: 'var(--fs-caption)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                · {p.provider_type}
-              </span>
-            </div>
-            <div
+        {providers.map((p, i) => {
+          const v = validated[i];
+          const d = dedup[i];
+          const reasonParts: string[] = [];
+          if (v) reasonParts.push(...v.missing);
+          if (d && d.is_duplicate) {
+            reasonParts.push(`与现有 ${d.duplicate_of ?? 'provider'} 重复`);
+          }
+          const skipReason = reasonParts.join(' / ');
+          const checked = selected.has(p.id);
+          return (
+            <li
+              key={p.id}
+              data-testid={`import-sql-row-${p.id}`}
               style={{
-                fontFamily: 'var(--font-mono, monospace)',
-                fontSize: 'var(--fs-caption)',
-                color: 'var(--text-secondary)',
-                marginTop: 2,
-                wordBreak: 'break-all',
+                padding: '8px 16px',
+                borderBottom: '1px solid var(--border)',
+                fontSize: 'var(--fs-body)',
+                color: 'var(--text-primary)',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'flex-start',
               }}
             >
-              {p.api_base}
-            </div>
-          </li>
-        ))}
+              <input
+                type="checkbox"
+                data-testid={`import-sql-checkbox-${p.id}`}
+                checked={checked}
+                onChange={() => onToggle(p.id)}
+                style={{ marginTop: 4 }}
+                aria-label={`选择导入 ${p.name}`}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{p.name}</span>
+                  <code style={codeStyle}>{p.id}</code>
+                  <span
+                    style={{
+                      fontSize: 'var(--fs-caption)',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    · {p.provider_type}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: 'var(--fs-caption)',
+                    color: 'var(--text-secondary)',
+                    marginTop: 2,
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  {p.api_base}
+                </div>
+                {skipReason && (
+                  <div
+                    data-testid={`import-sql-skip-reason-${p.id}`}
+                    style={{
+                      fontSize: 'var(--fs-caption)',
+                      color: 'var(--warning)',
+                      marginTop: 4,
+                    }}
+                  >
+                    {skipReason}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
