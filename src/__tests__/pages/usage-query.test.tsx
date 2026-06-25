@@ -278,4 +278,24 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     const text = screen.getByTestId('usage-last-fetched').textContent ?? '';
     expect(text).toContain('最后更新');
   });
+
+  // M5 bug #14 — tokens >= 1亿 时显示 "X 亿 Y 万" (formatChineseTokenCount),
+  // 而不是 "1,234,567" 字符串 (toLocaleString 原始格式).
+  it('M5 bug #14: tokens_used = 123_456_789 显示 "1 亿 2345 万" 而非 "123,456,789"', async () => {
+    mockInvoke.mockImplementation(async (cmd: string, args?: { window?: string }) => {
+      if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
+        return sampleSnapshot((args?.window as '5h' | '1w' | '1m') ?? '5h', { tokens_used: 123_456_789 });
+      }
+      if (cmd === 'get_usage_history') return [{ date: '2026-06-25', model: 'm', tokens: 100 }];
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-tokens-value').textContent).toContain('1 亿');
+    });
+    const txt = screen.getByTestId('usage-tokens-value').textContent ?? '';
+    expect(txt).toContain('2345 万');
+    // 反事故: 不要出现原始 toLocaleString 千分位格式 (这是 bug)
+    expect(txt).not.toContain('123,456,789');
+  });
 });

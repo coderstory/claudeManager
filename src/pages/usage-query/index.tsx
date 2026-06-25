@@ -48,6 +48,7 @@ import type {
 } from '../../types/usage';
 import { WINDOW_LABELS } from '../../types/usage';
 import { useViewState } from '../../hooks/useViewState';
+import { formatChineseTokenCount } from '../../lib/format';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -126,7 +127,7 @@ export default function UsageQueryPage(): ReactElement {
 
   const tokensLabel = useMemo(() => {
     if (!state.snapshot) return '—';
-    return state.snapshot.tokens_used.toLocaleString();
+    return formatChineseTokenCount(state.snapshot.tokens_used);
   }, [state.snapshot]);
 
   const breakdown: UsageBreakdownEntry[] = state.snapshot?.breakdown ?? [];
