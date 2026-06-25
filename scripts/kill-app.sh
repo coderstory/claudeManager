@@ -18,6 +18,44 @@ if [[ "${1:-}" == "--force" ]]; then
   FORCE=true
 fi
 
+# === Platform gate (M3.1.x macOS support) ===
+# Original script was Windows-only (tasklist / taskkill / powershell).
+# On macOS use pkill on the inner Mach-O binary; Linux is unsupported
+# per CLAUDE.md §15.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  echo ">>> kill-app.sh [macOS]: pkill ClaudeManager.app/Contents/MacOS/claude-config-manager..."
+  INNER_BIN_PATTERN="ClaudeManager.app/Contents/MacOS/claude-config-manager"
+  if [[ "$FORCE" == "true" ]]; then
+    pkill -9 -f "$INNER_BIN_PATTERN" 2>/dev/null || true
+  else
+    # macOS has no CloseMainWindow equivalent that the tray-app handler
+    # will honor (it always intercepts); send SIGTERM and let the app
+    # exit cleanly. Fall back to SIGKILL after 3s.
+    pkill -TERM -f "$INNER_BIN_PATTERN" 2>/dev/null || true
+    for i in {1..6}; do
+      sleep 0.5
+      if ! pgrep -f "$INNER_BIN_PATTERN" >/dev/null 2>&1; then
+        echo ">>> Graceful exit successful."
+        exit 0
+      fi
+    done
+    echo ">>> Graceful exit timeout. Falling back to SIGKILL..."
+    pkill -9 -f "$INNER_BIN_PATTERN" 2>/dev/null || true
+  fi
+  sleep 1
+  if pgrep -f "$INNER_BIN_PATTERN" >/dev/null 2>&1; then
+    echo ">>> FAIL: process still alive after kill."
+    exit 1
+  fi
+  echo ">>> All processes cleaned."
+  exit 0
+fi
+
+if [[ "$(uname -s)" == "Linux" ]]; then
+  echo ">>> kill-app.sh: Linux is not supported (CLAUDE.md §15)." >&2
+  exit 1
+fi
+
 EXE_NAME="claude-config-manager.exe"
 # M2.6+ ships the release exe with a suffix (e.g. ClaudeConfigManager-M2.3.1-f9-fuzzy-search.exe).
 # The PE image name is still carved at compile time, but Windows Start-Process shows the
