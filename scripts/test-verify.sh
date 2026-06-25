@@ -45,17 +45,17 @@ timeout 180 cargo build --tests "$@" 2>&1
 echo ""
 echo "=== test-verify 编译结果 ==="
 if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "CYGWIN"* || "$(uname -s)" == "MSYS"* ]]; then
-  EXE_COUNT=$(find target/debug/deps -maxdepth 1 -name "*.exe" 2>/dev/null | wc -l | tr -d ' ')
+  EXE_COUNT=$(find target/debug/deps -maxdepth 1 -name "*.exe" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
   echo "编译通过"
   echo "   生成 test executables: ${EXE_COUNT}"
   echo "   列表 (前 20):"
-  find target/debug/deps -maxdepth 1 -name "*.exe" 2>/dev/null | head -20
+  find target/debug/deps -maxdepth 1 -name "*.exe" 2>/dev/null | head -20 || true
 else
-  EXE_COUNT=$(find target/debug/deps -maxdepth 1 -type f -executable 2>/dev/null | wc -l | tr -d ' ')
+  EXE_COUNT=$(find target/debug/deps -maxdepth 1 -type f -executable 2>/dev/null | wc -l | tr -d ' ' || echo 0)
   echo "编译通过"
   echo "   生成 test executables: ${EXE_COUNT}"
   echo "   列表 (前 20):"
-  find target/debug/deps -maxdepth 1 -type f -executable 2>/dev/null | head -20
+  find target/debug/deps -maxdepth 1 -type f -executable 2>/dev/null | head -20 || true
 fi
 echo ""
 echo "   注意: 不要 cargo test 实际跑 (Tauri 已知限制)"
