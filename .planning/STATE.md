@@ -1,48 +1,56 @@
 ---
 gsd_state_version: 1.0
-milestone: M4
-milestone_name: 端到端用户行为测试 (E2E black-box via AppleScript + UI Automation)
+milestone: M4+M5
+milestone_name: M4 e2e 框架 + M5 用户报告 33 bug 修复
 status: planning
-last_updated: 2026-06-25T23:05:00.000Z
-last_activity: 2026-06-25 -- v3.0 收尾 (5 commit scripts/rust 修复) + M4 启动 (4 决策拍板) + .app 装到 /Applications/
+last_updated: 2026-06-25T23:50:00.000Z
+last_activity: 2026-06-25 -- v3.0 收尾 (5 commit) + M4 规划 (5 决策) + M5 规划 (33 bug)
 progress:
   total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
-stopped_at: M4 规划阶段 — 待 M4-PLAN.md 写完 commit,等用户拍板进 Phase 1
+stopped_at: M4 + M5 规划阶段 — M4-PLAN.md + M5-PLAN.md 都写完,等用户回答 8 开放问题进 Phase 1
 ---
 
 <!--
   v2.0 / v3.0 milestone closure summary (auto-synced 2026-06-25).
   原 M1.x / M2.x / M3.x 详细历史保留在下半部 (line 150+), 作为审计痕迹。
   本顶部段为 gsd chain + 主 session 决策 + 当前状态的总览入口。
-  M4 启动: 14 场景全收 / AppleScript + 真 .app / 14 hard-fail / 主 session 规划。
+  M4 + M5 规划完成, 等用户拍 8 开放问题进 Phase 1。
 -->
 
-# Claude 配置管理器 — STATE.md (v3.0 收尾 + M4 启动)
+# Claude 配置管理器 — STATE.md (v3.0 收尾 + M4/M5 规划)
 
 ## Current Position
 
-Phase: M4 (planning)
+Phase: M4 + M5 (planning, 双 phase 并行规划)
 Plan: Not started
-Status: 4 决策已拍板,待主 session 写 M4-PLAN.md
+Status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
 Last activity: 2026-06-25
-Next: 写 M4-PLAN.md → commit → push → 等用户拍板进 Phase 1 实现
+Next: 等用户回答 8 开放问题 → M4 Phase 1 启动 (验证 Tauri 读 XDG_CONFIG_HOME) + M5 Phase 1 启动 (修 critical 5)
 
-**v3.0 → M4 交接 (2026-06-25) 一句话总结**: v3.0 round 1 (M3.11~M3.15 + M4.3 Phase 1 + M4.6 SQLite history) 已 ship,本会话做 v3.0 收尾:
+**v3.0 收尾 (2026-06-25)** 一句话总结: v3.0 round 1 (M3.11~M3.15 + M4.3 Phase 1 + M4.6 SQLite history) ship 后, 本会话:
 - scripts/ 跨平台修 5 处 (commit 090f2c8 + 7c07924 + 7721520 + 00bb480)
 - rust warning 清 5 处 (commit dd1a54d)
-- AGENTS.md 重写 (worktree workflow discontinued)
-- test-all 5 阶段: ui-check + frontend (500/500) + rust + smoke (10/10) 全 PASS;e2e WARN 是 tauri-driver 不支持 macOS (上游架构限制,非 scripts bug)
-- ClaudeManager.app 装到 /Applications/,launch + 窗口验证 OK
+- AGENTS.md 重写 (worktree workflow discontinued, 主 session 直接改代码)
+- test-all 5 阶段: ui-check + frontend (500/500) + rust + smoke (10/10) 全 PASS; e2e WARN 是 tauri-driver 不支持 macOS
+- ClaudeManager.app 装到 /Applications/, launch + 1 窗口验证 OK
 
-**M4 启动 (2026-06-25) 4 决策**:
-- Q1 场景范围: 14 场景全收 (F1-F24 高频+高风险 + 4 跨 F 业务流)
-- Q2 macOS 路径: AppleScript + 真 .app 启动 (不走 webview,不走 tauri-driver,直接 System Events + 验证 settings.json 副作用)
-- Q3 ship gate: 14 hard-fail (跟 smoke test 10 项同级,严格 ship gate)
-- Q4 计划阶段: 主 session 写 M4-PLAN.md (subagent 派会撞 worktree workflow 顾虑)
+**M4 启动 (2026-06-25)** 5 决策:
+- Q1 场景范围: 14 场景全收
+- Q2 macOS 路径: AppleScript + 真 .app
+- Q3 ship gate: 14 hard-fail
+- Q4 计划阶段: 主 session 写 M4-PLAN.md
+- Q5 5 开放问题拍: A=2 / B=1 / C=1 / D=2 / E=1 (fixture 隔离 = XDG_CONFIG_HOME)
+
+**M5 启动 (2026-06-25)** 33 bug 来源 = ~/Desktop/17823997343240.md (2026-06-25 23:31 用户实测):
+- Q1 修法: M5 一次性 33/33
+- Q2 scope: M5 全做 33/33
+- Q3 顺序: 当前只做规划
+- Q4 M4 vs M5: 先 M4 (e2e 框架) 后 M5 (用 M4 验)
+- Q5 修法优先级 + #12/#23-24/#25 三个 D 类信息澄清: **等用户拍板**
 
 **v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）+ L-M2.02 详情页 max-width 统一（9 页 ship, smoke 7/7）+ Phase 21 SQLite research 完成（21-RESEARCH.md + 21-CONTEXT.md, 3 待拍板）。
 

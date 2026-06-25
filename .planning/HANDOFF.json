@@ -1,12 +1,12 @@
 {
   "version": "3.0",
-  "timestamp": "2026-06-25T23:05:00+08:00",
-  "phase": "M4",
-  "phase_name": "端到端用户行为测试 (E2E black-box via AppleScript + UI Automation)",
-  "phase_dir": ".planning/phases/M4-e2e-framework/",
+  "timestamp": "2026-06-25T23:50:00+08:00",
+  "phase": "M4+M5",
+  "phase_name": "M4 e2e 框架 + M5 用户报告 33 bug 修复",
+  "phase_dir": ".planning/phases/M4-e2e-framework/ + .planning/phases/M5-bug-fixes/",
   "plan": null,
-  "task": "M4-PLAN.md (write)",
-  "total_tasks": 1,
+  "task": "M4-PLAN.md + M5-PLAN.md (both written, 8 开放问题等拍板)",
+  "total_tasks": 2,
   "status": "in_progress",
   "m1_actual_state": {
     "method": "Derived from git log (NOT from STATE.md reverse-derivation)",
