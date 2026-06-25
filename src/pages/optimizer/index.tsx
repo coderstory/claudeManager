@@ -581,10 +581,20 @@ function FindingRow({
       <input
         type="checkbox"
         checked={selected}
+        disabled={!finding.auto_apply}
         onChange={() => onToggle(finding.id)}
         style={{ marginTop: 3 }}
         data-testid={`optimizer-checkbox-${finding.id}`}
-        aria-label={`选择 ${finding.title}`}
+        aria-label={
+          finding.auto_apply
+            ? `选择 ${finding.title}`
+            : `${finding.title}（需手动处理,不可勾选;请点击详情查看）`
+        }
+        title={
+          finding.auto_apply
+            ? undefined
+            : '需手动处理,请点击右侧 [详情] 查看说明'
+        }
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div

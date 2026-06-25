@@ -125,6 +125,34 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     expect(applyBtn.textContent).toContain('应用 1 项');
   });
 
+  // M5 #26 — manual-handling findings (auto_apply=false) must NOT be
+  // selectable via the checkbox. The user wants to "click into details"
+  // (covered by #28) instead of mistakenly including manual items in
+  // the apply batch.
+  it('manual handling findings have a disabled checkbox', async () => {
+    mockInvoke.mockResolvedValue([
+      finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
+      finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
+    ]);
+    render(<OptimizerPage />);
+    const manual = await screen.findByTestId(
+      'optimizer-checkbox-id-manual',
+    );
+    expect((manual as HTMLInputElement).disabled).toBe(true);
+    // Auto-apply findings remain enabled (regression guard).
+    const auto = await screen.findByTestId('optimizer-checkbox-id-auto');
+    expect((auto as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('auto_apply findings keep an enabled checkbox', async () => {
+    mockInvoke.mockResolvedValue([
+      finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
+    ]);
+    render(<OptimizerPage />);
+    const checkbox = await screen.findByTestId('optimizer-checkbox-id-auto');
+    expect((checkbox as HTMLInputElement).disabled).toBe(false);
+  });
+
   it('apply button calls apply_optimizations with the selected finding ids', async () => {
     mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === 'scan_optimizations') {
