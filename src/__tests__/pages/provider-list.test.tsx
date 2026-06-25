@@ -817,4 +817,22 @@ describe('ProviderListPage — M3.0.4 defensive handling of missing models.by_ti
     expect(screen.getByTestId('provider-export-glm')).toBeInTheDocument();
     expect(screen.getByTestId('provider-activate-glm')).toBeInTheDocument();
   });
+
+  // M5 bug #5 — "Default Model (ANTHROPIC_MODEL)" → "Default Model"
+  // 验证 provider 列表页源码 (Form + Detail 两处) 都不再显示 "(ANTHROPIC_MODEL)" 后缀
+  // (env var 名不进 UI, 防止 §6.5 显示名/系统标识分层事故).
+  // 注: 源码级回归 — 渲染表单需先 mock invoke + click Add 按钮, 用 readFileSync 更直接.
+  it('M5 bug #5: provider-list 源码里表单/详情 Field label 不含 "(ANTHROPIC_MODEL)" 后缀', () => {
+    const { readFileSync } = require('fs');
+    const { resolve } = require('path');
+    const src = readFileSync(
+      resolve(__dirname, '../../pages/provider-list/index.tsx'),
+      'utf-8',
+    );
+    // 新文案 "Default Model" 必须出现 (表单 + 详情 2 处)
+    const matches = src.match(/Default Model\b/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+    // 旧文案 "Default Model (ANTHROPIC_MODEL)" 必须不出现
+    expect(src).not.toContain('Default Model (ANTHROPIC_MODEL)');
+  });
 });

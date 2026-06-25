@@ -1112,7 +1112,7 @@ function ProviderFormModal({
         <Field label="API Key">
           <input data-testid="provider-form-api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} style={inputStyle} disabled={isSubmitting} />
         </Field>
-        <Field label="Default Model (ANTHROPIC_MODEL)">
+        <Field label="Default Model">
           <input data-testid="provider-form-model-default" value={modelDefault} onChange={(e) => setModelDefault(e.target.value)} style={inputStyle} disabled={isSubmitting} placeholder="claude-sonnet-4-6" />
         </Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-2)' }}>
@@ -1196,7 +1196,7 @@ function ProviderDetailsModal({ detailsState, onClose }: ProviderDetailsModalPro
             <DetailRow label="Base URL" value={detailsState.provider.api_base} />
             <DetailRow label="API Key" value={detailsState.provider.api_key} mono />
             <DetailRow
-              label="Default Model (ANTHROPIC_MODEL)"
+              label="Default Model"
               value={detailsState.provider.models.default || '(server default)'}
               mono
             />
