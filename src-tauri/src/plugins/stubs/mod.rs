@@ -12,7 +12,6 @@
 pub mod provider_list;
 pub mod provider_switch;
 pub mod import_sql;
-pub mod deeplink_import;
 pub mod json_editor;
 pub mod mcp_management;
 pub mod usage_query;
@@ -25,7 +24,6 @@ pub mod backup_restore;
 pub use provider_list::ProviderListPlugin;
 pub use provider_switch::ProviderSwitchPlugin;
 pub use import_sql::ImportSqlPlugin;
-pub use deeplink_import::DeeplinkImportPlugin;
 pub use json_editor::JsonEditorPlugin;
 pub use mcp_management::McpManagementPlugin;
 pub use usage_query::UsageQueryPlugin;

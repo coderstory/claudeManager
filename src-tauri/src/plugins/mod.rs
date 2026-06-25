@@ -1,13 +1,13 @@
 //! Plugin system (M1.3).
 //!
-//! Re-exports the plugin trait surface, the [`PluginHost`], and the 12
+//! Re-exports the plugin trait surface, the [`PluginHost`], and the 11
 //! stub plugins. The single entry point used by `lib.rs` is
 //! [`init_all`], which builds a populated host and calls `init_all` on it.
 //!
 //! See each submodule for detail:
 //! - [`traits`] — the `IPlugin` contract
 //! - [`host`]   — `PluginHost` (registry + lifecycle)
-//! - [`stubs`]  — the 12 stub plugins (F1, F2, F3, F4, F5, F6, F7, F8,
+//! - [`stubs`]  — the 11 stub plugins (F1, F2, F3, F5, F6, F7, F8,
 //!                F16, F17, F18, F19)
 
 pub mod host;
@@ -24,7 +24,7 @@ pub use traits::{
 // init_all
 // ---------------------------------------------------------------------------
 
-/// Build a [`PluginHost`] pre-populated with all 12 stub plugins, and run
+/// Build a [`PluginHost`] pre-populated with all 11 stub plugins, and run
 /// `init_all` on it against `ctx`.
 ///
 /// `init_all` is the **single** entry point that `lib.rs` should call.
@@ -34,11 +34,10 @@ pub use traits::{
 pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     let mut host = PluginHost::new();
 
-    // F1..F8 core
+    // F1..F8 core (F4 deeplink-import removed in cleanup commit 0ff5b86)
     host.register(Box::new(stubs::ProviderListPlugin))?;
     host.register(Box::new(stubs::ProviderSwitchPlugin))?;
     host.register(Box::new(stubs::ImportSqlPlugin))?;
-    host.register(Box::new(stubs::DeeplinkImportPlugin))?;
     host.register(Box::new(stubs::JsonEditorPlugin))?;
     host.register(Box::new(stubs::McpManagementPlugin))?;
     host.register(Box::new(stubs::UsageQueryPlugin))?;
@@ -55,7 +54,7 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
 
     // M2.17 — observability for the wiring step. tauri-plugin-log
     // captures this via the `log` facade and writes to a per-app log
-    // file; operators can grep for the marker to confirm 12 plugins
+    // file; operators can grep for the marker to confirm 11 plugins
     // were registered at this process. Per-plugin id is logged so a
     // broken registration (missing import) shows up as an absent line.
     log::info!(
