@@ -7,24 +7,28 @@
 //! - Run every rule's `check` and gather findings
 //! - Dispatch `apply_findings(ids)` back to the originating rule
 //!
-//! ## Caching: none
+//! ## Caching: most-recent scan results
 //!
-//! Unlike `UsageService`, this service holds NO cache. Each `scan` is
-//! a fresh pass — findings carry uuid `id`s that are only valid until
-//! the next `scan`. The service stays stateless apart from the
-//! resolved `AppPaths` snapshot.
+//! Unlike M2.9 (stateless), this service caches the most recent
+//! `scan_with_root` result so `apply_findings` can look up a
+//! finding by `id` from the cache instead of re-scanning. Re-scanning
+//! on apply was the source of M5 bug #27 — every fresh `scan`
+//! generates new uuid v4 ids, so a finding the user just selected
+//! would "expire" between scan and apply. Now `apply_findings` reads
+//! from the cache; if the requested id is missing it falls back to a
+//! re-scan (which surfaces a clear "stale" message for genuinely
+//! outdated findings — e.g. another apply already addressed them).
 //!
 //! ## Concurrency
 //!
-//! Tauri commands hit `apply_findings` serially per IPC call, so we
-//! don't need a `Mutex`. Two simultaneous scans would each return
-//! their own `Vec<OptimizationFinding>` independently — no shared
-//! state.
+//! The cache is `Mutex`-protected; Tauri commands hit
+//! `apply_findings` serially per IPC call, so contention is low.
 //!
-//! ## Why scan-on-apply
+//! ## Why scan-on-apply fallback
 //!
-//! `apply_findings` re-runs `scan()` internally (rather than letting
-//! the UI cache findings) so:
+//! `apply_findings` first tries the cached findings (the common path
+//! when the UI just scanned and immediately applied). If a finding
+//! isn't in the cache it re-runs `scan()` so:
 //! - The rule has fresh ctx (the previous apply may have mutated
 //!   files; e.g. applying DEPRECATED_FIELD twice in a row would
 //!   otherwise re-attempt a no-op).
@@ -32,6 +36,7 @@
 //!   `ApplyResult::manual("finding 已过期")`).
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde_json::Value;
 
@@ -64,6 +69,12 @@ pub struct OptimizerService {
     backups_dir: PathBuf,
     /// Cached `<claude_dir>/mcp.json`.
     mcp_json_path: PathBuf,
+    /// M5 bug #27 — most-recent scan cache. `scan_with_root` writes
+    /// here; `apply_findings` reads first before falling back to a
+    /// re-scan. The cache is keyed only by the most recent scan
+    /// (single-slot) — for our usage pattern (UI scans → user picks
+    /// → applies), one slot is enough. `None` before any scan runs.
+    last_scan: Mutex<Option<Vec<OptimizationFinding>>>,
 }
 
 impl OptimizerService {
@@ -80,6 +91,7 @@ impl OptimizerService {
             providers_dir,
             backups_dir,
             mcp_json_path,
+            last_scan: Mutex::new(None),
         }
     }
 
@@ -127,6 +139,13 @@ impl OptimizerService {
             Severity::Warning => 1,
             Severity::Info => 2,
         });
+        // M5 bug #27 — cache the scan result so the subsequent
+        // `apply_findings` can find findings by id. Without this
+        // cache, apply re-scans (fresh uuid v4 ids each time) and
+        // the user's just-selected finding "expires".
+        if let Ok(mut slot) = self.last_scan.lock() {
+            *slot = Some(findings.clone());
+        }
         Ok(findings)
     }
 
@@ -190,7 +209,17 @@ impl OptimizerService {
             }
         }
 
-        let findings = self.scan_with_root(active_root_dir)?;
+        let findings = if let Ok(slot) = self.last_scan.lock() {
+            // M5 bug #27 fix — use the cached scan if present so a
+            // fresh uuid from a re-scan doesn't invalidate the
+            // user's just-selected finding. If the cache is empty
+            // (cold start, or another apply invalidated), fall
+            // through to scan_with_root below.
+            slot.clone()
+                .unwrap_or_else(|| self.scan_with_root(active_root_dir).unwrap_or_default())
+        } else {
+            self.scan_with_root(active_root_dir)?
+        };
         let mut ctx = self.build_context(active_root_dir);
         let mut results = Vec::with_capacity(ids.len());
         for requested_id in ids {
