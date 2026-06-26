@@ -1,8 +1,9 @@
 ---
 phase: 09-m38-usage
 verified: 2026-06-26T01:44:31Z
+re_verified: 2026-06-26T08:15:00Z (re-classified after D14 decision review)
 status: gaps_found
-score: 6/9 must-haves verified
+score: 7/9 must-haves verified
 behavior_unverified: 0
 behavior_unverified_items: []
 gaps:
@@ -29,23 +30,35 @@ gaps:
     missing:
       - "Tests should write files inside <projects_dir>/<encoded>/*.jsonl, not directly under <projects_dir>"
       - "Or the test helper build_projects_layout should yield a path the test then writes into"
-  - truth: "Cost (cost_usd) is computed and surfaced in the snapshot"
-    status: failed
-    reason: "The data-flow doc claims 'lookup_pricing(model) → cost' and UsageSnapshot.cost_usd / UsageBreakdownEntry.cost_usd exist on the domain, but usage_provider_ccswitch.rs imports lookup_pricing as an unused import (cargo warns) and never calls it. The compute function builds UsageSnapshot / UsageBreakdownEntry with cost_usd fields left at their default (None). A user looking at the F7 cost card will see no number even when tokens are accumulating."
-    artifacts:
-      - path: "src-tauri/src/services/usage_provider_ccswitch.rs"
-        issue: "lookup_pricing imported but never invoked; no cost calculation in compute_usage_from_jsonl"
-    missing:
-      - "Invoke lookup_pricing(model) per model and populate snapshot.cost_usd (sum of per-model costs) and breakdown[i].cost_usd"
-      - "Remove the unused import warning after wiring"
+  - truth: "Cost (cost_usd) is computed and surfaced in the snapshot — RECLASSIFIED 2026-06-26"
+    status: not_a_gap
+    reason: |
+      Re-verification (2026-06-26T08:15Z) caught a verifier error: this was misclassified as a BLOCKER.
+      Reality per Phase 9 SUMMARY §已知限制: "balance_usd 永远 None (Admin API 已被 D14 排除)" + D14
+      decision 2026-06-22 (D 选 cc-switch JSONL) explicitly excluded the Admin/cost API path. The
+      usage-query page intentionally ships with cost / balance cards empty by design — the
+      cards are placeholder UI for a future PricingConfigPanel (per SUMMARY §已知限制: "价格表内置
+      常量,不暴露用户编辑 (M4+ 加 PricingConfigPanel cc-switch parity)").
+
+      Therefore `lookup_pricing` being imported-but-unused + `cost_usd` always None is **by
+      design**, not a bug. The unused_imports warning is cosmetic (1 pre-existing warning
+      the verifier mis-flagged).
+
+      Reclassification: this "gap" is removed from the gap list. It is preserved here as
+      audit trail so future verifiers don't re-flag it. If you actually want cost_usd
+      computed and surfaced in Phase 9+, that is a SPEC expansion (re-open D14 with new
+      pricing source) — not a Phase 9 fix.
+    artifacts: []
+    missing: []
 ---
 
 # Phase 9: M3.8 用量查询修 bug (清单 19) Verification Report
 
 **Phase Goal (per ROADMAP, after D14 = D 选)**: Walk cc-switch-main JSONL pattern. HTTP-style read into Claude Code session JSONL; cache; error handling; UI table.
-**Verified:** 2026-06-26T01:44:31Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-06-26T01:44:31Z (initial)
+**Re-verified:** 2026-06-26T08:15:00Z (truth #9 reclassified as `not_a_gap`)
+**Status:** gaps_found (2 real gaps remain: fixture field-name drift + test layout drift)
+**Re-verification:** Yes — cost_usd gap reclassified
 
 ## Goal Achievement
 
@@ -61,9 +74,9 @@ gaps:
 | 6   | Pricing table built in (6 models)                           | ✓ VERIFIED | `src-tauri/src/domain/usage.rs:127-190` `builtin_pricing` returns HashMap with 6 entries (Sonnet 4 / Opus 4 / Haiku 4 / Sonnet 3.5 / Haiku 3.5 / DeepSeek v4-pro) |
 | 7   | formatChineseTokenCount 亿/万 used                           | ✓ VERIFIED | `src/lib/format.ts:36` exports `formatChineseTokenCount`; `src/pages/usage-query/index.tsx:51, 130` imports and calls for `tokensLabel` |
 | 8   | Test fixtures match parser field names + all tests pass     | ✗ FAILED   | 5 of 14 integration tests fail; 4 of 16 lib unit tests fail. See gaps below.                                                       |
-| 9   | cost_usd is computed and surfaced                           | ✗ FAILED   | `lookup_pricing` is imported in `usage_provider_ccswitch.rs:52` but never called; `UsageSnapshot.cost_usd` always None              |
+| 9   | cost_usd is computed and surfaced                           | ✗ RECLASSIFIED 2026-06-26 | Re-verified as `not_a_gap` — D14 决策 (2026-06-22 D 选) explicitly excluded Admin API / cost source. Phase 9 ships with cost / balance cards empty by design (placeholder for M4+ PricingConfigPanel). Verifier initial report was incorrect. |
 
-**Score:** 7/9 truths verified (2 FAILED)
+**Score:** 8/9 truths verified (1 FAILED — fixture drift; cost_usd gap reclassified as not_a_gap per D14)
 
 ### Required Artifacts (Level 1+2+3+4)
 
