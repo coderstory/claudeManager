@@ -253,10 +253,14 @@ pub async fn import_providers_from_sql(
 /// The service-layer type is rich (`ImportSkip.kind` is `String`,
 /// `ImportResult.errors` is `Vec<ImportSkip>`) — we wrap it in a DTO
 /// so the IPC contract is stable even if the internal type changes.
+///
+/// BUG-BZ-01: `invalid_rows` carries parse-error count distinct from
+/// `skipped` (dedup hits). Surfaced in the UI as a "格式错误" card.
 #[derive(Debug, serde::Serialize)]
 pub struct ImportResultDto {
     pub imported: usize,
     pub skipped: usize,
+    pub invalid_rows: usize,
     pub mcp_count: usize,
     pub errors: Vec<ImportSkipDto>,
 }
@@ -274,6 +278,7 @@ impl From<ImportResult> for ImportResultDto {
         Self {
             imported: r.imported,
             skipped: r.skipped,
+            invalid_rows: r.invalid_rows,
             mcp_count: r.mcp_count,
             errors: r.errors.into_iter().map(ImportSkipDto::from).collect(),
         }
@@ -715,6 +720,7 @@ mod tests {
         let dto = ImportResultDto {
             imported: 2,
             skipped: 1,
+            invalid_rows: 1,
             mcp_count: 0,
             errors: vec![ImportSkipDto {
                 kind: "parse".into(),

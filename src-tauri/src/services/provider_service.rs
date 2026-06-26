@@ -734,6 +734,7 @@ impl ProviderService {
         // list the UI can show as a unified "skipped lines" panel.
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -749,9 +750,18 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: count parse-level rejections separately from
+        // dedup hits (`skipped`). `parsed.skipped_lines` is the parser
+        // reject list (bad JSON / invalid id / missing field). Write
+        // errors stay inside `errors` (not counted in either bucket —
+        // they're "we tried to write but the disk said no", not
+        // "the row was malformed before it ever got to disk").
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -827,6 +837,7 @@ impl ProviderService {
         // list the UI can show as a unified "skipped lines" panel.
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -842,9 +853,13 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: parse-level rejects distinct from dedup (`skipped`).
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -964,6 +979,7 @@ impl ProviderService {
 
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -979,9 +995,13 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: parse-level rejects distinct from dedup (`skipped`).
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -1063,6 +1083,12 @@ pub struct ImportResult {
     /// Number of provider rows skipped because the target file already
     /// existed (idempotency — re-running with the same dump is safe).
     pub skipped: usize,
+    /// Number of rows the SQL parser rejected (bad JSON, invalid id,
+    /// missing required field, etc.). BUG-BZ-01: previously lumped
+    /// into `skipped`, conflating "your dump has malformed rows"
+    /// with "you re-imported the same dump". The UI now surfaces this
+    /// as a distinct "格式错误" card (danger tone).
+    pub invalid_rows: usize,
     /// Parsing or write errors encountered. Each entry is one row that
     /// couldn't be processed — the UI shows them in a details panel.
     pub errors: Vec<ImportSkip>,
