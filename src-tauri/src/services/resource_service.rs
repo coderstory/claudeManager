@@ -163,6 +163,32 @@ impl ResourceService {
             }
         })
     }
+
+    /// Phase 27 Fix 6 (D-14) — 委托给 McpService::list_with_active_root
+    /// (D-14 schema 不合并,数据源单一 = mcp_servers SQLite 表)。
+    ///
+    /// ResourceBrowser 的 mcp tab 走 `list_resources('mcp')` →
+    /// list_with_active_root → 本方法 → McpService.list。**不**
+    /// 复制数据到 resource_items 表;不新建 schema。
+    ///
+    /// `active_root_dir` 语义同 list_with_active_root:None = user-level,
+    /// Some(root) = project mode。
+    ///
+    /// 当前 stub 实现:返回空 Vec(struct 字段没装配 McpService,
+    /// 真实 wiring 在 commands/resource.rs::list_resources 里走
+    /// active_root 路由调 mcp_service)。ResourceItem 形状下个
+    /// 迭代补 — 本 plan 锁紧"不复制 mcp 数据"这一约束即可。
+    pub fn list_mcp_with_active_root(
+        &self,
+        _active_root_dir: Option<&Path>,
+    ) -> Result<Vec<crate::domain::ResourceItem>, ResourceServiceError> {
+        // D-14 enforcement: ResourceBrowser 的 mcp tab 数据流 =
+        // list_resources('mcp') → 这条路径 → McpService(单一数据源)。
+        // 本方法现在返回空 Vec,只占接口位 — 完整 ResourceItem 映射
+        // 由 mcp_service 的输出转,留到后续 mcp-detail 一起做(避免
+        // 本 plan 范围爆炸)。
+        Ok(Vec::new())
+    }
 }
 
 #[cfg(test)]
@@ -334,6 +360,36 @@ mod tests {
         let json = serde_json::to_string(&items[0]).unwrap();
         let back: ResourceItem = serde_json::from_str(&json).unwrap();
         assert_eq!(back, items[0]);
+    }
+
+    // ---- Phase 27 Fix 6 (D-14) — ResourceService::list_mcp_with_active_root ----
+    //
+    // D-14 不合并 schema: ResourceService 不直接读 mcp.json,只暴露
+    // 委托入口给 commands/resource.rs::list_resources 用,真实数据
+    // 由 McpService 提供。本测试只验证入口形状,不强验数据内容
+    // (数据测试归 mcp_service::tests)。
+
+    /// 入口存在,None / Some 都返回 Ok,空 Vec(stub 实现)。
+    #[test]
+    fn list_mcp_with_active_root_none_returns_ok() {
+        let tmp = TempDir::new().unwrap();
+        let svc = ResourceService::new(tmp.path().to_path_buf(), Box::new(NoopReveal));
+        let items = svc.list_mcp_with_active_root(None).unwrap();
+        // D-14: ResourceService 不复制 mcp 数据;list_mcp 走 McpService
+        // 委托(commands/resource.rs 内 wiring)。ResourceService
+        // 自己 stub 返回空 Vec(避免 McpService 双向依赖 + 测试 setup
+        // 重复)。数据契约由 mcp_service 验。
+        assert!(items.is_empty());
+    }
+
+    /// Some(root) 也走同一 stub 路径,行为一致。
+    #[test]
+    fn list_mcp_with_active_root_some_root_returns_ok() {
+        let tmp = TempDir::new().unwrap();
+        let svc = ResourceService::new(tmp.path().to_path_buf(), Box::new(NoopReveal));
+        let ghost = tmp.path().join("ghost-project");
+        let items = svc.list_mcp_with_active_root(Some(&ghost)).unwrap();
+        assert!(items.is_empty());
     }
 
     // ---- M3.12 (A1#11) — F16 list_resources 接入 active_root_dir ----

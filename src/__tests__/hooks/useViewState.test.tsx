@@ -60,9 +60,10 @@ describe('useViewState', () => {
     // F2 redirect shim removed (action moved to F1 [激活] button).
     // F4 deeplink-import removed → 10 plugins.
     // F8 removed in M5 #18 → 9 plugins.
-    // Total = home + 9 plugins + history + about = 12.
+    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
+    //                ALL_VIEWS 移除该 view,12 → 11。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(12);
+    expect(ALL_VIEWS.length).toBe(11);
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -71,9 +72,9 @@ describe('useViewState', () => {
   });
 
   it('reads the persisted view from localStorage on mount', () => {
-    localStorage.setItem(STORAGE_KEY, 'mcp-management');
+    localStorage.setItem(STORAGE_KEY, 'resource-browser');
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
-    expect(result.current.view).toBe('mcp-management');
+    expect(result.current.view).toBe('resource-browser');
   });
 
   it('falls back to "home" when the persisted view is not in ALL_VIEWS', () => {
@@ -84,24 +85,33 @@ describe('useViewState', () => {
     expect(result.current.view).toBe('home');
   });
 
+  /// Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 'mcp-management'
+  /// (D-10 删 view 之前) → 回退到 'home'。App.tsx 之后会接住这个
+  /// 分支用 window.location.replace 重定向到 /resource-browser?tab=mcp。
+  it('Phase 27 Fix 6: stale "mcp-management" localStorage falls back to "home"', () => {
+    localStorage.setItem(STORAGE_KEY, 'mcp-management');
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
+    expect(result.current.view).toBe('home');
+  });
+
   it('setView updates the current view and writes to localStorage', () => {
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     act(() => {
-      result.current.setView('mcp-management');
+      result.current.setView('resource-browser');
     });
-    expect(result.current.view).toBe('mcp-management');
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('mcp-management');
+    expect(result.current.view).toBe('resource-browser');
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('resource-browser');
   });
 
   it('setView with the same value is a no-op (no extra localStorage write)', () => {
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     act(() => {
-      result.current.setView('mcp-management');
+      result.current.setView('resource-browser');
     });
     const spy = vi.spyOn(Storage.prototype, 'setItem');
     const callsBefore = spy.mock.calls.length;
     act(() => {
-      result.current.setView('mcp-management');
+      result.current.setView('resource-browser');
     });
     expect(spy.mock.calls.length).toBe(callsBefore);
     spy.mockRestore();
@@ -189,17 +199,17 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 9 plugin ids from the registry', () => {
+  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (post-Fix-6)', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
-    // This is checked dynamically (not hardcoded) so adding a new
-    // plugin only requires the developer to update the union in
-    // useViewState.ts — the test then points out the omission.
+    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
+    // ALL_VIEWS 不再列它。registry 仍 9 plugin(mcp-management entry
+    // 仍存在,只是不再作为独立 view 暴露 — 提供 McpManagementPanel
+    // 共享组件给 mcp tab 用)。
     const registryIds = [
       'provider-list',
       'import-sql',
       'json-editor',
-      'mcp-management',
       'usage-query',
       'resource-browser',
       'marketplace',
@@ -209,6 +219,9 @@ describe('useViewState', () => {
     for (const id of registryIds) {
       expect(ALL_VIEWS, `ALL_VIEWS missing plugin id ${id}`).toContain(id);
     }
+    expect(ALL_VIEWS, 'mcp-management should NOT be a ViewId after Fix 6').not.toContain(
+      'mcp-management',
+    );
   });
 
   it('ViewId type stays exhaustive against ALL_VIEWS at compile time', () => {

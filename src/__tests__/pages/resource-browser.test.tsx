@@ -1401,3 +1401,41 @@ describe('ResourceBrowserPage — M3.4 scanner filtering (清单 17)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 27 Fix 6 (D-11): URL ?tab=mcp initializes mcp tab
+// ---------------------------------------------------------------------------
+//
+// 27-CONTEXT D-11: ResourceBrowser 接受 URL ?tab=mcp 作为默认 tab。
+// 老用户从 /mcp-management 重定向过来后,ResourceBrowser mount 时
+// 立即定位到 mcp tab 而不是默认的 plugin tab。
+//
+// 由于 useSearchParams 在 jsdom + 单测环境里需要 MemoryRouter 或
+// 直接 mock URL,我们用 window.location.search 设置 + 重新 mount
+// 来驱动这条路径。Test 验证 mount 后 listResources('mcp') 是第一次
+// fetch(不是 listResources('plugin'))。
+
+describe('ResourceBrowserPage — Phase 27 Fix 6: URL ?tab=mcp initial kind', () => {
+  beforeEach(() => {
+    // jsdom 默认 URL 是 about:blank,这里设 search 触发 useSearchParams
+    // 读到 tab=mcp。
+    window.history.replaceState({}, '', '/?tab=mcp');
+  });
+
+  it('mount with ?tab=mcp → first list_resources call uses kind="mcp"', async () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'list_resources',
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+    });
+    const firstCall = mockInvoke.mock.calls.find(
+      (c) => c[0] === 'list_resources',
+    );
+    expect(firstCall).toBeDefined();
+    expect((firstCall![1] as { kind: string }).kind).toBe('mcp');
+  });
+});

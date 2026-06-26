@@ -85,3 +85,27 @@ describe('AppSidebar — Phase 11 SC #7', () => {
     expect(screen.getByTestId('sidebar-item-about')).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 27 Fix 6 (BUG-CR-04 子件) — MCP 合并到 ResourceBrowser
+// ---------------------------------------------------------------------------
+//
+// D-10/D-12: sidebar "MCP 管理" 入口删除 (route 'mcp-management' 退出
+// ALL_VIEWS + VIEW_META)。mcp tab 现在挂在 /resource-browser 下。
+// D-13: 老用户 localStorage 还存 'mcp-management' → App.tsx redirect。
+
+describe('AppSidebar — Phase 27 Fix 6: MCP merged into ResourceBrowser', () => {
+  it('does NOT render a sidebar-item-mcp-management tile (D-10/D-12)', async () => {
+    render(<AppSidebar currentView="home" onNavigate={vi.fn()} />);
+    await screen.findByTestId('sidebar-project-switcher');
+    // 旧 MCP 管理入口已被合并到 resource-browser mcp tab,不再单独
+    // 出现在侧边栏。
+    expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
+  });
+
+  it('still renders the resource-browser tile (D-11 + URL ?tab=mcp)', async () => {
+    render(<AppSidebar currentView="home" onNavigate={vi.fn()} />);
+    await screen.findByTestId('sidebar-project-switcher');
+    expect(screen.getByTestId('sidebar-item-resource-browser')).toBeInTheDocument();
+  });
+});
