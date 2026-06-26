@@ -7,6 +7,7 @@
 | **v2.0** | **用户反馈修复 + 双模式 (M2.17 + M3.1~M3.10)** | **2026-06-22** | **11** | **v2.0** | **27 条清单全修复 + M3.10 双模式架构 + D14 cc-switch JSONL** |
 | **v3.0-M4** | **e2e 框架 (14 端到端场景 ship gate)** | **2026-06-26** | **4** | **v3.0-M4** | **黑盒端到端测试 (真 .app + 真 FS) + test-all.sh stage 6 硬关卡** |
 | **v3.0.1** | **M5 用户 bug 修复 (33 bug)** | **2026-06-26** | **4** | **v3.0.1** | **33/33 bug 修完 (4 critical 5 / 业务 13 / 重构 9 / A 类 5+整合) + ClaudeManager.app 14M rebuild + tag v3.0.1** |
+| ❌ | ~~v3.0 round 3 (云备份 + updater UI + M4.6)~~ | **2026-06-26 废弃** | ~~3~~ | — | ~~v3.0 round 3 backlog (Phase 19/20/21) 用户拍板不做;project 停在 v3.0.1~~ |
 
 ## v2.0 关键产物
 - 12 个 ship exe (~30 MB each) 在 `~/Desktop/ClaudeConfigManager-M3/`
@@ -28,7 +29,7 @@
 |---|---|---|---|---|
 | A1 M3.10-adapter plugin 适配 | 13 | 13 | 0 | F2 switch + F13 backup_now + 11 个 v3.0 round 1 接入；#9 F18 scan_optimizations `scan_with_root` 已 ship (commit `2e4e75b`) |
 | A2 v3.0 公证发布 (M4.1~M4.6) | 6 | 0 | 6 | M4.1 证书取消 + M4.5 商店取消 → 主线需重新界定 |
-| A3 M4.6 长期 backlog 候选 | 9 | 2 | 7 | 备份 Phase 1 增量 + L-M2.08 MacWindowChrome 完成；其余按需启动 |
+| A3 M4.6 长期 backlog 候选 | 9 | 2 | 7 | 备份 Phase 1 增量 + L-M2.08 MacWindowChrome 完成；**2026-06-26 用户拍板废弃 Phase 19/20/21(云备份 + updater UI + 长尾项)**;其余按需启动 |
 | B1 平台/环境限制 | 5 | 1 | 4 | #4 MacWindowChrome 架构统一完成（commit `7efb0f8`）；其余 non-blocking 已记录 |
 | B2 测试缺口 | 3 | 1 | 2 | #1 M3.8 usage fixture 8 子任务完成（commit `4f5df37`）；#2 Playwright e2e + #3 unimplemented! 待 #14 余额恢复后处理 |
 | B3 M1 遗留设计限制 | 2 | 2 | 0 | #9 dark theme 已解决；#10 Tailwind dead deps v3.0 round 1 移除完成（commit `ed5a3e5`） |
@@ -42,13 +43,13 @@
 | 类别 | 本轮完成 | 仍 pending |
 |---|---|---|
 | A1 M3.10-adapter | ✅ 13/13 接入（含 #9 F18 scan_optimizations `scan_with_root`, commit `2e4e75b`） | — |
-| A2 M4.3 updater | Phase 1 (pubkey+endpoint) | Phase 2 前端 UI / Phase 3 E2E 灰度 |
-| A3 备份增强 | Phase 1 增量 (commit `3eadae2`) | Phase 2 云备份 |
+| A2 M4.3 updater | Phase 1 (pubkey+endpoint) | ~~Phase 2 前端 UI / Phase 3 E2E 灰度~~ **2026-06-26 废弃** |
+| A3 备份增强 | Phase 1 增量 (commit `3eadae2`) | ~~Phase 2 云备份~~ **2026-06-26 废弃** |
 | A3 MacWindowChrome (L-M2.08) | ✅ 架构统一（commit `7efb0f8`） | — |
 | B2#1 usage 测试 | ✅ 8 子任务补齐（commit `4f5df37`） | — |
 | B3#10 Tailwind | ✅ 移除 6 包 + cn util + dead className（commit `ed5a3e5`） | — |
 | #14 Playwright e2e | ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`) — Phase 18 6/6 spec PASS | — |
-| M4.6 其余 (i18n/SQLite/多窗口/Telemetry/L-M2.02) | — | 未启动 |
+| M4.6 其余 (i18n/SQLite/多窗口/Telemetry/L-M2.02) | — | ~~未启动~~ **2026-06-26 废弃** |
 
 **本轮 commits**（按时间顺序，2026-06-22）：
 `ed5a3e5` / `f375bf1` / `2e4e75b` / `afd090e` / `8a2650f` / `a9bd4b5` / `f145d38` / `e2d5e06` / `4f5df37` / `3eadae2` / `7efb0f8` / `da6ba67`

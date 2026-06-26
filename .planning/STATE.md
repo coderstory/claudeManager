@@ -5,7 +5,7 @@ milestone_name: M5 用户 bug 修复 (33 bug 全部 ship, tag v3.0.1)
 current_phase: 26 (post-ship, audit/cleanup pending)
 current_phase_name: M5 A 类 5 + 整合验证 (Phase 26, 5 SUMMARY + VERIFICATION ship-gate PASS)
 status: M5 ship archived 2026-06-26 (tag v3.0.1); 33/33 bug 修完; test-all 6 stages PASS; M4 e2e 15/15 PASS; ClaudeManager.app rebuild OK + launch 1 window OK
-last_updated: "2026-06-26T07:00:00.000Z"
+last_updated: "2026-06-26T07:30:00.000Z"
 last_activity: 2026-06-26
 last_activity_desc: M5 phase 26 complete — 33/33 bug 修完, A 类 5 + 整合验证 ship gate PASS, 4 subagent 修 (#18 #22 #23+#24 + 3 TS error fix)
 progress:
@@ -14,7 +14,7 @@ progress:
   total_plans: 22
   completed_plans: 23
   percent: 100
-stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stages PASS, M4 e2e 15/15 PASS, ClaudeManager.app 14M rebuild OK + 1 窗口 OK, tag v3.0.1
+stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stages PASS, M4 e2e 15/15 PASS, ClaudeManager.app 14M rebuild OK + 1 窗口 OK, tag v3.0.1; **2026-06-26 用户拍板废弃 v3.0 round 3 (云备份 + updater UI + M4.6 长尾);project 当前停在 v3.0.1,无 active milestone**
 
 <!--
   manager_projection_sync_note (2026-06-26):
@@ -28,6 +28,11 @@ stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stage
       - 4 个 v3.0.1 phase (23-26) ✅
       = 共 22 complete (Phase 19/20/21 仍 pending,属 v3.0 round 3 backlog)
     跑 gsd-autonomous 之前先看本字段,不要被 manager projection 误导。
+
+  v3.0_round3_deprecation_note (2026-06-26):
+    Phase 19 (云备份) / Phase 20 (M4.3 updater UI) / Phase 21 (M4.6 长尾) — 用户 2026-06-26 拍板废弃。
+    项目当前停在 v3.0.1,无 active milestone,启动新里程碑前需用户重新拍板。
+    ROADMAP.md / PROJECT.md / MILESTONES.md 均已同步标记 ❌ 废弃。
 -->
 ---
 

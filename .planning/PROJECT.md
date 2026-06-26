@@ -23,7 +23,7 @@
 
 **Latest milestone:** v3.0.1 — M5 用户 bug 修复 (33 bug, shipped 2026-06-26)
 **Tag:** v3.0.1
-**Next:** v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾) — see ROADMAP.md
+**Next:** 用户 2026-06-26 拍板放弃 v3.0 round 3;project 当前停在 v3.0.1,无 active milestone
 
 ## Current Milestone
 
@@ -31,7 +31,7 @@
 - ✅ **v3.0 功能完善 + updater 基础 (M3.11~M3.15 + M4.3)** — round 1 (Phase 12-17) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 shipped 2026-06-26 (tag v3.0-M4); 14/14 scenarios PASS, test-all stage 6 hard-fail wired
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 shipped 2026-06-26 (tag v3.0.1); 33/33 bug 修完; ClaudeManager.app 14M rebuild OK + 1 窗口 OK; test-all 6 阶段 PASS
-- 🚧 **v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)** — pending
+- ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;见 Out of Scope
 
 ## Requirements
 
@@ -89,9 +89,6 @@
 > v3.0 进行中：A1 13/13 + updater Phase1 + 备份增量 + WindowChrome 统一已完成；e2e/云备份/updater UI/M4.6 长尾 pending。
 
 - [x] **Phase 18: M1 L1 Playwright e2e (Windows only)** — ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`);6/6 spec PASS（3 WebView2 via tauri-driver CDP + 3 vite dev）;atomic fix `b8361ce`（playwright.config.ts webServer gating + fixtures.ts CDP-mode `page.goto` Proxy no-op）
-- [ ] **Phase 19: A3 备份增强 Phase 2 (云备份)** — 远程备份 (S3/OSS)
-- [ ] **Phase 20: M4.3 updater Phase 2/3** — 前端 updater UI + E2E 灰度回滚
-- [ ] **Phase 21: M4.6 长期 backlog** — i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02（按需启动）
 
 ### Out of Scope
 
@@ -101,6 +98,7 @@
 - ❌ **macOS 应用商店 / Microsoft Store 上架** — M4.5 用户拍板不上架;v4.0+ 之前不会重提
 - ❌ **M4.1 代码签名证书** — 用户拍板不买;M4.2/M4.4 暂缓
 - ❌ **D6 Mac 真机验证** — 用户拍板不处理;v3.0 期间不启动
+- ❌ **v3.0 round 3 (A3 云备份 + M4.3 updater UI + M4.6 长尾)** — 2026-06-26 用户拍板废弃;project 停在 v3.0.1,如需重提需用户重新拍板
 
 ## Context
 
