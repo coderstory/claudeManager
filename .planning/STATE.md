@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: M6 用户实测反馈修复
-current_phase: 27
-current_phase_name: v3-2-m6-critical-5-bug-bug-cr-01-05
+current_phase: 28
+current_phase_name: BUG-BZ-01~13
 status: executing
-stopped_at: Phase 27 PLAN.md shipped (27-01 + 27-02)
-last_updated: "2026-06-26T13:19:34.708Z"
+stopped_at: Phase 27 UI-SPEC approved
+last_updated: "2026-06-26T16:38:15.766Z"
 last_activity: 2026-06-26
-last_activity_desc: Phase 27 execution started
+last_activity_desc: Phase 27 complete, transitioned to Phase 28
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 20
 ---
 
 <!--
@@ -70,10 +70,10 @@ progress:
 
 ## Current Position
 
-Phase: 27 (v3-2-m6-critical-5-bug-bug-cr-01-05) — EXECUTING
-Plan: 1 of 2
+Phase: 28 — v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13)
+Plan: Not started
 Status: Executing Phase 27
-Last activity: 2026-06-26 — Phase 27 execution started
+Last activity: 2026-06-26 — Phase 27 complete, transitioned to Phase 28
 
 **v3.2 plan summary** (ROADMAP.md Phase 27-31):
 

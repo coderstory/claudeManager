@@ -435,7 +435,7 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 | 24. M5 业务 13 bug 修复 | v3.0.1 | 2 commits | Complete | 2026-06-26 |
 | 25. M5 重构 9 bug (#18 真修) | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 | 26. M5 A 类 5 + 整合验证 + tag v3.0.1 | v3.0.1 | 1 commit | Complete | 2026-06-26 |
-| 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 0/1 | In Progress | - |
+| 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 2/2 | Complete    | 2026-06-26 |
 | 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 0/1 | In Progress | - |
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 0/1 | In Progress | - |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 0/1 | In Progress | - |
@@ -496,18 +496,18 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 **Requirements**: BUG-CR-01 (header drag P1) / BUG-CR-02 (用量三件套 P0) / BUG-CR-03 (JSON path::field P0) / BUG-CR-04 (scope remount P0) / BUG-CR-05 (SQL 数量 P0)
 **Depends on:** Phase 26 (v3.0.1 M5)
 **Status**: 🚧 In Progress
-**Plans:** 2 plans (Wave 1 = 4 subagent 并行 fix 1/2/3/4;Wave 2 = 1 subagent 串行 fix 5+6 — 沿用 D29 4 槽并发上限;累计 6 fix commits)
+**Plans:** 2/2 plans complete
 **Verification:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/27-VERIFICATION.md` (status: passed 后) + test-all.sh 6 stages PASS + Playwright e2e 20/20
 **Archive:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/`
 
 Plans:
 **Wave 1**
 
-- [ ] 27-01-PLAN.md — Wave 1 (4 subagent 并行): fix 1 header drag (合约验证 + e2e) / fix 2 用量三件套 (COALESCE MIN type + 30 天窗口 GROUP BY + SELECT COUNT verify) / fix 3 JSON path::field (Rust field 参数 + 前端 sessionStorage split + T-05 field 安全拒绝) / fix 4 useScope hook (React 19 useSyncExternalStore, no zustand) + 3 组件 key remount (McpManagement/JsonFileTree/ResourceBrowser)
+- [x] 27-01-PLAN.md — Wave 1 (4 subagent 并行): fix 1 header drag (合约验证 + e2e) / fix 2 用量三件套 (COALESCE MIN type + 30 天窗口 GROUP BY + SELECT COUNT verify) / fix 3 JSON path::field (Rust field 参数 + 前端 sessionStorage split + T-05 field 安全拒绝) / fix 4 useScope hook (React 19 useSyncExternalStore, no zustand) + 3 组件 key remount (McpManagement/JsonFileTree/ResourceBrowser)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 27-02-PLAN.md — Wave 2 (1 subagent, 依赖 27-01 fix 4): fix 5 SQL 导入 selected IDs + distinct 计数 + UNIQUE 约束 (D-15~D-18);fix 6 MCP 合并重构 (/mcp-management 路由删除 + sidebar 清理 + 老用户 localStorage remap → /resource-browser?tab=mcp + McpManagementPanel 共享组件)
+- [x] 27-02-PLAN.md — Wave 2 (1 subagent, 依赖 27-01 fix 4): fix 5 SQL 导入 selected IDs + distinct 计数 + UNIQUE 约束 (D-15~D-18);fix 6 MCP 合并重构 (/mcp-management 路由删除 + sidebar 清理 + 老用户 localStorage remap → /resource-browser?tab=mcp + McpManagementPanel 共享组件)
 
 **Success Criteria** (observable user behaviors — 重映射到 11 条实测反馈,6 个 fix):
 

@@ -19,11 +19,11 @@ shipped: pending
 >
 > **v3.2.1 (2026-06-26) 重映射**:实测 11 条反馈映射到预排 BUG-CR-01~05 槽位,原预排的 F2 switch atomic / F13 backup / sqlite read / F2 round-trip / F18 finding 过期 5 项推 v3.2.1 backlog;实际修复见 `.planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-CONTEXT.md` (D-01~D-32)。
 
-- [ ] **BUG-CR-01**: header 区域可拖动窗口（鼠标按住 AppHeader 非控件区不报错 / OS 触发窗口移动）
-- [ ] **BUG-CR-02**: 用量查询页 7 天趋势正确（SQL MIN 类型不报错 + 30 天窗口按天聚合 + 刷新后立即看到新行）
-- [ ] **BUG-CR-03**: JSON 编辑器打开不报错（路径/字段拆 IPC 参数 + 虚拟路径协议 `path::field` 解析对）
-- [ ] **BUG-CR-04**: scope (用户/项目) 切换生效（MCP / JSON 目录树 / 资源浏览 3 处 `useScope` 强制重 mount）
-- [ ] **BUG-CR-05**: SQL 导入数量正确（1 个 provider = 1 个提示,`UNIQUE(provider_name, source_path)` 去重）
+- [x] **BUG-CR-01**: header 区域可拖动窗口（鼠标按住 AppHeader 非控件区不报错 / OS 触发窗口移动）
+- [x] **BUG-CR-02**: 用量查询页 7 天趋势正确（SQL MIN 类型不报错 + 30 天窗口按天聚合 + 刷新后立即看到新行）
+- [x] **BUG-CR-03**: JSON 编辑器打开不报错（路径/字段拆 IPC 参数 + 虚拟路径协议 `path::field` 解析对）
+- [x] **BUG-CR-04**: scope (用户/项目) 切换生效（MCP / JSON 目录树 / 资源浏览 3 处 `useScope` 强制重 mount）
+- [x] **BUG-CR-05**: SQL 导入数量正确（1 个 provider = 1 个提示,`UNIQUE(provider_name, source_path)` 去重）
 
 ### 业务 Bug Fix (P1, phase 28)
 
