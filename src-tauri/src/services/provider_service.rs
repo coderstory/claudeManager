@@ -2341,4 +2341,128 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
             .unwrap_err();
         assert!(matches!(err, ProviderError::Io(_)));
     }
+
+    // -----------------------------------------------------------------------
+    // Phase 27 Fix 5 (BUG-CR-05 P0) — selected_ids filter + distinct count
+    // -----------------------------------------------------------------------
+    //
+    // The D-18 contract: 前端勾选 N 个 provider → 传 selected_ids: Vec<String>
+    // 给后端 → 后端按 ID 过滤 + 写入。imported 计数 = selected_ids 中
+    // 实际写入成功的 distinct provider 数 (D-17)。
+    //
+    // 关键不变量 (D-15~D-18 + CLAUDE.md §1 + §7):
+    //   - 1 INSERT = 1 provider 语义(原 parse 行为,本 plan 不动)
+    //   - selected_ids 为空 → Err("未选择任何 provider;请勾选至少 1 个再导入")
+    //     (CLAUDE.md §7 不静默吞错;不静默回退到全量导入)
+    //   - selected_ids 不与 parse 结果重叠的 ID → 静默忽略(后端按 ID
+    //     过滤,不是按 position;前端 selected Set 来自 preview 列表的
+    //     provider.id,理论上不会含未知 ID)
+    //   - UNIQUE(provider_name, source_path) 由 fs::exists 检查实现
+    //     (D-16;v2 可升级到 SQLite UNIQUE 索引)
+
+    fn sql_3_providers() -> String {
+        r#"
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p1', 'claude', 'P1', '{"env":{"ANTHROPIC_BASE_URL":"https://p1","ANTHROPIC_AUTH_TOKEN":"k1","ANTHROPIC_MODEL":"m1"},"model":"m1"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p2', 'claude', 'P2', '{"env":{"ANTHROPIC_BASE_URL":"https://p2","ANTHROPIC_AUTH_TOKEN":"k2","ANTHROPIC_MODEL":"m2"},"model":"m2"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p3', 'claude', 'P3', '{"env":{"ANTHROPIC_BASE_URL":"https://p3","ANTHROPIC_AUTH_TOKEN":"k3","ANTHROPIC_MODEL":"m3"},"model":"m3"}');
+"#
+        .to_string()
+    }
+
+    /// D-17+D-18 RED: 后端按 selected_ids 过滤 → 只写勾选的那些。
+    /// "勾 2 个导入 2 个" 而不是"导入 6 个"。
+    #[test]
+    fn fix5_selected_ids_filter_writes_only_selected() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // 用户只勾 p1 + p3,SQL 含 3 个。
+        let selected = vec!["p1".to_string(), "p3".to_string()];
+        let result = svc
+            .import_providers_from_sql_with_selected_ids(&sql_3_providers(), &selected, None)
+            .expect("import should succeed with non-empty selection");
+
+        assert_eq!(result.imported, 2, "应只导入 2 个,不是 3 个 (D-17 distinct 计数)");
+        assert_eq!(result.skipped, 0);
+        assert!(result.errors.is_empty());
+
+        // p1 + p3 文件存在,p2 不存在。
+        assert!(p_dir.join("p1.json").exists(), "p1 should be written");
+        assert!(p_dir.join("p3.json").exists(), "p3 should be written");
+        assert!(!p_dir.join("p2.json").exists(), "p2 must NOT be written (not in selected_ids)");
+    }
+
+    /// D-18 + CLAUDE.md §7 RED: selected_ids 为空 → 报错,绝不静默全量导入。
+    #[test]
+    fn fix5_empty_selected_ids_returns_error_no_silent_full_import() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let empty: Vec<String> = vec![];
+        let err = svc
+            .import_providers_from_sql_with_selected_ids(&sql_3_providers(), &empty, None)
+            .expect_err("empty selected_ids must error (CLAUDE.md §7)");
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("未选择任何 provider") || msg.contains("未选择") || msg.contains("empty"),
+            "error msg should mention empty selection, got: {msg}"
+        );
+
+        // 关键:err 之后,磁盘上**不应**有任何 provider 文件被写入
+        // (CLAUDE.md §7 "不静默吞错" 包含 "不静默退回到全量导入")。
+        let entries: Vec<_> = std::fs::read_dir(&p_dir)
+            .map(|d| d.filter_map(Result::ok).count())
+            .unwrap_or(0);
+        assert_eq!(entries, 0, "empty selected must not write any files");
+    }
+
+    /// D-16 UNIQUE 约束(由 fs::exists 实现)RED: 重复 import 同一
+    /// source_path → 第二次全部 skipped,不写盘。
+    #[test]
+    fn fix5_duplicate_id_is_skipped_by_fs_exists() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // 第一次:全选,全部写入。
+        let all = vec!["p1".to_string(), "p2".to_string(), "p3".to_string()];
+        let r1 = svc
+            .import_providers_from_sql_with_selected_ids(&sql_3_providers(), &all, None)
+            .unwrap();
+        assert_eq!(r1.imported, 3);
+
+        // 第二次:同样 selected_ids → 全部 dedup-skip (D-16)。
+        let r2 = svc
+            .import_providers_from_sql_with_selected_ids(&sql_3_providers(), &all, None)
+            .unwrap();
+        assert_eq!(r2.imported, 0, "no new writes on re-import");
+        assert_eq!(r2.skipped, 3, "all 3 should be reported as skipped (D-16 dedup)");
+    }
+
+    /// D-17 RED: selected_ids 中含 SQL 不存在的 id → 静默忽略,
+    /// imported 计数 = 实际写入的 distinct provider 数(不等于
+    /// selected_ids.len() — 错位 ID 不算写入)。
+    #[test]
+    fn fix5_selected_ids_with_unknown_id_silently_ignored() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // 勾 1 个真实 (p1) + 1 个不存在 (ghost)。
+        let selected = vec!["p1".to_string(), "ghost".to_string()];
+        let result = svc
+            .import_providers_from_sql_with_selected_ids(&sql_3_providers(), &selected, None)
+            .unwrap();
+
+        assert_eq!(result.imported, 1, "only p1 is real");
+        assert!(p_dir.join("p1.json").exists());
+        assert!(!p_dir.join("ghost.json").exists());
+    }
 }

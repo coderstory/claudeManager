@@ -606,3 +606,111 @@ describe('ImportSqlPage — F20 initialFilePath auto-load', () => {
     if (resolveRef.fn) resolveRef.fn('done');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 27 Fix 5 (BUG-CR-05 P0) — selectedIds wired through to backend
+// ---------------------------------------------------------------------------
+//
+// User feedback #11: "勾 1 个导入 6 个". 根因:前端 handleConfirm 调
+// importProvidersFromSql(bytes) 不传 selectedIds,后端写所有行。
+// 修后:handleConfirm 传 Array.from(selected) 给后端,后端按 ID 过滤
+// (D-15~D-18)。
+
+describe('ImportSqlPage — Phase 27 Fix 5 (BUG-CR-05): selectedIds passed to backend', () => {
+  it('handleConfirm passes selected_ids (Array.from(selected)) to import_providers_from_sql', async () => {
+    mockInvoke
+      .mockResolvedValueOnce(samplePreview())
+      .mockImplementation((cmd: string) => {
+        if (cmd === 'import_providers_from_sql') {
+          return Promise.resolve(sampleImportResult({ imported: 1 }));
+        }
+        return Promise.resolve(undefined);
+      });
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+
+    // 用户手动取消勾选 a 和 c,只留 b。
+    fireEvent.click(screen.getByTestId('import-sql-checkbox-a'));
+    fireEvent.click(screen.getByTestId('import-sql-checkbox-c'));
+
+    fireEvent.click(screen.getByTestId('import-sql-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-done')).toBeInTheDocument();
+    });
+
+    // 关键断言:invoke 'import_providers_from_sql' 第二个参数应含
+    // selected_ids: ['b'] (只有 b 被勾选)。
+    const importCall = mockInvoke.mock.calls.find(
+      (c) => c[0] === 'import_providers_from_sql',
+    );
+    expect(importCall).toBeDefined();
+    const args = importCall![1] as { selectedIds: string[] };
+    expect(args.selectedIds).toEqual(['b']);
+  });
+
+  it('DONE summary shows the actual imported count (from result.imported) not the SQL row count', async () => {
+    mockInvoke
+      .mockResolvedValueOnce(samplePreview())
+      .mockImplementation((cmd: string) => {
+        if (cmd === 'import_providers_from_sql') {
+          return Promise.resolve(sampleImportResult({ imported: 1 }));
+        }
+        return Promise.resolve(undefined);
+      });
+    render(<ImportSqlPage />);
+    pickFile('dump.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+
+    // 只勾 a(取消 b + c),模拟用户实际行为。
+    fireEvent.click(screen.getByTestId('import-sql-checkbox-b'));
+    fireEvent.click(screen.getByTestId('import-sql-checkbox-c'));
+
+    fireEvent.click(screen.getByTestId('import-sql-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-done')).toBeInTheDocument();
+    });
+    // 关键断言:summary 文案 "成功导入 1 个" — 不是 "3 个"
+    // (D-17 distinct count from backend)。
+    expect(screen.getByTestId('import-sql-done-summary').textContent).toMatch(
+      /成功导入 1 个 provider/,
+    );
+  });
+
+  it('confirms are blocked when no rows are selected (selectedCount === 0)', async () => {
+    // 整组都缺 token(validate fail)→ 默认全不勾。
+    mockInvoke.mockResolvedValueOnce(
+      samplePreview({
+        importable: 2,
+        preview_providers: [p('a', 'A'), p('b', 'B')],
+        validated_providers: [
+          { provider: p('a', 'A'), missing: ['missing token'] },
+          { provider: p('b', 'B'), missing: ['missing token'] },
+        ],
+        dedup_outcomes: [
+          { provider: p('a', 'A'), is_duplicate: false, duplicate_of: null },
+          { provider: p('b', 'B'), is_duplicate: false, duplicate_of: null },
+        ],
+      }),
+    );
+    render(<ImportSqlPage />);
+    pickFile('bad.sql');
+    await waitFor(() => {
+      expect(screen.getByTestId('import-sql-preview')).toBeInTheDocument();
+    });
+    // 按钮 disabled,即便用户强行触发也不会发 invoke。
+    const confirmBtn = screen.getByTestId('import-sql-confirm');
+    expect(confirmBtn).toBeDisabled();
+    // 没调 import 任何东西。
+    const importCalls = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'import_providers_from_sql',
+    );
+    expect(importCalls.length).toBe(0);
+  });
+});
