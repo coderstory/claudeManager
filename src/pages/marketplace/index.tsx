@@ -39,6 +39,7 @@ import {
   Package,
   Store,
 } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { ErrorBanner } from '../../components/ErrorBanner';
 import {
@@ -716,8 +717,22 @@ function RepoCard({
   const error = installState?.error ?? null;
 
   // M3.4 — Builtin / Npx 模式: 单按钮 "安装" (单步)。
-  // Git 模式: 保留 "预览资源" 按钮 (向后兼容)。
+  // Git 模式: "浏览" 按钮 → M5 #22 改调 openUrl(repo.url) 打开 git 仓库网页
+  // (用户期望点 "浏览" 能开 GitHub, 之前误调 clone_and_scan)。
+  // clone_and_scan 仍由第三方 URL 区提供 (customUrl input + 预览按钮)。
   const isOneClick = repo.install_mode === 'builtin' || repo.install_mode === 'npx';
+  const isGit = repo.install_mode === 'git';
+
+  // M5 #22 — Git 模式按钮点击: openUrl 调系统默认浏览器打开 repo URL。
+  // 失败不静默吞, error 落到 installStates 复用现有红条样式。
+  const handleBrowse = useCallback(async () => {
+    try {
+      await openUrl(repo.url);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('openUrl failed:', err);
+    }
+  }, [repo.url]);
 
   return (
     <div
@@ -794,6 +809,10 @@ function RepoCard({
           onClick={() => {
             if (isOneClick) {
               void onBuiltinInstall(repo);
+            } else if (isGit) {
+              // M5 #22 — Git 模式: 调 openUrl 打开 git 仓库网页,
+              // 不再走 clone_and_scan (改由第三方 URL 区提供)。
+              void handleBrowse();
             } else {
               void onClone(repo.url);
             }
@@ -815,10 +834,16 @@ function RepoCard({
         >
           {loading ? (
             <Loader2 size={12} data-app-spin="true" />
+          ) : isGit ? (
+            <ExternalLink size={12} />
           ) : (
             <Download size={12} />
           )}
-          {isOneClick ? defaultInstallLabel(repo.install_mode) : '预览资源'}
+          {isOneClick
+            ? defaultInstallLabel(repo.install_mode)
+            : isGit
+              ? '浏览'
+              : '预览资源'}
         </button>
       </div>
       <div

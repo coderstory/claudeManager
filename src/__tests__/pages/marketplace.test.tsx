@@ -27,6 +27,17 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+// M5 #22 — 浏览资源按钮调 @tauri-apps/plugin-opener 的 openUrl 打开 git 仓库 URL。
+// 原来 Git-mode RepoCard 上的 "预览资源" 按钮误调 clone_and_scan,导致用户点击
+// 期望打开 GitHub 仓库网页却触发本地 clone。修复后该按钮调 openUrl(repo.url),
+// clone_and_scan 仅由第三方 URL 区(customUrl)走。
+const mockOpenUrl = vi.fn();
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: (...args: unknown[]) => mockOpenUrl(...args),
+  openPath: vi.fn(),
+  revealItemInDir: vi.fn(),
+}));
+
 function repo(id: string, overrides: Partial<MarketplaceRepo> = {}): MarketplaceRepo {
   return {
     id,
@@ -57,6 +68,8 @@ function resource(
 
 beforeEach(() => {
   mockInvoke.mockReset();
+  mockOpenUrl.mockReset();
+  mockOpenUrl.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -610,13 +623,14 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     });
   });
 
-  it('clicking a Git repo card triggers clone_and_scan (preview, not single-step install)', async () => {
+  it('clicking a Git repo card opens the repo URL via @tauri-apps/plugin-opener (M5 #22)', async () => {
+    // M5 #22 — 修复前: Git-mode RepoCard 按钮调 clone_and_scan(本地 clone,
+    // 不打开 GitHub)。修复后: 调 openUrl(repo.url) 打开系统默认浏览器到
+    // git 仓库网页。clone_and_scan 仅由"第三方仓库"section 走。
+    const repoUrl = 'https://github.com/anthropics/claude-cookbooks.git';
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_marketplace_repos') {
-        return [builtinRepo('claude-cookbooks', 'git', '')];
-      }
-      if (cmd === 'clone_and_scan') {
-        return { repo_path: 'C:/mk/cookbooks', resources: [] } satisfies ScanResult;
+        return [builtinRepo('claude-cookbooks', 'git', '', { url: repoUrl })];
       }
       return null;
     });
@@ -634,10 +648,14 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     });
 
     await waitFor(() => {
-      const calls = mockInvoke.mock.calls.filter(
+      // 应调 openUrl(repoUrl) 一次
+      expect(mockOpenUrl).toHaveBeenCalledTimes(1);
+      expect(mockOpenUrl).toHaveBeenCalledWith(repoUrl);
+      // 不应调 clone_and_scan (这条路径已迁出 RepoCard)
+      const cloneCalls = mockInvoke.mock.calls.filter(
         (c) => c[0] === 'clone_and_scan',
       );
-      expect(calls.length).toBe(1);
+      expect(cloneCalls.length).toBe(0);
     });
   });
 
