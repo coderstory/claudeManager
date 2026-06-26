@@ -74,13 +74,16 @@
 **Requirements**: D7 (ErrorBanner 全扩展) / D9 (桌面清理) / D10 (17 限制评估)
 **Status**: in progress
 **Success Criteria**:
+
   1. M1 3 件套 (PluginHost wiring + build pipeline refresh + docs refresh) 全部 ship + smoke 7/7
   2. 17 MEDIUM/LOW 已知限制按 M2.16-001-M~010-M 顺序全评估,产出 `docs/investigations/m2.16-limitations-eval.md`
   3. F15 ErrorBanner 接入剩余 7 个页面 (import-sql / mcp-management / F2 切换 等),保持 testid 一致
   4. `~/Desktop/ClaudeConfigManager-M2/` 仅剩 D8 抽查的 2 个 exe,其他 mv 到 `~/Desktop/ClaudeConfigManager-archive/M2.16-2026-06-21/`
+
 **Plans**: 4 (并行槽)
 
 Plans:
+
 - [x] M2.17-3.1: PluginHost wiring (lib.rs::run + shutdown on RunEvent::Exit) — commits `d5443c3` + `18d4b29`
 - [x] M2.17-C1+C2: CI gates (npm run build in test-frontend + e2e skip with macos matrix) — commit `a980eeb`
 - [x] M2.17-C3: build-and-ship.sh refresh (cargo → `tauri build`) — commit `8ef961d`
@@ -95,12 +98,15 @@ Plans:
 **Depends on**: M2.17 (D10 限制评估完成)
 **Requirements**: 清单 1 (P0)
 **Success Criteria**:
+
   1. e2e cold-start 截图对比: launch → 1s → 3s → 5s,无白屏 + 无 loading 闪烁
   2. vitest 启动事件 mock 覆盖 setup/show/paint 4 个边界
   3. ship `ClaudeConfigManager-M3.1-startup-optimization.exe`,smoke 7/7 通过
+
 **Plans**: 1 plan (估时 2-3 天)
 
 Plans:
+
 - [ ] M3.1-01: 启动事件链路梳理 + splash 透明度修复 + webview 预加载
 
 ### Phase 3: M3.2 F2/托盘/InfoBar polish (清单 3/4/5/6/7/8/24 + M2.16-007-L)
@@ -109,6 +115,7 @@ Plans:
 **Depends on**: M3.1
 **Requirements**: 清单 3/4/5/6/7/8/24 (P1) + M2.16-007-L
 **Success Criteria**:
+
   1. 托盘 LeftDoubleClick handler 显示窗体
   2. sidebar 底部文案 "M1.9 · 架构期" → "钱云飞作品"
   3. 备份路径校验 (`IPlatformPaths::backups_dir` = `%APPDATA%\ClaudeConfigManager\backups`)
@@ -117,9 +124,11 @@ Plans:
   6. F19 恢复页 JSON 框全屏 toggle (app 窗体内)
   7. 设置入口 onClick 修复
   8. D7 F15 ErrorBanner 接入全部剩余页面
+
 **Plans**: 1 plan (估时 3-4 天,8 子任务并行)
 
 Plans:
+
 - [ ] M3.2-01: 8 项 polish + ErrorBanner 全扩展
 
 ### Phase 4: M3.3 配置优化 13 规则 + Fix + 新增 env (清单 9/10)
@@ -128,13 +137,16 @@ Plans:
 **Depends on**: M3.2
 **Requirements**: 清单 9/10 (P1/P2)
 **Success Criteria**:
+
   1. `docs/rules/builtin-rules.md` 文档化 13 规则 (含新增 3 env: `CLAUDE_CODE_ATTRIBUTION_HEADER=0` / `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` / `CLAUDE_CODE_EFFORT_LEVEL=max`)
   2. UI 每行展示规则名 + 状态 (绿勾/红 x) + Fix 按钮
   3. Fix 按钮调用 `apply_rule_fix(rule_id)` Tauri command,带原子备份
   4. 13+3 = 16 规则扫描 fixture + Fix 原子性测试
+
 **Plans**: 1 plan (估时 2-3 天)
 
 Plans:
+
 - [ ] M3.3-01: 13 规则文档化 + UI 重构 + 3 env 规则
 
 ### Phase 5: M3.4 资源市场重构 (清单 11/12/13/14/16/17)
@@ -143,15 +155,18 @@ Plans:
 **Depends on**: M3.3
 **Requirements**: 清单 11/12/13/14/16/17 (P1/P2)
 **Success Criteria**:
+
   1. F17 marketplace 安装流程三类统一 API (`install_builtin` / `install_third_party` / `install_npx`)
   2. 删除"克隆源码"分支
   3. 内置 superpowers (`/plugin install superpowers@claude-plugins-official`) + GSD (`npx @opengsd/gsd-core@latest`)
   4. GSD-* 合并展示为 "Get Shit Done" 分类
   5. 资源浏览过滤 `cache/` / `node_modules/` / `.git/` 三类
   6. 安装命令 mock + GSD 合并 fixture + 过滤规则单测
+
 **Plans**: 1 plan (估时 4-5 天)
 
 Plans:
+
 - [ ] M3.4-01: F17 marketplace 重构 (基于启动门槽 2 的 `docs/design/M3.4-marketplace-refactor.md`)
 
 ### Phase 6: M3.5 资源浏览修 bug (清单 15)
@@ -160,12 +175,15 @@ Plans:
 **Depends on**: M3.4
 **Requirements**: 清单 15 (P1) — D13 决策:按 M3.5 排期
 **Success Criteria**:
+
   1. `reveal_file` 返回 `Result<(), RevealError>` 区分 4 类 (合法路径 / 不存在 / 无权限 / 网络路径)
   2. 前端 ErrorBanner 显示本地化提示 ("无法打开该资源" + 排查建议)
   3. 4 个 reveal 场景 e2e 测试覆盖
+
 **Plans**: 1 plan (估时 0.5-1 天)
 
 Plans:
+
 - [ ] M3.5-01: reveal 错误处理 + 前端本地化
 
 ### Phase 7: M3.6 Provider CRUD + JSON 编辑器路径 (清单 20/22)
@@ -174,15 +192,18 @@ Plans:
 **Depends on**: M3.5
 **Requirements**: 清单 20 (P0) + 清单 22 (P0)
 **Success Criteria**:
+
   1. JSON 编辑器路径 bug 回归测试通过 (4 场景: 合法路径 / 不存在 / 权限 / 编码)
   2. provider 新增 UI 表单 (base_url / api_key_env / model + token-mask)
   3. provider 修改走 F13 自动备份
   4. provider 删除走 F13 备份 + 二次确认
   5. provider 查看只读详情页
   6. CRUD 各 2 用例 + 备份联动 + 权限校验
+
 **Plans**: 1 plan (估时 3-4 天)
 
 Plans:
+
 - [ ] M3.6-01: Provider CRUD 4 命令 + UI
 
 ### Phase 8: M3.7 单文件部署重构 (清单 18)
@@ -191,13 +212,16 @@ Plans:
 **Depends on**: M3.6
 **Requirements**: 清单 18 (P1)
 **Success Criteria**:
+
   1. F8 页面文案清晰解释 "导出单 exe / 嵌入 WebView2" 用途
   2. 新建 `pages/about/index.tsx`,显示版本 + build hash + 许可证 + 致谢
   3. sidebar 路由加 "关于" 入口
   4. about 页 snapshot + sidebar 路由跳转测试
+
 **Plans**: 1 plan (估时 1-2 天)
 
 Plans:
+
 - [ ] M3.7-01: F8 文案重写 + about 页新建
 
 ### Phase 9: M3.8 用量查询修 bug (清单 19) [BLOCKED D14]
@@ -206,14 +230,17 @@ Plans:
 **Depends on**: M3.7 + **D14 用户拍板** (BLOCKED)
 **Requirements**: 清单 19 (P0)
 **Success Criteria**:
+
   1. HTTP 客户端覆盖 Anthropic / OpenAI / 第三方代理三类 (按 D14 答案选)
   2. 错误处理覆盖 401 / 429 / network error / 数据格式错误
   3. 缓存策略 (5-min in-memory + 磁盘 fallback)
   4. UI 表格展示 provider + 周期 + 用量百分比 + 限额
   5. mock HTTP 4 场景测试
+
 **Plans**: 1 plan (估时 3-5 天,视 D14 答案浮动)
 
 Plans:
+
 - [ ] M3.8-01: 用量查询重写 (按 D14 选定方向)
 
 ### Phase 10: M3.9 SQL 导入命名 + 校验 (清单 2/21)
@@ -222,14 +249,17 @@ Plans:
 **Depends on**: M3.8
 **Requirements**: 清单 2 (P1) + 清单 21 (P1)
 **Success Criteria**:
+
   1. 菜单/页面标题 "SQL导入" → "SQL导入配置"
   2. SQL schema 校验 (cc-switch 格式: CREATE TABLE providers / INSERT statements)
   3. 校验失败 ErrorBanner + 错误详情
   4. 部分合法时 dry-run 预览 (列出将导入的 N 条 + 跳过的 M 条)
   5. 5 场景测试: 合法 / 非法 / 部分合法 / 空文件 / 编码错误
+
 **Plans**: 1 plan (估时 1-2 天)
 
 Plans:
+
 - [ ] M3.9-01: 命名 + 校验 + dry-run 预览
 
 ### Phase 11: M3.10 双模式 用户/项目 (清单 23 — M3 核心新功能)
@@ -238,6 +268,7 @@ Plans:
 **Depends on**: M3.9 + 启动门槽 1 架构评审通过
 **Requirements**: 清单 23 (P0) — M3 核心新功能 (架构级)
 **Success Criteria**:
+
   1. Project domain model (`id, name, root_dir, created_at, is_system`) + `projects.json` 持久化 + F13 备份
   2. 用户级 = 特殊 `is_system=true` 不可删
   3. 项目级 = 指向 `<root>/.claude/` 的虚拟视图
@@ -246,9 +277,11 @@ Plans:
   6. 切换项目走 F13 备份 + 原子切换
   7. sidebar 顶部 project switcher + 当前项目显示
   8. 跨 plugin "切换项目后行为" 集成测试 + 用户/项目数据隔离单测
+
 **Plans**: 1 plan (估时 5-7 天,含架构评审 + 适配所有 plugin 的回归测试)
 
 Plans:
+
 - [ ] M3.10-01: Project domain + 持久化
 - [ ] M3.10-02: 所有 plugin 适配 `IPlatformPaths::active_root_dir`
 - [ ] M3.10-03: 欢迎页改造 + sidebar 顶部 switcher
@@ -261,54 +294,65 @@ Plans:
 > v3.0 round 1 (2026-06-22) 已 ship 7 phase: A1 13/13 plugin 接入 / B3#10 Tailwind 移除 / B2#1 usage 测试 / A3 备份增量 / L-M2.08 WindowChrome / M4.3 updater Phase 1。剩余 e2e / 云备份 / updater UI / M4.6 长尾项。
 
 ### Phase 12: M3.11~M3.12 M3.10-adapter plugin 适配 (13 个 active_root_dir 接入点)
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commits**: f375bf1 (F5) / 2e4e75b (F18) / afd090e (F1+F3) / 8a2650f (F6) / a9bd4b5 (F13+F19) / f145d38 (F16+F17+F7)
 **内容**: 13 个 plugin 全部接入 active_root_dir,双模式架构从骨架到全 plugin 落地
 
 ### Phase 13: B3#10 Tailwind 移除
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commit**: ed5a3e5
 **内容**: 删 tailwindcss/postcss/autoprefixer/tailwind-merge/clsx/cva 6 包 + cn util + dead className + tokens.css 误导注释
 
 ### Phase 14: B2#1 usage fixture 8 子任务功能测试
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commit**: 4f5df37
 **内容**: cc-switch JSONL 解析 / 聚合 / 时间窗口 / 容错 / 性能 / 去重 8 场景测试
 
 ### Phase 15: A3 备份增强 Phase 1 (增量)
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commit**: 3eadae2
 **内容**: backup_incremental (skip identical snapshots)
 
 ### Phase 16: L-M2.08 MacWindowChrome 架构统一
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commit**: 7efb0f8
 **内容**: lib.rs 走 IPlatformWindowChrome trait dispatch, Mac impl = apply_vibrancy
 
 ### Phase 17: M4.3 updater Phase 1 (pubkey + endpoint)
+
 **Status**: ✅ 完成 (2026-06-22)
 **Commit**: da6ba67
 **内容**: 真实 ed25519 pubkey + GitHub release endpoint, 私钥未泄露
 
 ### Phase 18: M1 L1 Playwright e2e (Windows only)
+
 **Status**: ⏳ planned (3 plans; wave 1 WebView2 specs, wave 2 dev-server specs, wave 3 aggregate + STATE update)
 **Plans**: 3 (sequential waves 1→2→3)
 **Requirements**: none (validation/exec phase — verifies CLAUDE.md §5.3 M1 acceptance)
 
 Plans:
+
 - [x] 18-01-PLAN.md — WebView2 specs (launch / tray / close-minimize) via tauri-driver + CDP
 - [x] 18-02-PLAN.md — Dev-server specs (m1-9-2 / m2-3-0 / m2-3-2) via vite + PLAYWRIGHT_BASE_URL
 - [x] 18-03-PLAN.md — Aggregate 18-{01,02} results → 18-03-SUMMARY.md + STATE.md v3.0 → 8/10 ship
 
 ### Phase 19: A3 备份增强 Phase 2 (云备份)
+
 **Status**: ⏳ pending
 **内容**: 远程备份 (S3/OSS)
 
 ### Phase 20: M4.3 updater Phase 2/3
+
 **Status**: ⏳ pending
 **内容**: 前端 updater UI + E2E 灰度回滚
 
 ### Phase 21: M4.6 长期 backlog
+
 **Status**: ⏳ pending (按需启动)
 **内容**: i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02
 
@@ -330,6 +374,7 @@ Plans:
 > M4.3 已在 v3.0 round 1 ship Phase 1 (pubkey + endpoint, commit `da6ba67`),Phase 2/3 (前端 UI + E2E 灰度) 留 v3.0 round 2。
 
 候选清单 (M4.1~M4.6 现状):
+
 - ❌ M4.1 代码签名证书 (取消)
 - ⏸ M4.2 公证 (M4.1 取消 → 暂缓)
 - 🟡 M4.3 updater (Phase 1 已 ship, Phase 2/3 pending)
@@ -345,7 +390,7 @@ Round 2 pending: Phase 18 (e2e) → 19 (云备份) → 20 (updater UI) → 21 (M
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. M2.17 收尾期 | v2.0 | 2/2 | Complete | 2026-06-22 |
+| 1. M2.17 收尾期 | v2.0 | 3/2 | Complete    | 2026-06-22 |
 | 2. M3.1 启动优化 | v2.0 | 1/1 | Complete | 2026-06-22 |
 | 3. M3.2 F2/托盘/InfoBar polish | v2.0 | 1/1 | Complete | 2026-06-22 |
 | 4. M3.3 配置优化 16 规则 | v2.0 | 1/1 | Complete | 2026-06-22 |

@@ -2,15 +2,18 @@
 gsd_state_version: 1.0
 milestone: M4+M5
 milestone_name: M4 e2e 框架 + M5 用户报告 33 bug 修复
-status: planning
-last_updated: 2026-06-25T23:50:00.000Z
-last_activity: 2026-06-25 -- v3.0 收尾 (5 commit) + M4 规划 (5 决策) + M5 规划 (33 bug)
+current_phase: 02
+current_phase_name: 清单 1 — 冷启动白屏→全透明→loading 闪烁
+status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
+last_updated: "2026-06-25T23:29:23.161Z"
+last_activity: 2026-06-25
+last_activity_desc: Phase 1 complete, transitioned to Phase 02
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 21
+  completed_phases: 12
+  total_plans: 17
+  completed_plans: 18
+  percent: 57
 stopped_at: M4 + M5 规划阶段 — M4-PLAN.md + M5-PLAN.md 都写完,等用户回答 8 开放问题进 Phase 1
 ---
 
@@ -25,13 +28,14 @@ stopped_at: M4 + M5 规划阶段 — M4-PLAN.md + M5-PLAN.md 都写完,等用户
 
 ## Current Position
 
-Phase: M4 + M5 (planning, 双 phase 并行规划)
+Phase: 02 — M3.1 启动优化 (清单 1 — 冷启动白屏→全透明→loading 闪烁)
 Plan: Not started
 Status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
-Last activity: 2026-06-25
+Last activity: 2026-06-25 — Phase 1 complete, transitioned to Phase 02
 Next: 等用户回答 8 开放问题 → M4 Phase 1 启动 (验证 Tauri 读 XDG_CONFIG_HOME) + M5 Phase 1 启动 (修 critical 5)
 
 **v3.0 收尾 (2026-06-25)** 一句话总结: v3.0 round 1 (M3.11~M3.15 + M4.3 Phase 1 + M4.6 SQLite history) ship 后, 本会话:
+
 - scripts/ 跨平台修 5 处 (commit 090f2c8 + 7c07924 + 7721520 + 00bb480)
 - rust warning 清 5 处 (commit dd1a54d)
 - AGENTS.md 重写 (worktree workflow discontinued, 主 session 直接改代码)
@@ -39,6 +43,7 @@ Next: 等用户回答 8 开放问题 → M4 Phase 1 启动 (验证 Tauri 读 XDG
 - ClaudeManager.app 装到 /Applications/, launch + 1 窗口验证 OK
 
 **M4 启动 (2026-06-25)** 5 决策:
+
 - Q1 场景范围: 14 场景全收
 - Q2 macOS 路径: AppleScript + 真 .app
 - Q3 ship gate: 14 hard-fail
@@ -46,6 +51,7 @@ Next: 等用户回答 8 开放问题 → M4 Phase 1 启动 (验证 Tauri 读 XDG
 - Q5 5 开放问题拍: A=2 / B=1 / C=1 / D=2 / E=1 (fixture 隔离 = XDG_CONFIG_HOME)
 
 **M5 启动 (2026-06-25)** 33 bug 来源 = ~/Desktop/17823997343240.md (2026-06-25 23:31 用户实测):
+
 - Q1 修法: M5 一次性 33/33
 - Q2 scope: M5 全做 33/33
 - Q3 顺序: 当前只做规划
@@ -1422,6 +1428,7 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 ```
 
 **关键决策**：
+
 - 用户拍板 A+A+B（rusqlite + 全局 history.db + 按需启动 P3 backlog）
 - rusqlite_migration 1.0.0 与 rusqlite 0.40.1 不兼容（已记录 memory `feedback/rusqlite-migration-1.0.0-no-params-broken-with-rusqlite-0.40.md`），改用 2.6.0
 - IPC 命名冲突：`get_usage_history` → `get_usage_history_rows`（避开 F7）
@@ -1430,22 +1437,26 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 ## M3.13.x 关键修复
 
 ### A1 冷启动 splash 闪烁
+
 - **Root cause**: Tauri v2 `tauri://ready` 事件在 Win WebView2 不可靠
 - **修复**: React-first-paint + double rAF（前端 only，无 Rust 改动）
 - **效果**: 8s failsafe → 32ms React mount 触发
 
 ### A2 备份补全
+
 - 删除: `BackupService::delete_backup`（trash + rm 原子） + UI 二次确认
 - 去重: 后端 `canonicalize` inode 去重 + 前端 `useMemo+Set` 兜底
 - diff 全屏: 100vw × 100vh overlay + ESC + active 高亮
 
 ### A3 项目 picker + 路径校验（v5 收尾）
+
 - 极简版：HTML5 `<input type="file" webkitdirectory>` 模拟 picker（避免 npm dep lock 违反 §2.3）
 - 纯前端 regex validation（无 IPC）
 - A3 subagent 反复失败 4 次（v1 503 / v2 race / v3 文件损坏 / v4 被 kill）→ 主 session 收尾派 A3 v5
 - A3 v5 commit `64ce18e` ship 代码 + smoke 10/10
 
 ### A4 JSON 文件树
+
 - 后端 `list_editable_jsons` 递归扫描 `~/.claude/` 用户级 + active_root 项目级
 - 严格白名单 root 列表（不扫 `~/.codex/` 等避免安全作用域泄露）
 - MAX_JSON_TREE_ENTRIES=200 + MAX_JSON_TREE_DEPTH=5 双重 cap
@@ -1456,6 +1467,7 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 **触发**：ship A3 v5 失败 → 6 个文件有 merge conflict marker（其他 subagent 引入）
 
 **修复的 6 个文件**：
+
 1. `src-tauri/Cargo.toml` — 1 对 marker + 1 个重复 key（rusqlite = 0.40.1 出现 2 次）
 2. `src-tauri/src/commands/backup.rs` — 1 对 marker + 重复 `delete_backup` 函数
 3. `src-tauri/src/commands/fs.rs` — 2 对 marker + 重复 `let deep` 变量
