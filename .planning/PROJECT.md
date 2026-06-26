@@ -19,11 +19,20 @@
 - **Success metric**: 桌面 ship 的 Claude Config Manager 安装包能稳定切换 ≥3 个 provider 不出错
 - **Strategy notes**: 无（项目方向由 STATE.md 决策日志 + 用户反馈清单驱动）
 
-## Current State (post-v3.0.1)
+## Current State (v3.2 planning)
 
-**Latest milestone:** v3.0.1 — M5 用户 bug 修复 (33 bug, shipped 2026-06-26)
-**Tag:** v3.0.1
-**Next:** 用户 2026-06-26 拍板放弃 v3.0 round 3;project 当前停在 v3.0.1,无 active milestone
+**Latest shipped milestone:** v3.0.1 — M5 用户 bug 修复 (33 bug, shipped 2026-06-26, tag v3.0.1)
+**Active milestone:** v3.2 — M6 用户实测反馈修复 (planning 2026-06-26)
+**Goal:** v3.0.1 M5 修了 33 bug 后用户重新实测 ClaudeManager.app,根据新发现 bug 清单按 critical 优先原则 4 阶段修。
+
+## Current Milestone
+
+- ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1~M3.10)** — 11/11 ship, smoke 7/7, tag v2.0
+- ✅ **v3.0 功能完善 + updater 基础 (M3.11~M3.15 + M4.3)** — round 1 (Phase 12-17) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
+- ✅ **v3.0-M4 e2e 框架** — Phases 1-4 shipped 2026-06-26 (tag v3.0-M4); 14/14 scenarios PASS, test-all stage 6 hard-fail wired
+- ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 shipped 2026-06-26 (tag v3.0.1); 33/33 bug 修完; ClaudeManager.app 14M rebuild OK + 1 窗口 OK; test-all 6 阶段 PASS
+- ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;见 Out of Scope
+- 🚧 **v3.2 M6 用户实测反馈修复** — planning (2026-06-26);4 阶段 critical → 业务 → 重构 → A 类+整合;tag v3.2
 
 ## Current Milestone
 
@@ -89,6 +98,11 @@
 > v3.0 进行中：A1 13/13 + updater Phase1 + 备份增量 + WindowChrome 统一已完成；e2e/云备份/updater UI/M4.6 长尾 pending。
 
 - [x] **Phase 18: M1 L1 Playwright e2e (Windows only)** — ✅ 已 ship (commits `4fb03b5` + `dddc255` + `b8361ce`);6/6 spec PASS（3 WebView2 via tauri-driver CDP + 3 vite dev）;atomic fix `b8361ce`（playwright.config.ts webServer gating + fixtures.ts CDP-mode `page.goto` Proxy no-op）
+- [ ] **Phase 27: v3.2 M6 critical 5 bug 修复 (P0)** — 5 fix commits
+- [ ] **Phase 28: v3.2 M6 业务 13 bug 修复 (P1)** — 含 BUG-BZ-08~13 留空待用户实测补
+- [ ] **Phase 29: v3.2 M6 重构 9 bug 修复 (P2)**
+- [ ] **Phase 30: v3.2 M6 UI A 类 5 bug 修复 (P3)**
+- [ ] **Phase 31: v3.2 M6 整合验证 + tag v3.2** — test-all 6 阶段 PASS + M4 e2e 15/15 + ClaudeManager.app rebuild OK
 
 ### Out of Scope
 
@@ -143,6 +157,6 @@
 
 ---
 
-*Last updated: 2026-06-21 after M2.16 close + M2.17 start + M3/M4 roadmap draft (commit `d62ba75`)*
+*Last updated: 2026-06-26 — v3.2 (M6 用户实测反馈修复) started, REQUIREMENTS.md + STATE.md reset for new milestone*
 </content>
 </invoke>

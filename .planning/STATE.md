@@ -1,42 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0.1 (M5 shipped 2026-06-26)
-milestone_name: M5 用户 bug 修复 (33 bug 全部 ship, tag v3.0.1)
-current_phase: 26 (post-ship, audit/cleanup pending)
-current_phase_name: M5 A 类 5 + 整合验证 (Phase 26, 5 SUMMARY + VERIFICATION ship-gate PASS)
-status: M5 ship archived 2026-06-26 (tag v3.0.1); 33/33 bug 修完; test-all 6 stages PASS; M4 e2e 15/15 PASS; ClaudeManager.app rebuild OK + launch 1 window OK
-last_updated: "2026-06-26T07:30:00.000Z"
+milestone: v3.2
+milestone_name: M6 用户实测反馈修复
+status: planning
+last_updated: "2026-06-26T06:51:42.190Z"
 last_activity: 2026-06-26
-last_activity_desc: M5 phase 26 complete — 33/33 bug 修完, A 类 5 + 整合验证 ship gate PASS, 4 subagent 修 (#18 #22 #23+#24 + 3 TS error fix)
 progress:
-  total_phases: 26
-  completed_phases: 22
-  total_plans: 22
-  completed_plans: 23
-  percent: 100
-stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stages PASS, M4 e2e 15/15 PASS, ClaudeManager.app 14M rebuild OK + 1 窗口 OK, tag v3.0.1; **2026-06-26 用户拍板废弃 v3.0 round 3 (云备份 + updater UI + M4.6 长尾);project 当前停在 v3.0.1,无 active milestone**
-
-<!--
-  manager_projection_sync_note (2026-06-26):
-    `gsd-tools query init.milestone-op` 会报 completed_phases=13/26 — 这是 manager 扫描逻辑的已知限制:
-    它只数 .planning/phases/ 目录下含 SUMMARY.md 的 phase 目录 (13 个)。
-    Phase 23-26 的 SUMMARY 在 archive 后的 .planning/milestones/v3.0.1-phases/ 里,manager 不扫。
-    本 frontmatter 的 completed_phases=22 是手动维护的真值,反映 26 个 phase 中:
-      - 11 个 v2.0 phase (1-11) ✅
-      - 7 个 v3.0 round 1+2 phase (12-18) ✅
-      - 1 个 v3.0-M4 phase (22) ✅
-      - 4 个 v3.0.1 phase (23-26) ✅
-      = 共 22 complete (Phase 19/20/21 仍 pending,属 v3.0 round 3 backlog)
-    跑 gsd-autonomous 之前先看本字段,不要被 manager projection 误导。
-
-  v3.0_round3_deprecation_note (2026-06-26):
-    Phase 19 (云备份) / Phase 20 (M4.3 updater UI) / Phase 21 (M4.6 长尾) — 用户 2026-06-26 拍板废弃。
-    项目当前停在 v3.0.1,无 active milestone,启动新里程碑前需用户重新拍板。
-    ROADMAP.md / PROJECT.md / MILESTONES.md 均已同步标记 ❌ 废弃。
--->
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
+<!--
+  v3.2_milestone_context (2026-06-26):
+    用户选 v3.2 (M6 用户实测反馈修复) 作为下一 milestone。
+    Goal: v3.0.1 M5 修了 33 bug 后用户重新实测 ClaudeManager.app,
+          根据新发现 bug 清单按 critical 优先原则 4 阶段修。
+    沿用 M5 工程模式: 4 阶段 (critical 5 → 业务 13 → 重构 9 → A 类 5+整合)。
+    M4 e2e 15/15 必须保持 PASS (ship gate)。
+    不做: 云备份 / updater UI / M4.6 长尾 (2026-06-26 废弃 v3.0 round 3)。
+
+  v3.0_round3_deprecation_note (2026-06-26, 跨 milestone 保留):
+    Phase 19/20/21 (云备份 + updater UI + M4.6 长尾) 用户拍板废弃。
+    v3.2 不进这 3 项;如需重提需用户重新拍板。
+
+  manager_projection_sync_note (跨 milestone 保留):
+    gsd-tools query init.milestone-op 报 completed_phases=13/26 是硬编码扫描 .planning/phases/ 漏掉 archive 的已知限制。
+    v3.2 重置后 manager projection 会从 0 开始重新数,这是预期的(新 milestone 计数从 0)。
+-->
+
 **M5 ship (2026-06-26)**:
+
 - Phase 23: critical 5 (#2 #4 #6 #19 #27) — 5 fix commits 验证 + test-all 6 阶段 PASS + M4 e2e 15/15 覆盖
 - Phase 24: 业务 13 (含 #22 #23 #24 真修, 11 验证) — commit `c508371` (frontend) + `d232e1b` (rust CliNotFound)
 - Phase 25: 重构 9 (含 #18 真修, 8 验证) — commit `0eb7f08` (29 files, +269/-576, 4 处同步删)
@@ -70,37 +66,10 @@ stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stage
 
 ## Current Position
 
-Phase: 02 — M3.1 启动优化 (清单 1 — 冷启动白屏→全透明→loading 闪烁)
-Plan: Not started
-Status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
-Last activity: 2026-06-25 — Phase 1 complete, transitioned to Phase 02
-Next: 等用户回答 8 开放问题 → M4 Phase 1 启动 (验证 Tauri 读 XDG_CONFIG_HOME) + M5 Phase 1 启动 (修 critical 5)
-
-**v3.0 收尾 (2026-06-25)** 一句话总结: v3.0 round 1 (M3.11~M3.15 + M4.3 Phase 1 + M4.6 SQLite history) ship 后, 本会话:
-
-- scripts/ 跨平台修 5 处 (commit 090f2c8 + 7c07924 + 7721520 + 00bb480)
-- rust warning 清 5 处 (commit dd1a54d)
-- AGENTS.md 重写 (worktree workflow discontinued, 主 session 直接改代码)
-- test-all 5 阶段: ui-check + frontend (500/500) + rust + smoke (10/10) 全 PASS; e2e WARN 是 tauri-driver 不支持 macOS
-- ClaudeManager.app 装到 /Applications/, launch + 1 窗口验证 OK
-
-**M4 启动 (2026-06-25)** 5 决策:
-
-- Q1 场景范围: 14 场景全收
-- Q2 macOS 路径: AppleScript + 真 .app
-- Q3 ship gate: 14 hard-fail
-- Q4 计划阶段: 主 session 写 M4-PLAN.md
-- Q5 5 开放问题拍: A=2 / B=1 / C=1 / D=2 / E=1 (fixture 隔离 = XDG_CONFIG_HOME)
-
-**M5 启动 (2026-06-25)** 33 bug 来源 = ~/Desktop/17823997343240.md (2026-06-25 23:31 用户实测):
-
-- Q1 修法: M5 一次性 33/33
-- Q2 scope: M5 全做 33/33
-- Q3 顺序: 当前只做规划
-- Q4 M4 vs M5: 先 M4 (e2e 框架) 后 M5 (用 M4 验)
-- Q5 修法优先级 + #12/#23-24/#25 三个 D 类信息澄清: **等用户拍板**
-
-**v3.0 本轮（2026-06-22）一句话总结**：A1 12/13 plugin 适配完成 + B3#10 Tailwind 移除 + B2#1 usage 测试 + A3 备份增强 Phase 1 + L-M2.08 WindowChrome 统一 + M4.3 updater Phase 1 + Phase 18 e2e 6/6 PASS（#14 关闭）+ L-M2.02 详情页 max-width 统一（9 页 ship, smoke 7/7）+ Phase 21 SQLite research 完成（21-RESEARCH.md + 21-CONTEXT.md, 3 待拍板）。
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-26 — Milestone v3.2 started
 
 ## Recent Work
 
