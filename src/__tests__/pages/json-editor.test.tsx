@@ -27,6 +27,22 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+// Phase 27 Fix 4: JsonEditorPage now calls useProjects().
+// Mock it so tests that don't care about scope get a stable default.
+vi.mock('../../hooks/useProjects', () => ({
+  useProjects: () => ({
+    projects: [],
+    currentProjectId: null,
+    currentProject: null,
+    loading: false,
+    error: null,
+    reload: vi.fn(),
+    add: vi.fn(),
+    remove: vi.fn(),
+    switchTo: vi.fn(),
+  }),
+}));
+
 const SAMPLE_JSON = JSON.stringify({
   name: 'p1',
   api_key: 'sk-leaked-value',

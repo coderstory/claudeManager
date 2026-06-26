@@ -25,6 +25,22 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+// Phase 27 Fix 4: ResourceBrowserPage now calls useProjects().
+// Provide a default list_projects response so the hook doesn't crash.
+vi.mock('../../hooks/useProjects', () => ({
+  useProjects: () => ({
+    projects: [],
+    currentProjectId: null,
+    currentProject: null,
+    loading: false,
+    error: null,
+    reload: vi.fn(),
+    add: vi.fn(),
+    remove: vi.fn(),
+    switchTo: vi.fn(),
+  }),
+}));
+
 function item(
   id: string,
   kind: ResourceKind,

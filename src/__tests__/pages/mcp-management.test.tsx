@@ -49,7 +49,7 @@ const sampleHttp = (id: string, name: string): McpServer => ({
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  // Default: list returns 3 servers.
+  // Default: list returns 3 servers, no project (user scope).
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'list_mcp_servers') {
       return [
@@ -57,6 +57,11 @@ beforeEach(() => {
         sampleHttp('22222222-2222-2222-2222-222222222222', 'remote'),
         sampleStdio('33333333-3333-3333-3333-333333333333', 'echo'),
       ];
+    }
+    // Phase 27 Fix 4: useProjects() calls list_projects on mount.
+    // Default to no project (user scope).
+    if (cmd === 'list_projects') {
+      return { projects: [], current_project_id: null };
     }
     return null;
   });

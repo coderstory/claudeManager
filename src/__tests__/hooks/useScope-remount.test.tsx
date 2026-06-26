@@ -1,5 +1,5 @@
 /**
- * TDD RED — Component remount behavior for Phase 27 Fix 4 (BUG-CR-04).
+ * TDD — Component remount behavior for Phase 27 Fix 4 (BUG-CR-04).
  *
  * After the fix:
  *   - McpManagementPage wraps body in a div with
@@ -7,9 +7,11 @@
  *   - ResourceBrowserPage wraps body in a div with
  *     key={scope + ':' + (projectRoot ?? 'user')} data-testid="resource-browser-page"
  *   - JsonEditorPage wraps JsonFileTree in a key={scope + ':' + (projectRoot ?? 'user')}
- *   - JsonFileTree accepts + passes through the key prop
  *
  * These tests verify the key-driven remount contract at the DOM level.
+ * The key prop is consumed by React (not rendered to DOM), so we verify
+ * indirectly by checking that the components render correctly and the
+ * data-testid wrappers exist.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
@@ -24,6 +26,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 // Mock useProjects + useScope so we can drive scope changes.
 const mockCurrentProject = vi.fn();
+const mockSyncScope = vi.fn();
 vi.mock('../../hooks/useProjects', () => ({
   useProjects: () => ({
     currentProject: mockCurrentProject(),
@@ -37,7 +40,27 @@ vi.mock('../../hooks/useProjects', () => ({
   }),
 }));
 
-// Helper to set the project and force the hook to re-evaluate.
+vi.mock('../../hooks/useScope', () => ({
+  useScope: () => {
+    // Return the current state from the singleton. Since the singleton
+    // is shared across tests, we read mockCurrentProject directly.
+    const proj = mockCurrentProject();
+    const scope = proj ? 'project' : 'user';
+    const root = proj ? proj.root_dir : null;
+    return [
+      scope,
+      (next: string) => {
+        // Simulate scope change by updating the mock.
+        if (next === 'user') mockCurrentProject.mockReturnValue(null);
+        else mockCurrentProject.mockReturnValue({ id: 'p1', name: 'X', root_dir: '/x', is_system: false });
+      },
+      root,
+      vi.fn(),
+    ] as const;
+  },
+  syncScopeFromProject: mockSyncScope,
+}));
+
 function setProject(proj: { id: string; name: string; root_dir: string; is_system: boolean } | null) {
   mockCurrentProject.mockReturnValue(proj);
 }
@@ -46,29 +69,37 @@ describe('Phase 27 Fix 4 — component remount on scope change (BUG-CR-04)', () 
   beforeEach(() => {
     mockInvoke.mockReset();
     mockCurrentProject.mockReset();
+    mockSyncScope.mockReset();
   });
 
   // ----- McpManagementPage -----
   describe('McpManagementPage', () => {
-    it('wraps body in a div with key={scope + ":" + projectRoot} and data-testid="mcp-management-page"', async () => {
+    it('wraps body in a div with data-testid="mcp-management-page"', async () => {
       setProject(null);
       mockInvoke.mockResolvedValue([]);
       const { default: McpManagementPage } = await import('../../pages/mcp-management');
       render(<McpManagementPage />);
       const page = await screen.findByTestId('mcp-management-page');
-      // The outer div should have a key attribute (React sets it on the
-      // fiber, not the DOM — but we can verify the div exists and has
-      // stable identity by checking its data-testid).
       expect(page).toBeInTheDocument();
-      // The key is set on the React element, not the DOM. We verify
-      // the wrapper exists and has the expected structure.
       expect(page.getAttribute('data-testid')).toBe('mcp-management-page');
+    });
+
+    it('calls syncScopeFromProject on mount', async () => {
+      setProject(null);
+      mockInvoke.mockResolvedValue([]);
+      const { default: McpManagementPage } = await import('../../pages/mcp-management');
+      render(<McpManagementPage />);
+      await screen.findByTestId('mcp-management-page');
+      // syncScopeFromProject is called via useEffect after render.
+      await waitFor(() => {
+        expect(mockSyncScope).toHaveBeenCalled();
+      });
     });
   });
 
   // ----- ResourceBrowserPage -----
   describe('ResourceBrowserPage', () => {
-    it('wraps body in a div with key={scope + ":" + projectRoot} and data-testid="resource-browser-page"', async () => {
+    it('wraps body in a div with data-testid="resource-browser-page"', async () => {
       setProject(null);
       mockInvoke.mockResolvedValue([]);
       const { default: ResourceBrowserPage } = await import('../../pages/resource-browser');
@@ -77,11 +108,23 @@ describe('Phase 27 Fix 4 — component remount on scope change (BUG-CR-04)', () 
       expect(page).toBeInTheDocument();
       expect(page.getAttribute('data-testid')).toBe('resource-browser-page');
     });
+
+    it('calls syncScopeFromProject on mount', async () => {
+      setProject(null);
+      mockInvoke.mockResolvedValue([]);
+      const { default: ResourceBrowserPage } = await import('../../pages/resource-browser');
+      render(<ResourceBrowserPage />);
+      await screen.findByTestId('resource-browser-page');
+      // syncScopeFromProject is called via useEffect after render.
+      await waitFor(() => {
+        expect(mockSyncScope).toHaveBeenCalled();
+      });
+    });
   });
 
   // ----- JsonEditorPage + JsonFileTree -----
   describe('JsonEditorPage + JsonFileTree', () => {
-    it('JsonFileTree accepts and passes through the key prop', async () => {
+    it('JsonFileTree renders with key prop', async () => {
       setProject(null);
       mockInvoke.mockResolvedValue([]);
       const { JsonFileTree } = await import('../../components/JsonFileTree');
@@ -93,7 +136,7 @@ describe('Phase 27 Fix 4 — component remount on scope change (BUG-CR-04)', () 
         size: 100,
         last_modified: 1700000000,
       };
-      const { container } = render(
+      render(
         <JsonFileTree
           key="user:/initial"
           entries={[sampleEntry]}
@@ -101,9 +144,19 @@ describe('Phase 27 Fix 4 — component remount on scope change (BUG-CR-04)', () 
           onSelect={() => {}}
         />,
       );
-      // The key prop is consumed by React, not rendered to DOM. We
-      // verify the component renders successfully with the key.
       expect(screen.getByTestId('json-file-tree')).toBeInTheDocument();
+    });
+
+    it('JsonEditorPage calls syncScopeFromProject on mount', async () => {
+      setProject(null);
+      mockInvoke.mockResolvedValue([]);
+      const { default: JsonEditorPage } = await import('../../pages/json-editor');
+      render(<JsonEditorPage />);
+      await screen.findByTestId('json-editor-page');
+      // syncScopeFromProject is called via useEffect after render.
+      await waitFor(() => {
+        expect(mockSyncScope).toHaveBeenCalled();
+      });
     });
   });
 });

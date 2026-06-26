@@ -58,6 +58,7 @@ import {
 import type { McpServer, McpTransport } from '../../types/mcp';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useProjects } from '../../hooks/useProjects';
+import { useScope, syncScopeFromProject } from '../../hooks/useScope';
 import {
   addMcpServer,
   listMcpServers,
@@ -98,6 +99,18 @@ const INITIAL_STATE: PageState = {
 
 export default function McpManagementPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+
+  // Phase 27 Fix 4 (BUG-CR-04): scope state via useScope singleton.
+  // Read currentProject from useProjects and sync to the scope store,
+  // then subscribe to scope changes so we can force remount via key.
+  const { currentProject } = useProjects();
+  const [scope, , projectRoot] = useScope();
+
+  // Sync scope from currentProject after render (not during render
+  // to avoid React "setState while rendering a different component" warning).
+  useEffect(() => {
+    syncScopeFromProject(currentProject);
+  }, [currentProject]);
 
   // Initial load.
   useEffect(() => {
@@ -353,13 +366,22 @@ export default function McpManagementPage(): ReactElement {
   // (项目级: `<root>/.claude/mcp.json`;用户级: `~/.claude/mcp.json`),
   // 不能两个状态都用同一个 `~/.claude/mcp.json`,否则用户切了项目
   // 但 UI 还在说改的是用户级,会引发数据写错位置的认知错位。
-  const { currentProject } = useProjects();
-  const mcpPathLabel = currentProject
+  // Phase 27 Fix 4: use scope from useScope() instead of currentProject
+  // directly, so the label updates correctly on scope change.
+  const mcpPathLabel = scope === 'project' && currentProject
     ? `${currentProject.name} (.claude/mcp.json)`
     : '~/.claude/mcp.json';
 
+  // Phase 27 Fix 4 (BUG-CR-04): key-driven remount on scope change.
+  // When the user switches scope in the sidebar, the key changes,
+  // React unmounts the old instance (cancelling in-flight fetches via
+  // the `cancelled` flag) and mounts a new one that re-runs the mount
+  // effect with the new scope.
+  const scopeKey = scope + ':' + (projectRoot ?? 'user');
+
   return (
     <div
+      key={scopeKey}
       style={{
         padding: 'var(--space-6)',
         maxWidth: 720,

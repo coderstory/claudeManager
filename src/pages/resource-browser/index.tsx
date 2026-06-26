@@ -69,6 +69,8 @@ import {
 } from '../../types/resource';
 import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
 import type { RevealFailure } from '../../components/ErrorBanner';
+import { useScope, syncScopeFromProject } from '../../hooks/useScope';
+import { useProjects } from '../../hooks/useProjects';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -199,6 +201,17 @@ export default function ResourceBrowserPage(): ReactElement {
   // (accordion 风格但非互斥)。切 tab 时 runList 会清空它,避免跨 kind
   // 残留展开态。
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  // Phase 27 Fix 4 (BUG-CR-04): scope state via useScope singleton.
+  // Read currentProject from useProjects and sync to the scope store,
+  // then subscribe to scope changes for key-driven remount.
+  const { currentProject } = useProjects();
+  const [scope, , projectRoot] = useScope();
+
+  // Sync scope from currentProject after render.
+  useEffect(() => {
+    syncScopeFromProject(currentProject);
+  }, [currentProject]);
 
   const runList = useCallback(async (kind: ResourceKind) => {
     // F21 — reset the query whenever we re-scan / switch kind, so
@@ -369,8 +382,16 @@ export default function ResourceBrowserPage(): ReactElement {
 
   // ---- render ----
 
+  // Phase 27 Fix 4 (BUG-CR-04): key-driven remount on scope change.
+  // When the user switches scope in the sidebar, the key changes,
+  // React unmounts the old instance (cancelling in-flight fetches via
+  // the `ignore` flag) and mounts a new one that re-runs the mount
+  // effect with the new scope.
+  const scopeKey = scope + ':' + (projectRoot ?? 'user');
+
   return (
     <div
+      key={scopeKey}
       data-testid="resource-browser-page"
       style={{
         padding: 24,

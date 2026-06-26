@@ -74,6 +74,8 @@ import {
 } from '../../lib/json-editor';
 import { JsonFileTree } from '../../components/JsonFileTree';
 import type { JsonFileEntry } from '../../types/json';
+import { useScope, syncScopeFromProject } from '../../hooks/useScope';
+import { useProjects } from '../../hooks/useProjects';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -128,6 +130,15 @@ export default function JsonEditorPage(): ReactElement {
   const [treeError, setTreeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Phase 27 Fix 4 (BUG-CR-04): scope state via useScope singleton.
+  const { currentProject } = useProjects();
+  const [scope, , projectRoot] = useScope();
+
+  // Sync scope from currentProject after render.
+  useEffect(() => {
+    syncScopeFromProject(currentProject);
+  }, [currentProject]);
 
   // M3.11 (A4#12) — 页面 mount 时拉一次文件树(后端 list_editable_jsons)。
   // 拉到的 entries 是当前 active project 下的所有可编辑 .json。
@@ -483,6 +494,7 @@ export default function JsonEditorPage(): ReactElement {
           data-testid="json-editor-tree-col"
         >
           <JsonFileTree
+            key={scope + ':' + (projectRoot ?? 'user')}
             entries={treeEntries}
             selectedPath={state.filePath}
             onSelect={handleTreeSelect}
