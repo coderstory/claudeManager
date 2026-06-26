@@ -93,6 +93,7 @@ export function ImportSqlPage({
     bytes: number[];
     fileName: string;
     preview: SqlPreview;
+    selectedIds: string[];
   } | null>(null);
 
   // F20 — 文件关联自动加载。
@@ -126,7 +127,20 @@ export function ImportSqlPage({
         const bytes = Array.from(new TextEncoder().encode(content));
         const preview = await parseSqlPreview(bytes);
         if (cancelled) return;
-        handleConfirmRef.current = { bytes, fileName, preview };
+        // Phase 27 Fix 5: 初始 selectedIds 用 preview 的 "default
+        // checked" 集合(importable 且非 dedup)与 Preview 组件
+        // 内部 useState 初始化逻辑保持一致。这里先填一个空
+        // 数组,等 handleConfirm 真正被 Preview 触发时再覆盖。
+        // (Preview 组件 mount 时已 selected 自己 useState,
+        // 我们父组件这一份初始为 [] 不影响 — handleConfirm 触发
+        // 那一刻 Preview 会传 Array.from(selected) 进来,覆盖
+        // handleConfirmRef.current.selectedIds。)
+        handleConfirmRef.current = {
+          bytes,
+          fileName,
+          preview,
+          selectedIds: [],
+        };
         setState({ kind: 'preview', fileName, preview, bytes });
       } catch (err) {
         if (cancelled) return;
@@ -170,6 +184,7 @@ export function ImportSqlPage({
           bytes,
           fileName: file.name,
           preview,
+          selectedIds: [],
         };
         setState({
           kind: 'preview',
@@ -185,17 +200,38 @@ export function ImportSqlPage({
     [],
   );
 
-  const handleConfirm = useCallback(async () => {
-    // Snapshot the current preview state synchronously. We avoid
-    // setState's callback form because React StrictMode double-invokes
-    // it — the second invocation would skip our assignment. Instead we
-    // mirror state into a ref on every transition so this handler can
-    // read it directly.
+  const handleConfirm = useCallback((selectedIds: string[]) => {
+    // Phase 27 Fix 5 (BUG-CR-05 P0): selected 状态在 Preview 子组件,
+    // 父组件不在自己的 useState 镜像它,改成 Preview 调 onConfirm
+    // 时把 selected 一次性传过来 (D-18)。
+    //
+    // 拿到 selectedIds 后,我们走 import path 跟原来一样:把 payload
+    // 写到 handleConfirmRef(防 StrictMode 双触发),setState 切到
+    // importing,然后 await invoke。这里 handleConfirm 自身不再
+    // await — async 部分由 handleConfirmAsync 接住,这样 Preview
+    // 子组件的 onClick 不需要 async fn(StrictMode 友好)。
     const snap = handleConfirmRef.current;
     if (!snap) return;
+    // 把 selectedIds 写入 ref(覆盖之前的 stale 值)
+    handleConfirmRef.current = { ...snap, selectedIds };
+    void handleConfirmAsync();
+  }, []);
+
+  // handleConfirmAsync 拆出来 — handleConfirm 走 sync 路径
+  // 写 ref + setState,真正的 await 放在 async fn 里。
+  const handleConfirmAsync = useCallback(async () => {
+    const snap = handleConfirmRef.current;
+    if (!snap) return;
+    if (snap.selectedIds.length === 0) {
+      setState({
+        kind: 'error',
+        message: '请至少勾选 1 个 provider 再确认导入',
+      });
+      return;
+    }
     setState({ kind: 'importing', preview: snap.preview });
     try {
-      const result = await importProvidersFromSql(snap.bytes);
+      const result = await importProvidersFromSql(snap.bytes, snap.selectedIds);
       setState({ kind: 'done', result, fileName: snap.fileName });
     } catch (err) {
       setState({ kind: 'error', message: stringifyError(err) });
@@ -375,7 +411,11 @@ function IdleState({ onPickFile }: { onPickFile: () => void }): ReactElement {
 interface PreviewProps {
   preview: SqlPreview;
   fileName: string;
-  onConfirm: () => void;
+  /** Phase 27 Fix 5: parent reads the latest selected Set via this
+   *  callback. Returning the current `selected` synchronously is
+   *  what wires the user's checkbox choices through to the
+   *  import command. */
+  onConfirm: (selectedIds: string[]) => void;
   onPickFile: () => void;
 }
 
@@ -500,7 +540,7 @@ function Preview({
         <button
           type="button"
           data-testid="import-sql-confirm"
-          onClick={onConfirm}
+          onClick={() => onConfirm(Array.from(selected))}
           disabled={selectedCount === 0}
           style={{
             ...btnStyle,

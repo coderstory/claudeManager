@@ -73,9 +73,18 @@ export function parseSqlPreview(bytes: number[]): Promise<SqlPreview> {
  * `bytes` 同 `parseSqlPreview` —— 原始 .sql 文件的 number[] 形式。
  * Rust 端 decode 后写盘。返回 ImportResult 含每行错误(前端展示
  * 详情面板,不静默吞)。
+ *
+ * Phase 27 Fix 5 (BUG-CR-05 P0) — `selectedIds` 是前端勾选的
+ * provider id 列表 (D-18)。后端按 id 过滤写入;勾 N 个 → 导入 N 个
+ * (D-17 distinct count)。`selectedIds` 为空时后端 Err(CLAUDE.md §7
+ * 不静默全量导入),前端 handleConfirm 也在 UI 层做 pre-check
+ * (selectedCount === 0 → 按钮 disabled,根本不会发 invoke)。
  */
-export function importProvidersFromSql(bytes: number[]): Promise<ImportResult> {
-  return invoke<ImportResult>('import_providers_from_sql', { bytes });
+export function importProvidersFromSql(
+  bytes: number[],
+  selectedIds: string[],
+): Promise<ImportResult> {
+  return invoke<ImportResult>('import_providers_from_sql', { bytes, selectedIds });
 }
 
 // ---------------------------------------------------------------------------

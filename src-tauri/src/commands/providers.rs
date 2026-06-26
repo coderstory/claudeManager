@@ -224,10 +224,17 @@ pub async fn parse_sql_preview(
 /// land in `<root>/.claude/providers/`; otherwise the legacy
 /// `<app_data>/providers/` location is used. The parser + idempotency
 /// logic is unchanged.
+///
+/// Phase 27 Fix 5 (BUG-CR-05 P0) — `selected_ids` 是前端勾选的
+/// provider id 列表 (D-18)。后端按 id 过滤写入,distinct 计数
+/// (D-17) 反馈给前端 toast("成功导入 N 个" 中的 N = 实际写入数)。
+/// `selected_ids` 为空时后端 Err(CLAUDE.md §7 不静默全量导入)。
+/// 详见 `ProviderService::import_providers_from_sql_with_selected_ids`。
 #[tauri::command]
 pub async fn import_providers_from_sql(
     state: State<'_, AppState>,
     bytes: Vec<u8>,
+    selected_ids: Vec<String>,
 ) -> CmdResult<ImportResultDto> {
     let content = decode_sql_bytes(&bytes)
         .map_err(|e| format!("导入 SQL 失败 (编码问题): {e}"))?;
@@ -236,7 +243,7 @@ pub async fn import_providers_from_sql(
     let active_root_ref = active_root.as_deref();
     let result = state
         .provider_service
-        .import_providers_from_sql_with_active_root(&content, active_root_ref)
+        .import_providers_from_sql_with_selected_ids(&content, &selected_ids, active_root_ref)
         .map_err(|e| e.to_string())?;
     Ok(result.into())
 }

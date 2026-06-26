@@ -849,6 +849,143 @@ impl ProviderService {
             mcp_count: parsed.mcp_servers.len(),
         })
     }
+
+    /// Phase 27 Fix 5 (BUG-CR-05 P0) — SQL import with explicit
+    /// `selected_ids` filter (D-15~D-18 + CLAUDE.md §1 + §7).
+    ///
+    /// ## Why this exists
+    ///
+    /// Pre-Fix 5 `import_providers_from_sql_with_active_root` ignored
+    /// user intent: it always imported every successfully-parsed
+    /// provider. The user's M5 report (#11): "勾 1 个导入 6 个" — the
+    /// user checked 1 checkbox, the toast said 6 imported. That
+    /// violates CLAUDE.md §1 ("Provider 切换 1 秒搞定，绝不出错"
+    /// — the "1 秒" implicitly trusts the import count).
+    ///
+    /// ## Contract (D-15~D-18)
+    ///
+    /// - **`selected_ids` MUST be non-empty.** Empty list returns
+    ///   `Err(ProviderError::Json("未选择任何 provider;请勾选至少
+    ///   1 个再导入"))`. CLAUDE.md §7 forbids silent fallback to
+    ///   "import all" — that would be silent swallowing of user
+    ///   intent (they explicitly chose to uncheck everything).
+    /// - **`selected_ids` is the allow-list of provider ids to
+    ///   import.** Rows whose `provider.id` is NOT in
+    ///   `selected_ids` are silently dropped (the user never opted
+    ///   in for them). Unknown ids in `selected_ids` (not in
+    ///   `parsed.providers`) are silently ignored — the frontend
+    ///   builds `selected` from `preview_providers[i].id`, so this
+    ///   only happens on stale state.
+    /// - **`imported` count = number of providers actually written
+    ///   to disk this call** (D-17 distinct count = selected_ids
+    ///   ∩ parsed.providers ∖ {already on disk}). It is NOT
+    ///   `selected_ids.len()` (which would be wrong if some are
+    ///   duplicates or unknown).
+    /// - **`skipped` count = already on disk (idempotency /
+    ///   D-16 UNIQUE)** — provider files matching a `selected_ids`
+    ///   entry that already exists are counted as `skipped`, not
+    ///   `imported`. This is the existing M2.2 behaviour
+    ///   (fs::exists check); the D-16 SQLite UNIQUE index is a v2
+    ///   improvement.
+    /// - **`errors` are unchanged**: parse-level skips + write-level
+    ///   failures. Empty `selected_ids` is NOT surfaced as a
+    ///   per-row error (it short-circuits to `Err(...)` above).
+    /// - **`mcp_count` unchanged** — F6 owns write-side.
+    /// - **`active_root`** is the M3.12 project-mode switch —
+    ///   `None` = user-level, `Some(root)` = project-level.
+    ///   `selected_ids` filtering is orthogonal to scope.
+    pub fn import_providers_from_sql_with_selected_ids(
+        &self,
+        content: &str,
+        selected_ids: &[String],
+        active_root: Option<&Path>,
+    ) -> Result<ImportResult, ProviderError> {
+        // D-18 + CLAUDE.md §7: empty selection is an explicit user
+        // signal ("uncheck all"), not "import everything". Refuse
+        // up-front so we don't write a single file before the user
+        // notices.
+        if selected_ids.is_empty() {
+            return Err(ProviderError::Json(serde_json::Error::custom(
+                "未选择任何 provider;请勾选至少 1 个再导入".to_string(),
+            )));
+        }
+
+        let parsed = crate::infrastructure::sql_parser::parse_sql_dump(content)
+            .map_err(|e| {
+                ProviderError::Json(serde_json::Error::custom(format!(
+                    "SQL parse failed: {e}"
+                )))
+            })?;
+
+        // Build a fast HashSet lookup for selected_ids (avoids O(n*m)
+        // .contains() loop on every row). selected_ids.len() is
+        // typically <50, parsed.providers.len() is typically <100,
+        // so this is more about clarity than perf.
+        let selected_set: std::collections::HashSet<&str> =
+            selected_ids.iter().map(String::as_str).collect();
+
+        let mut imported = 0usize;
+        let mut skipped = 0usize;
+        let mut write_errors: Vec<WriteError> = Vec::new();
+
+        for provider in parsed.providers {
+            // D-15/D-18: only write rows the user explicitly selected.
+            // Unknown ids (not in selected_set) are silently dropped.
+            if !selected_set.contains(provider.id.as_str()) {
+                continue;
+            }
+            let target = self.provider_path_for_active_root(&provider.id, active_root);
+            // D-16: UNIQUE(provider_name, source_path) — current
+            // implementation is fs::exists. The provider_id == filename
+            // stem invariant gives us per-id uniqueness for free.
+            if target.exists() {
+                skipped += 1;
+                continue;
+            }
+            let json = match serde_json::to_string_pretty(&provider) {
+                Ok(s) => s,
+                Err(e) => {
+                    write_errors.push(WriteError {
+                        id: provider.id.clone(),
+                        reason: format!("serialise failed: {e}"),
+                    });
+                    continue;
+                }
+            };
+            if let Err(e) = fs_atomic::write_with_backup(&target, &json) {
+                write_errors.push(WriteError {
+                    id: provider.id.clone(),
+                    reason: format!("atomic write failed: {e}"),
+                });
+                continue;
+            }
+            imported += 1;
+        }
+
+        let errors = parsed
+            .skipped_lines
+            .into_iter()
+            .map(|s| ImportSkip {
+                kind: "parse".into(),
+                line: s.line,
+                id: None,
+                reason: s.reason,
+            })
+            .chain(write_errors.into_iter().map(|w| ImportSkip {
+                kind: "write".into(),
+                line: 0,
+                id: Some(w.id),
+                reason: w.reason,
+            }))
+            .collect();
+
+        Ok(ImportResult {
+            imported,
+            skipped,
+            errors,
+            mcp_count: parsed.mcp_servers.len(),
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2415,10 +2552,10 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('p3', 'claud
 
         // 关键:err 之后,磁盘上**不应**有任何 provider 文件被写入
         // (CLAUDE.md §7 "不静默吞错" 包含 "不静默退回到全量导入")。
-        let entries: Vec<_> = std::fs::read_dir(&p_dir)
+        let entries_count: usize = std::fs::read_dir(&p_dir)
             .map(|d| d.filter_map(Result::ok).count())
             .unwrap_or(0);
-        assert_eq!(entries, 0, "empty selected must not write any files");
+        assert_eq!(entries_count, 0, "empty selected must not write any files");
     }
 
     /// D-16 UNIQUE 约束(由 fs::exists 实现)RED: 重复 import 同一
