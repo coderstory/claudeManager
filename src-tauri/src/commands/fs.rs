@@ -944,6 +944,146 @@ mod tests {
         );
     }
 
+    /// Phase 27 Fix 3 — path::field virtual path protocol (BUG-CR-03).
+    ///
+    /// These tests pin the contract that:
+    ///   1. `read_file(path, Some(field))` calls `resolve_claude_path`
+    ///      with `path` only (field is NOT a path component).
+    ///   2. `read_file("providers/foo.json:api_key", None)` splits on
+    ///      the first `::` → `path="providers/foo.json"`,
+    ///      `field="api_key"` (backward-compat with old optimizer that
+    ///      sent a single `path::field` arg).
+    ///   3. Invalid field values are rejected before touching the
+    ///      filesystem (T-05 security: empty, `..`, `/`, `\`, NUL,
+    ///      `::` are all rejected).
+    ///
+    /// We can't easily invoke the `#[tauri::command]` function without
+    // a Tauri runtime, so we validate the field + split logic via
+    // helper functions and exercise `resolve_claude_path` for the
+    /// "path only, not field" guarantee.
+    mod path_field_protocol_tests {
+        use super::*;
+
+        // -----------------------------------------------------------------
+        // validate_field (to be implemented in the fix phase)
+        // -----------------------------------------------------------------
+
+        /// Helper: validate a field name. Returns Ok(()) for valid,
+        /// Err(msg) for invalid. This is the T-05 security gate.
+        fn validate_field(field: &str) -> Result<(), String> {
+            // RED phase: this function does not exist yet. Tests that
+            // reference it will fail to compile until the GREEN phase
+            // adds the implementation.
+            validate_field_impl(field)
+        }
+
+        // Placeholder — will be replaced in GREEN phase.
+        fn validate_field_impl(_field: &str) -> Result<(), String> {
+            unreachable!("RED — placeholder; real impl in GREEN phase")
+        }
+
+        #[test]
+        fn validate_field_accepts_simple_identifier() {
+            assert!(validate_field("api_key").is_ok());
+            assert!(validate_field("token").is_ok());
+            assert!(validate_field("myField123").is_ok());
+            assert!(validate_field("a").is_ok());
+        }
+
+        #[test]
+        fn validate_field_rejects_empty() {
+            let err = validate_field("").expect_err("empty field must be rejected");
+            assert!(
+                err.contains("空") || err.contains("empty"),
+                "error must mention emptiness, got: {err}"
+            );
+        }
+
+        #[test]
+        fn validate_field_rejects_dotdot() {
+            let err = validate_field("../../etc/passwd")
+                .expect_err(".. must be rejected");
+            assert!(
+                err.contains("..") || err.contains("非法"),
+                "error must mention .. or illegality, got: {err}"
+            );
+        }
+
+        #[test]
+        fn validate_field_rejects_path_separator() {
+            let err = validate_field("foo/bar")
+                .expect_err("forward slash must be rejected");
+            assert!(
+                err.contains("/") || err.contains("\\") || err.contains("非法") || err.contains("路径"),
+                "error must mention path or illegality, got: {err}"
+            );
+            let err = validate_field("foo\\bar")
+                .expect_err("backslash must be rejected");
+            assert!(
+                err.contains("/") || err.contains("\\") || err.contains("非法") || err.contains("路径"),
+                "error must mention path or illegality, got: {err}"
+            );
+        }
+
+        #[test]
+        fn validate_field_rejects_nul_byte() {
+            let err = validate_field("foo\0bar")
+                .expect_err("NUL byte must be rejected");
+            assert!(
+                err.contains("NUL") || err.contains("null") || err.contains("非法"),
+                "error must mention NUL/null or illegality, got: {err}"
+            );
+        }
+
+        #[test]
+        fn validate_field_rejects_double_colon() {
+            let err = validate_field("a::b")
+                .expect_err(":: must be rejected");
+            assert!(
+                err.contains("::") || err.contains("非法"),
+                "error must mention :: or illegality, got: {err}"
+            );
+        }
+
+        // -----------------------------------------------------------------
+        // path::field split (to be implemented in the fix phase)
+        // -----------------------------------------------------------------
+
+        /// Helper: split a virtual path of the form `path::field` into
+        /// `(path, field)`. Only the FIRST `::` is the split point —
+        /// the rest is already caught by `validate_field`.
+        fn split_path_field(virtual_path: &str) -> (String, Option<String>) {
+            // RED phase: split logic placeholder.
+            split_path_field_impl(virtual_path)
+        }
+
+        fn split_path_field_impl(_virtual_path: &str) -> (String, Option<String>) {
+            unreachable!("RED — placeholder; real impl in GREEN phase")
+        }
+
+        #[test]
+        fn split_path_field_no_double_colon_returns_none_field() {
+            let (path, field) = split_path_field("providers/foo.json");
+            assert_eq!(path, "providers/foo.json");
+            assert!(field.is_none());
+        }
+
+        #[test]
+        fn split_path_field_with_double_colon_splits_once() {
+            let (path, field) = split_path_field("providers/foo.json:api_key");
+            assert_eq!(path, "providers/foo.json");
+            assert_eq!(field.as_deref(), Some("api_key"));
+        }
+
+        #[test]
+        fn split_path_field_nested_path_preserves_directory_structure() {
+            let (path, field) =
+                split_path_field("sub/deep/nested/file.json:some_field");
+            assert_eq!(path, "sub/deep/nested/file.json");
+            assert_eq!(field.as_deref(), Some("some_field"));
+        }
+    }
+
     // -----------------------------------------------------------------
     // M3.11 (A4#12) — F5 json-editor `list_editable_jsons`
     // 白名单扫描器单元测试。覆盖 7 个关键行为:
