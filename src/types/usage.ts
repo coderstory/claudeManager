@@ -36,6 +36,14 @@ export interface UsageSnapshot {
   breakdown?: UsageBreakdownEntry[];
   /** Distinct models that contributed to the snapshot (M3.8). */
   model_count?: number;
+  /**
+   * Phase 27 Fix 2 (BUG-CR-02 / D-09) — number of rows written to
+   * SQLite `usage_history` by the most recent `refresh_usage`
+   * cycle. Surfaced in the UI so the user sees "已写入 N 条" (CLAUDE.md
+   * §7 — never silently swallow failures). Omitted on the read
+   * path (`get_current_usage`); only `refresh_usage` populates it.
+   */
+  inserted_rows?: number;
 }
 
 /** One row in the per-model breakdown table (M3.8). */

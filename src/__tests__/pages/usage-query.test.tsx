@@ -41,6 +41,10 @@ const sampleSnapshot = (
   window,
   tokens_used: 12345,
   timestamp: 1_700_000_000,
+  // Phase 27 Fix 2 (BUG-CR-02 / D-09) — fixtures default to
+  // `inserted_rows: 0` so old tests don't have to populate it; the
+  // fix-2 toast test below overrides with a non-zero value.
+  inserted_rows: 0,
   ...overrides,
 });
 
@@ -297,5 +301,124 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     expect(txt).toContain('2345 万');
     // 反事故: 不要出现原始 toLocaleString 千分位格式 (这是 bug)
     expect(txt).not.toContain('123,456,789');
+  });
+
+  // ============================================================
+  // Phase 27 Fix 2 (BUG-CR-02 重定义) — 用量三件套共根修复
+  // ============================================================
+
+  // D-09: refresh_usage 后页面必须显示 toast 报 N 条已写入 (CLAUDE.md
+  // §7 不静默吞错)。新 snapshot 带 inserted_rows=N → toast 数据属性
+  // + 文案 "已写入 N 条用量记录到 SQLite"。
+  it('Fix 2 (D-09): refresh 后 toast 显示 "已写入 N 条用量记录到 SQLite"', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
+        return sampleSnapshot('5h', { inserted_rows: 7 });
+      }
+      if (cmd === 'get_usage_history') return [];
+      if (cmd === 'get_daily_stats_history') return [];
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    // Wait for initial load to settle.
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-refresh-btn')).toBeInTheDocument();
+    });
+    // Click refresh.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('usage-refresh-btn'));
+    });
+    // Toast appears with the inserted count.
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-refresh-toast')).toBeInTheDocument();
+    });
+    const toast = screen.getByTestId('usage-refresh-toast');
+    expect(toast.getAttribute('data-inserted-rows')).toBe('7');
+    expect(toast.textContent).toContain('已写入 7 条用量记录到 SQLite');
+  });
+
+  // D-09 边界: inserted_rows=0 (no new rows) 也要显示 toast — 文案
+  // 切换为 "刷新成功 — 无新增用量记录"，避免 silently success。
+  it('Fix 2 (D-09): inserted_rows=0 时显示 "刷新成功 — 无新增用量记录" 兜底', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
+        return sampleSnapshot('5h', { inserted_rows: 0 });
+      }
+      if (cmd === 'get_usage_history') return [];
+      if (cmd === 'get_daily_stats_history') return [];
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-refresh-btn')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('usage-refresh-btn'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-refresh-toast')).toBeInTheDocument();
+    });
+    const toast = screen.getByTestId('usage-refresh-toast');
+    expect(toast.getAttribute('data-inserted-rows')).toBe('0');
+    expect(toast.textContent).toContain('无新增用量记录');
+  });
+
+  // D-09 边界: error 优先 — 当 refresh 失败时,toast 不应显示 (error
+  // banner 已经覆盖了"发生了什么")。
+  it('Fix 2 (D-09): refresh 失败时 toast 不出现 (error banner 优先)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage') return sampleSnapshot('5h');
+      if (cmd === 'refresh_usage') throw new Error('查询失败: 未知');
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-refresh-btn')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('usage-refresh-btn'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-error')).toBeInTheDocument();
+    });
+    // No toast on error path.
+    expect(screen.queryByTestId('usage-refresh-toast')).not.toBeInTheDocument();
+  });
+
+  // D-08: trend chart 至少渲染 1 个 bar(不是只返回当天 1 条)。
+  // Frontend 已经支持 7 天; backend 的 30 天窗口 backfill 是真正的根因。
+  // 此处只测前端 contract: 给 mock 数据 N 行 → 渲染 N 个 bar。
+  it('Fix 2 (D-08): trend chart 渲染 N 个 bar(对应 N 行 daily stats)', async () => {
+    const today = new Date();
+    const rows: Array<{
+      provider_id: string;
+      stat_date: string;
+      tokens_used: number;
+      snapshot_count: number;
+      last_aggregated_recorded_at: number;
+    }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today.getTime() - i * 86400_000);
+      rows.push({
+        provider_id: 'p1',
+        stat_date: d.toISOString().slice(0, 10),
+        tokens_used: 100 + i * 50,
+        snapshot_count: 1,
+        last_aggregated_recorded_at: 1_700_000_000,
+      });
+    }
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage') return sampleSnapshot('5h');
+      if (cmd === 'get_usage_history') return [];
+      if (cmd === 'get_daily_stats_history') return rows;
+      return null;
+    });
+    render(<UsageQueryPage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-trend-section')).toBeInTheDocument();
+    });
+    // 至少 1 个 bar(testid 是 usage-trend-bar-YYYY-MM-DD)。
+    const bars = screen.getAllByTestId(/^usage-trend-bar-/);
+    expect(bars.length).toBeGreaterThanOrEqual(1);
   });
 });

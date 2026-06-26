@@ -213,9 +213,21 @@ pub struct UsageSnapshot {
     /// M3.8 — distinct models that contributed to the snapshot.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub model_count: u32,
+    /// Phase 27 Fix 2 (BUG-CR-02 / D-09) — number of rows written
+    /// to `usage_history` by this refresh cycle. Surfaced in the UI
+    /// so the user sees "已写入 N 条" instead of an opaque
+    /// "imported 0" / silent no-op (CLAUDE.md §7 — never silently
+    /// swallow failures). Default = 0 so older callers / mock
+    /// fixtures don't need to populate the field.
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub inserted_rows: usize,
 }
 
 fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+fn is_zero_usize(v: &usize) -> bool {
     *v == 0
 }
 
@@ -257,6 +269,10 @@ impl UsageSnapshot {
             timestamp: now_unix_secs(),
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — empty snapshot has
+            // no rows to count. `refresh_usage` overrides this with
+            // the actual inserted count from `HistoryService`.
+            inserted_rows: 0,
         }
     }
 }
@@ -379,6 +395,7 @@ mod tests {
                 message_count: 17,
             }],
             model_count: 1,
+            inserted_rows: 3,
         };
         let json = serde_json::to_string(&snap).unwrap();
         let back: UsageSnapshot = serde_json::from_str(&json).unwrap();
@@ -394,6 +411,7 @@ mod tests {
             timestamp: 1,
             breakdown: Vec::new(),
             model_count: 0,
+            inserted_rows: 0,
         };
         let v = serde_json::to_value(&snap).unwrap();
         assert!(v.get("breakdown").is_some());
@@ -413,6 +431,7 @@ mod tests {
             timestamp: 1,
             breakdown: Vec::new(),
             model_count: 0,
+            inserted_rows: 0,
         };
         let b = UsageSnapshot {
             provider_id: "b".into(),

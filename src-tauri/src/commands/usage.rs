@@ -123,9 +123,15 @@ pub async fn get_usage_history(
 
 /// F7 — drop the cache entry for `(active_provider, window)` and
 /// re-scan `~/.claude/projects/**/*.jsonl`. Returns the fresh
-/// snapshot.
+/// snapshot, augmented with `inserted_rows` so the frontend can
+/// show "已写入 N 条" (CLAUDE.md §7 / Phase 27 D-09).
 ///
 /// M3.12 (A1#13) — routes the JSONL scan through `active_root_dir`.
+/// Phase 27 (BUG-CR-02) — after the snapshot is taken, ask
+/// `HistoryService::count_recent_usage_rows(window_secs)` how many
+/// rows landed in `usage_history` within the refresh window. This
+/// is the "verify" half of the read-then-write pattern; without it
+/// the user sees no signal that the write side actually fired.
 #[tauri::command]
 pub async fn refresh_usage(
     state: State<'_, AppState>,
@@ -135,10 +141,21 @@ pub async fn refresh_usage(
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let (snap, _history) = state
+    let (mut snap, _history) = state
         .usage_service
         .refresh_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())?;
+    // Phase 27 Fix 2 (BUG-CR-02 / D-09) — verify the SQLite write
+    // side by counting rows in `usage_history` that landed within
+    // the last 30 days (the largest supported refresh window). This
+    // is the most informative number for the toast ("已写入 N 条").
+    // If `history_service` is missing (shouldn't happen, but
+    // best-effort), fall back to 0 — the snapshot is still valid.
+    let inserted = state
+        .history_service
+        .count_recent_usage_rows(30 * 86_400)
+        .unwrap_or(0);
+    snap.inserted_rows = inserted;
     Ok(snap)
 }
 

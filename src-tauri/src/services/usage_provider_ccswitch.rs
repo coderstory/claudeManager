@@ -170,6 +170,11 @@ pub fn compute_usage_from_jsonl(
         timestamp: now,
         breakdown,
         model_count: stats.messages_after_dedup.min(u32::MAX as u64) as u32,
+        // Phase 27 Fix 2 (BUG-CR-02 / D-09) — non-refresh path
+        // (read from JSONL cache) doesn't write to SQLite, so the
+        // row count is 0. `refresh_usage` overrides this with the
+        // actual count.
+        inserted_rows: 0,
     };
 
     // Build history (sorted by date asc, model asc).

@@ -33,7 +33,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{UsageSnapshot, UsageWindow};
@@ -391,26 +391,37 @@ impl HistoryService {
     }
 
     /// Aggregate counters + db size on disk.
+    ///
+    /// Phase 27 Fix 2 (BUG-CR-02 / D-07) — `SELECT MIN(recorded_at)`
+    /// on an empty table yields NULL, and rusqlite's strict
+    /// `query_row` then refuses to coerce the NULL into `Option<i64>`,
+    /// surfacing as `Invalid column type Null`. The fix wraps MIN
+    /// in `COALESCE(..., 0) AS first_recorded_at` (cast INTEGER)
+    /// so an empty table reports `first_recorded_at = Some(0)` and a
+    /// populated table reports the actual minimum. The MAX side has
+    /// the same NULL risk; same `COALESCE(..., 0)` treatment.
     pub fn stats(&self) -> Result<HistoryStats, HistoryError> {
         let guard = self.db.lock().map_err(|_| HistoryError::MutexPoisoned)?;
         let usage_rows: i64 =
             guard.query_row("SELECT COUNT(*) FROM usage_history", [], |r| r.get(0))?;
         let backup_rows: i64 =
             guard.query_row("SELECT COUNT(*) FROM backup_history", [], |r| r.get(0))?;
-        let first: Option<i64> = guard
-            .query_row(
-                "SELECT MIN(recorded_at) FROM usage_history",
-                [],
-                |r| r.get(0),
-            )
-            .optional()?;
-        let last: Option<i64> = guard
-            .query_row(
-                "SELECT MAX(recorded_at) FROM usage_history",
-                [],
-                |r| r.get(0),
-            )
-            .optional()?;
+        // D-07: COALESCE(MIN/MAX(recorded_at), 0) cast INTEGER — empty
+        // table yields Some(0), populated yields the real unix-second
+        // minimum. Avoids "Invalid column type Null" without changing
+        // the public shape (still Option<i64>).
+        let first: i64 = guard.query_row(
+            "SELECT CAST(COALESCE(MIN(recorded_at), 0) AS INTEGER) AS first_recorded_at
+             FROM usage_history",
+            [],
+            |r| r.get(0),
+        )?;
+        let last: i64 = guard.query_row(
+            "SELECT CAST(COALESCE(MAX(recorded_at), 0) AS INTEGER) AS last_recorded_at
+             FROM usage_history",
+            [],
+            |r| r.get(0),
+        )?;
         // db size is on-disk metadata; we report page_count * page_size.
         let page_count: i64 = guard
             .query_row("PRAGMA page_count", [], |r| r.get(0))
@@ -424,8 +435,8 @@ impl HistoryService {
             usage_rows,
             backup_rows,
             db_size_bytes,
-            first_recorded_at: first,
-            last_recorded_at: last,
+            first_recorded_at: Some(first),
+            last_recorded_at: Some(last),
         })
     }
 
@@ -554,11 +565,42 @@ impl HistoryService {
     // Phase 21 — 增量聚合缓存 (usage_daily_stats)
     // -----------------------------------------------------------------------
 
+    /// Phase 27 Fix 2 (BUG-CR-02 / D-09) — count rows in `usage_history`
+    /// with `recorded_at >= now - window_secs`. Used by the
+    /// `refresh_usage` IPC to verify that the in-memory snapshot was
+    /// actually persisted to SQLite (CLAUDE.md §7 — never silently
+    /// swallow failures). Returns 0 when no rows fall inside the
+    /// window (legitimate first-launch state).
+    ///
+    /// `window_secs` is treated as a lower bound on the timestamp
+    /// (`recorded_at >= cutoff`); callers should pass a value
+    /// strictly greater than the maximum plausible age of a single
+    /// refresh cycle (e.g. 1 hour, 1 day) so the verify covers the
+    /// just-written row.
+    pub fn count_recent_usage_rows(&self, window_secs: u64) -> Result<usize, HistoryError> {
+        let now = now_unix_secs();
+        let cutoff = now.saturating_sub(window_secs as i64);
+        let guard = self.db.lock().map_err(|_| HistoryError::MutexPoisoned)?;
+        let n: i64 = guard.query_row(
+            "SELECT COUNT(*) FROM usage_history WHERE recorded_at >= ?1",
+            params![cutoff],
+            |r| r.get(0),
+        )?;
+        Ok(n.max(0) as usize)
+    }
+
     /// Public entry point: re-aggregate `usage_daily_stats` from the
     /// raw `usage_history` table. Skips when the aggregation table
     /// is non-empty (idempotent first-launch behavior; concurrent
     /// starts that race to insert new rows are picked up by the
     /// per-row `upsert_daily_stat` path in `record_usage`).
+    ///
+    /// Phase 27 Fix 2 (BUG-CR-02 / D-08) — aggregate only the last
+    /// 30 days of `usage_history` rows, not the entire table. Without
+    /// this filter, an old project's stale snapshots can dominate
+    /// the per-day `tokens_used` delta calculation (today_max -
+    /// prev_max) and skew the trend chart. 30 days is wide enough to
+    /// cover a normal weekly view but bounded enough to stay cheap.
     ///
     /// Designed to be called once at startup, on a background
     /// thread (see `app_state.rs::build`).
@@ -573,11 +615,18 @@ impl HistoryService {
         if existing > 0 {
             return Ok(0);
         }
-        // 1. Derive all (provider_id, stat_date) buckets with their
-        //    today_max + snapshot_count + max_recorded_at. We GROUP
-        //    BY both keys so the day boundary is implicit.
-        //    `tokens_used` is not a column on `usage_history`; we
-        //    pull it from the raw JSON blob with json_extract.
+        // D-08: 30-day window filter on the raw usage_history scan.
+        // Compute cutoff in Rust (same source of truth as
+        // now_unix_secs) so the test can inject deterministic
+        // timestamps without mocking the system clock.
+        let now = now_unix_secs();
+        let cutoff_ts = now - 30 * 86_400i64;
+        // 1. Derive all (provider_id, stat_date) buckets within the
+        //    last 30 days with their today_max + snapshot_count +
+        //    max_recorded_at. We GROUP BY both keys so the day
+        //    boundary is implicit. `tokens_used` is not a column on
+        //    `usage_history`; we pull it from the raw JSON blob with
+        //    json_extract.
         let mut stmt = guard.prepare(
             "SELECT provider_id,
                     strftime('%Y-%m-%d', recorded_at, 'unixepoch') AS stat_date,
@@ -585,11 +634,12 @@ impl HistoryService {
                     COUNT(*) AS snapshot_count,
                     MAX(recorded_at) AS last_recorded
              FROM usage_history
+             WHERE recorded_at >= ?1
              GROUP BY provider_id, stat_date
              ORDER BY provider_id, stat_date",
         )?;
         let mut rows: Vec<(String, String, i64, i64, i64)> = stmt
-            .query_map([], |r| {
+            .query_map(params![cutoff_ts], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
@@ -604,7 +654,6 @@ impl HistoryService {
             return Ok(0);
         }
 
-        let now = now_unix_secs();
         let mut prev_max: std::collections::HashMap<String, i64> =
             std::collections::HashMap::new();
         let mut inserted: i64 = 0;
@@ -773,6 +822,9 @@ mod tests {
             timestamp: ts,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test helper
+            // default to 0; only `refresh_usage` populates this.
+            inserted_rows: 0,
         }
     }
 
@@ -996,6 +1048,134 @@ mod tests {
             (rows[0].used_pct - 50.0).abs() < 0.01,
             "10_000 / 20_000 = 50.0%, got {}",
             rows[0].used_pct,
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 27 Fix 2 (BUG-CR-02 重定义) — 用量三件套共根修复:
+    //   1. SQL MIN column type 错(空表 / 大表都该返 0 而非 Null)
+    //   2. 30 天窗口默认 — backfill 不再是全表 GROUP BY
+    //   3. count_recent_usage_rows 用于 D-09 verify
+    // -----------------------------------------------------------------
+
+    /// D-07 修复: stats() 在空表上 `SELECT MIN(recorded_at)` 之前会报
+    /// "Invalid column type Null"。改用 `COALESCE(MIN(recorded_at), 0) AS
+    /// first_recorded_at` 显式 cast INTEGER 后,空表必须返 `Some(0)`
+    /// 而不是 None / 报错。
+    #[test]
+    fn stats_min_recorded_at_returns_zero_for_empty_table() {
+        let (_tmp, svc) = open_fresh();
+        let stats = svc.stats().unwrap();
+        assert_eq!(stats.usage_rows, 0);
+        assert_eq!(
+            stats.first_recorded_at,
+            Some(0),
+            "empty table: MIN(recorded_at) must coerce to 0 via COALESCE, was {:?}",
+            stats.first_recorded_at,
+        );
+        assert_eq!(stats.last_recorded_at, Some(0));
+    }
+
+    /// D-07 修复: 写入多天后 stats().first_recorded_at 必须是最早一条
+    /// 的 unix 秒(不是 0)。这验证 cast INTEGER 不会把真实时间也变 0。
+    #[test]
+    fn stats_min_recorded_at_returns_actual_min_when_rows_exist() {
+        let (_tmp, svc) = open_fresh();
+        // 写 3 条,时间跨度 30 天
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, 1_700_000_000, 100),
+            None,
+        )
+        .unwrap();
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, 1_700_000_000 + 86_400, 200),
+            None,
+        )
+        .unwrap();
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, 1_700_000_000 + 30 * 86_400, 300),
+            None,
+        )
+        .unwrap();
+        let stats = svc.stats().unwrap();
+        assert_eq!(stats.usage_rows, 3);
+        assert_eq!(stats.first_recorded_at, Some(1_700_000_000));
+        assert_eq!(
+            stats.last_recorded_at,
+            Some(1_700_000_000 + 30 * 86_400),
+        );
+    }
+
+    /// D-08 + D-09: count_recent_usage_rows(window_secs) 必须返最近
+    /// window_secs 内写入的行数(用于 refresh_usage 写库后 verify)。
+    #[test]
+    fn count_recent_usage_rows_within_window() {
+        let (_tmp, svc) = open_fresh();
+        let now = now_unix_secs();
+        // 写 3 条:1 条在最近 1h 内,2 条在 2 天前
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, now - 60, 100),
+            None,
+        )
+        .unwrap();
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, now - 2 * 86_400, 100),
+            None,
+        )
+        .unwrap();
+        svc.record_usage(
+            &build_snap("p2", UsageWindow::OneMonth, now - 2 * 86_400 - 60, 100),
+            None,
+        )
+        .unwrap();
+        // window=1h → 只返第 1 条
+        let recent_1h = svc.count_recent_usage_rows(3600).unwrap();
+        assert_eq!(recent_1h, 1, "expected only 1 row in last hour");
+        // window=3天 → 3 条全返
+        let recent_3d = svc.count_recent_usage_rows(3 * 86_400).unwrap();
+        assert_eq!(recent_3d, 3);
+    }
+
+    /// D-08: backfill_daily_stats 加 30 天默认窗口 — 老的历史数据
+    /// 不会被纳入(避免 5 个月前的 stale snapshot 影响 today 的
+    /// MAX/MIN 增量计算)。
+    #[test]
+    fn backfill_daily_stats_respects_30_day_window() {
+        let (_tmp, svc) = open_fresh();
+        let now = now_unix_secs();
+        // 写 2 条:1 条 60 天前(应该被 30 天窗口过滤),1 条 today
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, now - 60 * 86_400, 500),
+            None,
+        )
+        .unwrap();
+        svc.record_usage(
+            &build_snap("p1", UsageWindow::OneMonth, now - 60, 1500),
+            None,
+        )
+        .unwrap();
+        // 默认 30 天窗口 backfill, 只聚合今天的那条
+        let n = svc.backfill_daily_stats().unwrap();
+        assert!(n >= 1, "must aggregate at least today's row, got {n}");
+        let stats = svc.query_daily_stats(&DailyStatsFilter::default()).unwrap();
+        // 60 天前那条不应该出现在结果里(被 30 天窗口过滤)
+        let today_only: Vec<_> = stats
+            .iter()
+            .filter(|r| r.tokens_used == 1500)
+            .collect();
+        assert!(
+            !today_only.is_empty(),
+            "today's row (tokens=1500) must be aggregated, stats: {:?}",
+            stats,
+        );
+        let old_only: Vec<_> = stats
+            .iter()
+            .filter(|r| r.tokens_used == 500)
+            .collect();
+        assert!(
+            old_only.is_empty(),
+            "60-days-ago row (tokens=500) must be filtered out by 30-day window, but found: {:?}",
+            old_only,
         );
     }
 }

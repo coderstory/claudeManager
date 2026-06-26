@@ -70,6 +70,14 @@ interface PageState {
   loading: boolean;
   refreshing: boolean;
   error: { kind: string; message: string } | null;
+  /**
+   * Phase 27 Fix 2 (BUG-CR-02 / D-09) — last successful refresh's
+   * `inserted_rows` count. Surfaces a non-blocking toast banner
+   * ("已写入 N 条") so the user can see whether their click on
+   * "刷新" actually wrote anything to SQLite (CLAUDE.md §7 —
+   * never silently swallow failures).
+   */
+  refreshToast: { inserted: number; at: number } | null;
 }
 
 const INITIAL_STATE: PageState = {
@@ -80,6 +88,7 @@ const INITIAL_STATE: PageState = {
   loading: true,
   refreshing: false,
   error: null,
+  refreshToast: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -110,7 +119,15 @@ export default function UsageQueryPage(): ReactElement {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setState((prev) => ({ ...prev, refreshing: true, error: null }));
+    setState((prev) => ({
+      ...prev,
+      refreshing: true,
+      error: null,
+      // Phase 27 Fix 2 (BUG-CR-02 / D-09) — clear any stale toast
+      // before kicking off the new refresh so the user sees a
+      // single "fresh" toast (vs the previous one lingering).
+      refreshToast: null,
+    }));
     void loadAll(state.window, true).then((patch) => {
       setState((prev) => ({ ...prev, ...patch }));
     });
@@ -322,6 +339,36 @@ export default function UsageQueryPage(): ReactElement {
             }}
           />
           <span>{state.error.message}</span>
+        </div>
+      )}
+
+      {/* Phase 27 Fix 2 (BUG-CR-02 / D-09) — refresh-success toast.
+          Shows "已写入 N 条用量记录到 SQLite" (or "刷新成功 — 无新增" when
+          0 rows were inserted — better than silent success). Lives
+          below the error banner; does not stack over the chart. */}
+      {state.refreshToast && !state.error && (
+        <div
+          data-testid="usage-refresh-toast"
+          role="status"
+          data-inserted-rows={state.refreshToast.inserted}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            borderRadius: 'var(--radius-button)',
+            border: '1px solid rgba(56, 142, 60, 0.3)',
+            background: 'rgba(56, 142, 60, 0.05)',
+            padding: '8px 12px',
+            fontSize: 13,
+            color: 'var(--success)',
+            marginBottom: 16,
+          }}
+        >
+          <span>
+            {state.refreshToast.inserted > 0
+              ? `刷新成功 — 已写入 ${state.refreshToast.inserted} 条用量记录到 SQLite`
+              : '刷新成功 — 无新增用量记录'}
+          </span>
         </div>
       )}
 
@@ -879,6 +926,12 @@ async function loadAll(
       const snap = await refreshUsage(window);
       const history = await getUsageHistory(window);
       const trend = await fetchSevenDayTrend(snap.provider_id);
+      // Phase 27 Fix 2 (BUG-CR-02 / D-09) — capture the inserted
+      // row count for the toast banner. Always show the toast on a
+      // successful refresh (even when 0 rows were inserted) so the
+      // user gets explicit "刷新成功 — 已写入 N 条" feedback instead
+      // of a silent no-op. CLAUDE.md §7 — never silently swallow.
+      const inserted = snap.inserted_rows ?? 0;
       return {
         snapshot: snap,
         history,
@@ -886,6 +939,7 @@ async function loadAll(
         loading: false,
         refreshing: false,
         error: null,
+        refreshToast: { inserted, at: Date.now() },
       };
     }
     // Concurrent — they hit the same (provider_id, window) cache

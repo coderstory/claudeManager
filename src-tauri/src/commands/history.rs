@@ -419,6 +419,9 @@ mod tests {
             timestamp: 1_700_000_000,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         svc.record_usage(&snap, Some("/root-a")).unwrap();
 
@@ -441,6 +444,9 @@ mod tests {
             timestamp: 1_700_000_000, // 2023-11-14T22:13:20Z
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         // Same provider, same UTC day (timestamp + 3600 = still same day).
         let snap2 = crate::domain::UsageSnapshot {
@@ -450,6 +456,9 @@ mod tests {
             timestamp: 1_700_000_000 + 3600,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         svc.record_usage(&snap1, None).unwrap();
         svc.record_usage(&snap2, None).unwrap();
@@ -479,6 +488,9 @@ mod tests {
             timestamp: 1_700_000_000,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         let snap_b = crate::domain::UsageSnapshot {
             provider_id: "b".into(),
@@ -487,6 +499,9 @@ mod tests {
             timestamp: 1_700_000_000,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         svc.record_usage(&snap_a, None).unwrap();
         svc.record_usage(&snap_b, None).unwrap();
@@ -588,6 +603,9 @@ mod tests {
             timestamp: 1_700_000_000,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         svc.record_usage(&snap, None).unwrap();
         svc.record_backup(
@@ -639,6 +657,9 @@ mod tests {
             timestamp: 1_700_000_000,
             breakdown: Vec::new(),
             model_count: 0,
+            // Phase 27 Fix 2 (BUG-CR-02 / D-09) — test fixture
+            // default; only `refresh_usage` populates this.
+            inserted_rows: 0,
         };
         svc.record_usage(&snap, None).unwrap();
 
