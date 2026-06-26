@@ -1,23 +1,36 @@
 /**
- * F18 — 配置优化 (M2.9 real implementation).
+ * F18 — 配置优化 (M2.9 + M3.3 Phase 4 real implementation).
  *
- * User flow (per docs/design/M2.9-dataflow.md):
+ * User flow (per docs/design/M2.9-dataflow.md, updated for M3.3):
  *   1. User clicks the sidebar "配置优化" tile.
  *   2. Page mounts and calls `scanOptimizations` to fetch findings
- *      from all 13 rules.
+ *      from all 16 rules (13 file rules + 3 env rules).
  *   3. UI renders findings grouped by severity (Error → Warning →
- *      Info). Each finding has a checkbox; auto-apply findings are
- *      pre-checked, manual ones are not (but always selectable).
- *   4. User clicks [应用 N 项] → calls `applyOptimizations` with
- *      the checked finding IDs. Each ApplyResult is shown inline
- *      with green/red status + backup path.
- *   5. After apply, [重新扫描] re-runs scan to validate the fix.
+ *      Info). Each FindingRow shows: status icon (green-check when
+ *      fixed/applied, red-x when failed or manual-only) + rule name
+ *      + affected path + an inline Fix button (only for auto-apply
+ *      rules). A secondary "Apply All Auto-Fix" button above the
+ *      list handles the M2.9 batch pattern for power users.
+ *   4. Per-row Fix button → calls `applyRuleFix(ruleId)`. Each
+ *      ApplyResult is shown inline with green/red status + backup
+ *      path. On success the row's status icon flips to green-check
+ *      and the Fix button disables (re-click won't double-apply).
+ *   5. After all applies, [重新扫描] re-runs scan to validate the
+ *      fix (rules that no longer fire disappear from the list).
  *
- * ## Design choices (CLAUDE.md §5 + SPEC §5.11)
+ * ## Design choices (CLAUDE.md §5 + SPEC §5.11 + M3.3 §5.11.2)
  *
  * - **No grouping libraries** — plain `Array.filter` per severity.
- * - **Auto-apply findings default checked**, manual ones default
- *   unchecked (matches SPEC §6.7: "安全 = 默认勾选, 需确认 = 不勾选").
+ * - **Per-row status icon (green-check / red-x)** — replaced the
+ *   M2.9 batch checkbox UI. Manual rules get a red-x + "在 JSON
+ *   编辑器中打开" action (same M5 #28 path).
+ * - **Per-row Fix button (auto rules only)** — calls
+ *   `applyRuleFix(ruleId)` (the new SC #3 backend). One click =
+ *   one rule. Idempotent: a second click on an already-applied
+ *   row is a no-op (button disabled).
+ * - **Keep batch "Apply All Auto-Fix"** — power-user escape hatch.
+ *   It calls the original `applyOptimizations(findingIds)` with
+ *   all auto-apply finding ids.
  * - **Apply results stay visible until next scan** — user can read
  *   "已自动备份至 ~/.claude/settings.json.bak.<ts>".
  * - **Empty state ≠ error**: zero findings is the "all good" state;
@@ -35,11 +48,13 @@ import {
   RefreshCw,
   ShieldAlert,
   Wand2,
+  XCircle,
 } from 'lucide-react';
 
 import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   applyOptimizations,
+  applyRuleFix,
   exportOptimizationReport,
   scanOptimizations,
 } from '../../lib/api/optimizer';
@@ -58,14 +73,26 @@ import {
 // Page-level state
 // ---------------------------------------------------------------------------
 
+/** M3.3 — per-rule apply tracking (SC #2/#3).
+ *  Keyed by `rule_id` (not finding id, since the per-row Fix button
+ *  addresses rules). Value is the latest ApplyResult for that rule.
+ *  Rules not in the map are in their default state (not yet applied). */
+type RuleStatusMap = Record<string, ApplyResult | undefined>;
+
 interface PageState {
   findings: OptimizationFinding[];
-  selectedIds: Set<string>;
   loading: boolean;
-  applying: boolean;
   scanError: string | null;
-  applyError: string | null;
-  applyResults: ApplyResult[] | null;
+  /** Per-row Fix button results. Cleared on rescan. */
+  ruleStatus: RuleStatusMap;
+  /** rule_ids currently being fixed (per-row Fix in flight). */
+  fixingRuleIds: Set<string>;
+  /** Per-row Fix errors (last failed rule_id → message). */
+  fixError: { ruleId: string; message: string } | null;
+  /** Batch "Apply All Auto-Fix" progress / results. */
+  applyingAll: boolean;
+  applyAllResults: ApplyResult[] | null;
+  applyAllError: string | null;
   lastScanAt: number | null;
   /** F23 导出报告时置 true,禁用导出按钮。 */
   exporting: boolean;
@@ -77,12 +104,14 @@ interface PageState {
 
 const INITIAL_STATE: PageState = {
   findings: [],
-  selectedIds: new Set(),
   loading: true,
-  applying: false,
   scanError: null,
-  applyError: null,
-  applyResults: null,
+  ruleStatus: {},
+  fixingRuleIds: new Set(),
+  fixError: null,
+  applyingAll: false,
+  applyAllResults: null,
+  applyAllError: null,
   lastScanAt: null,
   exporting: false,
   exportError: null,
@@ -114,18 +143,20 @@ export default function OptimizerPage(): ReactElement {
       ...prev,
       loading: true,
       scanError: null,
-      applyResults: null,
+      // Clear per-row apply state — fresh scan invalidates prior
+      // statuses (findings may have disappeared; re-scanning is the
+      // "tell me truth again" trigger).
+      ruleStatus: {},
+      fixingRuleIds: new Set(),
+      fixError: null,
+      applyAllResults: null,
+      applyAllError: null,
     }));
     try {
       const findings = await scanOptimizations();
-      // Default-check the auto_apply ones.
-      const checked = new Set(
-        findings.filter((f) => f.auto_apply).map((f) => f.id),
-      );
       setState((prev) => ({
         ...prev,
         findings,
-        selectedIds: checked,
         loading: false,
         scanError: null,
         lastScanAt: Date.now(),
@@ -134,7 +165,6 @@ export default function OptimizerPage(): ReactElement {
       setState((prev) => ({
         ...prev,
         findings: [],
-        selectedIds: new Set(),
         loading: false,
         scanError: err instanceof Error ? err.message : String(err),
       }));
@@ -145,15 +175,6 @@ export default function OptimizerPage(): ReactElement {
   useEffect(() => {
     void runScan();
   }, [runScan]);
-
-  const handleToggle = useCallback((id: string) => {
-    setState((prev) => {
-      const next = new Set(prev.selectedIds);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return { ...prev, selectedIds: next };
-    });
-  }, []);
 
   // M5 #28 — jump to JSON editor with `finding.affected_path` pre-loaded.
   // Writes to sessionStorage so the editor's mount effect can pick it up
@@ -169,30 +190,94 @@ export default function OptimizerPage(): ReactElement {
     setView('json-editor');
   }, [setView]);
 
-  const handleApply = useCallback(async () => {
-    const ids = Array.from(state.selectedIds);
+  // M3.3 — per-row Fix button handler (SC #2/#3). One click → one
+  // rule's apply. After success, the row's status icon flips to
+  // green-check + the Fix button disables (avoid double-apply).
+  const handleFixOne = useCallback(async (ruleId: string) => {
+    setState((prev) => {
+      const next = new Set(prev.fixingRuleIds);
+      next.add(ruleId);
+      return { ...prev, fixingRuleIds: next, fixError: null };
+    });
+    try {
+      const results = await applyRuleFix(ruleId);
+      setState((prev) => {
+        const next = new Set(prev.fixingRuleIds);
+        next.delete(ruleId);
+        // Use the first result as the "status icon" source; if
+        // multiple findings fired for this rule, the first one's
+        // outcome represents the batch (subsequent ones are rare
+        // and would surface in the ApplyResultsPanel).
+        const result = results[0];
+        return {
+          ...prev,
+          fixingRuleIds: next,
+          ruleStatus: result
+            ? { ...prev.ruleStatus, [ruleId]: result }
+            : prev.ruleStatus,
+        };
+      });
+    } catch (err) {
+      setState((prev) => {
+        const next = new Set(prev.fixingRuleIds);
+        next.delete(ruleId);
+        return {
+          ...prev,
+          fixingRuleIds: next,
+          fixError: {
+            ruleId,
+            message: err instanceof Error ? err.message : String(err),
+          },
+        };
+      });
+    }
+  }, []);
+
+  // M3.3 — batch "Apply All Auto-Fix" (kept as power-user escape
+  // hatch, see design comment at top of file). Gathers every
+  // auto-apply finding's id and sends them all in one batch.
+  const handleApplyAll = useCallback(async () => {
+    const ids = state.findings
+      .filter((f) => f.auto_apply)
+      .map((f) => f.id);
     if (ids.length === 0) return;
-    setState((prev) => ({ ...prev, applying: true, applyError: null }));
+    setState((prev) => ({ ...prev, applyingAll: true, applyAllError: null }));
     try {
       const results = await applyOptimizations(ids);
-      setState((prev) => ({
-        ...prev,
-        applying: false,
-        applyResults: results,
-        applyError: null,
-      }));
+      setState((prev) => {
+        // Map each apply result back to its finding's rule_id so
+        // per-row status icons update.
+        const idToRule = new Map(
+          prev.findings.map((f) => [f.id, f.rule_id] as const),
+        );
+        const nextStatus: RuleStatusMap = { ...prev.ruleStatus };
+        for (const r of results) {
+          const rid = idToRule.get(r.finding_id);
+          if (rid) nextStatus[rid] = r;
+        }
+        return {
+          ...prev,
+          applyingAll: false,
+          applyAllResults: results,
+          applyAllError: null,
+          ruleStatus: nextStatus,
+        };
+      });
     } catch (err) {
       setState((prev) => ({
         ...prev,
-        applying: false,
-        applyError: err instanceof Error ? err.message : String(err),
+        applyingAll: false,
+        applyAllError: err instanceof Error ? err.message : String(err),
       }));
     }
-  }, [state.selectedIds]);
+  }, [state.findings]);
 
   // F23 — 导出 markdown 报告。后端生成内容 + 弹保存框 + 写盘,
   // 前端只传当前 findings + applyResults（如有),拿回路径展示成功提示。
   // 用户在保存框取消 → 后端返回 null → 静默,不显示任何错误。
+  //
+  // M3.3: 用 `applyAllResults`（批量 apply 的结果)作为报告里的
+  // "应用状态"数据源,跟 batch apply 路径对齐。
   const handleExport = useCallback(async () => {
     setState((prev) => ({
       ...prev,
@@ -203,7 +288,7 @@ export default function OptimizerPage(): ReactElement {
     try {
       const path = await exportOptimizationReport(
         state.findings,
-        state.applyResults,
+        state.applyAllResults,
         new Date().toISOString(),
       );
       if (path === null) {
@@ -230,7 +315,7 @@ export default function OptimizerPage(): ReactElement {
         exportSuccessPath: null,
       }));
     }
-  }, [state.findings, state.applyResults]);
+  }, [state.findings, state.applyAllResults]);
 
   const grouped = useMemo(() => {
     const m: Record<Severity, OptimizationFinding[]> = {
@@ -244,7 +329,11 @@ export default function OptimizerPage(): ReactElement {
     return m;
   }, [state.findings]);
 
-  const selectedCount = state.selectedIds.size;
+  // auto-apply finding 数(M3.3 batch 按钮 "Apply All Auto-Fix" 用)
+  const autoFixCount = useMemo(
+    () => state.findings.filter((f) => f.auto_apply).length,
+    [state.findings],
+  );
   const totalCount = state.findings.length;
 
   // ---- render ----
@@ -290,7 +379,7 @@ export default function OptimizerPage(): ReactElement {
               marginBottom: 0,
             }}
           >
-            扫描 ~/.claude/ 下的 settings.json + providers/ + mcp.json,识别 13 类常见问题。
+            扫描 ~/.claude/ 下的 settings.json + providers/ + mcp.json,识别 16 类常见问题。
             {state.lastScanAt && (
               <span style={{ marginLeft: 8 }}>
                 · 上次扫描: {new Date(state.lastScanAt).toLocaleTimeString()}
@@ -420,8 +509,57 @@ export default function OptimizerPage(): ReactElement {
             未发现需优化的项
           </div>
           <div style={{ fontSize: 12, marginTop: 4 }}>
-            配置看起来很好,所有 13 个规则都已通过。
+            配置看起来很好,所有 16 个规则都已通过。
           </div>
+        </div>
+      )}
+
+      {/* M3.3 — 批量 "Apply All Auto-Fix" 按钮(放在列表上方,作为
+          power-user 快速通道;主交互仍是 per-row Fix 按钮)。 */}
+      {autoFixCount > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '12px 16px',
+            background: 'var(--bg-elevated)',
+            borderRadius: 'var(--radius-button)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {autoFixCount} 项可自动修复
+          </div>
+          <button
+            type="button"
+            data-testid="optimizer-apply-all-btn"
+            onClick={() => {
+              void handleApplyAll();
+            }}
+            disabled={state.applyingAll || autoFixCount === 0}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 16px',
+              borderRadius: 'var(--radius-button)',
+              border: 'none',
+              background:
+                autoFixCount === 0 ? 'var(--text-muted)' : 'var(--accent)',
+              color: '#fff',
+              fontSize: 13,
+              cursor:
+                state.applyingAll || autoFixCount === 0
+                  ? 'not-allowed'
+                  : 'pointer',
+              opacity: state.applyingAll ? 0.6 : 1,
+            }}
+          >
+            <Wand2 size={14} />
+            {state.applyingAll ? '应用中...' : `应用全部 ${autoFixCount} 项自动修复`}
+          </button>
         </div>
       )}
 
@@ -439,8 +577,9 @@ export default function OptimizerPage(): ReactElement {
                 key={sev}
                 severity={sev}
                 findings={list}
-                selectedIds={state.selectedIds}
-                onToggle={handleToggle}
+                ruleStatus={state.ruleStatus}
+                fixingRuleIds={state.fixingRuleIds}
+                onFixOne={handleFixOne}
                 onOpenInEditor={handleOpenInEditor}
               />
             );
@@ -448,66 +587,33 @@ export default function OptimizerPage(): ReactElement {
         </div>
       )}
 
-      {/* Apply bar */}
-      {totalCount > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            padding: '12px 16px',
-            background: 'var(--bg-elevated)',
-            borderRadius: 'var(--radius-button)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            已选 {selectedCount} / {totalCount} 项
-          </div>
-          <button
-            type="button"
-            data-testid="optimizer-apply-btn"
-            onClick={() => {
-              void handleApply();
-            }}
-            disabled={state.applying || selectedCount === 0}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-button)',
-              border: 'none',
-              background:
-                selectedCount === 0 ? 'var(--text-muted)' : 'var(--accent)',
-              color: '#fff',
-              fontSize: 13,
-              cursor:
-                state.applying || selectedCount === 0
-                  ? 'not-allowed'
-                  : 'pointer',
-              opacity: state.applying ? 0.6 : 1,
-            }}
-          >
-            <Wand2 size={14} />
-            {state.applying ? '应用中...' : `应用 ${selectedCount} 项`}
-          </button>
-        </div>
-      )}
-
-      {/* 应用失败提示(F15 ErrorBanner kind=error) */}
-      {state.applyError && (
+      {/* Per-row Fix 失败提示(F15 ErrorBanner kind=error) */}
+      {state.fixError && (
         <ErrorBanner
           kind="error"
-          testId="optimizer-apply-error"
-          message={`应用失败: ${state.applyError}`}
+          testId="optimizer-fix-error"
+          message={`修复失败: ${state.fixError.message}`}
+          onDismiss={() => {
+            setState((prev) => ({ ...prev, fixError: null }));
+          }}
         />
       )}
 
-      {/* Apply results */}
-      {state.applyResults && state.applyResults.length > 0 && (
-        <ApplyResultsPanel results={state.applyResults} />
+      {/* Apply All 失败提示 */}
+      {state.applyAllError && (
+        <ErrorBanner
+          kind="error"
+          testId="optimizer-apply-all-error"
+          message={`批量应用失败: ${state.applyAllError}`}
+          onDismiss={() => {
+            setState((prev) => ({ ...prev, applyAllError: null }));
+          }}
+        />
+      )}
+
+      {/* Apply results — batch apply 的整体结果汇总 */}
+      {state.applyAllResults && state.applyAllResults.length > 0 && (
+        <ApplyResultsPanel results={state.applyAllResults} />
       )}
     </div>
   );
@@ -520,14 +626,16 @@ export default function OptimizerPage(): ReactElement {
 function SeverityGroup({
   severity,
   findings,
-  selectedIds,
-  onToggle,
+  ruleStatus,
+  fixingRuleIds,
+  onFixOne,
   onOpenInEditor,
 }: {
   severity: Severity;
   findings: OptimizationFinding[];
-  selectedIds: Set<string>;
-  onToggle: (id: string) => void;
+  ruleStatus: RuleStatusMap;
+  fixingRuleIds: Set<string>;
+  onFixOne: (ruleId: string) => void;
   onOpenInEditor: (path: string) => void;
 }): ReactElement {
   const Icon = SEVERITY_ICONS[severity];
@@ -574,8 +682,9 @@ function SeverityGroup({
           <FindingRow
             key={f.id}
             finding={f}
-            selected={selectedIds.has(f.id)}
-            onToggle={onToggle}
+            status={ruleStatus[f.rule_id]}
+            fixing={fixingRuleIds.has(f.rule_id)}
+            onFixOne={onFixOne}
             onOpenInEditor={onOpenInEditor}
           />
         ))}
@@ -585,20 +694,38 @@ function SeverityGroup({
 }
 
 // ---------------------------------------------------------------------------
-// FindingRow
+// FindingRow — M3.3 重构:绿勾/红 x 状态图标 + 单条 Fix 按钮
+//
+// 状态机:
+//   - 无 status 时:    显示空心圆 (尚未处理)
+//   - status.applied:   绿勾 CheckCircle,Fix 按钮禁用
+//   - status.error / status.applied=false: 红 x XCircle,Fix 按钮可重试
+//   - manual rule:     永久红 x + "在 JSON 编辑器中打开" 链接(无 Fix 按钮)
+//
+// Fix 按钮只在 auto_apply rules 显示,且仅在 fixingRuleIds 包含 rule_id
+// 时显示 "修复中..." 状态。
 // ---------------------------------------------------------------------------
 
 function FindingRow({
   finding,
-  selected,
-  onToggle,
+  status,
+  fixing,
+  onFixOne,
   onOpenInEditor,
 }: {
   finding: OptimizationFinding;
-  selected: boolean;
-  onToggle: (id: string) => void;
+  status: ApplyResult | undefined;
+  fixing: boolean;
+  onFixOne: (ruleId: string) => void;
   onOpenInEditor: (path: string) => void;
 }): ReactElement {
+  // 状态判定
+  const isApplied = status?.applied === true;
+  const hasError = status !== undefined && !status.applied;
+  // 一次性规则:successful apply 之后按钮永久禁用(re-scan 会清空)
+  const isFixed = isApplied;
+  const fixButtonDisabled = !finding.auto_apply || fixing || isFixed;
+
   return (
     <li
       data-testid={`optimizer-finding-${finding.id}`}
@@ -610,24 +737,49 @@ function FindingRow({
         borderTop: '1px solid var(--border)',
       }}
     >
-      <input
-        type="checkbox"
-        checked={selected}
-        disabled={!finding.auto_apply}
-        onChange={() => onToggle(finding.id)}
-        style={{ marginTop: 3 }}
-        data-testid={`optimizer-checkbox-${finding.id}`}
-        aria-label={
-          finding.auto_apply
-            ? `选择 ${finding.title}`
-            : `${finding.title}（需手动处理,不可勾选;请点击详情查看）`
-        }
-        title={
-          finding.auto_apply
-            ? undefined
-            : '需手动处理,请点击右侧 [详情] 查看说明'
-        }
-      />
+      {/* M3.3 状态图标:绿勾 / 红 x / 空心圆 */}
+      <div
+        data-testid={`optimizer-status-${finding.id}`}
+        style={{
+          marginTop: 2,
+          width: 18,
+          height: 18,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {isApplied ? (
+          <CheckCircle2
+            size={16}
+            color="var(--success)"
+            aria-label="已修复"
+            data-status="applied"
+          />
+        ) : hasError ? (
+          <XCircle
+            size={16}
+            color="var(--danger)"
+            aria-label="修复失败"
+            data-status="error"
+          />
+        ) : !finding.auto_apply ? (
+          <XCircle
+            size={16}
+            color="var(--text-muted)"
+            aria-label="需手动处理"
+            data-status="manual"
+          />
+        ) : (
+          <AlertCircle
+            size={16}
+            color="var(--text-muted)"
+            aria-label="待修复"
+            data-status="pending"
+          />
+        )}
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -699,33 +851,103 @@ function FindingRow({
             建议: {finding.suggested_action}
           </div>
         )}
-        {/* M5 #28 — manual-handling findings (auto_apply=false) cannot
-            be checked (#26). Offer a click-to-detail action that jumps
-            to the JSON editor with the affected file pre-loaded. */}
-        {!finding.auto_apply && (
-          <button
-            type="button"
-            data-testid={`optimizer-open-json-editor-${finding.id}`}
+        {/* 错误信息(从 ApplyResult.error 透出) */}
+        {hasError && status?.error && (
+          <div
+            data-testid={`optimizer-error-msg-${finding.id}`}
             style={{
-              marginTop: 8,
-              padding: '4px 10px',
               fontSize: 12,
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-button)',
-              background: 'var(--bg-elevated)',
-              color: 'var(--accent)',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              fontFamily: 'inherit',
+              color: 'var(--danger)',
+              marginTop: 6,
             }}
-            onClick={() => onOpenInEditor(finding.affected_path)}
           >
-            <ExternalLink size={12} aria-hidden="true" />
-            在 JSON 编辑器中打开
-          </button>
+            {status.error}
+          </div>
         )}
+        {/* 备份路径(成功时展示) */}
+        {isApplied && status?.backup_path && (
+          <div
+            data-testid={`optimizer-backup-${finding.id}`}
+            style={{
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              marginTop: 4,
+              fontFamily: 'var(--font-mono, monospace)',
+              wordBreak: 'break-all',
+            }}
+          >
+            备份: {status.backup_path}
+          </div>
+        )}
+        {/* 操作行:Fix 按钮(auto rule) 或 在 JSON 编辑器中打开(manual rule) */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          {finding.auto_apply && (
+            <button
+              type="button"
+              data-testid={`optimizer-fix-btn-${finding.id}`}
+              onClick={() => onFixOne(finding.rule_id)}
+              disabled={fixButtonDisabled}
+              aria-label={
+                isFixed ? `${finding.title} 已修复` : `修复 ${finding.title}`
+              }
+              style={{
+                padding: '4px 12px',
+                fontSize: 12,
+                border: '1px solid var(--accent)',
+                borderRadius: 'var(--radius-button)',
+                background: isFixed ? 'rgba(0,0,0,0.04)' : 'var(--accent)',
+                color: isFixed ? 'var(--text-muted)' : '#fff',
+                cursor: fixButtonDisabled ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontFamily: 'inherit',
+                opacity: fixing ? 0.6 : 1,
+              }}
+            >
+              {fixing ? (
+                <>
+                  <RefreshCw size={12} aria-hidden="true" />
+                  修复中...
+                </>
+              ) : isFixed ? (
+                <>
+                  <CheckCircle2 size={12} aria-hidden="true" />
+                  已修复
+                </>
+              ) : (
+                <>
+                  <Wand2 size={12} aria-hidden="true" />
+                  Fix
+                </>
+              )}
+            </button>
+          )}
+          {/* M5 #28 — manual rule 跳转 JSON editor */}
+          {!finding.auto_apply && (
+            <button
+              type="button"
+              data-testid={`optimizer-open-json-editor-${finding.id}`}
+              style={{
+                padding: '4px 10px',
+                fontSize: 12,
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-button)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--accent)',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontFamily: 'inherit',
+              }}
+              onClick={() => onOpenInEditor(finding.affected_path)}
+            >
+              <ExternalLink size={12} aria-hidden="true" />
+              在 JSON 编辑器中打开
+            </button>
+          )}
+        </div>
       </div>
     </li>
   );

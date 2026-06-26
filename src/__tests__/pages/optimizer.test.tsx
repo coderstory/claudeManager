@@ -1,14 +1,16 @@
 /**
- * Vitest coverage for the F18 OptimizerPage (M2.9).
+ * Vitest coverage for the F18 OptimizerPage (M2.9 + M3.3 Phase 4).
  *
  * What this covers (TDD, CLAUDE.md §5.2):
  *   - Initial render: scan button + page chrome.
  *   - Mount triggers `scan_optimizations`.
  *   - Findings render grouped by severity.
- *   - Auto-apply findings are pre-checked, manual ones are not.
- *   - Toggling a checkbox updates the selected count.
- *   - Apply button calls `apply_optimizations` with the selected ids.
- *   - ApplyResult panel renders success + failure rows.
+ *   - Per-row status icon (M3.3 SC #2): green-check / red-x / pending / manual.
+ *   - Per-row Fix button (M3.3 SC #2/#3): invokes `apply_rule_fix(ruleId)`,
+ *     flips status icon to "applied" on success, disables button.
+ *   - Batch "Apply All Auto-Fix" button calls `apply_optimizations` with
+ *     the auto-apply finding ids only.
+ *   - ApplyResult panel renders success + failure rows after batch apply.
  *   - Empty findings → empty-state CheckCircle banner.
  *   - Scan error → error InfoBar.
  */
@@ -100,67 +102,89 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     });
   });
 
-  it('pre-checks auto_apply findings and leaves manual ones unchecked', async () => {
+  // M3.3 — auto_apply findings get a Fix button + status icon "pending",
+  // manual findings get the "在 JSON 编辑器中打开" link instead.
+  it('auto_apply findings render a Fix button + status icon pending', async () => {
     mockInvoke.mockResolvedValue([
       finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
       finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
     ]);
     render(<OptimizerPage />, { wrapper: wrap });
     await waitFor(() => {
-      const auto = screen.getByTestId(
-        'optimizer-checkbox-id-auto',
-      ) as HTMLInputElement;
-      const manual = screen.getByTestId(
-        'optimizer-checkbox-id-manual',
-      ) as HTMLInputElement;
-      expect(auto.checked).toBe(true);
-      expect(manual.checked).toBe(false);
+      const autoFixBtn = screen.getByTestId('optimizer-fix-btn-id-auto');
+      expect(autoFixBtn).toBeInTheDocument();
+      expect((autoFixBtn as HTMLButtonElement).disabled).toBe(false);
+      // 状态图标 = pending(尚未处理)
+      const autoStatus = screen.getByTestId('optimizer-status-id-auto');
+      expect(autoStatus.querySelector('[data-status="pending"]')).toBeTruthy();
     });
   });
 
-  it('toggling a checkbox updates the selected count and apply button', async () => {
-    mockInvoke.mockResolvedValue([
-      finding('id-1', 'RULE_A', 'warning', false),
-    ]);
-    render(<OptimizerPage />, { wrapper: wrap });
-    const checkbox = await screen.findByTestId('optimizer-checkbox-id-1');
-    expect((checkbox as HTMLInputElement).checked).toBe(false);
-    await act(async () => {
-      fireEvent.click(checkbox);
-    });
-    expect((checkbox as HTMLInputElement).checked).toBe(true);
-    const applyBtn = screen.getByTestId(
-      'optimizer-apply-btn',
-    ) as HTMLButtonElement;
-    expect(applyBtn.textContent).toContain('应用 1 项');
-  });
-
-  // M5 #26 — manual-handling findings (auto_apply=false) must NOT be
-  // selectable via the checkbox. The user wants to "click into details"
-  // (covered by #28) instead of mistakenly including manual items in
-  // the apply batch.
-  it('manual handling findings have a disabled checkbox', async () => {
+  it('manual findings render an "open in JSON editor" link + status icon manual', async () => {
     mockInvoke.mockResolvedValue([
       finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
-      finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
     ]);
     render(<OptimizerPage />, { wrapper: wrap });
-    const manual = await screen.findByTestId(
-      'optimizer-checkbox-id-manual',
+    const openBtn = await screen.findByTestId(
+      'optimizer-open-json-editor-id-manual',
     );
-    expect((manual as HTMLInputElement).disabled).toBe(true);
-    // Auto-apply findings remain enabled (regression guard).
-    const auto = await screen.findByTestId('optimizer-checkbox-id-auto');
-    expect((auto as HTMLInputElement).disabled).toBe(false);
+    expect(openBtn).toBeInTheDocument();
+    // 手动规则的 status = manual
+    const status = screen.getByTestId('optimizer-status-id-manual');
+    expect(status.querySelector('[data-status="manual"]')).toBeTruthy();
   });
 
-  it('auto_apply findings keep an enabled checkbox', async () => {
+  // M3.3 SC #2/#3 — per-row Fix button 点击后调用 apply_rule_fix,
+  // 成功后状态翻成 "applied" + 按钮禁用。
+  it('per-row Fix button invokes apply_rule_fix and flips status to applied', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') {
+        return [finding('id-A', 'DEPRECATED_FIELD', 'info', true)];
+      }
+      if (cmd === 'apply_rule_fix') {
+        return [
+          {
+            finding_id: 'id-A',
+            applied: true,
+            backup_path: '/tmp/settings.json.bak.20260626-100000',
+            error: null,
+          },
+        ] as ApplyResult[];
+      }
+      return null;
+    });
+    render(<OptimizerPage />, { wrapper: wrap });
+    const fixBtn = await screen.findByTestId('optimizer-fix-btn-id-A');
+    expect((fixBtn as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(fixBtn);
+    });
+    // 验证 invoke('apply_rule_fix', { ruleId: 'DEPRECATED_FIELD' })
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'apply_rule_fix',
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      expect(calls[0][1]).toMatchObject({ ruleId: 'DEPRECATED_FIELD' });
+    });
+    // 状态翻到 applied + 按钮禁用
+    await waitFor(() => {
+      const status = screen.getByTestId('optimizer-status-id-A');
+      expect(status.querySelector('[data-status="applied"]')).toBeTruthy();
+      const btn = screen.getByTestId('optimizer-fix-btn-id-A') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+    });
+  });
+
+  // 旧 M2.9 行为 — 验证 batch "Apply All Auto-Fix" 按钮的"显示文案 + 数量"。
+  it('renders "Apply All Auto-Fix" batch button with auto-fix count', async () => {
     mockInvoke.mockResolvedValue([
-      finding('id-auto', 'DEPRECATED_FIELD', 'info', true),
+      finding('id-A', 'DEPRECATED_FIELD', 'info', true),
+      finding('id-B', 'ORPHAN_PROVIDER', 'warning', false),
     ]);
     render(<OptimizerPage />, { wrapper: wrap });
-    const checkbox = await screen.findByTestId('optimizer-checkbox-id-auto');
-    expect((checkbox as HTMLInputElement).disabled).toBe(false);
+    const btn = await screen.findByTestId('optimizer-apply-all-btn');
+    expect(btn.textContent).toContain('1'); // auto-fix count
   });
 
   // M5 #28 — manual-handling findings must expose a "open in JSON
@@ -174,7 +198,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       finding('id-manual', 'ORPHAN_PROVIDER', 'warning', false),
     ]);
     sessionStorage.clear();
-    const { rerender } = render(<OptimizerPage />, { wrapper: wrap });
+    render(<OptimizerPage />, { wrapper: wrap });
     const openBtn = await screen.findByTestId(
       'optimizer-open-json-editor-id-manual',
     );
@@ -185,20 +209,24 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     expect(sessionStorage.getItem('ccm.openFilePath')).toBe(
       '/some/path/ORPHAN_PROVIDER',
     );
-    rerender(<OptimizerPage />, { wrapper: wrap });
   });
 
-  it('apply button calls apply_optimizations with the selected finding ids', async () => {
+  // M3.3 — batch "Apply All Auto-Fix" 按钮调用 apply_optimizations,
+  // 把所有 auto_apply finding 的 id 传过去。
+  it('Apply All Auto-Fix button calls apply_optimizations with auto finding ids', async () => {
     mockInvoke.mockImplementation(async (cmd: string, args?: unknown) => {
       if (cmd === 'scan_optimizations') {
-        return [finding('id-A', 'DEPRECATED_FIELD', 'info', true)];
+        return [
+          finding('id-A', 'DEPRECATED_FIELD', 'info', true),
+          finding('id-B', 'ORPHAN_PROVIDER', 'warning', false),
+        ];
       }
       if (cmd === 'apply_optimizations') {
         const a = args as { findingIds: string[] };
         const results: ApplyResult[] = a.findingIds.map((id) => ({
           finding_id: id,
           applied: true,
-          backup_path: '/tmp/bak.20260619-100000',
+          backup_path: '/tmp/bak.20260626-100000',
           error: null,
         }));
         return results;
@@ -206,7 +234,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       return null;
     });
     render(<OptimizerPage />, { wrapper: wrap });
-    const applyBtn = await screen.findByTestId('optimizer-apply-btn');
+    const applyBtn = await screen.findByTestId('optimizer-apply-all-btn');
     await act(async () => {
       fireEvent.click(applyBtn);
     });
@@ -215,11 +243,13 @@ describe('OptimizerPage — F18 (M2.9)', () => {
         (c) => c[0] === 'apply_optimizations',
       );
       expect(calls.length).toBe(1);
+      // 只传 auto_apply 的 id — manual ORPHAN_PROVIDER 应被排除
       expect(calls[0][1]).toMatchObject({ findingIds: ['id-A'] });
     });
   });
 
-  it('renders apply results with success + backup path', async () => {
+  // M3.3 — 批量 apply 成功后,ApplyResultsPanel 渲染。
+  it('renders apply results panel with success + backup path after batch apply', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'scan_optimizations') {
         return [finding('id-A', 'DEPRECATED_FIELD', 'info', true)];
@@ -229,7 +259,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
           {
             finding_id: 'id-A',
             applied: true,
-            backup_path: '/tmp/settings.json.bak.20260619-100000',
+            backup_path: '/tmp/settings.json.bak.20260626-100000',
             error: null,
           },
         ] as ApplyResult[];
@@ -237,7 +267,7 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       return null;
     });
     render(<OptimizerPage />, { wrapper: wrap });
-    const applyBtn = await screen.findByTestId('optimizer-apply-btn');
+    const applyBtn = await screen.findByTestId('optimizer-apply-all-btn');
     await act(async () => {
       fireEvent.click(applyBtn);
     });
@@ -394,8 +424,8 @@ describe('OptimizerPage — F18 (M2.9)', () => {
       return null;
     });
     render(<OptimizerPage />, { wrapper: wrap });
-    // 先 apply,让 applyResults 进 state。
-    const applyBtn = await screen.findByTestId('optimizer-apply-btn');
+    // 先 batch apply (M3.3 "Apply All Auto-Fix" 按钮),让 applyAllResults 进 state。
+    const applyBtn = await screen.findByTestId('optimizer-apply-all-btn');
     await act(async () => {
       fireEvent.click(applyBtn);
     });

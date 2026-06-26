@@ -25,6 +25,26 @@ export function applyOptimizations(
   return invoke<ApplyResult[]>('apply_optimizations', { findingIds });
 }
 
+/** M3.3 (Phase 4, SC #2/#3) — per-rule Fix button (M2.9 had only the
+ *  batch "Apply N 项" pattern; this adds single-rule Fix that the
+ *  redesigned FindingRow invokes).
+ *
+ *  The Rust service (`OptimizerService::apply_rule_fix`) re-scans,
+ *  filters to findings matching `ruleId`, and runs the rule's
+ *  `apply` for each. Each auto-apply writes via
+ *  `fs_atomic::write_with_backup` (atomic + F13 backup), so the
+ *  returned ApplyResult has a `backup_path` set on success.
+ *
+ *  Error modes:
+ *  - unknown `ruleId` → throws with message `未知规则: <id>`
+ *  - known rule but no current findings → resolves with `[]` (the
+ *    rule simply doesn't fire on the current config)
+ *  - rule is manual-only → resolves with `[]` (manual rules never
+ *    auto-fire; FindingRow disables Fix in that case) */
+export function applyRuleFix(ruleId: string): Promise<ApplyResult[]> {
+  return invoke<ApplyResult[]>('apply_rule_fix', { ruleId });
+}
+
 /**
  * F23 — 导出优化建议 markdown 报告（M2.16）。
  *
