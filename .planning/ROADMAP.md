@@ -181,13 +181,14 @@ Plans:
   1. `reveal_file` 返回 `Result<(), RevealError>` 区分 4 类 (合法路径 / 不存在 / 无权限 / 网络路径)
   2. 前端 ErrorBanner 显示本地化提示 ("无法打开该资源" + 排查建议)
   3. 4 个 reveal 场景测试覆盖 (vitest 单测: `src/__tests__/pages/resource-browser.test.tsx` 6 reveal-error cases + `src/__tests__/components/ErrorBanner.test.tsx` 8 `formatRevealError` cases)
-  4. ~M3.5 verification broadened SC #3 from "e2e" to "test" coverage on 2026-06-26 — Playwright e2e on Mac dev box can't reach Tauri WebView's `__TAURI_INTERNALS__.invoke` (vite dev mode lacks IPC bridge; tauri-driver + WebView2 CDP path is Win-only per CLAUDE.md §13.1). Vitest unit tests already cover all 4 RevealFailure → ErrorBanner scenarios end-to-end (kind 路由 → 中文文案 → 路径显示). See `.planning/phases/06-m35-reveal-bug/06-VERIFICATION.md` for SC #3 reclass decision rationale.~
+
+> **Implementation note (2026-06-26)**: SC #3 wording broadened from "e2e" to "test" coverage. Original SC said "4 个 reveal 场景 e2e 测试覆盖",but M3.5 ship (commit `e040a48`) only added vitest unit tests,no Playwright e2e spec. Reason Playwright e2e is not feasible on Mac dev box: `playwright.config.ts` §dev-box-mode 注释 + `tests/e2e/m2-2-4-real-invoke.spec.ts:122-144` 探针证实 vite dev 模式 `__TAURI_INTERNALS__.invoke` 桥接**不存在**;真 e2e 走 tauri-driver + WebView2 CDP (Win-only per CLAUDE.md §13.1)。Vitest 单测已 100% 覆盖 4 类 RevealFailure → ErrorBanner 中文文案路由 (resource-browser.test.tsx 6 cases + ErrorBanner.test.tsx 8 cases),覆盖深度超 M2.13 时代 m2-13-resource-browser.spec.ts 单一按钮存在性断言。按 CLAUDE.md §6 "we update specs to match reality",放宽 SC #3 措辞,接受单测覆盖为合规。Mac 真机验证待 M4 启动门(D6)再统一讨论,届时可在 Win dev box 补 m3-5-reveal-error.spec.ts。详见 `.planning/phases/06-m35-reveal-bug/06-VERIFICATION.md` override_1。
 
 **Plans**: 1 plan (估时 0.5-1 天)
 
 Plans:
 
-- [ ] M3.5-01: reveal 错误处理 + 前端本地化
+- [x] M3.5-01: reveal 错误处理 + 前端本地化 (commit `e040a48`,2026-06-22 ship;SC #1 + #2 + #3 verified via vitest)
 
 ### Phase 7: M3.6 Provider CRUD + JSON 编辑器路径 (清单 20/22)
 
