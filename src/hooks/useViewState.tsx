@@ -88,7 +88,7 @@ export const STORAGE_KEY = 'ccm.lastView';
  * Adding a new plugin? Two edits:
  *   1. Add the entry to ALL_PLUGINS in src/plugins/registry.ts
  *   2. Add the id here as a literal in the union AND to ALL_VIEWS.
- * The test `ALL_VIEWS contains exactly the 10 plugin ids from the
+ * The test `ALL_VIEWS contains exactly the 9 plugin ids from the
  * registry` will catch the second if you forget the first.
  */
 export type ViewId =
@@ -98,7 +98,6 @@ export type ViewId =
   | 'json-editor'
   | 'mcp-management'
   | 'usage-query'
-  | 'single-file-deploy'
   | 'resource-browser'
   | 'marketplace'
   | 'optimizer'
@@ -111,7 +110,7 @@ export type ViewId =
  * ALL_VIEWS — runtime list of valid ViewIds.
  *
  * Order is the on-screen order in the sidebar:
- *   home first (landing), then the 10 plugin tiles in registry order,
+ *   home first (landing), then the 9 plugin tiles in registry order,
  *   then the 1 utility view ('about', M3.7 — 清单 18).
  *
  * Exported so AppSidebar can iterate without hardcoding a parallel
@@ -124,7 +123,6 @@ export const ALL_VIEWS: readonly ViewId[] = [
   'json-editor',
   'mcp-management',
   'usage-query',
-  'single-file-deploy',
   'resource-browser',
   'marketplace',
   'optimizer',

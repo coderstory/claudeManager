@@ -8,11 +8,12 @@
  *   3. 致谢 —— Tauri / React / cc-switch 引用
  *   4. 技术栈 —— 前端 / 后端 / 设计 token
  *
- * 复用 F8 IPC:不新增 command,直接调 `get_app_metadata` 拿 5 字段。清单 18
- * "build hash" 语义 = git short SHA,即 `git_commit` 字段。
+ * 复用 F8 时代的 IPC:不新增 command,直接调 `get_app_metadata` 拿 5 字段
+ * (F8 页面已在 M5 #18 移除,但 IPC `get_app_metadata` 由 about 页消费)。
+ * 清单 18 "build hash" 语义 = git short SHA,即 `git_commit` 字段。
  *
  * 设计原则:
- *   - 全部样式 inline `style={{}}`,沿用 single-file-deploy 已有模式
+ *   - 全部样式 inline `style={{}}`,沿用 F8 时代确立的模式
  *     (项目无 Tailwind 管线,见 CLAUDE.md §2.4)。
  *   - 复用 AboutCard + InfoSection 通用组件。
  *   - 复用 ErrorBanner 显示 IPC 错误(清单 18 不破坏错误语义)。

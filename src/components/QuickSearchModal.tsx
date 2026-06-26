@@ -75,7 +75,6 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   'json-editor': 'JSON 编辑器',
   'mcp-management': 'MCP 管理',
   'usage-query': '用量查询',
-  'single-file-deploy': '单文件部署',
   'resource-browser': '资源浏览',
   marketplace: '资源市场',
   optimizer: '配置优化',

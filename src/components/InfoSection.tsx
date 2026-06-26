@@ -1,7 +1,7 @@
 /**
  * InfoSection — 关于页 key-value 列表分区 (M3.7)。
  *
- * 渲染 `<dl>` 列表,label-value 对布局(类似 single-file-deploy 的 MetaRow
+ * 渲染 `<dl>` 列表,label-value 对布局(沿用 F8 时代的 MetaRow 模式
  * 但拆成 2 列网格以适配关于页 5-6 项 key-value 不滚动的场景)。
  *
  * 不引入 Tailwind 类(项目无 Tailwind 管线,见 CLAUDE.md §2.4)。

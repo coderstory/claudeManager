@@ -59,20 +59,19 @@ fn ctx<'a>() -> PluginContext<'a> {
     PluginContext { app: None, paths }
 }
 
-/// The canonical 11 plugin ids. Mirrors the F1..F8 (minus F4) + F16..F19
+/// The canonical 10 plugin ids. Mirrors the F1..F7 (minus F4) + F16..F19
 /// feature mapping in CLAUDE.md §3.3. The order is the expected `init_all`
 /// registration order (which doubles as `init_all` call order and
 /// `shutdown_all` reverse order). F4 deeplink-import was removed in
-/// cleanup commit 0ff5b86.
+/// cleanup commit 0ff5b86. F8 was removed in M5 #18.
 const EXPECTED_IDS: &[&str] = &[
-    // F1..F8 core (F4 deeplink-import removed)
+    // F1..F7 core (F4 deeplink-import removed, F8 removed in M5 #18)
     "provider-list",
     "provider-switch",
     "import-sql",
     "json-editor",
     "mcp-management",
     "usage-query",
-    "single-file-deploy",
     // F16..F19 L1 features
     "resource-browser",
     "marketplace",
@@ -85,7 +84,7 @@ const EXPECTED_IDS: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 #[test]
-fn init_all_returns_host_with_eleven_registered_plugins() {
+fn init_all_returns_host_with_ten_registered_plugins() {
     let host = init_all(&ctx()).expect("init_all must succeed against the empty test context");
     assert_eq!(
         host.count(),
@@ -137,22 +136,23 @@ fn init_all_each_plugin_has_non_empty_name_and_matches_id() {
 
 #[test]
 fn init_all_aggregates_routes_from_every_route_contributing_stub() {
-    // Of the 11 registered stubs, only 7 contribute a route:
+    // Of the 10 registered stubs, only 6 contribute a route:
     //   provider-list, import-sql, mcp-management, resource-browser,
     //   marketplace, optimizer, backup-restore.
     // The other 4 contribute none: provider-switch (F2, action-only),
-    // json-editor, usage-query, single-file-deploy (F8, build-time
-    // concern). F4 deeplink-import was removed in cleanup commit
-    // 0ff5b86 — it previously contributed a route, hence the count
-    // dropped from 8 to 7.
+    // json-editor, usage-query. F4 deeplink-import was removed in
+    // cleanup commit 0ff5b86 — it previously contributed a route,
+    // hence the count dropped from 8 to 7. F8 was removed in M5 #18 —
+    // it never contributed a route (build-time concern), so the
+    // count dropped from 7 to 6.
     // (If a stub adds/removes a route, update this assertion + this
     // comment.)
     let host = init_all(&ctx()).expect("init_all must succeed");
     let routes = host.all_routes();
     assert_eq!(
         routes.len(),
-        7,
-        "expected 7 routes aggregated across 11 plugins, got {}",
+        6,
+        "expected 6 routes aggregated across 10 plugins, got {}",
         routes.len()
     );
     // Every route must point to a registered plugin id.

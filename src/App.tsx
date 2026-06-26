@@ -60,7 +60,6 @@ import JsonEditorPage from './pages/json-editor';
 import McpManagementPage from './pages/mcp-management';
 import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
-import SingleFileDeployPage from './pages/single-file-deploy';
 import ResourceBrowserPage from './pages/resource-browser';
 import MarketplacePage from './pages/marketplace';
 import BackupRestorePage from './pages/backup-restore';
@@ -109,10 +108,6 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
   'usage-query': {
     title: '用量查询',
     description: '按 provider 类型查询 token 用量(5h / 1w / 1m 或余额),5 分钟内存缓存。',
-  },
-  'single-file-deploy': {
-    title: '单文件部署',
-    description: '应用 = 一个可执行文件,无外部 .NET / Node / Python runtime 依赖。',
   },
   'resource-browser': {
     title: '资源浏览',
@@ -581,8 +576,6 @@ export default function App(): ReactElement {
               <McpManagementPage />
             ) : view === 'usage-query' ? (
               <UsageQueryPage />
-            ) : view === 'single-file-deploy' ? (
-              <SingleFileDeployPage />
             ) : view === 'resource-browser' ? (
               <ResourceBrowserPage />
             ) : view === 'marketplace' ? (

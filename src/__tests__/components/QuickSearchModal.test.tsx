@@ -108,15 +108,15 @@ describe('QuickSearchModal', () => {
     expect(screen.queryByTestId('quick-search-modal')).toBeNull();
   });
 
-  it('renders the 10 plugin entries when opened with no query', async () => {
+  it('renders the 9 plugin entries when opened with no query', async () => {
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     // home excluded from buildPluginResults → ALL_VIEWS minus 'home'.
     // M3.7: +1 utility 'about'. M4.6: +1 'history'.
     // F2 redirect shim removed (action moved to F1 [激活] button).
-    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins
-    // + 2 utility views = 12 entries.
+    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins.
+    // F8 removed in M5 #18 → 9 plugins + 2 utility views = 11 entries.
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(12);
+    expect(results.length).toBe(11);
   });
 
   it('typing filters the result list', async () => {

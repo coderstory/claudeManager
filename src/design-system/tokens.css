@@ -139,10 +139,10 @@ body,
   --view-transition-duration: 150ms;
 
   /* --- Detail page max-width (L-M2.02 — polish)
-   * 11 详情页(about / backup-restore / json-editor / marketplace /
-   * mcp-management / optimizer / resource-browser / single-file-deploy /
-   * usage-query 等)统一 720px 列宽;之前散落
-   * 720/896/960/1024/1080/1100/1280,visual inconsistency。
+   * 10 详情页(about / backup-restore / json-editor / marketplace /
+   * mcp-management / optimizer / resource-browser / usage-query /
+   * history 等,F8 已于 M5 #18 移除)统一 720px 列宽;
+   * 之前散落 720/896/960/1024/1080/1100/1280,visual inconsistency。
    * 行内嵌套子容器(<60% / 480 / 360 / 90vw / 520 等)不动,只锁
    * 详情页顶层容器。 */
   --detail-page-max-width: 720px;

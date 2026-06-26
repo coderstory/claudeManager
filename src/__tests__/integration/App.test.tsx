@@ -249,8 +249,8 @@ describe('App — view routing integration', () => {
 //
 // THE BUG CLASS THIS GUARDS AGAINST
 // ---------------------------------
-// M2.6 (F13 备份与恢复) and M2.8 (F8 单文件部署) each shipped a real
-// page + service + commands + a per-page test that called
+// M2.6 (F13 备份与恢复) and M2.8 (F8 — M5 #18 已删) each shipped
+// a real page + service + commands + a per-page test that called
 // `render(<RealPage />)` directly. Vitest reported 100% green, yet
 // the release exe still rendered `plugin: <view>` (PluginPlaceholder)
 // for those views — because nobody had wired the new component into
@@ -264,8 +264,8 @@ describe('App — view routing integration', () => {
 // page = move the id from PLACEHOLDER_VIEWS → REAL_PAGE_VIEWS, and
 // this suite enforces the App.tsx wiring at the same commit.
 //
-// This caught the M2.8 F8 bug (single-file-deploy) and the matching
-// M2.2 F3 bug (import-sql) on the very first run.
+// This caught the M2.8 F8 bug (since removed in M5 #18) and the
+// matching M2.2 F3 bug (import-sql) on the very first run.
 // ---------------------------------------------------------------------------
 describe('all plugin views route to their real page (M2.8.1 structural regression)', () => {
   // Views whose real page has shipped. Body MUST NOT contain the
@@ -279,7 +279,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'json-editor', realTestId: 'json-editor-page' },
     { view: 'mcp-management', realTestId: 'mcp-management-page' },
     { view: 'usage-query', realTestId: 'usage-query-page' },
-    { view: 'single-file-deploy', realTestId: 'single-file-deploy-page' },
     { view: 'resource-browser', realTestId: 'resource-browser-page' },
     { view: 'marketplace', realTestId: 'marketplace-page' },
     { view: 'backup-restore', realTestId: 'backup-restore-page' },

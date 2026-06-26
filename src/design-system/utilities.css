@@ -108,14 +108,10 @@
   cursor: not-allowed;
 }
 
-/* === Installer-commands toggle hover (single-file-deploy) ===
- * Replaces `hover:bg-bg-overlay` on the toggle button. */
-[data-app-cmd-toggle] {
-  transition: background-color 120ms ease;
-}
-[data-app-cmd-toggle]:hover {
-  background-color: var(--bg-overlay);
-}
+/* M5 #18 — removed `[data-app-cmd-toggle]` block.
+ * It backed the toggle button on the F8 page (now deleted). No
+ * other consumer references the selector (grep verified 2026-06-26);
+ * the rule is dead code. */
 
 /* === spinner / pulse keyframes (replaces animate-spin / animate-pulse) ===
  * M2.7 / M2.8 used `animate-spin` and `animate-pulse` for the

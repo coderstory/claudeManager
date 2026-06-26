@@ -22,7 +22,6 @@ import {
   jsonEditorPlugin,
   mcpManagementPlugin,
   usageQueryPlugin,
-  singleFileDeployPlugin,
   resourceBrowserPlugin,
   marketplacePlugin,
   optimizerPlugin,
@@ -30,7 +29,7 @@ import {
 } from './stubs/mod';
 
 /**
- * The 11 frontend plugin stubs, in the same order as the Rust
+ * The 10 frontend plugin stubs, in the same order as the Rust
  * `init_all` registrations. Order is not load-bearing but it keeps
  * the two registries visually aligned for review.
  */
@@ -40,7 +39,6 @@ export const ALL_PLUGINS: FrontendPlugin[] = [
   jsonEditorPlugin,
   mcpManagementPlugin,
   usageQueryPlugin,
-  singleFileDeployPlugin,
   resourceBrowserPlugin,
   marketplacePlugin,
   optimizerPlugin,

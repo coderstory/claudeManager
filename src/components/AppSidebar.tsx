@@ -37,7 +37,6 @@ import {
   Layers,
   Package,
   PencilLine,
-  Rocket,
   Store,
   Wand2,
 } from 'lucide-react';
@@ -76,10 +75,6 @@ const VIEW_META: Record<
   'usage-query': {
     icon: <Gauge size={18} aria-hidden="true" />,
     short: '用量查询',
-  },
-  'single-file-deploy': {
-    icon: <Rocket size={18} aria-hidden="true" />,
-    short: '单文件部署',
   },
   'resource-browser': {
     icon: <FileSearch size={18} aria-hidden="true" />,

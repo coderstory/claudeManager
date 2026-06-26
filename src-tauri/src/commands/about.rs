@@ -6,14 +6,15 @@
 //!
 //! ## Why not just rename `get_app_metadata`?
 //!
-//! - `single-file-deploy` still references `get_app_metadata` (the
-//!   function name appears in 3 places: src/lib/api/app.ts, the
-//!   Tauri command registration in lib.rs, and the page itself).
-//! - Renaming would force a multi-file sweep that risks breaking
-//!   the F8 page regression tests (single-file-deploy.test.tsx).
-//! - Instead we register a parallel command that delegates to the
-//!   same `AppMetadata::current()` constructor. IPC cost is one
-//!   extra symbol in the registry; runtime cost is zero.
+//! - The `get_app_metadata` IPC symbol is registered in lib.rs and
+//!   has a stable TS mirror in src/lib/api/app.ts; the about page
+//!   imports from there. Renaming would force a multi-file sweep.
+//! - We keep `get_app_metadata` as the underlying command (about
+//!   page is the only consumer now, after the F8 page was removed
+//!   in M5 #18) and register a parallel
+//!   `get_app_info` command that delegates to the same
+//!   `AppMetadata::current()` constructor. IPC cost is one extra
+//!   symbol in the registry; runtime cost is zero.
 //!
 //! ## Future direction (M4)
 //!
@@ -49,8 +50,8 @@ mod tests {
     use super::*;
 
     /// `get_app_info` MUST return the same fields as `AppMetadata::current()`,
-    /// because AboutPage + SingleFileDeployPage both read this snapshot and
-    /// the user-visible values must agree across views.
+    /// because both `get_app_info` and `get_app_metadata` delegate to the
+    /// same constructor and the user-visible values must agree.
     #[test]
     fn current_matches_app_metadata_snapshot() {
         let from_info = AppMetadata::current();

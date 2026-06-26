@@ -1,10 +1,10 @@
-//! Tauri commands for F8 — 单文件部署 / app metadata (M2.8).
+//! Tauri commands for app metadata (M2.8, originally for the F8
+//! page; now consumed by the About page after F8 was removed in M5 #18).
 //!
 //! `get_app_metadata` is a read-only command that returns build-time
-//! and runtime info for the SingleFileDeployPage. The page uses it to
-//! show the user "what version of the app is running, and what
-//! commit/target it was built from" before they go off and run
-//! `scripts/build-installer.sh`.
+//! and runtime info. The About page (src/pages/about/index.tsx) is
+//! now the only consumer — it shows the user "what version of the
+//! app is running, and what commit/target it was built from".
 //!
 //! ## Field sources (build-time)
 //!
@@ -116,7 +116,8 @@ impl AppMetadata {
     }
 }
 
-/// F8 — return the running app's metadata for the SingleFileDeployPage.
+/// Return the running app's metadata for the About page (originally
+/// for the F8 page, removed in M5 #18).
 ///
 /// `state` is unused today but threaded for parity with the other
 /// commands and so future fields (e.g. install path from

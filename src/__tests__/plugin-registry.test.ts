@@ -3,11 +3,11 @@ import { ALL_PLUGINS } from '../plugins/registry';
 import type { FrontendPlugin } from '../plugins/types';
 
 describe('Frontend plugin registry', () => {
-  it('contains the 10 plugin stubs from CLAUDE.md §3.3 (F2 merged into F1 action button, F4 deeplink-import removed)', () => {
-    // F1..F8 core (minus F2 action + F4 removed) + F16..F19 L1 features
-    // = 10 (F2 removed — its action now lives on the F1 [激活] button;
-    // F4 deeplink-import removed in cleanup commit 0ff5b86).
-    expect(ALL_PLUGINS.length).toBe(10);
+  it('contains the 9 plugin stubs from CLAUDE.md §3.3 (F2 merged into F1 action button, F4 deeplink-import removed, F8 removed in M5 #18)', () => {
+    // F1..F7 + F16..F19 L1 features = 9 (F2 removed — its action now
+    // lives on the F1 [激活] button; F4 deeplink-import removed in
+    // cleanup commit 0ff5b86; F8 removed in M5 #18).
+    expect(ALL_PLUGINS.length).toBe(9);
   });
 
   it('every plugin has a unique kebab-case id', () => {

@@ -11,7 +11,6 @@ export { importSqlPlugin } from './import-sql';
 export { jsonEditorPlugin } from './json-editor';
 export { mcpManagementPlugin } from './mcp-management';
 export { usageQueryPlugin } from './usage-query';
-export { singleFileDeployPlugin } from './single-file-deploy';
 export { resourceBrowserPlugin } from './resource-browser';
 export { marketplacePlugin } from './marketplace';
 export { optimizerPlugin } from './optimizer';

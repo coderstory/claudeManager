@@ -9,7 +9,7 @@
  *   - 单一样式源(此处),所有卡片都用 AboutCard 包。
  *   - 通过 children 传入任意内容(分区 / 列表 / 引用)。
  *   - 提供可选 title + description 渲染(分区用)。
- *   - 视觉一致:single-file-deploy 已有的 card 样式。
+ *   - 视觉一致:复用了 F8 时代确立的 card 样式(2026-06-26 删 F8 后保留)。
  *
  * 不引入 Tailwind 类(项目无 Tailwind 管线,见 CLAUDE.md §2.4)。
  */

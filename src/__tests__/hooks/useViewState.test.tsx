@@ -59,9 +59,10 @@ describe('useViewState', () => {
     // M4.6 / Phase 21-C: +1 view 'history' (F21).
     // F2 redirect shim removed (action moved to F1 [激活] button).
     // F4 deeplink-import removed → 10 plugins.
-    // Total = home + 10 plugins + history + about = 13.
+    // F8 removed in M5 #18 → 9 plugins.
+    // Total = home + 9 plugins + history + about = 12.
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(13);
+    expect(ALL_VIEWS.length).toBe(12);
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -108,7 +109,7 @@ describe('useViewState', () => {
 
   it('exposes ALL_VIEWS so the sidebar can render the nav list', () => {
     // The sidebar imports this directly to avoid duplicating the
-    // 13-element list. This test pins the contract.
+    // 12-element list. This test pins the contract.
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.allViews).toBe(ALL_VIEWS);
   });
@@ -188,7 +189,7 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 10 plugin ids from the registry', () => {
+  it('ALL_VIEWS contains exactly the 9 plugin ids from the registry', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // This is checked dynamically (not hardcoded) so adding a new
@@ -200,7 +201,6 @@ describe('useViewState', () => {
       'json-editor',
       'mcp-management',
       'usage-query',
-      'single-file-deploy',
       'resource-browser',
       'marketplace',
       'optimizer',
