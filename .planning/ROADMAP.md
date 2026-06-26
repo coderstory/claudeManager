@@ -524,14 +524,14 @@ Plans:
 **Requirements**: BUG-BZ-01 (SQL 过滤无效行) / BUG-BZ-02 (JSON 全屏编辑) / BUG-BZ-03 (JSON 目录树) / BUG-BZ-04 (MCP 文案) / BUG-BZ-05 (用量 7 天) / BUG-BZ-06 (资源市场 browse URL) / BUG-BZ-07 (CliNotFound 本地化) / BUG-BZ-08~13 (留空待用户实测补)
 **Depends on:** Phase 27
 **Status**: 🚧 In Progress
-**Plans:** 1 plan (估时 3-4 天,沿用 M5-PLAN §5 模式;BUG-BZ-08~13 留空待 v3.2.1)
+**Plans:** 2 plans (28-01 7 真修 + 28-02 stub 0 代码改动;BUG-BZ-08~13 留空待 v3.2.1)
 **Verification:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/28-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS
 **Archive:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/`
 
 Plans:
 
-- [ ] 28-01-PLAN.md — 7 真修 bug fix commits (BUG-BZ-01~07):SQL parser 过滤 invalid rows + dry-run 计数;JSON editor 全屏 mode toggle;JSON 文件树渲染修复;MCP 文案 (恢复 clipboard import 提示);用量趋势 7 天聚合窗口;资源市场 browse URL onClick 修正;CliNotFound 4 类错误本地化 (启动 / git / install / scan)
-- [ ] 28-02-PLAN.md — BUG-BZ-08~13 留空 (v3.2.1 用户实测后补,不阻塞 ship)
+- [ ] 28-01-PLAN.md — 7 真修 bug fix commits (BUG-BZ-01~07):SQL parser 过滤 invalid rows + dry-run 计数;JSON editor 全屏 mode toggle;JSON 文件树渲染修复;MCP 文案 (恢复 clipboard import 提示);用量趋势 7 天聚合窗口;资源市场 browse URL onClick 修正;CliNotFound 4 类错误本地化 (启动 / git / install / scan);5 subagent 并行 (per M5-PLAN §5 pattern: A=fix1 / B=fix2+3 / C=fix4+5 / D=fix6 / E=fix7)
+- [ ] 28-02-PLAN.md — BUG-BZ-08~13 stub plan (0 代码改动;1 docs commit 推到 v3.2.1 backlog)
 
 **Success Criteria** (observable user behaviors):
 
