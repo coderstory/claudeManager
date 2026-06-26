@@ -12,6 +12,7 @@
 - ✅ **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3)** — round 1 (7/7 phase) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 (shipped 2026-06-26, tag v3.0-M4)
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 (shipped 2026-06-26, tag v3.0.1; 33/33 bug 修完, ClaudeManager.app 14M rebuild + 1 窗口 OK, 详见 [v3.0.1-ROADMAP.md](milestones/v3.0.1-ROADMAP.md))
+- 🚧 **v3.2 M6 用户实测反馈修复** — Phases 27-31 (planning 2026-06-26; BUG-CR-01~05 + BUG-BZ-01~13 + BUG-RF-01~09 + UI-A-01~05 + INT-01~06; tag v3.2)
 - ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;原 Phase 19/20/21 标记弃用,不进新 milestone
 
 ## Phases
@@ -398,12 +399,13 @@ Plans:
 
 ## Progress
 
-**Execution Order (v3.0 round 1 已 ship 7 phase + round 2 已 ship + v3.0-M4 已 ship + v3.0.1 M5 已 ship):**
+**Execution Order (v3.0 round 1 已 ship 7 phase + round 2 已 ship + v3.0-M4 已 ship + v3.0.1 M5 已 ship + v3.2 M6 planning):**
 Phase 12 → 13 → 14 → 15 → 16 → 17 ✅ (round 1)
 Phase 18 ✅ (round 2: Playwright e2e 6/6 PASS) → 21 ✅ (Phase 21 SQLite history)
 Phase 22 ✅ (v3.0-M4: e2e framework 14/14 PASS, tag v3.0-M4)
 Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
-~~Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项~~ ❌ **2026-06-26 用户拍板废弃**;project 当前停在 v3.0.1
+~~Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项~~ ❌ **2026-06-26 用户拍板废弃**
+Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 → 重构 9 → A 类 5+整合; tag v3.2)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -433,7 +435,11 @@ Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
 | 24. M5 业务 13 bug 修复 | v3.0.1 | 2 commits | Complete | 2026-06-26 |
 | 25. M5 重构 9 bug (#18 真修) | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 | 26. M5 A 类 5 + 整合验证 + tag v3.0.1 | v3.0.1 | 1 commit | Complete | 2026-06-26 |
-</content>
+| 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 0/1 | In Progress | - |
+| 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 0/1 | In Progress | - |
+| 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 0/1 | In Progress | - |
+| 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 0/1 | In Progress | - |
+| 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 0/1 | In Progress | - |
 </invoke>
 
 ### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27)
@@ -475,3 +481,132 @@ Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
 **Plans:** 1 plan (M5-PLAN §7) — 整合 subagent fix: `d4e4e40` (3 TS errors) + .app 14M rebuild + 启动 1 窗口 OK + tag v3.0.1
 **Verification:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/26-VERIFICATION.md` (status: passed) + `v3.0.1-MILESTONE-AUDIT.md` (status: passed)
 **Archive:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/`
+
+### 🚧 v3.2 M6 用户实测反馈修复 (In Progress)
+
+**Milestone Goal**: v3.0.1 M5 修了 33 bug 后用户重新实测 ClaudeManager.app,根据新发现 bug 清单按 critical 优先原则 4 阶段修 (BUG-CR-01~05 → BUG-BZ-01~13 → BUG-RF-01~09 → UI-A-01~05+INT-01~06),ship gate = test-all 6 阶段 PASS + M4 e2e 15/15 + ClaudeManager.app rebuild OK + tag v3.2。
+
+> **沿用 v3.0.1 M5 工程模式**: 4 阶段 (critical → 业务 → 重构 → A 类+整合) + 1 commit 1 fix (or subagent fix) + test-all 6 阶段 ship gate + tag v3.2。
+>
+> **排除**: v3.0 round 3 废弃 backlog (云备份 / updater UI / M4.6 长尾) 不进 v3.2;D6 Mac 真机验证不启动;BUG-BZ-08~13 留空待用户实测后补 (v3.2.1 follow-up)。
+
+### Phase 27: v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05)
+
+**Goal:** 修 5 个 critical bug (阻塞主流程) — F2 switch UI / F13 backup / sqlite read settings / F18 finding 过期 + 1 个综合;5 个原子 fix commit (或 subagent fix);每个 fix 加对应 vitest + 集成测试;test-all 6 阶段在 fix 后立即验证。
+**Requirements**: BUG-CR-01 (P0 切换 provider atomic) / BUG-CR-02 (P0 F13 备份可恢复) / BUG-CR-03 (P0 sqlite read settings 缺表) / BUG-CR-04 (P0 F2 switch UI round-trip) / BUG-CR-05 (P0 F18 finding 过期)
+**Depends on:** Phase 26 (v3.0.1 M5)
+**Status**: 🚧 In Progress
+**Plans:** 1 plan (估时 2-3 天,5 fix commits,沿用 M5-PLAN §4 模式)
+**Verification:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/27-VERIFICATION.md` (status: passed 后) + test-all.sh 6 stages PASS
+**Archive:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/`
+
+Plans:
+
+- [ ] 27-01-PLAN.md — 5 critical fix commits (每个 bug 一个原子 commit,含 TDD test + fix + verify);F2 switch 原子链 → backup → write → reload Claude 完整链路回归;sqlite migration 补缺表 + 解析错容错;F18 finding timestamp 过期检测 + 重新扫描触发器
+
+**Success Criteria** (observable user behaviors):
+
+  1. 用户点击 provider 切换 → 在 5s 内完成 backup → write → reload Claude,无红框 / 错误 toast / 进程崩溃
+  2. 用户创建 F13 备份 → 备份文件可在 F19 恢复页选中并恢复,settings.json 内容字节级一致
+  3. 用户启动应用 → sqlite 读取 settings.json 不报缺表错误;即使 settings.json 缺失或格式坏,返回 `Settings::empty()` 而不是 panic
+  4. 用户在 F2 switch UI 选择 provider → 切回 active provider 后,`is_active` 状态正确反映实际 settings.json (不是 in-memory stale)
+  5. 用户在 F18 优化页点击"重新扫描" → 所有 finding 重新生成,过期 finding 移除,Fix 按钮按 finding 列表中实际存在项渲染
+
+### Phase 28: v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13)
+
+**Goal:** 修 13 业务 bug (单功能,不影响主流程) — SQL 过滤 / JSON 全屏 / JSON 目录树 / MCP 文案 / 用量 7 天 / 资源市场 URL / CliNotFound + 6 个留空 (用户实测后补);每个 fix 加 vitest;5 subagent 实施 + 8 原 commit 验证。
+**Requirements**: BUG-BZ-01 (SQL 过滤无效行) / BUG-BZ-02 (JSON 全屏编辑) / BUG-BZ-03 (JSON 目录树) / BUG-BZ-04 (MCP 文案) / BUG-BZ-05 (用量 7 天) / BUG-BZ-06 (资源市场 browse URL) / BUG-BZ-07 (CliNotFound 本地化) / BUG-BZ-08~13 (留空待用户实测补)
+**Depends on:** Phase 27
+**Status**: 🚧 In Progress
+**Plans:** 1 plan (估时 3-4 天,沿用 M5-PLAN §5 模式;BUG-BZ-08~13 留空待 v3.2.1)
+**Verification:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/28-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS
+**Archive:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/`
+
+Plans:
+
+- [ ] 28-01-PLAN.md — 7 真修 bug fix commits (BUG-BZ-01~07):SQL parser 过滤 invalid rows + dry-run 计数;JSON editor 全屏 mode toggle;JSON 文件树渲染修复;MCP 文案 (恢复 clipboard import 提示);用量趋势 7 天聚合窗口;资源市场 browse URL onClick 修正;CliNotFound 4 类错误本地化 (启动 / git / install / scan)
+- [ ] 28-02-PLAN.md — BUG-BZ-08~13 留空 (v3.2.1 用户实测后补,不阻塞 ship)
+
+**Success Criteria** (observable user behaviors):
+
+  1. 用户导入 .sql 文件 → 列表只显示 valid rows,invalid 行被过滤并在 dry-run 预览中显示 skip count
+  2. 用户在 JSON 编辑器点击全屏按钮 → 编辑器撑满 app 窗口,ESC 退出全屏
+  3. 用户在 JSON 编辑器展开侧边文件树 → 渲染 `~/.claude/` 用户级 + active_root 项目级 JSON 文件,递归深度 ≤5,白名单 root
+  4. 用户在 MCP 管理页看到正确文案 (粘贴 ccswitch:// 自动解析填表提示,而非旧版"导入 JSON")
+  5. 用户在用量查询页选 7 天窗口 → sparkline 显示 7 个数据点,聚合 daily 而非 weekly
+  6. 用户在资源市场点击"浏览"按钮 → 跳转 GitHub 仓库正确 URL (不报 404 / 不是 cc-switch-main 旧路径)
+  7. 用户在资源市场执行 install 命令,git clone 失败 → ErrorBanner 显示本地化提示 "无法启动 git 命令行工具,请安装 Xcode CLT (macOS) 或 Git for Windows"
+  8. 用户启动应用,F17 marketplace 找不到 git → ErrorBanner 显示本地化提示,而不是英文 "CliNotFound"
+
+### Phase 29: v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09)
+
+**Goal:** 修 9 重构类 bug — 欢迎页弹窗 / 单文件部署 4 处同步 / 第三方仓库 / 手动处理 / 手动出 JSON / 备份分页+多选 / 备份不删 / 历史分页 / JSON 搜 settings;9 个 vitest;33+ bug 全手测。
+**Requirements**: BUG-RF-01 (欢迎页弹窗逻辑) / BUG-RF-02 (单文件部署已删,M6 需保持) / BUG-RF-03 (第三方仓库文案) / BUG-RF-04 (手动处理 checkbox) / BUG-RF-05 (手动出 JSON 编辑入口) / BUG-RF-06 (备份分页+多选) / BUG-RF-07 (备份文件不误删) / BUG-RF-08 (历史分页) / BUG-RF-09 (JSON 搜 settings 路径)
+**Depends on:** Phase 28
+**Status**: 🚧 In Progress
+**Plans:** 1 plan (估时 2-3 天,沿用 M5-PLAN §6 模式;含 #18 删单文件部署 M6 regression check)
+**Verification:** `milestones/v3.2-phases/29-v32-m6-refactor-9-bug-*/29-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS + 全 33+13+9 = 55 bug 手测
+**Archive:** `milestones/v3.2-phases/29-v32-m6-refactor-9-bug-*/`
+
+Plans:
+
+- [ ] 29-01-PLAN.md — 9 重构 bug fix:欢迎页 onMount 弹窗时序修正 (等 sqlite ready 后再弹);M5 #18 单文件部署删除回归测试 (确保 M6 期间不被误加回);F17 第三方仓库 tab 文案 (保留 + 改写警告语);手动处理 checkbox 半选状态正确渲染;手动出 JSON 编辑入口按钮跳转 `/json-editor` 正确路由;F13 备份页分页 (20/page) + 多选 + 批量删除;BackupService::delete 加 trash + 二次确认 (避免误删);history page 分页 (从全量 list 改 cursor-based);F5 JSON 搜 settings 路径解析 (`~/.claude/settings.json` 而非 `~/.claude/`)
+
+**Success Criteria** (observable user behaviors):
+
+  1. 用户首次启动应用 → 欢迎页弹窗在 sqlite ready 之后弹出,不在 loading 阶段误弹
+  2. 用户搜索 sidebar 入口 → "单文件部署" 不在路由列表中 (M5 #18 删除保持,不被新 commit 加回)
+  3. 用户访问资源市场 → 看到第三方仓库 tab + 警告语 "第三方仓库未经 Claude 官方审核,请自行甄别"
+  4. 用户在 F13 备份页勾选"全选当前页" → checkbox 三态 (none / partial / all) 正确显示,部分选中时显示横线
+  5. 用户在 F13 备份页点击"导出 JSON 编辑" → 跳转 `/json-editor` 并预填选中备份内容
+  6. 用户在 F13 备份页看到分页 (20/page) + 翻页按钮 + 多选 checkbox column
+  7. 用户点击备份删除 → 二次确认 modal "确定删除 N 个备份?此操作不可撤销" + 删除走 trash (可恢复 30 天)
+  8. 用户访问 history page → 看到 cursor-based 分页,滚动加载更多,不一次性加载全表
+  9. 用户在 JSON 编辑器搜 "settings" → 文件树展开并定位到 `settings.json` (不是文件夹)
+
+### Phase 30: v3.2 M6 A 类 5 bug 修复 (UI-A-01~05)
+
+**Goal:** 修 5 个 UI/UX polish bug — 二次元主题 header / Default Model 字段 / formatChineseTokenCount / 资源市场"重新扫描"按钮 / 关于页项目主页;5 个 vitest;视觉一致性回归 (h1/padding/fontSize 与 baseline 对齐)。
+**Requirements**: UI-A-01 (二次元主题 header 排版) / UI-A-02 (Default Model 字段显示) / UI-A-03 (formatChineseTokenCount 函数) / UI-A-04 (资源市场"重新扫描"按钮位置) / UI-A-05 (关于页项目主页 URL)
+**Depends on:** Phase 29
+**Status**: 🚧 In Progress
+**Plans:** 1 plan (估时 1-2 天,沿用 M5-PLAN §7 模式;5 fix commits 或 subagent fix)
+**Verification:** `milestones/v3.2-phases/30-v32-m6-a-5-bug-*/30-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS + 视觉回归 (h1=18px / padding=24px / max-width=896px 与 baseline 对齐)
+**Archive:** `milestones/v3.2-phases/30-v32-m6-a-5-bug-*/`
+
+Plans:
+
+- [ ] 30-01-PLAN.md — 5 A 类 fix:二次元主题 header logo 居中 + spacing 调整 (与瓷白/暗色主题对齐);provider 编辑 form 显示 Default Model 字段 (从 settings.json `model` 字段);formatChineseTokenCount 函数 bug 修复 (中文单位"万"正确换算,不报 NaN);F17 资源市场"重新扫描"按钮移到 tab 右上角 (而不是底部);关于页项目主页 URL 改成新 identifier URL (CLAUDE.md §6.5 显示名 vs 系统标识分层规则)
+
+**Success Criteria** (observable user behaviors):
+
+  1. 用户切换到二次元主题 → header logo 居中,搜索 / 主题切换 / 最小化 按钮位置与瓷白/暗色主题完全一致
+  2. 用户在 provider 编辑 form 看到 "Default Model" 输入框,值从 settings.json `model` 字段读取
+  3. 用户在用量查询页看到中文 token 数 (例如 "1.2万" / "23.5万" 而不是 "NaN" / "12345")
+  4. 用户在资源市场页面看到 "重新扫描" 按钮在 tab 右上角 (而非底部 footer)
+  5. 用户在关于页看到项目主页 URL 显示正确,且不是空白或旧 cc-switch-main 链接
+
+### Phase 31: v3.2 M6 整合验证 (INT-01~06) + tag v3.2
+
+**Goal:** v3.2 ship gate — test-all 6 阶段 PASS + M4 e2e 15/15 回归 (14 hard-fail + 1 stub) + vitest 全 PASS (含 v3.2 新增测试) + ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK + STATE.md 写 M6 完成段 + tag v3.2。
+**Requirements**: INT-01 (test-all 6 stages) / INT-02 (M4 e2e 15/15) / INT-03 (vitest 全 PASS) / INT-04 (ClaudeManager.app rebuild OK) / INT-05 (STATE.md M6 段) / INT-06 (tag v3.2)
+**Depends on:** Phase 30
+**Status**: 🚧 In Progress
+**Plans:** 1 plan (估时 1-2 天,沿用 v3.0.1 Phase 26 整合模式)
+**Verification:** `milestones/v3.2-phases/31-v32-m6-integrate-*/31-VERIFICATION.md` (status: passed) + `v3.2-MILESTONE-AUDIT.md` (status: passed) + `git tag v3.2` 成功
+**Archive:** `milestones/v3.2-phases/31-v32-m6-integrate-*/`
+
+Plans:
+
+- [ ] 31-01-PLAN.md — 整合验证 subagent:跑 scripts/test-all.sh 6 阶段 (ui-check / frontend / rust / e2e / smoke / m4-e2e) 全 PASS;vitest 全 PASS (550+ 含 v3.2 新增);ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK;M4 e2e 15/15 (14 hard-fail + 1 stub) 回归;STATE.md 写 "M6 完成" 段;`git tag v3.2` + push tag
+
+**Success Criteria** (observable user behaviors):
+
+  1. scripts/test-all.sh 6 阶段输出全 PASS (ui-check 0 error / frontend vitest 全过 / rust cargo test 全过 / e2e 6/6 / smoke 10/10 / m4-e2e 15/15)
+  2. `vitest run` 输出全部 PASS (含 v3.2 新增 ~50 测试,合计 600+)
+  3. M4 e2e 15/15 场景回归 (启动 app → 切 provider → 备份 → 恢复 → sqlite 读 settings → F18 扫描 → 资源市场 browse → MCP toggle → 用量查询 → 备份分页 → history 分页 → JSON 搜 settings → 主题切换 → 关于页 URL → splash 2s → kill app 干净)
+  4. ClaudeManager.app 重新 build (`scripts/build-and-ship.sh`) + 装到 `~/Applications/` + 双击启动 → 看到主窗口,标题"Claude 配置管理器",WebView2 子窗口 1 个,tray icon 显示
+  5. STATE.md 顶部 Current Position 段写 "M6 完成 (2026-06-26)" + Recent Work 加 Phase 27-31 各行 + Decisions 加 D17 (v3.2 拍板) + Known Issues 加 v3.2 已知限制
+  6. `git tag -l v3.2` 输出 `v3.2` + `git push origin v3.2` 成功
+
+---

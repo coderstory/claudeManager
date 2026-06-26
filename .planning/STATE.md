@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: M6 用户实测反馈修复
 status: planning
-last_updated: "2026-06-26T06:51:42.190Z"
+last_updated: "2026-06-26T07:05:00.000Z"
 last_activity: 2026-06-26
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -62,14 +62,21 @@ progress:
   M4 + M5 规划完成, 等用户拍 8 开放问题进 Phase 1。
 -->
 
-# Claude 配置管理器 — STATE.md (v3.0 收尾 + M4/M5 规划)
+# Claude 配置管理器 — STATE.md (v3.0 收尾 + M4/M5 完成 + M6 v3.2 规划)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-26 — Milestone v3.2 started
+Phase: 27 (v3.2 M6 critical 5 bug 修复) — planning complete, execution not started
+Plan: 27-01-PLAN.md (待派)
+Status: Roadmap complete (Phases 27-31 planned); awaiting execution
+Last activity: 2026-06-26 — Milestone v3.2 ROADMAP + REQUIREMENTS + STATE sync
+
+**v3.2 plan summary** (ROADMAP.md Phase 27-31):
+- Phase 27: critical 5 bug 修复 (BUG-CR-01~05)
+- Phase 28: 业务 13 bug 修复 (BUG-BZ-01~07 真修 + BUG-BZ-08~13 留空待 v3.2.1)
+- Phase 29: 重构 9 bug 修复 (BUG-RF-01~09)
+- Phase 30: A 类 5 bug 修复 (UI-A-01~05)
+- Phase 31: 整合验证 (INT-01~06) + tag v3.2 (test-all 6 + M4 e2e 15/15 + ClaudeManager.app rebuild)
 
 ## Recent Work
 
@@ -92,6 +99,7 @@ Last activity: 2026-06-26 — Milestone v3.2 started
 - D14 (2026-06-22): M3.8 用量查询走 cc-switch-main JSONL 读法 (D 选, 5 天估时)
 - D15 (2026-06-22, v3.0 round 1): B3#10 Tailwind 选 B 移除（commit `ed5a3e5`）
 - D16 (2026-06-22, v3.0 round 1): v3.0 milestone goal = "功能完善 + updater 基础 + 备份增强"（公证发布主线因 M4.1 取消暂缓；Mac 验证 D6 仍待决）
+- **D17 (2026-06-26, v3.2 M6 启动)**: v3.2 milestone = "M6 用户实测反馈修复",Phase 27-31 沿用 v3.0.1 M5 工程模式 (critical 5 → 业务 13 → 重构 9 → A 类 5+整合)。排除 v3.0 round 3 废弃 backlog (云备份 / updater UI / M4.6 长尾)。排除 D6 Mac 真机验证。BUG-BZ-08~13 留空待用户实测补 (v3.2.1 follow-up)。tag v3.2。
 
 ## Known Issues (Remaining, post-v2.0 + v3.0 round 1)
 

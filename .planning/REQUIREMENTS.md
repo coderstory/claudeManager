@@ -97,14 +97,44 @@ shipped: pending
 
 ## Traceability (filled by roadmap)
 
-| REQ-ID | Phase |
-|--------|-------|
-| BUG-CR-01 ~ 05 | Phase 27 (critical 5) |
-| BUG-BZ-01 ~ 13 | Phase 28 (业务 13) |
-| BUG-RF-01 ~ 09 | Phase 29 (重构 9) |
-| UI-A-01 ~ 05 | Phase 30 (A 类 5) |
-| INT-01 ~ 06 | Phase 31 (整合验证) |
+| REQ-ID | Phase | Notes |
+|--------|-------|-------|
+| BUG-CR-01 | Phase 27 | 用户切换 provider (atomic backup → write → reload Claude) 不报错 |
+| BUG-CR-02 | Phase 27 | F13 备份可恢复 |
+| BUG-CR-03 | Phase 27 | sqlite 读 settings.json 无缺表报错 |
+| BUG-CR-04 | Phase 27 | F2 switch UI round-trip 无错 |
+| BUG-CR-05 | Phase 27 | F18 finding 过期处理 |
+| BUG-BZ-01 | Phase 28 | SQL 导入过滤无效行 |
+| BUG-BZ-02 | Phase 28 | JSON 全屏编辑 |
+| BUG-BZ-03 | Phase 28 | JSON 目录树渲染 |
+| BUG-BZ-04 | Phase 28 | MCP 文案 |
+| BUG-BZ-05 | Phase 28 | 用量趋势 7 天 |
+| BUG-BZ-06 | Phase 28 | 资源市场 browse URL |
+| BUG-BZ-07 | Phase 28 | CliNotFound 本地化 |
+| BUG-BZ-08 ~ 13 | Phase 28 | 留空待用户实测补 (v3.2.1 follow-up) |
+| BUG-RF-01 | Phase 29 | 欢迎页弹窗逻辑 |
+| BUG-RF-02 | Phase 29 | 单文件部署删除保持 (M5 #18 regression) |
+| BUG-RF-03 | Phase 29 | 第三方仓库文案 |
+| BUG-RF-04 | Phase 29 | 手动处理 checkbox |
+| BUG-RF-05 | Phase 29 | 手动出 JSON 编辑入口 |
+| BUG-RF-06 | Phase 29 | 备份分页 + 多选 |
+| BUG-RF-07 | Phase 29 | 备份文件不误删 |
+| BUG-RF-08 | Phase 29 | 历史分页 |
+| BUG-RF-09 | Phase 29 | JSON 搜 settings 路径 |
+| UI-A-01 | Phase 30 | 二次元主题 header 排版 |
+| UI-A-02 | Phase 30 | Default Model 字段显示 |
+| UI-A-03 | Phase 30 | formatChineseTokenCount 函数 |
+| UI-A-04 | Phase 30 | 资源市场"重新扫描"按钮位置 |
+| UI-A-05 | Phase 30 | 关于页项目主页 URL |
+| INT-01 | Phase 31 | test-all 6 阶段全 PASS |
+| INT-02 | Phase 31 | M4 e2e 15/15 回归 |
+| INT-03 | Phase 31 | vitest 全 PASS (含 v3.2 新增) |
+| INT-04 | Phase 31 | ClaudeManager.app rebuild + 启动 OK |
+| INT-05 | Phase 31 | STATE.md M6 段 |
+| INT-06 | Phase 31 | tag v3.2 |
+
+**Coverage check**: 100% (38 active requirements → 5 phases 27-31,每 phase 5-13 req,无 orphan phase,无 orphan requirement)。
 
 ---
 
-*Last updated: 2026-06-26 (v3.2 M6 requirements draft)*
+*Last updated: 2026-06-26 (v3.2 M6 roadmap filled traceability + Phase 27-31 mapped)*
