@@ -168,6 +168,11 @@ pub enum MarketplaceError {
     /// git CLI 失败(网络 / 认证 / 无效 URL)。
     #[error("git error: {0}")]
     Git(String),
+    /// M5 user bug #23 + #24 — `claude` / `npx` CLI 不在 PATH 时
+    /// spawn 失败,不能错位包成 git error。专门 variant 让前端
+    /// 能区分 "git 出问题" vs "CLI 工具没装"。
+    #[error("无法启动 '{cmd}' CLI (请确认已安装)")]
+    CliNotFound { cmd: String },
     /// resource_id 解析失败或扫描后找不到匹配资源。
     #[error("invalid resource id: {0}")]
     InvalidResourceId(String),
@@ -530,14 +535,13 @@ impl MarketplaceService {
             )));
         }
         // 调 `claude plugin install <target>` CLI。
-        // 失败 (CLI 不在 PATH / exit != 0) → 包成 Git error 返回。
+        // 失败 (CLI 不在 PATH / exit != 0) → 包成 CliNotFound 返回。
+        // M5 user bug #24: 之前错位包成 Git error,误导用户。
         let out = std::process::Command::new("claude")
             .args(["plugin", "install", &repo.install_target])
             .output()
-            .map_err(|e| {
-                MarketplaceError::Git(format!(
-                    "无法启动 'claude' CLI (请确认 Claude Code 已安装): {e}"
-                ))
+            .map_err(|_e| MarketplaceError::CliNotFound {
+                cmd: "claude".to_string(),
             })?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
@@ -641,14 +645,13 @@ impl MarketplaceService {
                 "npx package 名不能为空".into(),
             ));
         }
-        // npx 不在 PATH → spawn 失败 → 包成 Git error。
+        // npx 不在 PATH → spawn 失败 → 包成 CliNotFound。
+        // M5 user bug #23: 之前错位包成 Git error,误导用户。
         let out = std::process::Command::new("npx")
             .args([pkg, "--global", "--silent"])
             .output()
-            .map_err(|e| {
-                MarketplaceError::Git(format!(
-                    "无法启动 'npx' (请确认 Node.js + npm 已安装): {e}"
-                ))
+            .map_err(|_e| MarketplaceError::CliNotFound {
+                cmd: "npx".to_string(),
             })?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
@@ -1252,38 +1255,87 @@ mod tests {
     /// M3.4: install_builtin 调用真实 `claude` CLI 时, 没装 Claude Code
     /// 的 dev box 上应返回 Git error (不是 panic)。
     ///
-    /// **不**依赖 dev box 是否有 `claude` 命令 — 用 PATH 临时指向不存在的
-    /// 目录确保 spawn 失败,验证错误路径走通。
+    /// M5 user bug #24 — install_builtin 在 `claude` CLI 不在 PATH 时应返回
+    /// 专门的 `CliNotFound` variant 而不是 `Git`,错误信息应明确指向
+    /// `claude` 而不是 git。
+    ///
+    /// 不依赖 dev box 是否有 `claude` 命令 — 直接调,大多数 CI / dev box
+    /// 没装 `claude`,所以预期返回 `CliNotFound`。
     #[test]
-    fn install_builtin_returns_error_when_claude_cli_missing() {
-        // 临时把 PATH 清空,确保 `claude` 不可 spawn。
-        // 用 scoped env var 避免污染其他并行测试。
+    fn install_builtin_returns_clinotfound_when_claude_missing() {
         let tmp = TempDir::new().unwrap();
         let svc = make_service(
             tmp.path().join("mk"),
             tmp.path().join("claude"),
             tmp.path().join("fake"),
         );
-        // 不动全局 PATH (其他测试可能依赖), 直接调 — 大多数 CI / dev box
-        // 没装 `claude`,所以这里预期返回 Git error。如果机器恰好有
-        // `claude` CLI (罕见), 这条测试会被 skip 标记 (下面 assert 注释)。
         let result = svc.install_builtin("superpowers");
-        // 不管成功 / 失败, 都不应该 panic。
-        // 大多数情况: 没有 `claude` CLI → Git error。
         match result {
             Ok(installed) => {
                 // 机器真有 `claude` CLI 且 install 成功了 — 这是 OK 的,
                 // 不算测试失败 (CI 通常没装)。
                 assert!(installed.installed);
             }
-            Err(MarketplaceError::Git(msg)) => {
-                // 预期路径 — 错误信息应提示 "claude" 或 "CLI"。
-                assert!(
-                    msg.contains("claude") || msg.contains("CLI") || msg.contains("failed"),
-                    "错误消息应含 'claude' / 'CLI': {msg}"
+            Err(MarketplaceError::CliNotFound { cmd }) => {
+                // M5 bug #24: 应明确指出是 `claude` CLI 找不到,不是 git。
+                assert_eq!(
+                    cmd, "claude",
+                    "CliNotFound.cmd 应等于 'claude' (实际: {cmd})"
                 );
             }
-            Err(other) => panic!("unexpected error variant: {other:?}"),
+            Err(other) => panic!(
+                "expected CliNotFound {{ cmd: 'claude' }}, got {other:?}"
+            ),
+        }
+    }
+
+    /// M5 user bug #23 — install_npx 在 `npx` 不在 PATH 时应返回
+    /// 专门的 `CliNotFound` variant,而不是错位包成 `Git`。
+    ///
+    /// 用户报告的具体错位措辞是:
+    ///   "git error: 无法启动 'npx' (请确认 Node.js + npm 已安装):
+    ///    No such file or directory (os error 2)"
+    ///
+    /// dev box 可能装了 npx (此时本测试命中 exit-nonzero 路径而非 spawn
+    /// 路径),所以这里改用 "错位措辞消失" 而非 "必须是 CliNotFound" 断言:
+    /// 关键点是 Git variant 的 message 不能再含 "无法启动" + "npx"。
+    /// 真没装 npx 的 dev box 会落到 CliNotFound 分支,装了的会落到
+    /// exit-nonzero 分支(Git 包 stderr,但 stderr 是真实 npm 输出,
+    /// 不是 spawn 失败措辞)。
+    #[test]
+    fn install_npx_returns_clinotfound_when_npx_missing() {
+        let tmp = TempDir::new().unwrap();
+        let svc = make_service(
+            tmp.path().join("mk"),
+            tmp.path().join("claude"),
+            tmp.path().join("fake"),
+        );
+        let result = svc.install_npx("@opengsd/__definitely_not_a_real_pkg__@latest");
+        match result {
+            Ok(installed) => {
+                // 机器有 `npx` 且 install 成功了 — 不算失败。
+                assert!(installed.installed);
+            }
+            Err(MarketplaceError::CliNotFound { cmd }) => {
+                // M5 bug #23 路径: 真没 npx → CliNotFound { cmd: "npx" }。
+                assert_eq!(
+                    cmd, "npx",
+                    "CliNotFound.cmd 应等于 'npx' (实际: {cmd})"
+                );
+            }
+            Err(MarketplaceError::Git(msg)) => {
+                // 机器装了 npx 但 pkg 不存在 → exit nonzero,走 Git 分支
+                // (包真实 npm stderr)。这种情况 OK,只要 message 不含
+                // M5 bug #23 的"spawn 失败错位为 git"措辞。
+                assert!(
+                    !msg.contains("无法启动"),
+                    "M5 bug #23: Git variant 不应再含 '无法启动' \
+                     (spawn 失败错位文案),got: {msg}"
+                );
+            }
+            Err(other) => {
+                panic!("unexpected error variant: {other:?}");
+            }
         }
     }
 
