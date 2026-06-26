@@ -45,6 +45,7 @@ import {
   ALL_VIEWS,
   type ViewId,
 } from '../hooks/useViewState';
+import { SidebarProjectSwitcher } from './SidebarProjectSwitcher';
 
 /** Map each ViewId → lucide icon component + Chinese subtitle. */
 const VIEW_META: Record<
@@ -132,6 +133,13 @@ export function AppSidebar({
         backdropFilter: 'blur(var(--blur-md)) saturate(160%)',
       } as React.CSSProperties}
     >
+      {/* Phase 11 SC #7 — Sidebar top project switcher.
+          Shows the active project name + a dropdown to switch to
+          another project. Reuses useProjects() so state stays in
+          sync with HomeView (no second fetch path). */}
+      <SidebarProjectSwitcher
+        onSwitchNavigate={() => onNavigate('home')}
+      />
       <ul>
         {ALL_VIEWS.map((view) => {
           const meta = VIEW_META[view];
