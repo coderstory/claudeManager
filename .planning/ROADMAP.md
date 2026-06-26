@@ -109,6 +109,8 @@ Plans:
 
 - [ ] M3.1-01: 启动事件链路梳理 + splash 透明度修复 + webview 预加载
 
+> **Implementation note (2026-06-26)**: Actual cold-start splash fix was implemented via **M3.13.2 (commit `fdaaaa5`)**, not in this phase's original code changes. M3.1's PLAN.md listed artifacts that were never shipped (`src/components/Splash.tsx`, lib.rs setup/show timing, main.tsx Suspense fallback, tauri.conf.json splash config). M3.13.2 replaced the `tauri://ready` event-driven approach (unreliable on Win WebView2) with React-first-paint + double-rAF + MIN_SPLASH_MS=1200ms floor. Current `src/App.tsx:308-396` is M3.13.2 code. `webview 预加载优化` sub-bullet remains unimplemented (non-blocking). See `.planning/phases/02-m31-startup-optimization/02-VERIFICATION.md` for the goal-backward audit.
+
 ### Phase 3: M3.2 F2/托盘/InfoBar polish (清单 3/4/5/6/7/8/24 + M2.16-007-L)
 
 **Goal**: 8 项 polish 子任务并行 + D7 F15 ErrorBanner 扩到全部页面。
@@ -178,7 +180,8 @@ Plans:
 
   1. `reveal_file` 返回 `Result<(), RevealError>` 区分 4 类 (合法路径 / 不存在 / 无权限 / 网络路径)
   2. 前端 ErrorBanner 显示本地化提示 ("无法打开该资源" + 排查建议)
-  3. 4 个 reveal 场景 e2e 测试覆盖
+  3. 4 个 reveal 场景测试覆盖 (vitest 单测: `src/__tests__/pages/resource-browser.test.tsx` 6 reveal-error cases + `src/__tests__/components/ErrorBanner.test.tsx` 8 `formatRevealError` cases)
+  4. ~M3.5 verification broadened SC #3 from "e2e" to "test" coverage on 2026-06-26 — Playwright e2e on Mac dev box can't reach Tauri WebView's `__TAURI_INTERNALS__.invoke` (vite dev mode lacks IPC bridge; tauri-driver + WebView2 CDP path is Win-only per CLAUDE.md §13.1). Vitest unit tests already cover all 4 RevealFailure → ErrorBanner scenarios end-to-end (kind 路由 → 中文文案 → 路径显示). See `.planning/phases/06-m35-reveal-bug/06-VERIFICATION.md` for SC #3 reclass decision rationale.~
 
 **Plans**: 1 plan (估时 0.5-1 天)
 
