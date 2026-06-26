@@ -5,17 +5,24 @@ milestone_name: M4 e2e 框架 + M5 用户报告 33 bug 修复
 current_phase: 02
 current_phase_name: 清单 1 — 冷启动白屏→全透明→loading 闪烁
 status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
-last_updated: "2026-06-25T23:29:23.161Z"
-last_activity: 2026-06-25
-last_activity_desc: Phase 1 complete, transitioned to Phase 02
+last_updated: "2026-06-26T00:00:00.000Z"
+last_activity: 2026-06-26
+last_activity_desc: M4 ship — Phase 4 wired into ship gate, tag v3.0-M4 created
 progress:
   total_phases: 21
-  completed_phases: 12
+  completed_phases: 16
   total_plans: 17
   completed_plans: 18
-  percent: 57
-stopped_at: M4 + M5 规划阶段 — M4-PLAN.md + M5-PLAN.md 都写完,等用户回答 8 开放问题进 Phase 1
+  percent: 76
+stopped_at: M4 ship (2026-06-26) — 14/14 e2e PASS, test-all stage 6 hard-fail wired, tag v3.0-M4
 ---
+
+**M4 ship (2026-06-26)**:
+- Phase 1: CCM_TEST_HOME verified (commit prior, 2 mac tests + 2 windows tests PASS)
+- Phase 2: Driver libs (commit `2c825e1`, 8 files)
+- Phase 3: 14 scenarios (commits `9ebdc39`, `92e9711`, `0b666b6`, `fb0535f`, `278ac17`)
+- Phase 4: test-all.sh stage 6 wired (commit `c6f7765`) + tag `v3.0-M4`
+- Final: 14/14 scenarios PASS, run-all gate enforced
 
 <!--
   v2.0 / v3.0 milestone closure summary (auto-synced 2026-06-25).
