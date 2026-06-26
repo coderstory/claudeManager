@@ -855,3 +855,49 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     expect(btn).toBeDisabled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 28 BZ-06 — marketplace browse button regression (M5 #22 already shipped)
+// ---------------------------------------------------------------------------
+
+describe('MarketplacePage — Phase 28 BZ-06 browse-button regression', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockOpenUrl.mockReset();
+    mockOpenUrl.mockResolvedValue(undefined);
+  });
+
+  it('marketplace_browse_button_calls_openUrl_with_repo_url', async () => {
+    // BZ-06 regression — clicking the Git-mode repo card's clone/browse
+    // button must call openUrl(repo.url) (NOT clone_and_scan), so the
+    // user gets the GitHub page in their default browser.
+    const repoUrl = 'https://github.com/anthropics/claude-cookbooks.git';
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [
+          builtinRepo('claude-cookbooks', 'git', '', { url: repoUrl }),
+        ];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-card-claude-cookbooks'),
+      ).toBeInTheDocument();
+    });
+    // Click the repo's action button (Git mode → "浏览")
+    fireEvent.click(
+      screen.getByTestId('marketplace-repo-clone-claude-cookbooks'),
+    );
+    await waitFor(() => {
+      expect(mockOpenUrl).toHaveBeenCalledWith(repoUrl);
+    });
+    // Should NOT have called clone_and_scan (that path moved to
+    // the custom-URL input section)
+    const cloneCalls = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'clone_and_scan',
+    );
+    expect(cloneCalls.length).toBe(0);
+  });
+});
