@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude 配置管理器 — UI 重设计 Demo (5 主题)</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme-light.css">
+<link rel="stylesheet" href="theme-liquid-glass.css">
+<link rel="stylesheet" href="theme-dark.css">
+<link rel="stylesheet" href="theme-editorial.css">
+<link rel="stylesheet" href="theme-pixel.css">
+</head>
+<body>
+
+<!-- 顶部主题切换器 (macOS 风格: 左侧红黄绿按钮, 中间 app 名, 右侧主题切换) -->
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="window-controls">
+      <button class="wc-btn close" title="关闭" aria-label="close"></button>
+      <button class="wc-btn min" title="最小化" aria-label="minimize"></button>
+      <button class="wc-btn max" title="最大化" aria-label="maximize"></button>
+    </span>
+    <span class="app-name">Claude 配置管理器</span>
+    <span class="app-version">v3.2 · Demo</span>
+  </div>
+  <div class="topbar-center" id="topbarCenter">Claude 配置管理器</div>
+  <nav class="theme-switcher" id="themeSwitcher">
+    <button data-theme="light" class="theme-btn active">极简卡片</button>
+    <button data-theme="liquid-glass" class="theme-btn">液态玻璃</button>
+    <button data-theme="dark" class="theme-btn">深色高级</button>
+    <button data-theme="editorial" class="theme-btn">瑞士网格</button>
+    <button data-theme="pixel" class="theme-btn">像素黑白</button>
+  </nav>
+  <div class="topbar-right">
+    <!-- macOS 顶部右侧留空, 主题切换器居中后这里不再放窗口控制 -->
+  </div>
+</header>
+
+<div class="app-shell">
+
+  <!-- 左侧 Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section-label">主功能</div>
+    <a class="nav-item active" data-page="provider-list">
+      <span class="nav-icon">⌂</span>
+      <span class="nav-text">提供商</span>
+    </a>
+    <a class="nav-item" data-page="mcp">
+      <span class="nav-icon">⌬</span>
+      <span class="nav-text">MCP 管理</span>
+    </a>
+    <a class="nav-item" data-page="usage">
+      <span class="nav-icon">◷</span>
+      <span class="nav-text">用量查询</span>
+    </a>
+    <a class="nav-item" data-page="import">
+      <span class="nav-icon">↓</span>
+      <span class="nav-text">导入配置</span>
+    </a>
+    <div class="sidebar-section-label">资源</div>
+    <a class="nav-item" data-page="resource">
+      <span class="nav-icon">▤</span>
+      <span class="nav-text">资源浏览</span>
+    </a>
+    <a class="nav-item" data-page="marketplace">
+      <span class="nav-icon">◫</span>
+      <span class="nav-text">资源市场</span>
+    </a>
+    <div class="sidebar-section-label">系统</div>
+    <a class="nav-item" data-page="optimizer">
+      <span class="nav-icon">⚙</span>
+      <span class="nav-text">智能优化</span>
+    </a>
+    <a class="nav-item" data-page="backup">
+      <span class="nav-icon">⤓</span>
+      <span class="nav-text">备份恢复</span>
+    </a>
+    <a class="nav-item" data-page="history">
+      <span class="nav-icon">↻</span>
+      <span class="nav-text">历史记录</span>
+    </a>
+    <a class="nav-item" data-page="json-editor">
+      <span class="nav-icon">{ }</span>
+      <span class="nav-text">JSON 编辑</span>
+    </a>
+    <a class="nav-item" data-page="about">
+      <span class="nav-icon">ⓘ</span>
+      <span class="nav-text">关于</span>
+    </a>
+  </aside>
+
+  <!-- 主内容区 — 12 页切换 -->
+  <main class="main" id="main">
+    <!-- 由 JS 渲染 -->
+  </main>
+</div>
+
+<!-- 弹窗容器 -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-icon" id="modalIcon">?</div>
+      <div class="modal-title" id="modalTitle">标题</div>
+    </div>
+    <div class="modal-body" id="modalBody">内容</div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" id="modalConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 底部状态栏 -->
+<footer class="statusbar">
+  <span class="status-left">
+    <span class="status-dot active"></span>
+    当前: <strong id="activeProvider">GLM-4.6</strong>
+    · 配置文件: <code>~/.claude/settings.json</code>
+  </span>
+  <span class="status-right" id="themeStatus">主题: 极简卡片 (light)</span>
+</footer>
+
+<!-- 弹窗入口浮窗 -->
+<div class="modal-launcher" id="modalLauncher">
+  <div class="modal-launcher-label">弹窗演示 ▾</div>
+  <div class="modal-launcher-list">
+    <button data-modal="confirm">确认对话框</button>
+    <button data-modal="delete">删除确认</button>
+    <button data-modal="quick-search">快速搜索</button>
+    <button data-modal="new-provider">新建 Provider</button>
+    <button data-modal="import-preview">导入预览</button>
+    <button data-modal="error">错误提示</button>
+    <button data-modal="about-modal">关于</button>
+    <button data-modal="theme-picker">主题选择器</button>
+  </div>
+</div>
+
+<script src="pages.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

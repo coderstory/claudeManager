@@ -1,0 +1,53 @@
+/* light.css — 极简卡片 (Linear/Vercel 风) */
+:root, [data-theme="light"] {
+  /* Backgrounds */
+  --bg-primary: #FAFAF7;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(0,0,0,0.04);
+  --bg-sunken: #F4F4F5;
+
+  /* Text */
+  --text-primary: #1F2328;
+  --text-secondary: #656D76;
+  --text-muted: #8B949E;
+
+  /* Brand */
+  --accent: #0969DA;
+  --accent-soft: #DDF4FF;
+  --accent-strong: #0860C7;
+  --accent-fg-on: #FFFFFF;
+
+  /* Status */
+  --success: #388E3C;
+  --warning: #F57C00;
+  --danger: #D32F2F;
+  --info: #0969DA;
+
+  /* Border / Shadow */
+  --border: #E1E4E8;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.12);
+
+  /* Radius */
+  --card-radius: 8px;
+  --button-radius: 6px;
+  --radius-modal: 12px;
+  --radius-badge: 3px;
+
+  /* Typography */
+  --font-ui: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --fs-heading: 18px;
+  --fs-body: 14px;
+
+  /* Layout */
+  --header-height: 48px;
+  --sidebar-width: 220px;
+
+  /* Motion */
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 280ms;
+}

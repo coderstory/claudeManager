@@ -1,0 +1,78 @@
+/* editorial.css — 瑞士网格 (Editorial 风) */
+[data-theme="editorial"] {
+  --bg-primary: #FAFAF9;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: #F5F5F4;
+  --bg-sunken: #F5F5F4;
+
+  --text-primary: #000000;
+  --text-secondary: #52525B;
+  --text-muted: #A1A1AA;
+
+  --accent: #000000;
+  --accent-soft: #F5F5F4;
+  --accent-strong: #000000;
+  --accent-fg-on: #FFFFFF;
+
+  --success: #15803D;
+  --warning: #B45309;
+  --danger: #B91C1C;
+  --info: #1E40AF;
+
+  --border: #000000;
+  --shadow-sm: 2px 2px 0 #000000;
+  --shadow-md: 4px 4px 0 #000000;
+  --shadow-lg: 6px 6px 0 #000000;
+
+  --card-radius: 0px;
+  --button-radius: 0px;
+  --radius-modal: 0px;
+  --radius-badge: 0px;
+
+  --font-ui: "Inter", "Helvetica Neue", "Arial", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --fs-heading: 28px;
+  --fs-body: 13px;
+
+  --header-height: 56px;
+  --sidebar-width: 240px;
+
+  --ease-default: steps(1, end);
+  --duration-fast: 0ms;
+  --duration-normal: 0ms;
+  --duration-slow: 0ms;
+}
+
+/* Editorial 特色: 2px 黑色边框, 硬阴影, 0 圆角, 0 过渡 */
+[data-theme="editorial"] * { transition: none !important; animation-duration: 0.01ms !important; }
+[data-theme="editorial"] .card, [data-theme="editorial"] .list-row, [data-theme="editorial"] .modal,
+[data-theme="editorial"] .kpi, [data-theme="editorial"] .modal-launcher, [data-theme="editorial"] .input,
+[data-theme="editorial"] .btn { border-width: 2px; border-radius: 0; }
+[data-theme="editorial"] .btn-primary { background: #000; color: #fff; border: 2px solid #000; }
+[data-theme="editorial"] .btn-primary:hover { background: #fff; color: #000; }
+[data-theme="editorial"] .btn-primary:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+[data-theme="editorial"] .nav-item.active { background: #000; color: #fff; border-left: none; }
+[data-theme="editorial"] .nav-item.active .nav-icon { color: #fff; }
+[data-theme="editorial"] .sidebar { background: #000; color: #fff; border-right: 4px solid #000; }
+[data-theme="editorial"] .sidebar-section-label { color: #A1A1AA; }
+[data-theme="editorial"] .nav-item { color: #fff; }
+[data-theme="editorial"] .nav-item:hover { background: #27272A; color: #fff; }
+[data-theme="editorial"] .topbar { background: #fff; border-bottom: 2px solid #000; }
+[data-theme="editorial"] .topbar .logo { color: #000; }
+[data-theme="editorial"] .page-title { font-weight: 900; letter-spacing: -0.03em; }
+[data-theme="editorial"] .page-header { border-bottom: 2px solid #000; }
+
+/* === editorial 主题: macOS 按钮改为黑白灰 (编辑设计风) === */
+[data-theme="editorial"] .wc-btn.close { background: #FFFFFF; border: 2px solid #000; box-shadow: 1px 1px 0 #000; }
+[data-theme="editorial"] .wc-btn.min   { background: #DDDDDD; border: 2px solid #000; box-shadow: 1px 1px 0 #000; }
+[data-theme="editorial"] .wc-btn.max   { background: #000000; border: 2px solid #000; box-shadow: 1px 1px 0 #000; }
+[data-theme="editorial"] .wc-btn:hover { filter: none; background: #FFFF00; }
+[data-theme="editorial"] .wc-btn.close:hover::after,
+[data-theme="editorial"] .wc-btn.min:hover::after,
+[data-theme="editorial"] .wc-btn.max:hover::after { color: #000; }
+[data-theme="editorial"] .card-avatar { background: #FFFFFF; color: #000; border-radius: 0; border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+[data-theme="editorial"] .data-table th { background: #000; color: #fff; }
+[data-theme="editorial"] .data-table td { border-bottom: 1px solid #E4E4E7; }
+[data-theme="editorial"] .badge-active { background: #000; color: #fff; }
+[data-theme="editorial"] .badge-inactive { background: #fff; color: #000; border: 1px solid #000; }
+[data-theme="editorial"] .modal-header { border-left-width: 6px; }

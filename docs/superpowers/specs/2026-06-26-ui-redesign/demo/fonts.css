@@ -1,0 +1,37 @@
+/* fonts.css — 本地字体声明 (无外网依赖) */
+
+/* Press Start 2P — 8-bit 像素字体 (英文/数字/符号) */
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('fonts/PressStart2P.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ZCOOL KuaiLe — 像素感中文字体 */
+@font-face {
+  font-family: 'ZCOOL KuaiLe';
+  src: url('fonts/ZCOOLKuaiLe.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Inter — editorial 主题黑体 */
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-400.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* JetBrains Mono — dark 主题等宽 */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/JetBrainsMono-400.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}

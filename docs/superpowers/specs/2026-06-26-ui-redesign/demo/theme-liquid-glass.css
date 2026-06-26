@@ -1,0 +1,88 @@
+/* liquid-glass.css — 液态玻璃 (macOS Sonoma 风) */
+[data-theme="liquid-glass"] {
+  --bg-primary: linear-gradient(135deg, #C7D2FE 0%, #E0E7FF 25%, #FCE7F3 50%, #FED7AA 100%);
+  --bg-elevated: rgba(255,255,255,0.5);
+  --bg-overlay: rgba(255,255,255,0.4);
+  --bg-sunken: rgba(255,255,255,0.3);
+
+  --text-primary: #1E1B4B;
+  --text-secondary: #4338CA;
+  --text-muted: #6366F1;
+
+  --accent: #6366F1;
+  --accent-gradient: linear-gradient(135deg, #6366F1, #8B5CF6);
+  --accent-soft: rgba(99,102,241,0.15);
+  --accent-strong: #4F46E5;
+  --accent-fg-on: #FFFFFF;
+
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+
+  --border: rgba(255,255,255,0.6);
+  --shadow-sm: 0 1px 2px rgba(99,102,241,0.08);
+  --shadow-md: 0 4px 16px rgba(99,102,241,0.12), 0 8px 32px rgba(99,102,241,0.08);
+  --shadow-lg: 0 8px 32px rgba(99,102,241,0.15), 0 16px 64px rgba(99,102,241,0.10);
+
+  --card-radius: 14px;
+  --button-radius: 10px;
+  --radius-modal: 16px;
+  --radius-badge: 6px;
+
+  --font-ui: "SF Pro Display", -apple-system, "PingFang SC", system-ui, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", Menlo, monospace;
+  --fs-heading: 22px;
+  --fs-body: 14px;
+
+  --header-height: 52px;
+  --sidebar-width: 240px;
+
+  --ease-default: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 180ms;
+  --duration-normal: 280ms;
+  --duration-slow: 420ms;
+}
+
+/* 液态玻璃特色: backdrop-filter 应用到所有 elevated 表面 */
+[data-theme="liquid-glass"] .topbar,
+[data-theme="liquid-glass"] .sidebar,
+[data-theme="liquid-glass"] .card,
+[data-theme="liquid-glass"] .list-row,
+[data-theme="liquid-glass"] .modal,
+[data-theme="liquid-glass"] .kpi,
+[data-theme="liquid-glass"] .modal-launcher {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+[data-theme="liquid-glass"] .modal { backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); }
+
+/* === liquid-glass 弹窗强化 === */
+/* 遮罩更浅, 用紫蓝半透而非纯黑 50% */
+[data-theme="liquid-glass"] .modal-overlay { background: rgba(99,102,241,0.18); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+/* 弹窗本身提高实色度 (0.5 → 0.78) 让文字清晰, 但仍透出背景渐变 */
+[data-theme="liquid-glass"] .modal {
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 16px 48px rgba(99,102,241,0.25), 0 0 0 1px rgba(255,255,255,0.3) inset;
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+}
+[data-theme="liquid-glass"] .modal-header { background: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(99,102,241,0.15); }
+[data-theme="liquid-glass"] .modal-body { background: rgba(255,255,255,0.5); }
+[data-theme="liquid-glass"] .modal-footer { background: rgba(255,255,255,0.4); border-top: 1px solid rgba(99,102,241,0.15); }
+/* 弹窗内输入框也走玻璃感 */
+[data-theme="liquid-glass"] .modal .input { background: rgba(255,255,255,0.5); border-color: rgba(99,102,241,0.2); }
+/* 弹窗内按钮更亮的渐变 */
+[data-theme="liquid-glass"] .modal .btn-primary {
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  border: none;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+}
+[data-theme="liquid-glass"] .btn-primary {
+  background: linear-gradient(135deg, #6366F1, #8B5CF6);
+  border: none;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+[data-theme="liquid-glass"] .card-avatar { background: linear-gradient(135deg, #818CF8, #C084FC); color: white; }
+[data-theme="liquid-glass"] .nav-item.active { background: rgba(99,102,241,0.2); color: #4338CA; }

@@ -1,0 +1,520 @@
+/* theme-pixel.css — 像素黑白 (Minecraft 风)
+ * 核心规则: 0 圆角, 0 阴影, 0 渐变, 1-2px 硬边, 8-bit 像素字体
+ * 色板: 黑 #000 / 白 #FFF / 4 档灰 #DDD/#AAA/#555/#222 + MC 泥土棕 #8B6F47 强调
+ */
+[data-theme="pixel"] {
+  /* Backgrounds */
+  --bg-primary: #C6C6C6;          /* MC 经典石灰色 */
+  --bg-elevated: #FFFFFF;         /* 卡片纯白 */
+  --bg-overlay: #AAAAAA;
+  --bg-sunken: #DDDDDD;
+
+  /* Text */
+  --text-primary: #000000;
+  --text-secondary: #222222;
+  --text-muted: #555555;
+
+  /* Brand */
+  --accent: #555555;              /* 灰色主调 (黑白风) */
+  --accent-soft: #DDDDDD;
+  --accent-strong: #222222;
+  --accent-fg-on: #FFFFFF;
+
+  /* Status — MC 红/绿/黄 */
+  --success: #5BAA3F;             /* MC 草绿 */
+  --warning: #FFAA00;             /* MC 经验黄 */
+  --danger: #AA0000;              /* MC 红石 */
+  --info: #3F76AA;                /* MC 钻石蓝 */
+
+  /* Border / Shadow — MC 风没有阴影, 只有硬边 */
+  --border: #000000;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+
+  /* Radius — 0 圆角, 像素感 */
+  --card-radius: 0px;
+  --button-radius: 0px;
+  --radius-modal: 0px;
+  --radius-badge: 0px;
+
+  /* Typography — 本地字体 (Press Start 2P 英文像素 + ZCOOL KuaiLe 中文像素) */
+  --font-ui: "Press Start 2P", "ZCOOL KuaiLe", "Courier New", monospace;
+  --font-mono: "Press Start 2P", "ZCOOL KuaiLe", "Courier New", monospace;
+  --fs-heading: 18px;
+  --fs-body: 12px;
+
+  /* Layout */
+  --header-height: 40px;
+  --sidebar-width: 200px;
+
+  /* Motion — 0 动画, 像素风硬切 */
+  --ease-default: steps(1, end);
+  --duration-fast: 0ms;
+  --duration-normal: 0ms;
+  --duration-slow: 0ms;
+}
+
+/* === 像素风核心: 强制 image-rendering pixelated, 关闭字体抗锯齿 === */
+[data-theme="pixel"] *,
+[data-theme="pixel"] *::before,
+[data-theme="pixel"] *::after {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  font-smooth: never;
+  text-rendering: geometricPrecision;
+}
+
+/* Press Start 2P 是 8-bit 像素字体, 字号 ≥16px 像素格子才清晰可见 */
+[data-theme="pixel"] { font-size: 12px; }
+
+/* === MC 风格背景贴图 (base64 16x16 PNG) === */
+[data-theme="pixel"] .main {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAm0lEQVR4nGMoOeDxv+ZEwH8YTQxG1sOQv8PlPzJO32CDQhPCDD2Xov7jwy2nglBodMxAifNBNENVvM3/ObVB/7vz3f8XhZuA2c3p9v+RxfGxGfApghk0pdQLpxoGUmyDGQRzKYjNQIpt6GyQQTi9gM02rF4gxTZsAcxAim3YAhirF0iJTqK8gC+AGchJPMhexvACqdFJ0AuEAhgA/zBQT1QiM0UAAAAASUVORK5CYII=);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+
+[data-theme="pixel"] .sidebar {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAI0lEQVR4nGPo7u7+P3v27P/k0gwgghLMMOqCUReMumCQuAAAPjTEH1rQf4oAAAAASUVORK5CYII=);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+  background-color: #8B8B8B;
+}
+
+[data-theme="pixel"] .topbar {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAANklEQVR4nGPIDzf7v6Ah5D+5NAMlmkE0w8C7oDvfHcwgl2agRDOIHgQuGPhYGHgXDHwsDLgLAOl1Kl9A64P9AAAAAElFTkSuQmCC);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+
+[data-theme="pixel"] .card {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGO4c2Lif0oww4sbK/5Tghk+PNz5H4RJtRmmjwEmQKrNGF6AmUgsHvXCqBdo4wVyMQOpfkfHAE0/Xq5LW9yLAAAAAElFTkSuQmCC);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+
+[data-theme="pixel"] .modal-body {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGO4c2Lif0oww4sbK/5Tghk+PNz5H4RJtRmmjwEmQKrNGF6AmUgsHvXCqBdo4wVyMQOpfkfHAE0/Xq5LW9yLAAAAAElFTkSuQmCC);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+
+[data-theme="pixel"] .statusbar {
+  background-color: #2A1810;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 3px, transparent 3px, transparent 5px);
+}
+
+[data-theme="pixel"] body { background: #5BB4E8; }
+
+/* === 边框 === 2px 黑边 (MC 风格贴图) */
+[data-theme="pixel"] .card,
+[data-theme="pixel"] .list-row,
+[data-theme="pixel"] .modal,
+[data-theme="pixel"] .kpi,
+[data-theme="pixel"] .modal-launcher,
+[data-theme="pixel"] .btn,
+[data-theme="pixel"] .input,
+[data-theme="pixel"] .badge {
+  border-width: 2px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* === 顶部主题切换器 === MC 工具栏 */
+[data-theme="pixel"] .topbar {
+  background: #555555;
+  border-bottom: 2px solid #000;
+  color: #FFFFFF;
+}
+[data-theme="pixel"] .topbar .logo { color: #FFFFFF; }
+[data-theme="pixel"] .app-name { font-family: var(--font-ui); font-size: 12px; }
+[data-theme="pixel"] .app-version { color: #AAAAAA; }
+[data-theme="pixel"] .theme-btn {
+  background: #DDDDDD;
+  color: #000;
+  border: 2px solid #000;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 4px 8px;
+  image-rendering: pixelated;
+}
+[data-theme="pixel"] .theme-btn:hover { background: #FFFFFF; }
+[data-theme="pixel"] .theme-btn.active { background: #5BAA3F; color: #FFFFFF; border-color: #000; }
+[data-theme="pixel"] .window-controls .wc-btn { color: #FFFFFF; }
+[data-theme="pixel"] .window-controls .wc-btn:hover { background: #AA0000; color: #FFFFFF; }
+[data-theme="pixel"] .window-controls .wc-btn.close:hover { background: #AA0000; }
+
+/* === Sidebar === MC 物品栏 */
+[data-theme="pixel"] .sidebar {
+  background: #8B8B8B;
+  border-right: 2px solid #000;
+}
+[data-theme="pixel"] .sidebar-section-label {
+  color: #FFFFFF;
+  background: #555555;
+  padding: 6px 12px;
+  border-bottom: 2px solid #000;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+[data-theme="pixel"] .nav-item {
+  color: #FFFFFF;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #555555;
+  border-radius: 0;
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+[data-theme="pixel"] .nav-item:hover { background: #AAAAAA; color: #FFFFFF; }
+[data-theme="pixel"] .nav-item.active {
+  background: #5BAA3F;
+  color: #FFFFFF;
+  border-left: 4px solid #000;
+  border-bottom: 1px solid #555555;
+}
+
+/* === 页面 header === */
+[data-theme="pixel"] .page-header {
+  border-bottom: 2px solid #000;
+  background: #DDDDDD;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+[data-theme="pixel"] .page-title {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  color: #000;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+[data-theme="pixel"] .page-subtitle {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: #555555;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+/* === 卡片 === MC 方块贴图 */
+[data-theme="pixel"] .card {
+  background: #FFFFFF;
+  border: 2px solid #000;
+  border-radius: 0;
+  padding: 12px;
+  margin-bottom: 12px;
+  position: relative;
+}
+[data-theme="pixel"] .card:hover { background: #F0F0F0; }
+[data-theme="pixel"] .card.active {
+  background: #DDDDDD;
+  border-color: #000;
+  border-left: 6px solid #5BAA3F;
+  padding-left: 10px;
+}
+[data-theme="pixel"] .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+[data-theme="pixel"] .card-avatar {
+  width: 32px;
+  height: 32px;
+  background: #8B6F47;             /* MC 泥土棕 */
+  border: 2px solid #000;
+  border-radius: 0;
+  color: #FFFFFF;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+[data-theme="pixel"] .card-info { flex: 1; margin-left: 8px; min-width: 0; }
+[data-theme="pixel"] .card-title {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: #000;
+  letter-spacing: 0.02em;
+}
+[data-theme="pixel"] .card-subtitle {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: #555555;
+  margin-top: 4px;
+}
+[data-theme="pixel"] .card-meta {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: #555555;
+  margin-top: 2px;
+}
+[data-theme="pixel"] .card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+/* === 按钮 === MC 按钮贴图 (灰底 + 黑边 + 按下变深) */
+[data-theme="pixel"] .btn {
+  background: #DDDDDD;
+  color: #000;
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 6px 10px;
+  image-rendering: pixelated;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+}
+[data-theme="pixel"] .btn:hover { background: #FFFFFF; }
+[data-theme="pixel"] .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #000;
+}
+[data-theme="pixel"] .btn-primary { background: #5BAA3F; color: #FFFFFF; }
+[data-theme="pixel"] .btn-primary:hover { background: #6FC04A; }
+[data-theme="pixel"] .btn-danger { background: #AA0000; color: #FFFFFF; }
+[data-theme="pixel"] .btn-danger:hover { background: #CC0000; }
+[data-theme="pixel"] .btn-ghost {
+  background: transparent;
+  border: 2px solid #555;
+  box-shadow: none;
+  color: #555;
+}
+
+/* === 徽章 === MC 经验条颜色 */
+[data-theme="pixel"] .badge {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 2px solid #000;
+  border-radius: 0;
+  image-rendering: pixelated;
+  text-transform: uppercase;
+}
+[data-theme="pixel"] .badge-active { background: #5BAA3F; color: #FFFFFF; }
+[data-theme="pixel"] .badge-inactive { background: #AAAAAA; color: #FFFFFF; }
+[data-theme="pixel"] .badge-warning { background: #FFAA00; color: #000; }
+[data-theme="pixel"] .badge-info { background: #3F76AA; color: #FFFFFF; }
+
+/* === 进度条 === MC 经验条 (像素分隔) */
+[data-theme="pixel"] .usage-bar {
+  height: 12px;
+  background: #000;
+  border: 2px solid #000;
+  border-radius: 0;
+  padding: 0;
+}
+[data-theme="pixel"] .usage-bar > span {
+  height: 100%;
+  background: #5BAA3F;
+  image-rendering: pixelated;
+}
+[data-theme="pixel"] .usage-bar.warning > span { background: #FFAA00; }
+[data-theme="pixel"] .usage-bar.danger > span { background: #AA0000; }
+
+/* === Toggle 开关 === MC 红石拉杆 */
+[data-theme="pixel"] .toggle {
+  width: 32px;
+  height: 16px;
+  background: #AA0000;
+  border: 2px solid #000;
+  border-radius: 0;
+}
+[data-theme="pixel"] .toggle::after {
+  width: 12px;
+  height: 12px;
+  background: #FFFFFF;
+  border: 1px solid #000;
+  border-radius: 0;
+  top: 1px;
+}
+[data-theme="pixel"] .toggle.on { background: #5BAA3F; }
+[data-theme="pixel"] .toggle.on::after { left: 14px; }
+
+/* === 输入框 === MC 文本框 */
+[data-theme="pixel"] .input {
+  background: #000000;
+  color: #FFFFFF;
+  border: 2px solid #555555;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  image-rendering: pixelated;
+}
+[data-theme="pixel"] .input:focus {
+  outline: none;
+  border-color: #FFFFFF;
+  box-shadow: 0 0 0 2px #555555;
+}
+[data-theme="pixel"] .input::placeholder { color: #888888; }
+
+/* === KPI 卡片 === MC 物品堆叠 */
+[data-theme="pixel"] .kpi {
+  background: #FFFFFF;
+  border: 2px solid #000;
+  border-radius: 0;
+  padding: 12px;
+}
+[data-theme="pixel"] .kpi-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+[data-theme="pixel"] .kpi-value {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: #000;
+  letter-spacing: 0.02em;
+}
+
+/* === 表格 === MC 背包网格 */
+[data-theme="pixel"] .data-table {
+  border-collapse: collapse;
+  border: 2px solid #000;
+}
+[data-theme="pixel"] .data-table th,
+[data-theme="pixel"] .data-table td {
+  border: 2px solid #000;
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+[data-theme="pixel"] .data-table th {
+  background: #555555;
+  color: #FFFFFF;
+  text-transform: uppercase;
+}
+[data-theme="pixel"] .data-table td { background: #FFFFFF; color: #000; }
+[data-theme="pixel"] .data-table tr:hover td { background: #DDDDDD; }
+
+/* === 弹窗 === MC 告示牌/箱子 */
+[data-theme="pixel"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: none;
+}
+[data-theme="pixel"] .modal {
+  background: #C6C6C6;
+  border: 3px solid #000;
+  border-radius: 0;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.4);
+  width: 420px;
+}
+[data-theme="pixel"] .modal-header {
+  background: #555555;
+  border-bottom: 2px solid #000;
+  border-left: 4px solid #5BAA3F;
+  padding: 10px 14px;
+}
+[data-theme="pixel"] .modal.danger .modal-header { border-left-color: #AA0000; }
+[data-theme="pixel"] .modal-title {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: #FFFFFF;
+  text-transform: uppercase;
+}
+[data-theme="pixel"] .modal-icon {
+  background: #000;
+  color: #FFFFFF;
+  border-radius: 0;
+  border: 2px solid #FFFFFF;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+[data-theme="pixel"] .modal-body {
+  padding: 14px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: #000;
+  line-height: 1.6;
+  background: #C6C6C6;
+}
+[data-theme="pixel"] .modal-footer {
+  background: #8B8B8B;
+  border-top: 2px solid #000;
+  padding: 10px 14px;
+}
+[data-theme="pixel"] .modal .btn {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+/* === 弹窗浮窗 === */
+[data-theme="pixel"] .modal-launcher {
+  background: #DDDDDD;
+  border: 2px solid #000;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+}
+[data-theme="pixel"] .modal-launcher-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: #000;
+  background: #555555;
+  color: #FFFFFF;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+[data-theme="pixel"] .modal-launcher-list button {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 4px 10px;
+  color: #000;
+  border-radius: 0;
+}
+[data-theme="pixel"] .modal-launcher-list button:hover {
+  background: #FFFFFF;
+  color: #5BAA3F;
+}
+
+/* === 列表行 === MC 物品行 */
+[data-theme="pixel"] .list-row {
+  background: #FFFFFF;
+  border: 2px solid #000;
+  border-radius: 0;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+[data-theme="pixel"] .list-row:hover { background: #F0F0F0; }
+
+/* === 状态栏 === */
+[data-theme="pixel"] .statusbar {
+  background: #000000;
+  color: #FFFFFF;
+  border-top: 2px solid #555;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+[data-theme="pixel"] .status-dot { background: #AA0000; }
+[data-theme="pixel"] .status-dot.active { background: #5BAA3F; }
+[data-theme="pixel"] .status-left code {
+  background: #333333;
+  color: #FFFFFF;
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+/* === JSON 编辑器 === */
+[data-theme="pixel"] .json-editor {
+  background: #000000;
+  color: #5BAA3F;
+  border: 2px solid #000;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: 12px;
+}
+[data-theme="pixel"] .json-key { color: #3F76AA; }
+[data-theme="pixel"] .json-string { color: #5BAA3F; }
+[data-theme="pixel"] .json-number { color: #FFAA00; }
+[data-theme="pixel"] .json-bool { color: #AA0000; }
