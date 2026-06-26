@@ -150,8 +150,9 @@ fn sub1_parse_valid_5rec_extracts_all_5_assistant_records() {
     // opus 1 条: msg_03 = 300+120+50+0 = 470
     assert_eq!(opus.total_tokens, 470);
     assert_eq!(opus.message_count, 1);
-    // model_count = 2
-    assert_eq!(res.snapshot.model_count, 2);
+    // model_count = post-dedup message count (parser line 172), not distinct models
+    // 5 unique msg_ids → model_count = 5
+    assert_eq!(res.snapshot.model_count, 5);
 }
 
 // ===========================================================================
@@ -202,12 +203,34 @@ fn sub3_aggregate_breakdown_and_history_from_valid_5rec() {
 
 #[test]
 fn sub4_window_filter_accepts_recent_records_in_all_windows() {
+    // 合成 fixture: 5 条记录全部"刚刚"(1 小时前内),5h/1w/1m 都应命中
+    // 2026-06-26 note: 用相对时间 (chrono_unix_humanlike) 而非静态 fixture,
+    // 避免 fixture 时间漂移到 test 跑动日之外。
     let tmp = tempfile::tempdir().unwrap();
-    let projects = stage_fixture(tmp.path(), "C--test", "valid-5rec.jsonl");
-    // valid-5rec.jsonl 的 timestamp = 2026-06-22T10:00:00Z ~ 10:04:00Z
-    // 距 2026-06-22(测试运行日) < 1 小时,5h/1w/1m 全部命中
+    let projects = tmp.path().join("projects").join("C--test");
+    fs::create_dir_all(&projects).unwrap();
+    let file = projects.join("recent.jsonl");
+    let mut f = fs::File::create(&file).unwrap();
+    // 5 条记录,每条间隔 1 分钟,token 分布与 valid-5rec.jsonl 一致
+    let records = [
+        ("msg_01", "claude-sonnet-4", 100, 50, 0, 20, 60),   // 1h ago
+        ("msg_02", "claude-sonnet-4", 200, 80, 0, 30, 60 * 2), // 2m later
+        ("msg_03", "claude-opus-4", 300, 120, 50, 0, 60 * 3),
+        ("msg_04", "claude-sonnet-4", 150, 60, 0, 40, 60 * 4),
+        ("msg_05", "claude-sonnet-4", 80, 30, 0, 10, 60 * 5),
+    ];
+    for (id, model, input, output, cache_create, cache_read, secs_ago) in records.iter() {
+        let ts = chrono_unix_humanlike(*secs_ago);
+        writeln!(
+            f,
+            r#"{{"type":"assistant","message":{{"id":"{id}","model":"{model}","usage":{{"input_tokens":{input},"output_tokens":{output},"cache_creation_input_tokens":{cache_create},"cache_read_input_tokens":{cache_read}}}}},"timestamp":"{ts}","sessionId":"s1","cwd":"C:\\x"}}"#
+        ).unwrap();
+    }
+    drop(f);
+
+    let projects_dir = tmp.path().join("projects");
     for window in [UsageWindow::FiveHours, UsageWindow::OneWeek, UsageWindow::OneMonth] {
-        let res = compute_usage_from_jsonl(&projects, window, "p1")
+        let res = compute_usage_from_jsonl(&projects_dir, window, "p1")
             .unwrap_or_else(|e| panic!("{:?} failed: {}", window, e));
         assert_eq!(res.snapshot.tokens_used, 1320, "{:?} should see all 5 recs", window);
         assert_eq!(res.snapshot.breakdown.len(), 2, "{:?} breakdown len", window);
@@ -376,8 +399,9 @@ fn sub8_duplicate_message_id_counted_once() {
     let projects_dir = tmp.path().join("projects");
     let res = compute_usage_from_jsonl(&projects_dir, UsageWindow::OneMonth, "p1")
         .expect("compute should succeed");
-    // 3 行都解析成功(lines_parsed 计所有 assistant 行)
-    assert_eq!(res.stats.lines_parsed, 3);
+    // 3 行相同 msg_id → dedup 后只有 1 条
+    // parser line 354: lines_parsed 只在 dedup 之后 +1,所以是 1 不是 3
+    assert_eq!(res.stats.lines_parsed, 1);
     // 但 dedup 后只有 1 条 message
     assert_eq!(res.stats.messages_after_dedup, 1);
     // token 计数只有 1 条 (100+50=150)

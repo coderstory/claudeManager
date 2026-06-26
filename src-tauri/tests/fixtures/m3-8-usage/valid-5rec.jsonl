@@ -1,6 +1,6 @@
-{"type":"assistant","message":{"id":"msg_01","model":"claude-sonnet-4","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_tokens":0,"cache_read_tokens":20},"timestamp":"2026-06-22T10:00:00Z"}}
-{"type":"assistant","message":{"id":"msg_02","model":"claude-sonnet-4","usage":{"input_tokens":200,"output_tokens":80,"cache_creation_tokens":0,"cache_read_tokens":30},"timestamp":"2026-06-22T10:01:00Z"}}
-{"type":"assistant","message":{"id":"msg_03","model":"claude-opus-4","usage":{"input_tokens":300,"output_tokens":120,"cache_creation_tokens":50,"cache_read_tokens":0},"timestamp":"2026-06-22T10:02:00Z"}}
-{"type":"assistant","message":{"id":"msg_04","model":"claude-sonnet-4","usage":{"input_tokens":150,"output_tokens":60,"cache_creation_tokens":0,"cache_read_tokens":40},"timestamp":"2026-06-22T10:03:00Z"}}
+{"type":"assistant","message":{"id":"msg_01","model":"claude-sonnet-4","usage":{"input_tokens":100,"output_tokens":50,"cache_creation_input_tokens":0,"cache_read_input_tokens":20}},"timestamp":"2026-06-22T10:00:00Z"}
+{"type":"assistant","message":{"id":"msg_02","model":"claude-sonnet-4","usage":{"input_tokens":200,"output_tokens":80,"cache_creation_input_tokens":0,"cache_read_input_tokens":30}},"timestamp":"2026-06-22T10:01:00Z"}
+{"type":"assistant","message":{"id":"msg_03","model":"claude-opus-4","usage":{"input_tokens":300,"output_tokens":120,"cache_creation_input_tokens":50,"cache_read_input_tokens":0}},"timestamp":"2026-06-22T10:02:00Z"}
+{"type":"assistant","message":{"id":"msg_04","model":"claude-sonnet-4","usage":{"input_tokens":150,"output_tokens":60,"cache_creation_input_tokens":0,"cache_read_input_tokens":40}},"timestamp":"2026-06-22T10:03:00Z"}
 {"type":"user","content":"hello"}
-{"type":"assistant","message":{"id":"msg_05","model":"claude-sonnet-4","usage":{"input_tokens":80,"output_tokens":30,"cache_creation_tokens":0,"cache_read_tokens":10},"timestamp":"2026-06-22T10:04:00Z"}}
+{"type":"assistant","message":{"id":"msg_05","model":"claude-sonnet-4","usage":{"input_tokens":80,"output_tokens":30,"cache_creation_input_tokens":0,"cache_read_input_tokens":10}},"timestamp":"2026-06-22T10:04:00Z"}
