@@ -9,7 +9,9 @@
 - ✅ **v1.0 架构期 (M1.1 ~ M1.12)** — 12 phases,shipped 2026-06-19 (5 exes on Desktop)
 - ✅ **v1.5 业务期 (M2.1 ~ M2.16)** — 16 phases,shipped 2026-06-21 (26+ exes on Desktop)
 - ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1 ~ M3.10)** — 11 phases,shipped 2026-06-22,tag v2.0
-- 🚧 **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3 + M4.6)** — in progress
+- ✅ **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3)** — round 1 (7/7 phase) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
+- ✅ **v3.0-M4 e2e 框架** — Phases 1-4 (shipped 2026-06-26, tag v3.0-M4)
+- 🚧 **v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)** — in progress
 
 ## Phases
 
@@ -360,6 +362,13 @@ Plans:
 **Status**: ⏳ pending (按需启动)
 **内容**: i18n / SQLite 历史 / 多窗口 / Telemetry / L-M2.02
 
+### Phase 22: M4 e2e 框架 (14 端到端场景 ship gate) [v3.0-M4 milestone]
+
+**Status**: ✅ 完成 (2026-06-26)
+**Commits**: `2c825e1` (driver libs) / `9ebdc39` (01-03) / `92e9711` (04-07) / `0b666b6` (08-11) / `fb0535f` (12-14) / `278ac17` (00-stub fix) / `c6f7765` (test-all stage 6) / `c7e7bb3` (STATE.md)
+**Tag**: `v3.0-M4`
+**内容**: 黑盒端到端测试 (真 .app + 真文件系统副作用 + 14 hard-fail ship gate)；新增 `scripts/test-all.sh` stage 6 (m4-e2e)；macOS 通过 AppleScript + System Events 驱动；Windows driver 是 stub (Phase 5)
+
 ## v3.0 round 1 关键决策 (2026-06-22)
 
 - D15: B3#10 Tailwind 选 B 移除（已 ship, commit `ed5a3e5`）
@@ -388,9 +397,11 @@ Plans:
 
 ## Progress
 
-**Execution Order (v3.0 round 1 已 ship 7 phase):**
-Phase 12 → 13 → 14 → 15 → 16 → 17 ✅
-Round 2 pending: Phase 18 (e2e) → 19 (云备份) → 20 (updater UI) → 21 (M4.6 long tail)
+**Execution Order (v3.0 round 1 已 ship 7 phase + round 2 已 ship + v3.0-M4 已 ship):**
+Phase 12 → 13 → 14 → 15 → 16 → 17 ✅ (round 1)
+Phase 18 ✅ (round 2: Playwright e2e 6/6 PASS) → 21 ✅ (Phase 21 SQLite history)
+Phase 22 ✅ (v3.0-M4: e2e framework 14/14 PASS, tag v3.0-M4)
+Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -415,5 +426,6 @@ Round 2 pending: Phase 18 (e2e) → 19 (云备份) → 20 (updater UI) → 21 (M
 | 19. A3 备份 Phase 2 (云备份) | v3.0 | 0/1 | Pending | - |
 | 20. M4.3 updater Phase 2/3 | v3.0 | 0/1 | Pending | - |
 | 21. M4.6 长期 backlog | v3.0 | 0/1 | Pending (按需) | - |
+| 22. M4 e2e 框架 (14 端到端 ship gate) | v3.0-M4 | 8 commits | Complete | 2026-06-26 |
 </content>
 </invoke>

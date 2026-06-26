@@ -5,12 +5,21 @@
 | v1.0 | 架构期 (M1.1~M1.12) | 2026-06-19 | 12 | - | Tauri v2 scaffold + OS 抽象 + plugin host + TDD |
 | v1.5 | 业务期 (M2.1~M2.16) | 2026-06-21 | 16 | - | F1~F16 全功能 ship |
 | **v2.0** | **用户反馈修复 + 双模式 (M2.17 + M3.1~M3.10)** | **2026-06-22** | **11** | **v2.0** | **27 条清单全修复 + M3.10 双模式架构 + D14 cc-switch JSONL** |
+| **v3.0-M4** | **e2e 框架 (14 端到端场景 ship gate)** | **2026-06-26** | **4** | **v3.0-M4** | **黑盒端到端测试 (真 .app + 真 FS) + test-all.sh stage 6 硬关卡** |
 
 ## v2.0 关键产物
 - 12 个 ship exe (~30 MB each) 在 `~/Desktop/ClaudeConfigManager-M3/`
 - 11 phase SUMMARY 在 `.planning/phases/`
 - v2.0-MILESTONE-AUDIT.md (status=passed, D8 user OK)
 - 3 个 session 沉淀 (feedback/gsd-planning-fits / pattern/ship-and-commit-stall-recovery / feedback/tauri-cargo-test-status-entrypoint)
+
+## v3.0-M4 关键产物
+- 4 phase 8 commits (driver libs + 14 scenarios + test-all stage 6 wired)
+- `tests/M4-e2e/` 完整框架 (orchestrator + 4 lib + 15 scenarios + 1 fixture)
+- 14/14 scenarios PASS + 00-stub soft-skip (15 scenarios total)
+- v3.0-M4-ROADMAP.md (本目录, archived)
+- `scripts/test-all.sh` 第 6 阶段 m4-e2e 硬关卡 + `--skip-m4-e2e` 快迭代旗标
+- macOS 优先 (AppleScript + System Events); Windows driver 是 Phase 5 stub
 
 ## v2.0 → v3.0 backlog（完整清单见 [v2.0-BACKLOG.md](milestones/v2.0-BACKLOG.md)）
 

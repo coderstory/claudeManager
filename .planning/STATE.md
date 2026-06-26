@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: M4+M5
-milestone_name: M4 e2e 框架 + M5 用户报告 33 bug 修复
-current_phase: 02
-current_phase_name: 清单 1 — 冷启动白屏→全透明→loading 闪烁
-status: M4-PLAN.md (10 章, 5 决策拍, fixture 隔离展开) + M5-PLAN.md (9 章, 4 阶段排序, 33 bug 分类)
+milestone: v3.0-M4 archived / v3.0 round 3 next
+milestone_name: M4 e2e 框架 (shipped 2026-06-26) + v3.0 round 3 pending
+current_phase: post-M4
+current_phase_name: awaiting next milestone (v3.0 round 3: M4.3 updater UI + A3 云备份 + M4.6 长尾)
+status: v3.0-M4 ship archived (2026-06-26, tag v3.0-M4); 14/14 e2e PASS, test-all stage 6 wired
 last_updated: "2026-06-26T00:00:00.000Z"
 last_activity: 2026-06-26
-last_activity_desc: M4 ship — Phase 4 wired into ship gate, tag v3.0-M4 created
+last_activity_desc: M4 archived — v3.0-M4-ROADMAP.md written, ROADMAP/MILESTONES/PROJECT updated
 progress:
-  total_phases: 21
-  completed_phases: 16
+  total_phases: 22
+  completed_phases: 17
   total_plans: 17
   completed_plans: 18
-  percent: 76
-stopped_at: M4 ship (2026-06-26) — 14/14 e2e PASS, test-all stage 6 hard-fail wired, tag v3.0-M4
+  percent: 77
+stopped_at: M4 archived (2026-06-26) — 14/14 e2e PASS, test-all stage 6 hard-fail wired, tag v3.0-M4; awaiting next milestone (v3.0 round 3)
 ---
 
 **M4 ship (2026-06-26)**:
