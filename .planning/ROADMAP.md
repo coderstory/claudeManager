@@ -492,25 +492,27 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 
 ### Phase 27: v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05)
 
-**Goal:** 修 5 个 critical bug (阻塞主流程) — F2 switch UI / F13 backup / sqlite read settings / F18 finding 过期 + 1 个综合;5 个原子 fix commit (或 subagent fix);每个 fix 加对应 vitest + 集成测试;test-all 6 阶段在 fix 后立即验证。
-**Requirements**: BUG-CR-01 (P0 切换 provider atomic) / BUG-CR-02 (P0 F13 备份可恢复) / BUG-CR-03 (P0 sqlite read settings 缺表) / BUG-CR-04 (P0 F2 switch UI round-trip) / BUG-CR-05 (P0 F18 finding 过期)
+**Goal:** 修 6 个 critical bug (实测反馈重映射: header 拖动 / 用量三件套 / JSON path::field / scope 三件套 / SQL 数量 / MCP 合并);MCP 路由合并到 /resource-browser?tab=mcp;每个 fix 加 1 vitest + 1 Playwright e2e spec;ship gate 15/15 → 20/20。
+**Requirements**: BUG-CR-01 (header drag P1) / BUG-CR-02 (用量三件套 P0) / BUG-CR-03 (JSON path::field P0) / BUG-CR-04 (scope remount P0) / BUG-CR-05 (SQL 数量 P0)
 **Depends on:** Phase 26 (v3.0.1 M5)
 **Status**: 🚧 In Progress
-**Plans:** 1 plan (估时 2-3 天,5 fix commits,沿用 M5-PLAN §4 模式)
-**Verification:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/27-VERIFICATION.md` (status: passed 后) + test-all.sh 6 stages PASS
+**Plans:** 2 plans (Wave 1 = 4 subagent 并行 fix 1/2/3/4;Wave 2 = 1 subagent 串行 fix 5+6 — 沿用 D29 4 槽并发上限;累计 6 fix commits)
+**Verification:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/27-VERIFICATION.md` (status: passed 后) + test-all.sh 6 stages PASS + Playwright e2e 20/20
 **Archive:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/`
 
 Plans:
 
-- [ ] 27-01-PLAN.md — 5 critical fix commits (每个 bug 一个原子 commit,含 TDD test + fix + verify);F2 switch 原子链 → backup → write → reload Claude 完整链路回归;sqlite migration 补缺表 + 解析错容错;F18 finding timestamp 过期检测 + 重新扫描触发器
+- [ ] 27-01-PLAN.md — Wave 1 (4 subagent 并行): fix 1 header drag (合约验证 + e2e) / fix 2 用量三件套 (COALESCE MIN type + 30 天窗口 GROUP BY + SELECT COUNT verify) / fix 3 JSON path::field (Rust field 参数 + 前端 sessionStorage split + T-05 field 安全拒绝) / fix 4 useScope hook (React 19 useSyncExternalStore, no zustand) + 3 组件 key remount (McpManagement/JsonFileTree/ResourceBrowser)
+- [ ] 27-02-PLAN.md — Wave 2 (1 subagent, 依赖 27-01 fix 4): fix 5 SQL 导入 selected IDs + distinct 计数 + UNIQUE 约束 (D-15~D-18);fix 6 MCP 合并重构 (/mcp-management 路由删除 + sidebar 清理 + 老用户 localStorage remap → /resource-browser?tab=mcp + McpManagementPanel 共享组件)
 
-**Success Criteria** (observable user behaviors):
+**Success Criteria** (observable user behaviors — 重映射到 11 条实测反馈,6 个 fix):
 
-  1. 用户点击 provider 切换 → 在 5s 内完成 backup → write → reload Claude,无红框 / 错误 toast / 进程崩溃
-  2. 用户创建 F13 备份 → 备份文件可在 F19 恢复页选中并恢复,settings.json 内容字节级一致
-  3. 用户启动应用 → sqlite 读取 settings.json 不报缺表错误;即使 settings.json 缺失或格式坏,返回 `Settings::empty()` 而不是 panic
-  4. 用户在 F2 switch UI 选择 provider → 切回 active provider 后,`is_active` 状态正确反映实际 settings.json (不是 in-memory stale)
-  5. 用户在 F18 优化页点击"重新扫描" → 所有 finding 重新生成,过期 finding 移除,Fix 按钮按 finding 列表中实际存在项渲染
+  1. 用户按住 header 空白区域拖动窗口生效;点击 header 按钮不被吞为 drag 事件 (fix 1,实测 #1)
+  2. 用户在用量页选 7 天窗口 → 看到 ≥ 1 个 trend bar (不是空 chart);refresh 用量后 toast 显示「已写入 N 条」(fix 2,实测 #2/#6/#7)
+  3. 用户在 F18 优化页点「在 JSON 编辑器中打开」→ editor 不再报「无法解析路径 ... :api_key」;正确加载 providers/{id}.json 内容 (fix 3,实测 #4)
+  4. 用户在 sidebar 切换 scope → MCP 管理 / JSON 编辑器侧边文件树 / 资源浏览 三个组件都重新加载数据;切到项目级后 MCP 列表显示项目级 mcp (fix 4,实测 #8/#10/#12)
+  5. 用户勾选 1 个 SQL provider 导入 → 提示「已导入 1 个」(不是「已导入 6 个」)(fix 5,实测 #11)
+  6. 用户访问 /mcp-management 老路由 → 自动重定向到 /resource-browser?tab=mcp;sidebar 无「MCP 管理」入口 (fix 6,合并重构)
 
 ### Phase 28: v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13)
 

@@ -5,14 +5,14 @@ milestone_name: M6 用户实测反馈修复
 current_phase: 27
 current_phase_name: v3.2 M6 critical 5 bug 修复
 status: planning
-stopped_at: Phase 27 context gathered
-last_updated: "2026-06-26T07:57:01.164Z"
+stopped_at: Phase 27 PLAN.md shipped (27-01 + 27-02)
+last_updated: "2026-06-26T08:35:00.000Z"
 last_activity: 2026-06-26
-last_activity_desc: Milestone v3.2 ROADMAP + REQUIREMENTS + STATE sync
+last_activity_desc: Phase 27 PLAN.md shipped — 2 plans (27-01 Wave 1 fix1/2/3/4;27-02 Wave 2 fix5+6)
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -1534,6 +1534,6 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 
 ## Session
 
-**Last session:** 2026-06-26T07:57:01.155Z
-**Stopped at:** Phase 27 context gathered
-**Resume file:** .planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-CONTEXT.md
+**Last session:** 2026-06-26T08:05:30.105Z
+**Stopped at:** Phase 27 UI-SPEC approved
+**Resume file:** .planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-UI-SPEC.md
