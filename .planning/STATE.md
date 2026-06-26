@@ -5,7 +5,7 @@ milestone_name: M5 用户 bug 修复 (33 bug 全部 ship, tag v3.0.1)
 current_phase: 26 (post-ship, audit/cleanup pending)
 current_phase_name: M5 A 类 5 + 整合验证 (Phase 26, 5 SUMMARY + VERIFICATION ship-gate PASS)
 status: M5 ship archived 2026-06-26 (tag v3.0.1); 33/33 bug 修完; test-all 6 stages PASS; M4 e2e 15/15 PASS; ClaudeManager.app rebuild OK + launch 1 window OK
-last_updated: "2026-06-26T06:30:00.000Z"
+last_updated: "2026-06-26T07:00:00.000Z"
 last_activity: 2026-06-26
 last_activity_desc: M5 phase 26 complete — 33/33 bug 修完, A 类 5 + 整合验证 ship gate PASS, 4 subagent 修 (#18 #22 #23+#24 + 3 TS error fix)
 progress:
@@ -15,6 +15,20 @@ progress:
   completed_plans: 23
   percent: 100
 stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stages PASS, M4 e2e 15/15 PASS, ClaudeManager.app 14M rebuild OK + 1 窗口 OK, tag v3.0.1
+
+<!--
+  manager_projection_sync_note (2026-06-26):
+    `gsd-tools query init.milestone-op` 会报 completed_phases=13/26 — 这是 manager 扫描逻辑的已知限制:
+    它只数 .planning/phases/ 目录下含 SUMMARY.md 的 phase 目录 (13 个)。
+    Phase 23-26 的 SUMMARY 在 archive 后的 .planning/milestones/v3.0.1-phases/ 里,manager 不扫。
+    本 frontmatter 的 completed_phases=22 是手动维护的真值,反映 26 个 phase 中:
+      - 11 个 v2.0 phase (1-11) ✅
+      - 7 个 v3.0 round 1+2 phase (12-18) ✅
+      - 1 个 v3.0-M4 phase (22) ✅
+      - 4 个 v3.0.1 phase (23-26) ✅
+      = 共 22 complete (Phase 19/20/21 仍 pending,属 v3.0 round 3 backlog)
+    跑 gsd-autonomous 之前先看本字段,不要被 manager projection 误导。
+-->
 ---
 
 **M5 ship (2026-06-26)**:

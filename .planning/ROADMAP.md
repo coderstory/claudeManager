@@ -398,10 +398,11 @@ Plans:
 
 ## Progress
 
-**Execution Order (v3.0 round 1 已 ship 7 phase + round 2 已 ship + v3.0-M4 已 ship):**
+**Execution Order (v3.0 round 1 已 ship 7 phase + round 2 已 ship + v3.0-M4 已 ship + v3.0.1 M5 已 ship):**
 Phase 12 → 13 → 14 → 15 → 16 → 17 ✅ (round 1)
 Phase 18 ✅ (round 2: Playwright e2e 6/6 PASS) → 21 ✅ (Phase 21 SQLite history)
 Phase 22 ✅ (v3.0-M4: e2e framework 14/14 PASS, tag v3.0-M4)
+Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
 Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -428,49 +429,49 @@ Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项
 | 20. M4.3 updater Phase 2/3 | v3.0 | 0/1 | Pending | - |
 | 21. M4.6 长期 backlog | v3.0 | 0/1 | Pending (按需) | - |
 | 22. M4 e2e 框架 (14 端到端 ship gate) | v3.0-M4 | 8 commits | Complete | 2026-06-26 |
+| 23. M5 critical 5 bug 修复 (#2/#4/#6/#19/#27) | v3.0.1 | 5 commits | Complete | 2026-06-26 |
+| 24. M5 业务 13 bug 修复 | v3.0.1 | 2 commits | Complete | 2026-06-26 |
+| 25. M5 重构 9 bug (#18 真修) | v3.0.1 | 1 commit | Complete | 2026-06-26 |
+| 26. M5 A 类 5 + 整合验证 + tag v3.0.1 | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 </content>
 </invoke>
 
-### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27 — is_active 消失 / sqlite 缺表 / update_provider missing id / 资源浏览切项目 / 配置优化 finding 过期; M5-PLAN §4; 5 新 vitest; test-all 5 阶段仍全 PASS)
+### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** 修 5 个 critical bug — is_active 消失 / sqlite 缺表 / update_provider missing id / 资源浏览切项目 / 配置优化 finding 过期; 5 个新 vitest; test-all 5 阶段仍全 PASS。
+**Requirements**: #2 / #4 / #6 / #19 / #27 (33-bug 清单 P0)
 **Depends on:** Phase 22
-**Plans:** 0 plans
+**Status**: ✅ Complete (2026-06-26)
+**Plans:** 1 plan (M5-PLAN §4) — shipped via 5 critical fix commits `8a56d4e` `a588f64` `1c4a64d` `9f4d5bd` `6dc4007`
+**Verification:** `milestones/v3.0.1-phases/23-m5-critical-5-bug-phase-1-*/23-VERIFICATION.md` (status: passed)
+**Archive:** `milestones/v3.0.1-phases/23-m5-critical-5-bug-phase-1-*/`
 
-Plans:
+### Phase 24: M5 业务修复 13 bug (Phase 2: #7 #8 #9 #10 #11 #12 #13 #15 #16 #17 #21 #22 #23 #24)
 
-- [ ] TBD (run /gsd-plan-phase 23 to break down)
-
-### Phase 24: M5 业务修复 13 bug (Phase 2: #7 #8 #9 #10 #11 #12 #13 #15 #16 #17 #21 #22 #23 #24 — SQL 导入过滤/JSON 全屏/JSON 目录树/MCP 文案/用量趋势 7 天/资源市场/CliNotFound; 13 新 vitest; 3 用户拍板决策走 Claude's Discretion)
-
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** 13 业务 bug — SQL 导入过滤 / JSON 全屏 / JSON 目录树 / MCP 文案 / 用量趋势 7 天 / 资源市场 / CliNotFound; 13 个新 vitest; 3 用户拍板决策走 Claude's Discretion。
+**Requirements**: #7 #8 #9 #10 #11 #12 #13 #15 #16 #17 #21 #22 #23 #24 (33-bug 清单 P1)
 **Depends on:** Phase 23
-**Plans:** 0 plans
+**Status**: ✅ Complete (2026-06-26)
+**Plans:** 1 plan (M5-PLAN §5) — 含 2 subagent fix: `c508371` (#22 资源市场 URL) + `d232e1b` (#23+#24 CliNotFound)
+**Verification:** `milestones/v3.0.1-phases/24-m5-13-bug-phase-2-*/24-VERIFICATION.md` (status: passed)
+**Archive:** `milestones/v3.0.1-phases/24-m5-13-bug-phase-2-*/`
 
-Plans:
+### Phase 25: M5 重构 9 bug (Phase 3: #3 #18 #25 #26 #28 #29 #30 #31 #33)
 
-- [ ] TBD (run /gsd-plan-phase 24 to break down)
-
-### Phase 25: M5 重构 9 bug (Phase 3: #3 #18 #25 #26 #28 #29 #30 #31 #33 — 欢迎页弹窗/删单文件部署 4 处同步/第三方仓库/手动处理不可勾/手动出 JSON 编辑/备份分页+多选/备份不删/历史分页/JSON 搜 settings; 9 新 vitest; 33 bug 全手测)
-
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** 9 重构 bug — 欢迎页弹窗 / 删单文件部署 4 处同步 / 第三方仓库 / 手动处理不可勾 / 手动出 JSON 编辑 / 备份分页+多选 / 备份不删 / 历史分页 / JSON 搜 settings; 9 个新 vitest; 33 bug 全手测。
+**Requirements**: #3 #18 #25 #26 #28 #29 #30 #31 #33 (33-bug 清单 P2)
 **Depends on:** Phase 24
-**Plans:** 0 plans
+**Status**: ✅ Complete (2026-06-26)
+**Plans:** 1 plan (M5-PLAN §6) — 含 #18 真修 subagent refactor: `0eb7f08` (29 files, +269/-576, 4 处同步删单文件部署)
+**Verification:** `milestones/v3.0.1-phases/25-m5-9-bug-phase-3-*/25-VERIFICATION.md` (status: passed)
+**Archive:** `milestones/v3.0.1-phases/25-m5-9-bug-phase-3-*/`
 
-Plans:
+### Phase 26: M5 A 类 5 + 整合验证 (Phase 4: #1 #5 #14 #20 #32)
 
-- [ ] TBD (run /gsd-plan-phase 25 to break down)
-
-### Phase 26: M5 A 类 5 + 整合验证 (Phase 4: #1 #5 #14 #20 #32 — 二次元主题 header/Default Model/formatChineseTokenCount/重新扫描按钮/关于页项目主页; test-all 5 阶段全过; ClaudeManager.app 重新 build+装+启动 OK; STATE.md 写 M5 完成; tag v3.1)
-
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** A 类 5 UI/UX bug — 二次元主题 header / Default Model / formatChineseTokenCount / 重新扫描按钮 / 关于页项目主页; test-all 5 阶段全过; ClaudeManager.app 重新 build + 装 + 启动 OK; STATE.md 写 M5 完成; tag v3.0.1。
+**Requirements**: #1 #5 #14 #20 #32 (33-bug 清单 P3 UI/UX)
 **Depends on:** Phase 25
-**Plans:** 0 plans
-
-Plans:
-
-- [ ] TBD (run /gsd-plan-phase 26 to break down)
+**Status**: ✅ Complete (2026-06-26)
+**Plans:** 1 plan (M5-PLAN §7) — 整合 subagent fix: `d4e4e40` (3 TS errors) + .app 14M rebuild + 启动 1 窗口 OK + tag v3.0.1
+**Verification:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/26-VERIFICATION.md` (status: passed) + `v3.0.1-MILESTONE-AUDIT.md` (status: passed)
+**Archive:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/`
