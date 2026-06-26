@@ -27,7 +27,6 @@
 import type { ReactElement } from 'react';
 import {
   Archive,
-  Boxes,
   Database,
   FileSearch,
   Gauge,
@@ -67,10 +66,6 @@ const VIEW_META: Record<
   'json-editor': {
     icon: <PencilLine size={18} aria-hidden="true" />,
     short: 'JSON 编辑器',
-  },
-  'mcp-management': {
-    icon: <Boxes size={18} aria-hidden="true" />,
-    short: 'MCP 管理',
   },
   'usage-query': {
     icon: <Gauge size={18} aria-hidden="true" />,

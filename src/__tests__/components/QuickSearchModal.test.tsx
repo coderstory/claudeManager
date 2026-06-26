@@ -40,7 +40,9 @@ beforeEach(() => {
 
 const SAMPLE: SearchResult[] = [
   { kind: 'plugin', label: 'Provider 列表', view: 'provider-list', hint: 'provider-list' },
-  { kind: 'plugin', label: 'MCP 管理', view: 'mcp-management', hint: 'mcp-management' },
+  // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab。
+  // QuickSearchModal 把 MCP server 入口映射到 'resource-browser' (D-11)。
+  { kind: 'plugin', label: '资源浏览', view: 'resource-browser', hint: 'resource-browser' },
   { kind: 'plugin', label: '用量查询', view: 'usage-query', hint: 'usage-query' },
   { kind: 'plugin', label: '配置优化', view: 'optimizer', hint: 'optimizer' },
   {
@@ -55,7 +57,7 @@ const SAMPLE: SearchResult[] = [
     view: 'provider-list',
     hint: 'deepseek',
   },
-  { kind: 'mcp', label: 'fs-mcp', view: 'mcp-management', hint: '已启用' },
+  { kind: 'mcp', label: 'fs-mcp', view: 'resource-browser', hint: '已启用' },
 ];
 
 describe('filterResults', () => {
@@ -97,7 +99,9 @@ describe('filterResults', () => {
 describe('PLUGIN_LABELS', () => {
   it('covers every ViewId except home with a Chinese label', () => {
     expect(PLUGIN_LABELS['provider-list']).toBe('Provider 列表');
-    expect(PLUGIN_LABELS['mcp-management']).toBe('MCP 管理');
+    // Phase 27 Fix 6: 'mcp-management' 不再是独立 view,改测
+    // 'resource-browser' (mcp tab 合并进去)。
+    expect(PLUGIN_LABELS['resource-browser']).toBe('资源浏览');
     expect(PLUGIN_LABELS['optimizer']).toBe('配置优化');
   });
 });

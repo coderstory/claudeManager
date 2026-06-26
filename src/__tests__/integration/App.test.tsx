@@ -70,14 +70,21 @@ describe('App — view routing integration', () => {
     }
   });
 
-  it('clicking the "MCP 管理" sidebar item navigates to the F6 page (M2.5: real impl)', () => {
+  it('Phase 27 Fix 6: clicking "MCP 管理" sidebar entry is gone — merged into resource-browser', () => {
     renderApp();
+    // D-10/D-12: 'mcp-management' 不再是独立 sidebar 入口。
+    expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
+  });
+
+  it('Phase 27 Fix 6: resource-browser renders mcp panel when kind=mcp (via setView)', () => {
+    renderApp();
+    // 老 MCP 功能现在挂在 resource-browser,需要 setView 到
+    // resource-browser + 默认 kind=plugin;这里只验证 resource-browser
+    // 入口可达,mcp 入口通过 URL ?tab=mcp 或 QuickSearchModal 触发。
     act(() => {
-      screen.getByTestId('sidebar-item-mcp-management').click();
+      screen.getByTestId('sidebar-item-resource-browser').click();
     });
-    // M2.5: the mcp-management view now mounts the real page, not
-    // the PluginPlaceholder. Assert on the page's data-testid.
-    expect(screen.getByTestId('mcp-management-page')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-browser-page')).toBeInTheDocument();
   });
 
   it('clicking the "Provider 列表" sidebar item shows the F1 page (M2.1: real impl)', () => {
@@ -270,6 +277,8 @@ describe('App — view routing integration', () => {
 describe('all plugin views route to their real page (M2.8.1 structural regression)', () => {
   // Views whose real page has shipped. Body MUST NOT contain the
   // PluginPlaceholder marker `plugin: <id>` once mounted.
+  // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
+  // 所以这个列表少了它;resource-browser 现在承载 mcp + 4 个文件 kind。
   const REAL_PAGE_VIEWS: ReadonlyArray<{
     view: ViewId;
     realTestId: string;
@@ -277,7 +286,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'provider-list', realTestId: 'provider-list-page' },
     { view: 'import-sql', realTestId: 'import-sql-page' },
     { view: 'json-editor', realTestId: 'json-editor-page' },
-    { view: 'mcp-management', realTestId: 'mcp-management-page' },
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'resource-browser', realTestId: 'resource-browser-page' },
     { view: 'marketplace', realTestId: 'marketplace-page' },

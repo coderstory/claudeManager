@@ -96,7 +96,6 @@ export type ViewId =
   | 'provider-list'
   | 'import-sql'
   | 'json-editor'
-  | 'mcp-management'
   | 'usage-query'
   | 'resource-browser'
   | 'marketplace'
@@ -113,6 +112,12 @@ export type ViewId =
  *   home first (landing), then the 9 plugin tiles in registry order,
  *   then the 1 utility view ('about', M3.7 — 清单 18).
  *
+ * Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' 的 mcp
+ * tab (D-10 删 view,D-11 资源浏览接管 mcp tab,D-12 sidebar 移除入口)。
+ * 老用户 localStorage 还存 'mcp-management' → isValidView 校验
+ * 失败 → fallback 'home';App.tsx 用 useEffect 进一步 remap 到
+ * /resource-browser?tab=mcp (D-13 legacy redirect)。
+ *
  * Exported so AppSidebar can iterate without hardcoding a parallel
  * list, and so the test can pin "every plugin id is reachable".
  */
@@ -121,7 +126,6 @@ export const ALL_VIEWS: readonly ViewId[] = [
   'provider-list',
   'import-sql',
   'json-editor',
-  'mcp-management',
   'usage-query',
   'resource-browser',
   'marketplace',

@@ -73,7 +73,6 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   'provider-list': 'Provider 列表',
   'import-sql': '.sql 导入',
   'json-editor': 'JSON 编辑器',
-  'mcp-management': 'MCP 管理',
   'usage-query': '用量查询',
   'resource-browser': '资源浏览',
   marketplace: '资源市场',
@@ -248,11 +247,14 @@ function providerToResult(p: Provider): SearchResult {
 }
 
 function mcpToResult(m: McpServer): SearchResult {
+  // Phase 27 Fix 6 (D-11) — mcp 入口合并到 resource-browser。点 MCP
+  // server 直接落到 /resource-browser?tab=mcp(URL 触发
+  // McpManagementPage 在 mcp tab 渲染)。
   return {
     kind: 'mcp',
     label: m.name,
     hint: m.enabled ? '已启用' : '已禁用',
-    view: 'mcp-management',
+    view: 'resource-browser',
   };
 }
 
@@ -391,6 +393,16 @@ export function QuickSearchModal({
         if (r) {
           pushSearchHistory(query);
           setHistory(readSearchHistory());
+          // Phase 27 Fix 6 (D-11) — mcp kind 的搜索结果映射到
+          // resource-browser + ?tab=mcp。这样 ResourceBrowser 首次
+          // mount 用 URL init kind = 'mcp' (见 readInitialKindFromUrl)。
+          if (r.kind === 'mcp') {
+            try {
+              window.history.replaceState({}, '', '/resource-browser?tab=mcp');
+            } catch {
+              // 沙盒/隐私模式 history API 不可用,fall through 让 onNavigate 接管。
+            }
+          }
           onNavigate(r.view);
           onClose();
         }
@@ -415,6 +427,16 @@ export function QuickSearchModal({
     (r: SearchResult) => {
       pushSearchHistory(query);
       setHistory(readSearchHistory());
+      // Phase 27 Fix 6 (D-11) — mcp kind 走 resource-browser + ?tab=mcp。
+      if (r.kind === 'mcp') {
+        try {
+          window.history.replaceState({}, '', '/resource-browser?tab=mcp');
+        } catch {
+          // 沙盒/隐私模式下 history API 不可用,onNavigate 仍切到
+          // resource-browser,但默认 tab 是 plugin(URL 没改)。用户
+          // 可手动点 mcp tab。不报错。
+        }
+      }
       onNavigate(r.view);
       onClose();
     },

@@ -71,6 +71,13 @@ import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
 import type { RevealFailure } from '../../components/ErrorBanner';
 import { useScope, syncScopeFromProject } from '../../hooks/useScope';
 import { useProjects } from '../../hooks/useProjects';
+// Phase 27 Fix 6 (D-11) — mcp tab 直接渲染 McpManagementPage(沿用
+// 27-01 fix 4 的 useScope + key remount,scope 切换也重 mount)。
+// 共享 McpManagementPanel 的提取推迟到后续 milestone — 本 plan
+// 锁紧合并行为(URL ?tab=mcp + sidebar 无 mcp 入口 + 老路由
+// redirect)即可,D-14 schema 不合并的约束由 McpService 独立
+// 持有,本处不直接复制数据。
+import McpManagementPage from '../mcp-management';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -89,14 +96,16 @@ interface PageState {
   revealErrorItemName: string | null;
 }
 
-const INITIAL_STATE: PageState = {
-  kind: 'plugin',
-  items: [],
-  loading: true,
-  listError: null,
-  revealFailure: null,
-  revealErrorItemName: null,
-};
+function makeInitialState(): PageState {
+  return {
+    kind: readInitialKindFromUrl(),
+    items: [],
+    loading: true,
+    listError: null,
+    revealFailure: null,
+    revealErrorItemName: null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // F22 — 详情面板 helpers
@@ -110,6 +119,29 @@ const INITIAL_STATE: PageState = {
  * "(无来源)",选中后只过滤 source_repo === null 的项。
  */
 const NONE_SOURCE_LABEL = '(无来源)';
+
+/**
+ * Phase 27 Fix 6 (D-11) — 读 URL `?tab=<kind>` 决定初始 tab。
+ * 老用户从 /mcp-management 重定向后(App.tsx D-13)落到这里,
+ * `?tab=mcp` → 默认 mcp tab。非法 kind 退回到 'plugin'(防滥用)。
+ *
+ * 项目不用 react-router(沿用 useViewState 自己路由,见 App.tsx
+ * rationale 注释),所以这里直接 parse window.location.search 而不是
+ * 用 useSearchParams。
+ */
+function readInitialKindFromUrl(): ResourceKind {
+  if (typeof window === 'undefined') return 'plugin';
+  const search = window.location.search.replace(/^\?/, '');
+  if (search === '') return 'plugin';
+  const params = new URLSearchParams(search);
+  const tab = params.get('tab');
+  if (!tab) return 'plugin';
+  // ALL_RESOURCE_KINDS 是 readonly 数组,作为白名单验证。非法值
+  // (拼写错 / 已删除 kind)退回到 'plugin',不抛。
+  return (ALL_RESOURCE_KINDS as readonly string[]).includes(tab)
+    ? (tab as ResourceKind)
+    : 'plugin';
+}
 
 /**
  * 资源形态 — ResourceItem.path 在磁盘上的实际形状。
@@ -183,7 +215,9 @@ function describeSourceField(kind: ResourceKind): string {
 // ---------------------------------------------------------------------------
 
 export default function ResourceBrowserPage(): ReactElement {
-  const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // Phase 27 Fix 6 (D-11) — initial kind 从 URL `?tab=` 读,默认 'plugin'。
+  // useState 的 lazy init(fn)只在 mount 时跑一次,后续 render 不会重读 URL。
+  const [state, setState] = useState<PageState>(makeInitialState);
   // F21 — search box query. Kept separate from PageState so re-typing
   // does NOT clobber the loaded items / loading flag. Switching tabs
   // (runList) clears the query so the new kind starts unfiltered.
@@ -249,9 +283,12 @@ export default function ResourceBrowserPage(): ReactElement {
     }
   }, []);
 
-  // Initial fetch on mount — defaults to the first kind (plugin).
+  // Initial fetch on mount — uses URL `?tab=` (D-11) or defaults to
+  // 'plugin'. We need to read the same initial kind that makeInitialState
+  // picked, so we re-call readInitialKindFromUrl() here. (Mount-time
+  // only — switching tabs is handled by handleTabClick.)
   useEffect(() => {
-    void runList(INITIAL_STATE.kind);
+    void runList(readInitialKindFromUrl());
   }, [runList]);
 
   const handleTabClick = useCallback(
@@ -518,8 +555,12 @@ export default function ResourceBrowserPage(): ReactElement {
         {state.kind === 'mcp' ? '' : '/'}
       </div>
 
-      {/* F21 — 搜索 + 来源过滤区(name 模糊 + source_repo 下拉) */}
-      {!state.loading && !state.listError && state.items.length > 0 && (
+      {/* F21 — 搜索 + 来源过滤区(name 模糊 + source_repo 下拉)。
+          mcp kind 已被 McpManagementPanel 接管,这里不显示搜索条。*/}
+      {!state.loading &&
+        !state.listError &&
+        state.kind !== 'mcp' &&
+        state.items.length > 0 && (
         <div
           style={{
             display: 'flex',
@@ -734,8 +775,8 @@ export default function ResourceBrowserPage(): ReactElement {
         </div>
       )}
 
-      {/* Loading */}
-      {state.loading && (
+      {/* Loading — mcp kind 已被 McpManagementPanel 接管,这里不显示。*/}
+      {state.loading && state.kind !== 'mcp' && (
         <div
           data-testid="resource-browser-loading"
           style={{
@@ -753,8 +794,12 @@ export default function ResourceBrowserPage(): ReactElement {
         </div>
       )}
 
-      {/* Empty state — 区分"目录本身为空"和"搜索无匹配"两种情况 */}
-      {!state.loading && !state.listError && filteredItems.length === 0 && (
+      {/* Empty state — 区分"目录本身为空"和"搜索无匹配"两种情况。
+          mcp kind 不显示通用 empty,走 McpManagementPanel 自己的 empty。*/}
+      {!state.loading &&
+        !state.listError &&
+        state.kind !== 'mcp' &&
+        filteredItems.length === 0 && (
         <div
           data-testid="resource-browser-empty"
           style={{
@@ -814,8 +859,21 @@ export default function ResourceBrowserPage(): ReactElement {
         </div>
       )}
 
-      {/* Items list */}
-      {!state.loading && filteredItems.length > 0 && (
+      {/* Phase 27 Fix 6 (D-11) — mcp tab 渲染 McpManagementPage(沿用
+          27-01 fix 4 的 useScope + key remount,scope 切换也重 mount)。
+          共享 McpManagementPanel 的提取推迟到后续 milestone — 本 plan
+          锁紧合并行为(URL ?tab=mcp + sidebar 无 mcp 入口 + 老路由
+          redirect)即可,D-14 schema 不合并的约束由 McpService 独立
+          持有,本处不直接复制数据。*/}
+      {state.kind === 'mcp' && (
+        <div data-testid="resource-browser-mcp-panel">
+          <McpManagementPage />
+        </div>
+      )}
+
+      {/* Items list — 4 个文件系统 kind 用通用 ResourceItem 列表,
+          mcp tab 已被上方 McpManagementPage 接管。*/}
+      {!state.loading && state.kind !== 'mcp' && filteredItems.length > 0 && (
         <div
           data-testid="resource-browser-list"
           style={{

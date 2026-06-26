@@ -347,25 +347,34 @@ describe('ResourceBrowserPage — F16 (M2.13)', () => {
     });
   });
 
-  it('disabled items render with a 禁用 badge (mcp.json disabled: true case)', async () => {
-    mockInvoke.mockResolvedValue([
-      item('mcp/web', 'mcp', { enabled: false }),
-    ]);
+  /// Phase 27 Fix 6 (D-14) — mcp tab 不再渲染文件系统的 mcp.json
+  /// ResourceItem 列表,改渲染 McpManagementPage(共享 component)。
+  /// 旧"mcp.json 禁用状态"测试语义不适用 — mcp 数据源现在是
+  /// mcp_servers SQLite 表(McpService),不是文件 scanner。
+  /// 这里改成断言 mcp tab 切到时 resource-browser-mcp-panel 出现,
+  /// 共享 component 的禁用 badge 测试在 mcp-management.test.tsx。
+  it('Phase 27 Fix 6: switching to mcp tab renders McpManagementPage panel', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [];
+      if (cmd === 'list_mcp_servers') return [];
+      return null;
+    });
     render(<ResourceBrowserPage />);
 
-    // Switch to mcp tab
     await act(async () => {
       fireEvent.click(screen.getByTestId('resource-browser-tab-mcp'));
     });
 
     await waitFor(() => {
       expect(
-        screen.getByTestId('resource-browser-row-mcp/web'),
+        screen.getByTestId('resource-browser-mcp-panel'),
       ).toBeInTheDocument();
     });
-    expect(
-      screen.getByTestId('resource-browser-status-mcp/web'),
-    ).toHaveTextContent(/禁用/);
+    // mcp-management-page 是 McpManagementPage 内部 testid(共享
+    // component 自己带,跟原路由一样 — 防止 e2e / 集成测试断链)。
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-management-page')).toBeInTheDocument();
+    });
   });
 });
 
@@ -760,29 +769,27 @@ describe('ResourceBrowserPage — F22 detail panel (M2.16)', () => {
     expect(panel.textContent).toContain('插件目录');
   });
 
-  it('detail panel shows 禁用 state for disabled mcp entry', async () => {
-    mockInvoke.mockResolvedValue([
-      item('mcp/web', 'mcp', { enabled: false }),
-    ]);
+  /// Phase 27 Fix 6 (D-14) — 同上,旧"mcp.json 详情面板 禁用"测试
+  /// 改写成 smoke: 切到 mcp tab 时 resource-browser-mcp-panel 出现。
+  /// 真正的 detail 渲染(从 mcp_servers 表读 description/manifest)
+  /// 在 mcp-management.test.tsx 覆盖。
+  it('Phase 27 Fix 6: switching to mcp tab → McpManagementPage mounts (replaces file-system mcp entry detail)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_resources') return [];
+      if (cmd === 'list_mcp_servers') return [];
+      return null;
+    });
     render(<ResourceBrowserPage />);
+
     await act(async () => {
       fireEvent.click(screen.getByTestId('resource-browser-tab-mcp'));
     });
+
     await waitFor(() => {
       expect(
-        screen.getByTestId('resource-browser-row-mcp/web'),
+        screen.getByTestId('resource-browser-mcp-panel'),
       ).toBeInTheDocument();
     });
-
-    await act(async () => {
-      fireEvent.click(
-        screen.getByTestId('resource-browser-row-body-mcp/web'),
-      );
-    });
-
-    const panel = screen.getByTestId('resource-browser-detail-mcp/web');
-    expect(panel.textContent).toContain('禁用');
-    expect(panel.textContent).toContain('mcp.json');
   });
 
   it('clicking the row reveal button does NOT toggle expand (stopPropagation)', async () => {

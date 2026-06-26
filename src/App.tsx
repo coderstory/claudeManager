@@ -57,7 +57,9 @@ import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ImportSqlPage } from './pages/import-sql';
 import JsonEditorPage from './pages/json-editor';
-import McpManagementPage from './pages/mcp-management';
+// Phase 27 Fix 6: 'mcp-management' 不再是独立路由。mcp 入口迁到
+// /resource-browser 的 mcp tab,共享 McpManagementPanel 组件 (D-10)。
+// 旧 McpManagementPage 保留 import 在 1 个里程碑后清理(D-13)。
 import OptimizerPage from './pages/optimizer';
 import UsageQueryPage from './pages/usage-query';
 import ResourceBrowserPage from './pages/resource-browser';
@@ -66,7 +68,7 @@ import BackupRestorePage from './pages/backup-restore';
 // M4.6 / Phase 21-C — F21 history query page (SQLite-backed).
 import HistoryPage from './pages/history';
 import AboutPage from './pages/about';
-import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
+import { useViewState, ALL_VIEWS, STORAGE_KEY, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 /**
@@ -100,10 +102,6 @@ const PAGE_META: Record<ViewId, { title: string; description: string }> = {
   'json-editor': {
     title: 'JSON 编辑器',
     description: '可视化 JSON 编辑器：语法高亮 + 校验 + 格式化 + token 遮罩。',
-  },
-  'mcp-management': {
-    title: 'MCP 管理',
-    description: 'MCP server 列表 + 启用 toggle + 新增 / 编辑 / 删除。',
   },
   'usage-query': {
     title: '用量查询',
@@ -151,6 +149,41 @@ export default function App(): ReactElement {
   // Esc closes. Kept in App.tsx (rather than in a store) because
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+
+  // Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 stale
+  // 'mcp-management'(Fix 6 之前最后一次访问的值)→ useViewState 的
+  // isValidView 校验失败 → 落回 'home'。我们用 useEffect 接住这个
+  // 分支:读到 ccm.lastView === 'mcp-management' → clearStorage +
+  // window.location.replace('/resource-browser?tab=mcp')。ResourceBrowser
+  // 自身的 useSearchParams 会读 ?tab=mcp → 默认 kind='mcp',mcp tab
+  // 接管 (D-11)。
+  //
+  // 这个 effect 只在挂载时跑一次(空依赖),mount 后用户切到正常 view
+  // 不会再次触发。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored === 'mcp-management') {
+        // 清掉 stale value,再 setView('resource-browser') 走正常 React
+        // 路由(useViewState 会写 ccm.lastView = 'resource-browser')。
+        // 这样能保证 window.location 和 localStorage 同步,不会
+        // 产生 "localStorage 还是 stale 但 view 已切" 的不一致。
+        window.localStorage.removeItem(STORAGE_KEY);
+        setView('resource-browser');
+        // URL 加 ?tab=mcp 触发 ResourceBrowser 的 useSearchParams 默认
+        // kind=mcp。这里用 location.replace 不留 history entry(用户
+        // 不应该能 "back" 回到 /mcp-management 老路由 — 那个路由
+        // 已经不存在了)。
+        if (!window.location.search.includes('tab=mcp')) {
+          window.location.replace('/resource-browser?tab=mcp');
+        }
+      }
+    } catch {
+      // localStorage 在沙盒/隐私模式下可能 throw;忽略,App 仍可用。
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // F10 — 拖放遮罩可见性。当用户拖入 .sql 文件悬停在窗口上时
   // 显示"松开以导入 .sql"遮罩,drop / leave 后隐藏。
@@ -572,8 +605,6 @@ export default function App(): ReactElement {
               <ImportSqlPage initialFilePath={pendingSqlFile} />
             ) : view === 'json-editor' ? (
               <JsonEditorPage />
-            ) : view === 'mcp-management' ? (
-              <McpManagementPage />
             ) : view === 'usage-query' ? (
               <UsageQueryPage />
             ) : view === 'resource-browser' ? (
