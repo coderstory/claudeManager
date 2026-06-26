@@ -823,9 +823,7 @@ export default function JsonEditorPage(): ReactElement {
           <textarea
             data-testid="json-editor-fullscreen-textarea"
             value={displayContent}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-              onRawChange(e.target.value)
-            }
+            onChange={handleRawChange}
             spellCheck={false}
             style={{
               flex: 1,

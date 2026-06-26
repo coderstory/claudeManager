@@ -164,29 +164,6 @@ export default function BackupRestorePage(): ReactElement {
     });
   }, []);
 
-  // M5 #29 — select-all on the current page.
-  const toggleSelectAllPage = useCallback((pagePaths: string[]): void => {
-    setState((prev) => {
-      const allSelected = pagePaths.every((p) => prev.selected.includes(p));
-      if (allSelected) {
-        // Deselect all on this page (keep selections from other pages).
-        return {
-          ...prev,
-          selected: prev.selected.filter((p) => !pagePaths.includes(p)),
-          diff: null,
-        };
-      }
-      // Select all on this page (union with existing from other pages).
-      const merged = Array.from(new Set([...prev.selected, ...pagePaths]));
-      return {
-        ...prev,
-        selected: merged,
-        // Diff becomes invalid once we cross 2.
-        diff: merged.length === 2 ? prev.diff : null,
-      };
-    });
-  }, []);
-
   // ---- detail view ----
 
   const handleShowContent = useCallback(async (path: string): Promise<void> => {

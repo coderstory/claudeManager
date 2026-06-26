@@ -60,13 +60,10 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
     switchTo,
   } = useProjects();
 
-  const [adding, setAdding] = useState<boolean>(false);
   // M5 #3 — modal mode flag. The user requested 新增项目 render as
   // a modal dialog (Esc to close, click overlay to dismiss) instead
-  // of an inline form below the project list. We keep `adding` as
-  // the source of truth and add `modalOpen` so we can render the
-  // dialog separately from any inline use (currently unused, but
-  // cheap insurance for future layouts).
+  // of an inline form below the project list. `modalOpen` is the
+  // single source of truth for the dialog's open/closed state.
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>('');
   const [newRoot, setNewRoot] = useState<string>('');
@@ -165,7 +162,6 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       await add(newName.trim(), newRoot.trim());
       setNewName('');
       setNewRoot('');
-      setAdding(false);
       setModalOpen(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -177,7 +173,6 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
 
   // M5 #3 — close the modal cleanly (Esc / overlay / 取消).
   const closeAddModal = useCallback((): void => {
-    setAdding(false);
     setModalOpen(false);
     setNewName('');
     setNewRoot('');
@@ -321,7 +316,6 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 onClick={() => {
                   // M5 #3 — open as a modal dialog (Esc to close,
                   // click overlay to dismiss) instead of inline.
-                  setAdding(true);
                   setModalOpen(true);
                 }}
                 disabled={busy}
