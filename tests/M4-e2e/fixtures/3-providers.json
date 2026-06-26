@@ -1,0 +1,32 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.provider-a.com",
+    "ANTHROPIC_AUTH_TOKEN": "sk-test-a-1234567890"
+  },
+  "providers": [
+    {
+      "id": "provider-a",
+      "name": "Provider A",
+      "baseUrl": "https://api.provider-a.com",
+      "apiKeyEnv": "ANTHROPIC_AUTH_TOKEN",
+      "model": "claude-sonnet-4-6",
+      "isActive": true
+    },
+    {
+      "id": "provider-b",
+      "name": "Provider B",
+      "baseUrl": "https://api.provider-b.com",
+      "apiKeyEnv": "ANTHROPIC_AUTH_TOKEN",
+      "model": "claude-opus-4-8",
+      "isActive": false
+    },
+    {
+      "id": "provider-c",
+      "name": "Provider C",
+      "baseUrl": "https://api.provider-c.com",
+      "apiKeyEnv": "ANTHROPIC_AUTH_TOKEN",
+      "model": "claude-sonnet-4-6",
+      "isActive": false
+    }
+  ]
+}
