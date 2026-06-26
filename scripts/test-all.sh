@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# scripts/test-all.sh — Unified 5-stage test entry
+# scripts/test-all.sh — Unified 6-stage test entry
 #
-# Runs the full pre-ship gate in one command. Default = all 5 stages.
+# Runs the full pre-ship gate in one command. Default = all 6 stages.
 # Each stage has a --skip-* flag for fast iteration (e.g. PR pre-push
 # without rebuilding the release exe for smoke/e2e).
 #
@@ -23,13 +23,19 @@
 #   5. Smoke test (scripts/smoke-test.sh)
 #      — 10/10 exe content/window/db checks
 #      — Requires release exe. If missing → WARN-skip.
+#   6. M4 e2e (tests/M4-e2e/run-all.sh)
+#      — 14 hard-fail scenarios validating real .app + real filesystem
+#        side effects (AppleScript on macOS, Win32 UI Automation on Windows).
+#      — macOS-first per M4-PLAN.md §9 Q=C=1; Windows via driver-win.ps1 (Phase 5).
+#      — HARD-FAIL: any of 14 scenarios FAIL → test-all exit 1 (Q3=ship gate).
 #
 # Usage:
-#   ./scripts/test-all.sh                          # all 5 stages
+#   ./scripts/test-all.sh                          # all 6 stages
 #   ./scripts/test-all.sh --skip-e2e --skip-smoke  # PR pre-push: only 1+2+3
 #   ./scripts/test-all.sh --skip-frontend          # skip vitest
 #   ./scripts/test-all.sh --skip-rust              # skip cargo build --tests
 #   ./scripts/test-all.sh --skip-ui-check          # skip the 3-location text check
+#   ./scripts/test-all.sh --skip-m4-e2e            # skip 14 M4 scenarios (dev loop)
 #
 # Exit codes:
 #   0  all REQUIRED stages passed (skipped stages not counted)
@@ -61,9 +67,9 @@ say_info() { echo -e "${C_INFO}$*${C_RESET}"; }
 # Without this the summary would print "MISS not run" for any stage that
 # never enters its run block (e.g. smoke not reached because earlier stage
 # was the last one run before exit).
-STAGE_ORDER=("ui-check" "frontend" "rust" "e2e" "smoke")
-STAGE_STATUS=(0 0 0 0 0)
-STAGE_DETAIL=("" "" "" "" "")
+STAGE_ORDER=("ui-check" "frontend" "rust" "e2e" "smoke" "m4-e2e")
+STAGE_STATUS=(0 0 0 0 0 0)
+STAGE_DETAIL=("" "" "" "" "" "")
 
 # Numeric encoding for STAGE_STATUS — easier to compare
 SKIP=1; PASS=2; FAIL=3; WARN=4
@@ -98,12 +104,13 @@ SKIP_FRONTEND=0
 SKIP_RUST=0
 SKIP_E2E=0
 SKIP_SMOKE=0
+SKIP_M4=0
 
 usage() {
   cat <<EOF
-Usage: test-all.sh [--skip-ui-check] [--skip-frontend] [--skip-rust] [--skip-e2e] [--skip-smoke]
+Usage: test-all.sh [--skip-ui-check] [--skip-frontend] [--skip-rust] [--skip-e2e] [--skip-smoke] [--skip-m4-e2e]
 
-Default: all 5 stages run sequentially (ui-check, frontend, rust, e2e, smoke).
+Default: all 6 stages run sequentially (ui-check, frontend, rust, e2e, smoke, m4-e2e).
 
 Stages:
   1. ui-check   scripts/check-ui-text-3-locations.sh
@@ -111,6 +118,7 @@ Stages:
   3. rust       scripts/test-verify.sh (cargo build --tests)
   4. e2e        scripts/run-e2e.sh  (WARN-skip if release exe / drivers missing)
   5. smoke      scripts/smoke-test.sh <exe>  (WARN-skip if release exe missing)
+  6. m4-e2e     tests/M4-e2e/run-all.sh  (14 hard-fail scenarios; macOS-first per M4-PLAN.md §9)
 
 Exit codes: 0 on all required stages passing, 1 on any failure or bad flag.
 EOF
@@ -124,6 +132,7 @@ while [[ $# -gt 0 ]]; do
     --skip-rust)      SKIP_RUST=1; shift ;;
     --skip-e2e)       SKIP_E2E=1; shift ;;
     --skip-smoke)     SKIP_SMOKE=1; shift ;;
+    --skip-m4-e2e)    SKIP_M4=1; shift ;;
     -h|--help|help)   usage ;;
     *)
       say_err "FAIL: unknown arg: $1"
@@ -160,11 +169,11 @@ fi
 
 # === Header ===
 echo "============================================"
-echo "test-all.sh — unified 5-stage gate"
+echo "test-all.sh — unified 6-stage gate"
 echo "  platform:  $(uname -s)"
 echo "  root:      $PROJECT_ROOT"
 echo "  release:   ${RELEASE_EXE:-(none)}"
-echo "  skips:     ui=$SKIP_UI frontend=$SKIP_FRONTEND rust=$SKIP_RUST e2e=$SKIP_E2E smoke=$SKIP_SMOKE"
+echo "  skips:     ui=$SKIP_UI frontend=$SKIP_FRONTEND rust=$SKIP_RUST e2e=$SKIP_E2E smoke=$SKIP_SMOKE m4-e2e=$SKIP_M4"
 echo "============================================"
 echo ""
 
@@ -181,7 +190,8 @@ run_stage() {
      [[ "$stage" == "frontend" && "$SKIP_FRONTEND" == "1" ]] || \
      [[ "$stage" == "rust" && "$SKIP_RUST" == "1" ]] || \
      [[ "$stage" == "e2e" && "$SKIP_E2E" == "1" ]] || \
-     [[ "$stage" == "smoke" && "$SKIP_SMOKE" == "1" ]]; then
+     [[ "$stage" == "smoke" && "$SKIP_SMOKE" == "1" ]] || \
+     [[ "$stage" == "m4-e2e" && "$SKIP_M4" == "1" ]]; then
     say_info "[$stage] SKIP (--skip flag)"
     stage_set "$idx" "$SKIP" "skipped by flag"
     return 0
@@ -303,10 +313,26 @@ if [[ "$SKIP_SMOKE" -ne 1 ]]; then
   fi
 fi
 
+# === Stage 6: M4 e2e (hard-fail per M4-PLAN.md §5 Q3) ===
+# macOS-first (M4-PLAN.md §9 Q=C=1); Windows via driver-win.ps1 (Phase 5).
+# 14 hard-fail scenarios validating real .app + real filesystem side effects.
+# `run_stage` (not soft) because Q3 says hard-fail; the `|| true` at the end
+# is so we still print the summary table even when this stage fails.
+if [[ "$SKIP_M4" -ne 1 ]]; then
+  if [[ "$(uname -s)" == "Darwin" ]] || [[ "$(uname -s)" == "MINGW"* ]] || [[ "$(uname -s)" == "CYGWIN"* ]]; then
+    run_stage "m4-e2e" "M4 e2e 14 场景 (AppleScript/UI Automation)" \
+      "$PROJECT_ROOT/tests/M4-e2e/run-all.sh" \
+      || true
+  else
+    say_info "[m4-e2e] SKIP (M4 macOS+Windows only; this is $(uname -s))"
+    stage_set "$(stage_index m4-e2e)" "$WARN" "M4 macOS+Windows only"
+  fi
+fi
+
 # === Summary ===
 echo ""
 echo "============================================"
-echo "Summary"
+echo "Summary (6 stages)"
 echo "============================================"
 printf "%-12s %-7s %s\n" "STAGE" "RESULT" "DETAIL"
 echo "--------------------------------------------"
