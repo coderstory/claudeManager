@@ -357,10 +357,11 @@ describe('McpManagementPage — F6 (M2.5)', () => {
     });
   });
 
-  // M5 bug #13 — empty-state hint must not mention ccswitch:// (the
-  // protocol was removed). Hint now points users at JSON clipboard
-  // content instead.
-  it('empty-state hint does not mention ccswitch protocol (bug #13)', async () => {
+  // BUG-BZ-04 — empty-state hint must mention BOTH clipboard paste
+  // options (MCP server JSON config AND ccswitch:// deeplink URL).
+  // The hint should guide users to either of the two paste inputs
+  // the import button smart-detects.
+  it('mcp_empty_state_hint_mentions_ccswitch_url', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_mcp_servers') return [];
       return null;
@@ -369,9 +370,25 @@ describe('McpManagementPage — F6 (M2.5)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('mcp-empty')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('mcp-empty').textContent).not.toContain(
-      'ccswitch',
-    );
+    const hint = screen.getByTestId('mcp-empty').textContent ?? '';
+    // Both paste inputs should be advertised in the hint.
+    expect(hint).toContain('JSON');
+    expect(hint).toContain('ccswitch://v1/import?resource=mcp');
+  });
+
+  // M5 bug #13 — original test that asserted no ccswitch mention;
+  // superseded by BUG-BZ-04 (re-enabled ccswitch:// in hint). Kept
+  // as a regression guard: never let the hint drop the JSON mention
+  // (it was the original guidance).
+  it('empty-state hint still mentions JSON clipboard content (BUG-BZ-04 guard)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_mcp_servers') return [];
+      return null;
+    });
+    render(<McpManagementPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-empty')).toBeInTheDocument();
+    });
     expect(screen.getByTestId('mcp-empty').textContent).toContain('JSON');
   });
 
