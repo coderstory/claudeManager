@@ -2,13 +2,17 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: M6 用户实测反馈修复
+current_phase: 27
+current_phase_name: v3.2 M6 critical 5 bug 修复
 status: planning
-last_updated: "2026-06-26T07:05:00.000Z"
+stopped_at: Phase 27 context gathered
+last_updated: "2026-06-26T07:57:01.164Z"
 last_activity: 2026-06-26
+last_activity_desc: Milestone v3.2 ROADMAP + REQUIREMENTS + STATE sync
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 5
+  total_plans: 0
   completed_plans: 0
   percent: 0
 ---
@@ -72,6 +76,7 @@ Status: Roadmap complete (Phases 27-31 planned); awaiting execution
 Last activity: 2026-06-26 — Milestone v3.2 ROADMAP + REQUIREMENTS + STATE sync
 
 **v3.2 plan summary** (ROADMAP.md Phase 27-31):
+
 - Phase 27: critical 5 bug 修复 (BUG-CR-01~05)
 - Phase 28: 业务 13 bug 修复 (BUG-BZ-01~07 真修 + BUG-BZ-08~13 留空待 v3.2.1)
 - Phase 29: 重构 9 bug 修复 (BUG-RF-01~09)
@@ -1526,3 +1531,9 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 - `.planning/STATE.md` 顶部状态更新（status: executing → awaiting_user_review）
 - 本节追加：v3.0 round 2 完整 ship 状态（8/8 + 收尾 commit）
 - `git commit`：`docs(v3.0-round2): STATE.md 落盘 - 8/8 任务 ship 完成 + 主 session 收尾`
+
+## Session
+
+**Last session:** 2026-06-26T07:57:01.155Z
+**Stopped at:** Phase 27 context gathered
+**Resume file:** .planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-CONTEXT.md
