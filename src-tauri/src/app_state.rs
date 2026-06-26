@@ -151,17 +151,21 @@ impl AppState {
                 }
             }
         };
-        let provider_service = Arc::new(
-            crate::services::provider_service::ProviderService::new(paths.clone()),
-        );
-        let mcp_service = Arc::new(
-            crate::services::mcp_service::McpService::new(paths.clone()),
-        );
         // M4.6 — attach the history sink to F13 so every new
-        // `.bak.<ts>` writes a row to `backup_history`.
+        // `.bak.<ts>` writes a row to `backup_history`. Must be
+        // built BEFORE `provider_service` so we can inject it via
+        // `.with_backup_service(...)` (M3.6 / 清单 22: update /
+        // delete need F13 auto-backup).
         let backup_service = Arc::new(
             crate::services::backup_service::BackupService::new(paths.clone())
                 .with_history(history_service.clone()),
+        );
+        let provider_service = Arc::new(
+            crate::services::provider_service::ProviderService::new(paths.clone())
+                .with_backup_service(backup_service.clone()),
+        );
+        let mcp_service = Arc::new(
+            crate::services::mcp_service::McpService::new(paths.clone()),
         );
         // M4.6 — attach the history sink to F7 so every fresh
         // snapshot writes a row to `usage_history`.

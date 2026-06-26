@@ -1,8 +1,8 @@
-//! optimizer_rules — 13 individual rules for F18 (M2.9).
+//! optimizer_rules — 16 individual rules for F18 (M2.9 + M3.3).
 //!
 //! Each rule is a `struct` implementing [`OptimizerRule`]. The
 //! [`OptimizerService`] (in `services/optimizer_service.rs`) registers
-//! all 13 rules and dispatches `scan` / `apply` calls to them.
+//! all 16 rules and dispatches `scan` / `apply` calls to them.
 //!
 //! # Why "infrastructure" not "domain"
 //!
@@ -1140,7 +1140,7 @@ fn write_env_kv(
 /// order. Used by `OptimizerService::new`; tests use it too so the count
 /// stays in sync.
 ///
-/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003。
+/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003,合计 16 条规则。
 pub fn all_rules() -> Vec<Box<dyn OptimizerRule>> {
     vec![
         Box::new(OrphanProviderRule),

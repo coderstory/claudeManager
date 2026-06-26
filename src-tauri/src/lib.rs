@@ -157,6 +157,8 @@ pub fn run() {
             commands::about::get_app_info,
             commands::optimizer::scan_optimizations,
             commands::optimizer::apply_optimizations,
+            // M3.3 (Phase 4) — per-row Fix button backend (SC #2/#3)
+            commands::optimizer::apply_rule_fix,
             // M2.16 — F23 优化建议导出 markdown（Rust 侧生成 + 弹保存框 + 原子写盘）
             commands::optimizer::export_optimization_report,
             // M2.13 — F16 资源浏览

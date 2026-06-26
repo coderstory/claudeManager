@@ -84,6 +84,45 @@ pub async fn apply_optimizations(
         .map_err(|e| format!("应用优化失败: {e}"))
 }
 
+/// M3.3 (Phase 4, SC #2 / #3) — per-rule Fix button backend.
+///
+/// Looks up `rule_id` in the registered rule set, re-scans, then runs
+/// the rule's `apply` for every auto-fixable finding. Returns one
+/// `ApplyResult` per finding the rule emitted (manual-only rules
+/// return `ApplyResult::manual`).
+///
+/// Each auto-apply writes via `fs_atomic::write_with_backup` (the
+/// same atomic pattern `apply_optimizations` uses, proven by the
+/// `apply_findings_creates_backup_for_auto_rules` test).
+///
+/// Returns `Err` when the `rule_id` doesn't match any registered rule
+/// so the UI can surface "未知规则" to the user (vs a silent
+/// empty-vector success).
+#[tauri::command]
+pub async fn apply_rule_fix(
+    state: State<'_, AppState>,
+    rule_id: String,
+) -> CmdResult<Vec<ApplyResult>> {
+    let active_root = crate::platform::runtime::paths().active_root_dir();
+    let results = state
+        .optimizer_service
+        .apply_rule_fix(&rule_id, active_root.as_deref())
+        .map_err(|e| format!("应用规则修复失败: {e}"))?;
+    if results.is_empty() {
+        // The service returns an empty vec when the rule_id is
+        // unknown OR when the rule didn't fire on the current
+        // config. Distinguish by checking the registry directly so
+        // the UI gets a useful message.
+        if state.optimizer_service.find_rule(&rule_id).is_none() {
+            return Err(format!("未知规则: {rule_id}"));
+        }
+        // Known rule but no findings — surface as a no-op success
+        // (the UI's status icon will just stay green-check; the
+        // user is happy their config is clean).
+    }
+    Ok(results)
+}
+
 // ---------------------------------------------------------------------------
 // F23 — 优化建议导出 (M2.16)
 // ---------------------------------------------------------------------------
@@ -240,7 +279,7 @@ fn epoch_to_ymdhms(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
 /// - 修复方式: 可自动修复 / 需手动处理
 /// - 应用状态（如有): 已应用 / 未应用 (原因)
 ///
-/// ## 附录: 13 条规则参考
+/// ## 附录: 16 条规则参考
 /// ...
 /// ```
 ///
@@ -307,7 +346,7 @@ pub(crate) fn build_markdown_report(
         .map(|rs| rs.iter().map(|r| (r.finding_id.as_str(), r)).collect())
         .unwrap_or_default();
     if findings.is_empty() {
-        out.push_str("\n未发现需优化的项。所有 13 个规则都已通过。\n");
+        out.push_str("\n未发现需优化的项。所有 16 个规则都已通过。\n");
     } else {
         for (i, f) in findings.iter().enumerate() {
             let sev_label = severity_zh(f.severity);
@@ -336,8 +375,8 @@ pub(crate) fn build_markdown_report(
         out.push('\n');
     }
 
-    // ---- 附录: 13 条规则参考 ----
-    out.push_str("## 附录: 13 条优化规则参考\n\n");
+    // ---- 附录: 16 条规则参考 ----
+    out.push_str("## 附录: 16 条优化规则参考\n\n");
     out.push_str("| 规则 ID | 严重度 | 可自动修复 | 说明 |\n");
     out.push_str("|---|---|---|---|\n");
     for (rid, sev, auto, desc) in RULE_REFERENCE {
@@ -358,7 +397,9 @@ pub(crate) fn build_markdown_report(
 /// 16 条优化规则的静态参考表（与 `optimizer_rules::all_rules` 对齐)。
 /// 用于报告附录,让接收方不看代码也能理解每条规则的语义。
 ///
-/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003 三条 env 规则。
+/// M3.3 增量:在 13 个文件规则之后追加 ENV001/002/003 三条 env 规则,
+///
+/// 合计 16 条规则。
 const RULE_REFERENCE: [(&str, Severity, bool, &str); 16] = [
     ("ORPHAN_PROVIDER", Severity::Warning, false, "settings.json 引用了不存在的 provider"),
     ("UNREFERENCED_PROVIDER", Severity::Info, false, "provider 从未被使用,可考虑删除"),

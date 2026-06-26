@@ -355,3 +355,86 @@ fn multi_rule_apply_each_gets_its_own_backup() {
     let raw = fs::read_to_string(&settings_path).unwrap();
     let _: Value = serde_json::from_str(&raw).expect("settings.json must remain valid JSON after atomic write");
 }
+
+// ---------------------------------------------------------------------------
+// M3.3 (Phase 4, SC #2/#3) — apply_rule_fix(rule_id) per-row Fix button
+// ---------------------------------------------------------------------------
+
+/// 用 `apply_rule_fix("ENV001")` 走单规则路径,验证:
+///   1. 单条 rule_id 调用 → settings.json 增量修复(只补 ENV001 那行)
+///   2. F13 备份文件存在,内容 = apply-before
+///   3. 新 settings.json = 期望的 after
+///
+/// 这是 per-row Fix 按钮的端到端 fixture 测试,跟 batch `apply_findings`
+/// 路径不同 — 通过 `service.apply_rule_fix("ENV001", None)` 直接驱动。
+///
+/// Fixture 形状:ENV001 的 `*-after.json` 直接就是 settings.json 内容
+/// (无 "settings_json" 包装),跟 R005 那种带包装的不一样 — ENV 规则
+/// 的 apply 前后都很小,简单直接。
+#[test]
+fn apply_rule_fix_env001_writes_zero_with_backup() {
+    let before = load_fixture(Path::new(
+        "tests/fixtures/optimizer/ENV001-attribution-header-apply-before.json",
+    ));
+    let after = load_fixture(Path::new(
+        "tests/fixtures/optimizer/ENV001-attribution-header-apply-after.json",
+    ));
+    // ENV001 fixture 直接就是 settings.json 内容(无 wrapper)
+    let before_settings = before.get("settings_json").cloned().unwrap_or_else(|| before.clone());
+
+    let h = Harness::new();
+    let settings_path = h.write_settings(&before_settings);
+
+    // 走 service 的 per-rule 入口
+    let results = h
+        .service
+        .apply_rule_fix("ENV001", None)
+        .expect("apply_rule_fix");
+
+    assert_eq!(results.len(), 1, "ENV001 should produce exactly 1 result");
+    let r = &results[0];
+    assert!(r.applied, "ENV001 should be applied, got: {:?}", r);
+    assert!(r.backup_path.is_some(), "F13 backup must be returned");
+
+    assert_backup_created_and_matches(&settings_path, &before_settings);
+    assert_settings_equals_after(&settings_path, &after);
+}
+
+/// Unknown rule_id → 空 results(命令层会翻成 Err("未知规则"))。
+/// service 层不报错,只返回空 vec — 给上层足够的判断空间。
+#[test]
+fn apply_rule_fix_unknown_rule_returns_empty() {
+    let h = Harness::new();
+    h.write_settings(&serde_json::json!({}));
+    let results = h
+        .service
+        .apply_rule_fix("NOT_A_REAL_RULE", None)
+        .expect("unknown rule is a no-op, not an error");
+    assert!(results.is_empty(), "unknown rule should produce no results");
+}
+
+/// `apply_rule_fix` 在 settings.json 已无问题时也返回空 vec(规则不 fire)。
+#[test]
+fn apply_rule_fix_clean_settings_returns_empty() {
+    let h = Harness::new();
+    // clean settings: 已经有 ANTHROPIC_BASE_URL,且 env 块不含任何需要 ENV
+    // 修复的字段 — DEPRECATED_FIELD 不存在(env 字段全 lowercase 也没),
+    // 其它 4 条 ENV 规则不 fire。
+    let clean = serde_json::json!({
+        "env": {
+            "ANTHROPIC_BASE_URL": "https://x.example",
+            "ANTHROPIC_AUTH_TOKEN": "k".repeat(32),
+            "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            "CLAUDE_CODE_EFFORT_LEVEL": "max"
+        }
+    });
+    h.write_settings(&clean);
+
+    // 选一条已知 auto 规则,clean config 下应返回空
+    let results = h
+        .service
+        .apply_rule_fix("DEPRECATED_FIELD", None)
+        .expect("apply_rule_fix clean");
+    assert!(results.is_empty(), "clean config should yield no apply results");
+}

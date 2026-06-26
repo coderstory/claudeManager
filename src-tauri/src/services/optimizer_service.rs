@@ -1,6 +1,6 @@
 //! OptimizerService — F18 (配置优化) business logic for M2.9.
 //!
-//! Composes all 13 [`OptimizerRule`] implementations to:
+//! Composes all 16 [`OptimizerRule`] implementations to:
 //!
 //! - Build a fresh [`OptimizerContext`] from `~/.claude/settings.json`
 //!   + `<app_data>/providers/*.json` + `~/.claude/mcp.json`
@@ -99,6 +99,13 @@ impl OptimizerService {
     #[allow(dead_code)]
     pub fn paths(&self) -> &AppPaths {
         &self.paths
+    }
+
+    /// Find a registered rule by its id. Returns `None` if no rule
+    /// with that id is registered (e.g. frontend typo'd the id).
+    /// Used by [`Self::apply_rule_fix`] to dispatch the per-rule fix.
+    pub fn find_rule(&self, rule_id: &str) -> Option<&dyn OptimizerRule> {
+        self.rules.iter().find(|r| r.id() == rule_id).map(|r| &**r)
     }
 
     // -----------------------------------------------------------------------
@@ -254,6 +261,76 @@ impl OptimizerService {
             }
             // Refresh ctx between applies so subsequent rules see the
             // mutated state. Cheap (just re-reads the 3 files).
+            ctx = self.build_context(active_root_dir);
+        }
+        Ok(results)
+    }
+
+    // -----------------------------------------------------------------------
+    // apply_rule_fix — M3.3 per-row Fix button (SC #2)
+    // -----------------------------------------------------------------------
+
+    /// Apply every auto-fixable finding for a single rule id.
+    ///
+    /// This is the per-row Fix button's backend: the UI scans, then
+    /// the user clicks Fix on a specific rule. We re-scan (so the
+    /// rule's `check` runs against the latest files), filter the
+    /// resulting findings to that `rule_id`, and run `apply` on each
+    /// one. Per-rule context (settings.json / providers / mcp.json) is
+    /// built once and refreshed between applies, identical to
+    /// [`Self::apply_findings`].
+    ///
+    /// Returns one `ApplyResult` per finding encountered. Manual-only
+    /// rules return `ApplyResult::manual` with an explanatory reason
+    /// (so the UI's per-row status icon flips to red-x with a
+    /// readable message instead of a silent no-op).
+    ///
+    /// Errors:
+    /// - Unknown `rule_id` → `Ok(vec![])` (empty result; the command
+    ///   layer wraps this as an `Err` for the user).
+    /// - The standard `OptimizerError` (I/O / rule) bubbles up to the
+    ///   command boundary and surfaces as a user-readable string.
+    pub fn apply_rule_fix(
+        &self,
+        rule_id: &str,
+        active_root_dir: Option<&Path>,
+    ) -> Result<Vec<ApplyResult>, OptimizerError> {
+        // Look up the rule first — unknown id is a no-op, not an
+        // error. The command layer translates the empty result into
+        // a user-friendly error message.
+        if self.find_rule(rule_id).is_none() {
+            return Ok(Vec::new());
+        }
+
+        // Re-scan so we have fresh findings (the user's scan may
+        // have aged out, or the rule may not have fired in the
+        // cached scan). This mirrors `apply_findings`'s cache-then-
+        // rescan pattern.
+        let findings = self.scan_with_root(active_root_dir)?;
+        let matching: Vec<OptimizationFinding> = findings
+            .into_iter()
+            .filter(|f| f.rule_id == rule_id)
+            .collect();
+        if matching.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rule = self.find_rule(rule_id).expect("checked above");
+        let mut ctx = self.build_context(active_root_dir);
+        let mut results = Vec::with_capacity(matching.len());
+        for finding in matching {
+            match rule.apply(&finding, &ctx) {
+                Ok(r) => results.push(r),
+                Err(e) => results.push(ApplyResult {
+                    finding_id: finding.id,
+                    applied: false,
+                    backup_path: None,
+                    error: Some(format!("rule.apply 失败: {e}")),
+                }),
+            }
+            // Refresh ctx between applies so subsequent rules see the
+            // mutated state (e.g. removing one deprecated key, then
+            // checking for another).
             ctx = self.build_context(active_root_dir);
         }
         Ok(results)
