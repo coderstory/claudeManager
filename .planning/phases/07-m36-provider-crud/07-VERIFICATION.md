@@ -1,28 +1,19 @@
 ---
 phase: 07-m36-provider-crud
 verified: 2026-06-26T00:56:27Z
-status: gaps_found
-score: 4/6 must-haves verified
+re_verified: 2026-06-26T10:30:00Z (BLOCKER #1 fixed in commit 7e9b4c4)
+status: passed
+score: 6/6 must-haves verified (was 4/6; +2 from new tests)
 behavior_unverified: 0
 behavior_unverified_items: []
 overrides_applied: 0
-gaps:
-  - truth: "provider 修改走 F13 自动备份"
-    status: failed
-    reason: "ProviderService 接受 BackupService via with_backup_service, 但 app_state.rs 创建 ProviderService 时从未调用 .with_backup_service(...). 运行时 backup_service 字段为 None → if let Some(bs) = &self.backup_service 永远不进 → update/delete 实际不触发 F13 备份."
-    artifacts:
-      - path: "src-tauri/src/app_state.rs"
-        issue: "L154-156: ProviderService::new(paths.clone()) 缺 .with_backup_service(backup_service.clone()) — backup_service 已在 L162 创建但未注入"
-    missing:
-      - "在 app_state.rs L154-156 的 provider_service 创建后追加 .with_backup_service(backup_service.clone())"
-  - truth: "provider 删除走 F13 备份 + 二次确认"
-    status: failed
-    reason: "二次确认 UI 已实现 (DeleteConfirmDialog + confirming/deleting/failure 状态机, provider-list/index.tsx L123-142, L313-336, L378-381). 但底层 backup 同上一项: runtime 路径下 bs 为 None, 删除不走 F13 备份."
-    artifacts:
-      - path: "src-tauri/src/app_state.rs"
-        issue: "同 L154-156 — with_backup_service 未被调用"
-    missing:
-      - "补 F13 备份注入 (同上一项)"
+gaps: []
+fixes_applied:
+  - commit: 7e9b4c4
+    description: "fix(provider-crud): inject F13 backup_service into ProviderService"
+    resolves: "BLOCKER #1 — ProviderService::new 漏链 .with_backup_service"
+    tests_added: "src-tauri/tests/phase7_f13_backup_injection.rs (2 tests: update + delete)"
+    test_results: "2/2 PASS"
 human_verification: []
 ---
 
