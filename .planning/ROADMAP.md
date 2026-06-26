@@ -501,8 +501,12 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 **Archive:** `milestones/v3.2-phases/27-v32-m6-critical-5-bug-*/`
 
 Plans:
+**Wave 1**
 
 - [ ] 27-01-PLAN.md — Wave 1 (4 subagent 并行): fix 1 header drag (合约验证 + e2e) / fix 2 用量三件套 (COALESCE MIN type + 30 天窗口 GROUP BY + SELECT COUNT verify) / fix 3 JSON path::field (Rust field 参数 + 前端 sessionStorage split + T-05 field 安全拒绝) / fix 4 useScope hook (React 19 useSyncExternalStore, no zustand) + 3 组件 key remount (McpManagement/JsonFileTree/ResourceBrowser)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 27-02-PLAN.md — Wave 2 (1 subagent, 依赖 27-01 fix 4): fix 5 SQL 导入 selected IDs + distinct 计数 + UNIQUE 约束 (D-15~D-18);fix 6 MCP 合并重构 (/mcp-management 路由删除 + sidebar 清理 + 老用户 localStorage remap → /resource-browser?tab=mcp + McpManagementPanel 共享组件)
 
 **Success Criteria** (observable user behaviors — 重映射到 11 条实测反馈,6 个 fix):
