@@ -16,12 +16,14 @@ shipped: pending
 
 > 用户实测新发现的 critical bug,阻塞主流程（备份失败 / 切换 provider 报错 / sqlite 缺表 / settings.json 解析错 等）。
 > Phase 27 critical 5 — 5 fix commits,每个 commit 一个独立 fix。
+>
+> **v3.2.1 (2026-06-26) 重映射**:实测 11 条反馈映射到预排 BUG-CR-01~05 槽位,原预排的 F2 switch atomic / F13 backup / sqlite read / F2 round-trip / F18 finding 过期 5 项推 v3.2.1 backlog;实际修复见 `.planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-CONTEXT.md` (D-01~D-32)。
 
-- [ ] **BUG-CR-01**: 用户可以正常切换 provider (atomic backup → write → reload Claude) 不报错
-- [ ] **BUG-CR-02**: 用户可以正常使用 F13 备份,备份文件可恢复
-- [ ] **BUG-CR-03**: 用户可以正常用 sqlite 读 settings.json,无缺表报错
-- [ ] **BUG-CR-04**: 用户可以正常用 F2 switch UI 切换 provider,无 round-trip 错
-- [ ] **BUG-CR-05**: 用户可以正常用 F18 配置优化,无 finding 过期错
+- [ ] **BUG-CR-01**: header 区域可拖动窗口（鼠标按住 AppHeader 非控件区不报错 / OS 触发窗口移动）
+- [ ] **BUG-CR-02**: 用量查询页 7 天趋势正确（SQL MIN 类型不报错 + 30 天窗口按天聚合 + 刷新后立即看到新行）
+- [ ] **BUG-CR-03**: JSON 编辑器打开不报错（路径/字段拆 IPC 参数 + 虚拟路径协议 `path::field` 解析对）
+- [ ] **BUG-CR-04**: scope (用户/项目) 切换生效（MCP / JSON 目录树 / 资源浏览 3 处 `useScope` 强制重 mount）
+- [ ] **BUG-CR-05**: SQL 导入数量正确（1 个 provider = 1 个提示,`UNIQUE(provider_name, source_path)` 去重）
 
 ### 业务 Bug Fix (P1, phase 28)
 
@@ -99,11 +101,11 @@ shipped: pending
 
 | REQ-ID | Phase | Notes |
 |--------|-------|-------|
-| BUG-CR-01 | Phase 27 | 用户切换 provider (atomic backup → write → reload Claude) 不报错 |
-| BUG-CR-02 | Phase 27 | F13 备份可恢复 |
-| BUG-CR-03 | Phase 27 | sqlite 读 settings.json 无缺表报错 |
-| BUG-CR-04 | Phase 27 | F2 switch UI round-trip 无错 |
-| BUG-CR-05 | Phase 27 | F18 finding 过期处理 |
+| BUG-CR-01 | Phase 27 | header 区域可拖动窗口 (D-22~D-24) |
+| BUG-CR-02 | Phase 27 | 用量查询 7 天趋势 + refresh 立即生效 (D-06~D-09) |
+| BUG-CR-03 | Phase 27 | JSON 编辑器 path::field 协议 (D-19~D-21) |
+| BUG-CR-04 | Phase 27 | scope 切换 useScope 强制 remount (D-01~D-05) |
+| BUG-CR-05 | Phase 27 | SQL 导入 1 INSERT = 1 provider + UNIQUE 去重 (D-15~D-18) |
 | BUG-BZ-01 | Phase 28 | SQL 导入过滤无效行 |
 | BUG-BZ-02 | Phase 28 | JSON 全屏编辑 |
 | BUG-BZ-03 | Phase 28 | JSON 目录树渲染 |
