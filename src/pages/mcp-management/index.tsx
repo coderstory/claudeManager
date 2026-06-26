@@ -493,8 +493,8 @@ export default function McpManagementPage(): ReactElement {
             fontSize: 13,
           }}
         >
-          未配置 MCP server。点击「新增 MCP server」开始配置,或粘贴一段 MCP server
-          JSON 配置到剪贴板后点「从剪贴板导入」。
+          未配置 MCP server。点击「新增 MCP server」开始配置,或粘贴 MCP server
+          JSON 配置 / ccswitch://v1/import?resource=mcp URL 到剪贴板后点「从剪贴板导入」(自动识别)。
         </div>
       ) : (
         <div
