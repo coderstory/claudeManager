@@ -224,9 +224,9 @@ export default function JsonEditorPage(): ReactElement {
   // "init PageState from content" 逻辑,但跳过 file picker input 的
   // reset(Input type=file 流程才需要)。
   const loadFileByPath = useCallback(
-    async (path: string): Promise<void> => {
+    async (path: string, field?: string): Promise<void> => {
       try {
-        const content = await readFile(path);
+        const content = await readFile(path, field);
         const initial: PageState = {
           ...INITIAL_STATE,
           filePath: path,
@@ -253,22 +253,28 @@ export default function JsonEditorPage(): ReactElement {
 
   // M5 #28 — read a deferred file path from sessionStorage on mount.
   // The optimizer's "在 JSON 编辑器中打开" button writes
-  // `ccm.openFilePath` and navigates here; the editor consumes + clears
-  // it once so subsequent mounts don't re-open the same file.
+  // `ccm.openFilePath` and (Phase 27 Fix 3) `ccm.openFileField` then
+  // navigates here; the editor consumes + clears both once so
+  // subsequent mounts don't re-open the same file.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    let pending: string | null = null;
+    let pendingPath: string | null = null;
+    let pendingField: string | null = null;
     try {
-      pending = window.sessionStorage.getItem('ccm.openFilePath');
-      if (pending) {
+      pendingPath = window.sessionStorage.getItem('ccm.openFilePath');
+      pendingField = window.sessionStorage.getItem('ccm.openFileField');
+      if (pendingPath) {
         window.sessionStorage.removeItem('ccm.openFilePath');
+      }
+      if (pendingField) {
+        window.sessionStorage.removeItem('ccm.openFileField');
       }
     } catch {
       // sessionStorage may throw in private mode — treat as no-op.
       return;
     }
-    if (pending && pending.length > 0) {
-      void loadFileByPath(pending);
+    if (pendingPath && pendingPath.length > 0) {
+      void loadFileByPath(pendingPath, pendingField ?? undefined);
     }
     // loadFileByPath identity is stable (memoized with [] deps).
   }, [loadFileByPath]);

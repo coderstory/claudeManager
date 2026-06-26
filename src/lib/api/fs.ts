@@ -30,14 +30,25 @@ import type { JsonFileEntry } from '../../types/json';
  *
  * @param path Absolute or `~/`-prefixed path. The backend rejects
  *             anything outside `<home>/.claude/` (case-insensitive).
+ * @param field Optional JSON field name. When provided, the backend
+ *              uses it to highlight the target field in the editor.
+ *              The field is NOT a path component — it's validated
+ *              against path separators and traversal sequences.
  *
  * @returns  The file content as a UTF-8 string.
  *
  * @throws   Tauri IPC error: backend rejection string (e.g.
  *           `"路径超出允许范围(只允许 ~/.claude/**): /etc/passwd"`).
  */
-export function readFile(path: string): Promise<string> {
-  return invoke<string>('read_file', { path });
+export function readFile(path: string, field?: string): Promise<string> {
+  // Only include `field` in the IPC args when it's actually provided.
+  // This avoids sending `null` (which would fail Rust's Option<String>
+  // deserialization) when the caller doesn't need a field.
+  const args: Record<string, string> = { path };
+  if (field !== undefined) {
+    args.field = field;
+  }
+  return invoke<string>('read_file', args);
 }
 
 /**

@@ -179,9 +179,25 @@ export default function OptimizerPage(): ReactElement {
   // M5 #28 — jump to JSON editor with `finding.affected_path` pre-loaded.
   // Writes to sessionStorage so the editor's mount effect can pick it up
   // (cross-view handoff without prop drilling).
-  const handleOpenInEditor = useCallback((path: string) => {
+  //
+  // Phase 27 Fix 3 — path::field virtual path protocol: if the
+  // `affected_path` contains `::`, split into (path, field) and write
+  // two sessionStorage keys so the editor can call readFile(path, field).
+  const handleOpenInEditor = useCallback((affectedPath: string) => {
     try {
-      sessionStorage.setItem('ccm.openFilePath', path);
+      // Split on the first `::`. If not present, field is undefined.
+      const idx = affectedPath.indexOf('::');
+      if (idx >= 0) {
+        const path = affectedPath.slice(0, idx);
+        const field = affectedPath.slice(idx + 2);
+        sessionStorage.setItem('ccm.openFilePath', path);
+        sessionStorage.setItem('ccm.openFileField', field);
+      } else {
+        sessionStorage.setItem('ccm.openFilePath', affectedPath);
+        // Clear any stale field from a previous open (avoids residue
+        // when opening a non-field-typed path after a field-typed one).
+        sessionStorage.removeItem('ccm.openFileField');
+      }
     } catch {
       // sessionStorage may be unavailable (private mode / disabled);
       // fall through to navigation anyway — editor will open to its

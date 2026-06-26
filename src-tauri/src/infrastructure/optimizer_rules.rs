@@ -297,7 +297,7 @@ impl OptimizerRule for EmptyFieldRule {
                     severity: Severity::Warning,
                     title: format!("空 api_key: {}", p.name),
                     description: format!("Provider \"{}\" 的 api_key 字段为空。", p.name),
-                    affected_path: format!("providers/{}.json:api_key", p.id),
+                    affected_path: format!("providers/{}.json::api_key", p.id),
                     suggested_action: "请到 Provider 详情页填写 api_key。".into(),
                     auto_apply: false,
                 });
@@ -309,7 +309,7 @@ impl OptimizerRule for EmptyFieldRule {
                     severity: Severity::Warning,
                     title: format!("空 api_base: {}", p.name),
                     description: format!("Provider \"{}\" 的 api_base 字段为空。", p.name),
-                    affected_path: format!("providers/{}.json:api_base", p.id),
+                    affected_path: format!("providers/{}.json::api_base", p.id),
                     suggested_action: "请到 Provider 详情页填写 api_base。".into(),
                     auto_apply: false,
                 });
@@ -440,7 +440,7 @@ impl OptimizerRule for InsecureApiKeyRule {
                     p.name,
                     Self::MIN_LEN
                 ),
-                affected_path: format!("providers/{}.json:api_key", p.id),
+                affected_path: format!("providers/{}.json::api_key", p.id),
                 suggested_action: "请到 Provider 详情页重新填写 api_key(至少 16 字符)。".into(),
                 auto_apply: false,
             })
@@ -536,7 +536,7 @@ impl OptimizerRule for LongProviderNameRule {
                     p.name.chars().count(),
                     Self::MAX_LEN
                 ),
-                affected_path: format!("providers/{}.json:name", p.id),
+                affected_path: format!("providers/{}.json::name", p.id),
                 suggested_action: "请到 Provider 详情页缩短 name。".into(),
                 auto_apply: false,
             })
@@ -833,7 +833,7 @@ impl OptimizerRule for InconsistentProviderTypeRule {
                     casings.len(),
                     casings.iter().collect::<Vec<_>>()
                 ),
-                affected_path: format!("providers/{}.json:provider_type", p.id),
+                affected_path: format!("providers/{}.json::provider_type", p.id),
                 suggested_action: format!("自动改为 \"{}\"(已自动备份)。", lower),
                 auto_apply: true,
             });

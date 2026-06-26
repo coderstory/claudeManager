@@ -43,6 +43,55 @@ use crate::platform::AppPaths;
 /// is the user-visible message (SPEC §6.5).
 type CmdResult<T> = Result<T, String>;
 
+/// Phase 27 Fix 3 — field validator for the path::field virtual protocol.
+///
+/// T-05 security: `field` is NOT a path component — it's a JSON field
+/// name. We reject anything that looks like a path traversal or could
+/// be used to confuse the split logic.
+///
+/// Rejects:
+///   - empty string
+///   - contains `..` (directory traversal)
+///   - contains `/` or `\` (path separator)
+///   - contains NUL byte (`\0`)
+///   - contains `::` (would make the split ambiguous)
+fn validate_field(field: &str) -> CmdResult<()> {
+    if field.is_empty() {
+        return Err("字段名为空".into());
+    }
+    if field.contains('\0') {
+        return Err("字段名含 NUL 字节".into());
+    }
+    if field.contains("::") {
+        return Err("字段名含 '::'".into());
+    }
+    if field.contains("..") {
+        return Err("字段名含 '..'".into());
+    }
+    if field.contains('/') || field.contains('\\') {
+        return Err("字段名含路径分隔符".into());
+    }
+    Ok(())
+}
+
+/// Split a virtual path of the form `path::field` into `(path, Some(field))`.
+///
+/// Only the FIRST `::` is the split point. If the input contains no `::`,
+/// returns `(input, None)`.
+///
+/// The caller is responsible for validating the resulting field via
+/// [`validate_field`] before use.
+fn split_path_field(virtual_path: &str) -> (String, Option<String>) {
+    // rsplitn(2, "::") gives at most 2 pieces starting from the right.
+    // But we want to split on the FIRST `::` (leftmost), so use splitn.
+    let mut parts = virtual_path.splitn(2, "::");
+    match (parts.next(), parts.next()) {
+        (Some(path), Some(field)) => (path.to_string(), Some(field.to_string())),
+        (Some(path), None) => (path.to_string(), None),
+        (None, _) => unreachable!("splitn always yields at least 1 element"),
+    }
+}
+
 /// F5 — read a `.json` file under `~/.claude/`.
 ///
 /// On any failure (file missing, permission denied, path outside
@@ -54,16 +103,51 @@ type CmdResult<T> = Result<T, String>;
 /// targeted copy ("文件不存在" / "无权限" / "编码错误" / "路径越界").
 /// The classifier lives in [`classify_io_error`] and is shared with
 /// `write_file_atomic` (write-side failures).
+///
+/// Phase 27 Fix 3 — `field: Option<String>` parameter:
+///   - The backend accepts a field name in addition to the path.
+///   - If `path` itself contains `::`, it is treated as a virtual
+///     path of the form `path::field` (backward-compat with the old
+///     optimizer that sent a single composite string).
+///   - The explicit `field` arg takes precedence over any embedded
+///     `::` in the path.
+///   - `field` is validated via [`validate_field`] and is NEVER
+///     passed to `resolve_claude_path` (T-05: field is not a path).
 #[tauri::command]
 pub async fn read_file(
     state: State<'_, AppState>,
     path: String,
+    field: Option<String>,
 ) -> CmdResult<String> {
     // M3.11 (A1#5) — read live active root from the platform shim
     // (state.paths is a one-shot startup snapshot; active_root can
     // change at runtime via the project switcher).
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let resolved = resolve_claude_path(&state.paths, active_root.as_deref(), &path)?;
+
+    // Phase 27 Fix 3 — path::field virtual path protocol.
+    // If the explicit `field` arg is present, validate it and use it.
+    // Otherwise, if `path` contains `::`, split into (path, field).
+    // The explicit field arg always takes precedence.
+    let (clean_path, resolved_field) = match field {
+        Some(f) => {
+            validate_field(&f)?;
+            (path, Some(f))
+        }
+        None => {
+            let (clean, maybe_field) = split_path_field(&path);
+            if let Some(ref f) = maybe_field {
+                validate_field(f)?;
+            }
+            (clean, maybe_field)
+        }
+    };
+
+    // T-05 security: `resolved_field` is only used by the frontend to
+    // highlight the target field in the editor. It is NEVER passed
+    // to `resolve_claude_path` or any filesystem API.
+    let _ = resolved_field;
+
+    let resolved = resolve_claude_path(&state.paths, active_root.as_deref(), &clean_path)?;
     match std::fs::read_to_string(&resolved) {
         Ok(content) => Ok(content),
         Err(e) => Err(classify_io_error(&resolved, e)),
@@ -971,15 +1055,8 @@ mod tests {
         /// Helper: validate a field name. Returns Ok(()) for valid,
         /// Err(msg) for invalid. This is the T-05 security gate.
         fn validate_field(field: &str) -> Result<(), String> {
-            // RED phase: this function does not exist yet. Tests that
-            // reference it will fail to compile until the GREEN phase
-            // adds the implementation.
-            validate_field_impl(field)
-        }
-
-        // Placeholder — will be replaced in GREEN phase.
-        fn validate_field_impl(_field: &str) -> Result<(), String> {
-            unreachable!("RED — placeholder; real impl in GREEN phase")
+            // Delegate to the production helper defined at module top.
+            super::validate_field(field)
         }
 
         #[test]
@@ -1053,12 +1130,7 @@ mod tests {
         /// `(path, field)`. Only the FIRST `::` is the split point —
         /// the rest is already caught by `validate_field`.
         fn split_path_field(virtual_path: &str) -> (String, Option<String>) {
-            // RED phase: split logic placeholder.
-            split_path_field_impl(virtual_path)
-        }
-
-        fn split_path_field_impl(_virtual_path: &str) -> (String, Option<String>) {
-            unreachable!("RED — placeholder; real impl in GREEN phase")
+            super::split_path_field(virtual_path)
         }
 
         #[test]
@@ -1070,7 +1142,7 @@ mod tests {
 
         #[test]
         fn split_path_field_with_double_colon_splits_once() {
-            let (path, field) = split_path_field("providers/foo.json:api_key");
+            let (path, field) = split_path_field("providers/foo.json::api_key");
             assert_eq!(path, "providers/foo.json");
             assert_eq!(field.as_deref(), Some("api_key"));
         }
@@ -1078,7 +1150,7 @@ mod tests {
         #[test]
         fn split_path_field_nested_path_preserves_directory_structure() {
             let (path, field) =
-                split_path_field("sub/deep/nested/file.json:some_field");
+                split_path_field("sub/deep/nested/file.json::some_field");
             assert_eq!(path, "sub/deep/nested/file.json");
             assert_eq!(field.as_deref(), Some("some_field"));
         }
