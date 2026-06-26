@@ -21,9 +21,23 @@
 - 新增 `src/lib/sql-validator.ts`: 纯前端 SQL 5 场景分类器 (零依赖)
   - `valid` / `partially_valid` / `illegal` / `empty` / `encoding_error`
   - 包含 `splitStatements` 工具: 按 `;` 拆分(忽略字符串内分号),记录 1-based 行号
-- 接入 `import-sql` 页面 (`handleFileChosen` + `initialFilePath` effect)
-  - 阻断策略: 仅对 `empty` / `encoding_error` 阻断 + show ErrorBanner
-  - 其它场景 (`illegal` / `partially_valid`) 仍走后端 `parseSqlPreview`,把诊断交由既有 preview / skipped 流程
+  - 14 个测试 (5 场景各 1-2 个 + splitStatements 边界) 全部 pass
+- **当前生产集成状态 (Phase 2 改造后)**:
+  - 接线点 `handleFileChosen` + `initialFilePath` effect **未调用** `validateSql`
+    (源出于 commit `6f5f365` 2026-06-25 "Phase 2 方案 D 第一变体:跳过前端
+    validateSql")。
+  - 等价的用户可见行为由后端 Rust `decode_sql_bytes` + `parse_sql_preview`
+    承担:
+    - 编码兜底:Rust 端 5 步 fallback chain (UTF-8 BOM / UTF-16 LE-BE BOM /
+      strict UTF-8 / GB18030 / Big5) 把 cn Windows GBK dump 解出来,前端
+      `file.text()` 强制 UTF-8 触发 mojibake 的问题根除。
+    - 场景分类:空文件 / 无 INSERT / 非法表 等场景由 Rust
+      `parse_sql_dump` 通过 `skipped_lines` (含 `line` / `name` / `reason`
+      字段) 返回,前端 Preview 直接展示 `importable` / `skipped` 计数 +
+      skipped_samples 表,与原前端 5 场景分类对用户等价。
+  - `src/lib/sql-validator.ts` 现为 orphan library (零生产调用点),
+    14 个测试继续作为单元测试与代码参考保留;后续若需前端早失败
+    (避免 IPC 一次往返) 可按 `lib/sql-validator.ts:35-37` 头部注释重接。
 - 新增 `src/__tests__/lib/sql-validator.test.ts`: 14 个测试
   - 5 场景各 1-2 个 (valid 单 provider / valid 4 provider / partially_valid 混合 / illegal 未知表 / illegal 无 SQL / empty 2 种 / encoding 1 个)
   - splitStatements 边界: 字符串内分号 / 多语句 / 多种 SQL 关键字 / 行号
@@ -38,7 +52,9 @@
 ## 验证
 
 ### 单元测试
-- `src/__tests__/lib/sql-validator.test.ts`: 14/14 passed
+- `src/__tests__/lib/sql-validator.test.ts`: 14/14 passed (单元测试覆盖
+  sql-validator 库本身的 5 场景 + splitStatements 边界;生产集成见
+  上面 "**当前生产集成状态**" 段)
 - `src/__tests__/pages/import-sql.test.tsx`: 17/17 passed (含更新后的 H1 heading)
 - 合计 31/31 passed
 
