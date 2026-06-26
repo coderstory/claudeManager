@@ -19,10 +19,10 @@
 - **Success metric**: 桌面 ship 的 Claude Config Manager 安装包能稳定切换 ≥3 个 provider 不出错
 - **Strategy notes**: 无（项目方向由 STATE.md 决策日志 + 用户反馈清单驱动）
 
-## Current State (post-v3.0-M4)
+## Current State (post-v3.0.1)
 
-**Latest milestone:** v3.0-M4 — M4 e2e 框架 (shipped 2026-06-26)
-**Tag:** v3.0-M4
+**Latest milestone:** v3.0.1 — M5 用户 bug 修复 (33 bug, shipped 2026-06-26)
+**Tag:** v3.0.1
 **Next:** v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾) — see ROADMAP.md
 
 ## Current Milestone
@@ -30,6 +30,7 @@
 - ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1~M3.10)** — 11/11 ship, smoke 7/7, tag v2.0
 - ✅ **v3.0 功能完善 + updater 基础 (M3.11~M3.15 + M4.3)** — round 1 (Phase 12-17) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 shipped 2026-06-26 (tag v3.0-M4); 14/14 scenarios PASS, test-all stage 6 hard-fail wired
+- ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 shipped 2026-06-26 (tag v3.0.1); 33/33 bug 修完; ClaudeManager.app 14M rebuild OK + 1 窗口 OK; test-all 6 阶段 PASS
 - 🚧 **v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)** — pending
 
 ## Requirements

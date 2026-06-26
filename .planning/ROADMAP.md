@@ -11,6 +11,7 @@
 - ✅ **v2.0 用户反馈修复 + 双模式 (M2.17 收尾 + M3.1 ~ M3.10)** — 11 phases,shipped 2026-06-22,tag v2.0
 - ✅ **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3)** — round 1 (7/7 phase) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 (shipped 2026-06-26, tag v3.0-M4)
+- ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 (shipped 2026-06-26, tag v3.0.1; 33/33 bug 修完, ClaudeManager.app 14M rebuild + 1 窗口 OK, 详见 [v3.0.1-ROADMAP.md](milestones/v3.0.1-ROADMAP.md))
 - 🚧 **v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)** — in progress
 
 ## Phases
@@ -429,3 +430,47 @@ Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项
 | 22. M4 e2e 框架 (14 端到端 ship gate) | v3.0-M4 | 8 commits | Complete | 2026-06-26 |
 </content>
 </invoke>
+
+### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27 — is_active 消失 / sqlite 缺表 / update_provider missing id / 资源浏览切项目 / 配置优化 finding 过期; M5-PLAN §4; 5 新 vitest; test-all 5 阶段仍全 PASS)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 22
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 23 to break down)
+
+### Phase 24: M5 业务修复 13 bug (Phase 2: #7 #8 #9 #10 #11 #12 #13 #15 #16 #17 #21 #22 #23 #24 — SQL 导入过滤/JSON 全屏/JSON 目录树/MCP 文案/用量趋势 7 天/资源市场/CliNotFound; 13 新 vitest; 3 用户拍板决策走 Claude's Discretion)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 23
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 24 to break down)
+
+### Phase 25: M5 重构 9 bug (Phase 3: #3 #18 #25 #26 #28 #29 #30 #31 #33 — 欢迎页弹窗/删单文件部署 4 处同步/第三方仓库/手动处理不可勾/手动出 JSON 编辑/备份分页+多选/备份不删/历史分页/JSON 搜 settings; 9 新 vitest; 33 bug 全手测)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 25 to break down)
+
+### Phase 26: M5 A 类 5 + 整合验证 (Phase 4: #1 #5 #14 #20 #32 — 二次元主题 header/Default Model/formatChineseTokenCount/重新扫描按钮/关于页项目主页; test-all 5 阶段全过; ClaudeManager.app 重新 build+装+启动 OK; STATE.md 写 M5 完成; tag v3.1)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 25
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 26 to break down)
