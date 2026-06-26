@@ -1,10 +1,11 @@
 ---
 phase: 27
 slug: v3-2-m6-critical-5-bug-bug-cr-01-05
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-26
+reviewed_at: 2026-06-26
 ---
 
 # Phase 27 — UI Design Contract
@@ -201,4 +202,4 @@ The current `AppHeader.tsx` already has the correct dual-layer pattern:
 - [ ] Dimension 5 Spacing: PASS (all spacing via `var(--space-*)` tokens; detail-page padding = `var(--space-6)` = 24px per M2.15 baseline; resource-browser tab gap = 4px per existing pattern)
 - [ ] Dimension 6 Registry Safety: PASS (no shadcn; no third-party registry; no `npx shadcn view` vetting needed)
 
-**Approval:** pending
+**Approval:** 2026-06-26 (UI checker — all 6 dimensions PASS)
