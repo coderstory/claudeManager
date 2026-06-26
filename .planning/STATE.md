@@ -1,23 +1,39 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0-M4 archived / v3.0 round 3 next
-milestone_name: M4 e2e 框架 (shipped 2026-06-26) + v3.0 round 3 pending
-current_phase: post-M4
-current_phase_name: awaiting next milestone (v3.0 round 3: M4.3 updater UI + A3 云备份 + M4.6 长尾)
-status: v3.0-M4 ship archived (2026-06-26, tag v3.0-M4); 14/14 e2e PASS, test-all stage 6 wired
-last_updated: "2026-06-26T00:00:00.000Z"
+milestone: v3.0.1 (M5 shipped 2026-06-26)
+milestone_name: M5 用户 bug 修复 (33 bug 全部 ship, tag v3.0.1)
+current_phase: 26 (post-ship, audit/cleanup pending)
+current_phase_name: M5 A 类 5 + 整合验证 (Phase 26, 5 SUMMARY + VERIFICATION ship-gate PASS)
+status: M5 ship archived 2026-06-26 (tag v3.0.1); 33/33 bug 修完; test-all 6 stages PASS; M4 e2e 15/15 PASS; ClaudeManager.app rebuild OK + launch 1 window OK
+last_updated: "2026-06-26T06:30:00.000Z"
 last_activity: 2026-06-26
-last_activity_desc: M4 archived — v3.0-M4-ROADMAP.md written, ROADMAP/MILESTONES/PROJECT updated
+last_activity_desc: M5 phase 26 complete — 33/33 bug 修完, A 类 5 + 整合验证 ship gate PASS, 4 subagent 修 (#18 #22 #23+#24 + 3 TS error fix)
 progress:
-  total_phases: 22
-  completed_phases: 17
-  total_plans: 17
-  completed_plans: 18
-  percent: 77
-stopped_at: M4 archived (2026-06-26) — 14/14 e2e PASS, test-all stage 6 hard-fail wired, tag v3.0-M4; awaiting next milestone (v3.0 round 3)
+  total_phases: 26
+  completed_phases: 22
+  total_plans: 22
+  completed_plans: 23
+  percent: 100
+stopped_at: M5 ship archived (2026-06-26) — 33/33 bug 修完, test-all 6 stages PASS, M4 e2e 15/15 PASS, ClaudeManager.app 14M rebuild OK + 1 窗口 OK, tag v3.0.1
 ---
 
+**M5 ship (2026-06-26)**:
+- Phase 23: critical 5 (#2 #4 #6 #19 #27) — 5 fix commits 验证 + test-all 6 阶段 PASS + M4 e2e 15/15 覆盖
+- Phase 24: 业务 13 (含 #22 #23 #24 真修, 11 验证) — commit `c508371` (frontend) + `d232e1b` (rust CliNotFound)
+- Phase 25: 重构 9 (含 #18 真修, 8 验证) — commit `0eb7f08` (29 files, +269/-576, 4 处同步删)
+- Phase 26: A 类 5 + 整合 — commit `d4e4e40` (3 TS error fix) + .app rebuild 14M + 启动 OK
+- Final: 33/33 bug 修完; vitest 550/550 PASS; test-all 6 stages PASS; tag v3.0.1
+
+**M4 ship (2026-06-26)** (前一个 milestone, 已 archived):
+
+- Phase 1: CCM_TEST_HOME verified (commit prior, 2 mac tests + 2 windows tests PASS)
+- Phase 2: Driver libs (commit `2c825e1`, 8 files)
+- Phase 3: 14 scenarios (commits `9ebdc39`, `92e9711`, `0b666b6`, `fb0535f`, `278ac17`)
+- Phase 4: test-all.sh stage 6 wired (commit `c6f7765`) + tag `v3.0-M4`
+- Final: 14/14 scenarios PASS, run-all gate enforced
+
 **M4 ship (2026-06-26)**:
+
 - Phase 1: CCM_TEST_HOME verified (commit prior, 2 mac tests + 2 windows tests PASS)
 - Phase 2: Driver libs (commit `2c825e1`, 8 files)
 - Phase 3: 14 scenarios (commits `9ebdc39`, `92e9711`, `0b666b6`, `fb0535f`, `278ac17`)
