@@ -3,7 +3,7 @@ gsd_decisions_version: 1.0
 phase: 45
 decided: 2026-06-27
 decided_by: discuss-phase subagent (待用户复核)
-based_on: ../v3.4-DECISIONS.md (5 BLOCKING 关闭) + ./45-RESEARCH.md Open Questions
+based_on: ../v3.4-DECISIONS.md (5 BLOCKING 关闭, 209 行, commit 372471b) + ./45-RESEARCH.md Open Questions
 ---
 
 # Phase 45 DECISIONS
