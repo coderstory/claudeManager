@@ -34,8 +34,14 @@ installers
 test-results/
 
 # local claude memory symlinks (project-irrelevant)
+# .claude/skills/ is project-level tooling shared with the team (per CLAUDE.md),
+# other .claude/ contents (settings / logs / providers / worktrees) stay local.
 .claude/*
 !.claude/settings.local.json
+!.claude/skills/
+# Python build artifacts inside skills — keep data + source, ignore __pycache__
+.claude/skills/**/__pycache__/
+*.pyc
 updater-private.key
 src/design-system/*.bak
 
