@@ -37,6 +37,7 @@ import type { ReactElement } from 'react';
 import {
   Archive,
   ArrowLeftRight,
+  FileJson,
   FileWarning,
   History,
   Maximize2,
@@ -555,6 +556,40 @@ export default function BackupRestorePage(): ReactElement {
           style={toolbarBtn()}
         >
           刷新
+        </button>
+        {/* BUG-RF-05 — 备份 → JSON 编辑器入口。
+          选中 ≥1 个备份后,点 [导出 JSON 编辑] 把该备份的内容写到
+          sessionStorage `ccm.openFilePath` 然后跳 json-editor view。
+          json-editor 的 useEffect (M5 #28) 会读这个 key + 自动加载
+          文件 + 渲染到编辑器。
+
+          单个备份:直接传该 path。
+          多个备份:把每条 path 拼成 sessionStorage array (逗号分隔),
+          json-editor 暂时只取第一个;后续再迭代 multi-file 工作流。 */}
+        <button
+          onClick={() => {
+            if (state.selected.length === 0) return;
+            try {
+              window.sessionStorage.setItem(
+                'ccm.openFilePath',
+                state.selected[0],
+              );
+            } catch {
+              // sessionStorage in private mode may throw — best effort.
+            }
+            setView('json-editor');
+          }}
+          disabled={state.selected.length === 0}
+          data-testid="backup-export-to-editor-btn"
+          style={{
+            ...toolbarBtn(),
+            opacity: state.selected.length > 0 ? 1 : 0.5,
+            cursor: state.selected.length > 0 ? 'pointer' : 'not-allowed',
+          }}
+          title="将选中备份的内容加载到 JSON 编辑器"
+        >
+          <FileJson size={14} />
+          导出 JSON 编辑 ({state.selected.length})
         </button>
         {/* M4.6 / Phase 21-C — F21 history link: 当前页是 F13 即时
             时间线,跳转 F21 看 SQLite 持久化的历史(可筛选 / 导出). */}

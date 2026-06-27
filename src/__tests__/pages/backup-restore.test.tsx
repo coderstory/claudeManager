@@ -695,4 +695,59 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(sa.checked).toBe(false);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-05 — backup → json-editor route.
+  //
+  // The "导出 JSON 编辑" button writes the first selected backup's
+  // path to sessionStorage (`ccm.openFilePath`) and navigates to
+  // the json-editor view. The editor's existing M5 #28 useEffect
+  // reads that key on mount and loads the file. We assert:
+  //  1. Button is disabled when nothing is selected.
+  //  2. Button writes the selected path to sessionStorage on click.
+  //  3. After click, the active view is 'json-editor' (localStorage
+  //     ccm.lastView flips accordingly).
+  // -------------------------------------------------------------------------
+  it('BUG-RF-05: export-to-editor button is disabled when no backup is selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(1);
+    });
+    const btn = screen.getByTestId('backup-export-to-editor-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    // 计数应为 0
+    expect(btn.textContent).toContain('0');
+  });
+
+  it('BUG-RF-05: export-to-editor writes selected path to sessionStorage and navigates', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    // 清空 sessionStorage + ccm.lastView
+    window.sessionStorage.clear();
+    window.localStorage.removeItem('ccm.lastView');
+
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    // 选中第一个
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // 点 [导出 JSON 编辑]
+    const btn = screen.getByTestId('backup-export-to-editor-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+
+    // sessionStorage 必须写入第一个 selected 的 path
+    expect(window.sessionStorage.getItem('ccm.openFilePath')).toBe('/bak/a');
+    // 视图必须切到 json-editor(useViewState 持久化到 ccm.lastView)
+    await waitFor(() => {
+      expect(window.localStorage.getItem('ccm.lastView')).toBe('json-editor');
+    });
+  });
 });
