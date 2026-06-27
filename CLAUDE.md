@@ -210,8 +210,12 @@ trait IPlugin {
 - 主 session 只负责：澄清问题 + 接收最终成果 + 关键决策确认
 - 所有具体执行（安装依赖 / 写代码 / 跑命令）派 subagent
 - Subagent 必须遵守本文件所有规则
-- Subagent 联网必须用 `cs-web-fetch` 技能（路径：`/c/Users/e-Yunfei.Qian/.claude/plugins-dev/cs-knowledge-base/skills/cs-web-fetch/scripts/fetch.js`）
-- 禁止 subagent 用内置 WebFetch / WebSearch / curl
+- Subagent 联网**优先级顺序 (2026-06-27 更新)**:
+  1. `cs-web-fetch` 技能（Windows 主路径：`/c/Users/e-Yunfei.Qian/.claude/plugins-dev/cs-knowledge-base/skills/cs-web-fetch/scripts/fetch.js`）
+  2. 内置 `WebFetch` / `WebSearch`（快路径,静态文档/找入口优先）
+  3. **`render-url` skill**（联网搜索失败时的 fallback;用 msedge headless 渲染动态网页/SPA/JS 重定向,支持 text/png/html 输出;适配 macOS / Windows / Linux）
+  4. 全部失败 → 标记 `RESOURCE_UNAVAILABLE`,继续推进不依赖该资源的部分
+- 禁止 subagent 用 `curl` / `wget` 直接抓网页（绕过审计）
 
 ## 9. 迭代交付纪律
 
