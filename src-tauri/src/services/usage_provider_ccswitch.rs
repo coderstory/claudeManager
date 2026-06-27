@@ -49,7 +49,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::domain::{
-    lookup_pricing, UsageBreakdownEntry, UsageHistoryEntry, UsageSnapshot, UsageWindow,
+    UsageBreakdownEntry, UsageHistoryEntry, UsageSnapshot, UsageWindow,
 };
 
 // ---------------------------------------------------------------------------
