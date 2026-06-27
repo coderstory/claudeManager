@@ -659,13 +659,15 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     });
   });
 
-  it('install_builtin_plugin failure shows red error banner on card', async () => {
+  it('install_builtin_plugin failure shows red error banner on card (with BZ-07 localized title)', async () => {
+    // BZ-07 — Rust 端返回 CliNotFound 字符串,前端走 localizeMarketplaceError
+    // 翻成中文 title。原来的 raw error text 已被替换 (M6 用户实测需求)。
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_marketplace_repos') {
         return [builtinRepo('superpowers', 'builtin', 'superpowers@x')];
       }
       if (cmd === 'install_builtin_plugin') {
-        throw new Error('claude plugin install 失败: command not found');
+        throw new Error("无法启动 'claude' CLI (请确认已安装)");
       }
       return null;
     });
@@ -683,6 +685,17 @@ describe('MarketplacePage — M3.4 三类 install', () => {
         screen.getByTestId('marketplace-repo-error-superpowers'),
       ).toBeInTheDocument();
     });
+    // BZ-07 — 错误条显示本地化中文 title "无法启动 claude 命令行工具"
+    expect(
+      screen.getByTestId('marketplace-repo-error-title-superpowers'),
+    ).toHaveTextContent('无法启动 claude 命令行工具');
+    // BZ-07 — hint 给出 brew / Windows 安装指引
+    expect(
+      screen.getByTestId('marketplace-repo-error-hint-superpowers'),
+    ).toHaveTextContent('brew install claude-code');
+    expect(
+      screen.getByTestId('marketplace-repo-error-hint-superpowers'),
+    ).toHaveTextContent('Windows');
   });
 
   it('GSD-* resources get the "Get Shit Done" category badge (清单 16)', async () => {
