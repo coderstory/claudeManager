@@ -4,17 +4,17 @@ milestone: v3.2
 milestone_name: M6 用户实测反馈修复
 current_phase: 28
 current_phase_name: BUG-BZ-01~13
-status: executing
-stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-06-26T16:38:15.766Z"
-last_activity: 2026-06-26
-last_activity_desc: Phase 27 complete, transitioned to Phase 28
+status: complete
+stopped_at: Phase 28 verified, queued for master merge
+last_updated: "2026-06-27T00:55:00.000Z"
+last_activity: 2026-06-27
+last_activity_desc: Phase 28 v3.2 M6 业务 13 bug 修復 ship-ready (7 fixes + 4 regression tests + 1 stub plan)
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 20
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
+  percent: 40
 ---
 
 <!--
@@ -71,9 +71,9 @@ progress:
 ## Current Position
 
 Phase: 28 — v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13)
-Plan: Not started
-Status: Executing Phase 27
-Last activity: 2026-06-26 — Phase 27 complete, transitioned to Phase 28
+Plan: COMPLETE (28-01 7 fixes ship + 28-02 stub for BUG-BZ-08~13 deferred to v3.2.1)
+Status: Phase 28 verified, queued for master merge
+Last activity: 2026-06-27 — Phase 28 complete, summary/verification written
 
 **v3.2 plan summary** (ROADMAP.md Phase 27-31):
 
@@ -105,6 +105,7 @@ Last activity: 2026-06-26 — Phase 27 complete, transitioned to Phase 28
 - D15 (2026-06-22, v3.0 round 1): B3#10 Tailwind 选 B 移除（commit `ed5a3e5`）
 - D16 (2026-06-22, v3.0 round 1): v3.0 milestone goal = "功能完善 + updater 基础 + 备份增强"（公证发布主线因 M4.1 取消暂缓；Mac 验证 D6 仍待决）
 - **D17 (2026-06-26, v3.2 M6 启动)**: v3.2 milestone = "M6 用户实测反馈修复",Phase 27-31 沿用 v3.0.1 M5 工程模式 (critical 5 → 业务 13 → 重构 9 → A 类 5+整合)。排除 v3.0 round 3 废弃 backlog (云备份 / updater UI / M4.6 长尾)。排除 D6 Mac 真机验证。BUG-BZ-08~13 留空待用户实测补 (v3.2.1 follow-up)。tag v3.2。
+- **D18 (2026-06-27, Phase 28 ship-ready)**: v3.2 Phase 28 = 7 真修 bug (BZ-01 SQL invalid_rows DTO / BZ-04 MCP paste-hint / BZ-06 catalog URL 锁定 / BZ-07 CliNotFound i18n) + 4 M5 验证回归 (BZ-02/03/05/06) + 6 留空 (BZ-08~13 → v3.2.1)。BZ-01 UI 渲染 (import-sql done view 显示 invalid_rows 区别于 skipped) deferred:DTO 已就位,UX 决策待 M6 用户实测反馈再补。9 个原子 commit + 2 docs + 1 verification。Zero new deps, zero version bumps, zero capability 变更。
 
 ## Known Issues (Remaining, post-v2.0 + v3.0 round 1)
 
