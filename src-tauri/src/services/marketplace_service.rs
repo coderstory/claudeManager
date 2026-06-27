@@ -1211,6 +1211,78 @@ mod tests {
         }
     }
 
+    /// BZ-06 — builtin_repos 所有 URL 都不能含 'cc-switch-main' 旧路径
+    /// (用户实测反馈: '浏览' 按钮 openUrl 跳到 cc-switch-main 仓库
+    /// → 404 / 私有仓库)。
+    ///
+    /// 锁定每个内置 repo 的 url 是 https://github.com 开头 + 含 .git 后缀 +
+    /// **不含** "cc-switch-main" 占位 (那个项目名不是任何真仓库)。
+    ///
+    /// 注意: 自身 `parser` / `usage_provider_ccswitch.rs` 等 Rust 文件
+    /// 注释里仍会引用 "cc-switch-main" (历史来源标注,不可删);本测试
+    /// 只检查 builtin_repos 返回的 url 字段。
+    #[test]
+    fn bz06_builtin_repos_urls_have_no_cc_switch_main_path() {
+        let repos = builtin_repos();
+        assert!(!repos.is_empty(), "builtin_repos 必须有 ≥1 个内置源");
+        for r in &repos {
+            assert!(
+                !r.url.contains("cc-switch-main"),
+                "BZ-06: builtin_repos[{}].url 不应含 'cc-switch-main' \
+                 旧路径 (实际: {})",
+                r.id,
+                r.url
+            );
+            assert!(
+                r.url.starts_with("https://"),
+                "BZ-06: builtin_repos[{}].url 必须 https:// 开头 (实际: {})",
+                r.id,
+                r.url
+            );
+            assert!(
+                r.url.starts_with("https://github.com/"),
+                "BZ-06: builtin_repos[{}].url 必须指向 github.com \
+                 (实际: {})",
+                r.id,
+                r.url
+            );
+            assert!(
+                r.url.ends_with(".git"),
+                "BZ-06: builtin_repos[{}].url 应以 .git 结尾 (实际: {})",
+                r.id,
+                r.url
+            );
+        }
+    }
+
+    /// BZ-06 — 已知 3 个内置 repo 的具体 URL 锁定(防止重构时悄悄改 URL)。
+    ///
+    /// 改动 builtin_repos URL 时,这里必须同步改;否则说明有人未走
+    /// 用户拍板流程就改了关键 catalog 数据。
+    #[test]
+    fn bz06_builtin_repos_urls_match_known_good_paths() {
+        let repos = builtin_repos();
+        let urls: std::collections::HashMap<&str, &str> = repos
+            .iter()
+            .map(|r| (r.id.as_str(), r.url.as_str()))
+            .collect();
+        assert_eq!(
+            urls.get("superpowers").copied(),
+            Some("https://github.com/anthropics/claude-plugins-official.git"),
+            "BZ-06: superpowers url 锚定到 anthropics/claude-plugins-official.git"
+        );
+        assert_eq!(
+            urls.get("claude-cookbooks").copied(),
+            Some("https://github.com/anthropics/claude-cookbooks.git"),
+            "BZ-06: claude-cookbooks url 锚定到 anthropics/claude-cookbooks.git"
+        );
+        assert!(
+            urls.get("gsd-core").map(|u| u.starts_with("https://github.com/")).unwrap_or(false),
+            "BZ-06: gsd-core url 必须 https://github.com 开头 (实际: {:?})",
+            urls.get("gsd-core")
+        );
+    }
+
     /// M3.4: install_builtin 拒绝未知 plugin_id。
     #[test]
     fn install_builtin_rejects_unknown_id() {

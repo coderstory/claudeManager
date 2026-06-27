@@ -913,4 +913,33 @@ describe('MarketplacePage — Phase 28 BZ-06 browse-button regression', () => {
     );
     expect(cloneCalls.length).toBe(0);
   });
+
+  it('rendered_repo_url_does_not_contain_cc_switch_main_path', async () => {
+    // BZ-06 — RepoCard 底部显示 repo.url (行 868);这条字串
+    // 不能含 'cc-switch-main' 旧路径占位 (M6 用户实测反馈:
+    // 看到 URL 后误以为是私仓库/失效 → 不敢点「浏览」)。
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [
+          builtinRepo('superpowers', 'builtin', 'superpowers@claude-plugins-official'),
+          builtinRepo('gsd-core', 'npx', '@opengsd/gsd-core@latest'),
+          builtinRepo('claude-cookbooks', 'git', ''),
+        ];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-superpowers')).toBeInTheDocument();
+    });
+    // 三张卡片全文都不能出现 'cc-switch-main'
+    const cardSuperpowers = screen.getByTestId('marketplace-repo-card-superpowers');
+    const cardGsd = screen.getByTestId('marketplace-repo-card-gsd-core');
+    const cardCookbooks = screen.getByTestId('marketplace-repo-card-claude-cookbooks');
+    for (const card of [cardSuperpowers, cardGsd, cardCookbooks]) {
+      expect(card.textContent).not.toContain('cc-switch-main');
+      // 必须是 github.com 链接
+      expect(card.textContent).toContain('github.com');
+    }
+  });
 });
