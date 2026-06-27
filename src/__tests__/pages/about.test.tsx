@@ -31,6 +31,9 @@ const sampleMetadata = (overrides: Partial<AppMetadata> = {}): AppMetadata => ({
   git_commit: 'abc1234',
   build_target: 'windows/x86_64',
   build_timestamp: 1_700_000_000,
+  // UI-A-05 (2026-06-27) — homepage_url 是新字段, 测试 fixture 必须同步
+  // (CLAUDE.md §6.4 三处同步)。默认填 HOMEPAGE_URL 常量值。
+  homepage_url: 'https://github.com/coderstory/claude-config-manager',
   ...overrides,
 });
 
@@ -157,5 +160,51 @@ describe('AboutPage — M3.7 (清单 18)', () => {
     // 两者都是 dl 的直接子元素, 验证单列布局
     expect(dl!.contains(licenseTypeRow)).toBe(true);
     expect(dl!.contains(homepageRow)).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 30 UI-A-05 — 项目主页 URL 来自 IPC, 不再硬编码
+  //
+  // 旧 bug: 前端 src/pages/about/index.tsx::PROJECT_HOMEPAGE 硬编码
+  //   "github.com/coderstory/claude-config-manager"(无 https:// 前缀,
+  //   旧 cc-switch-main 链路残留)。
+  // 新实现: Rust 端 HOMEPAGE_URL 常量 → AppMetadata.homepage_url → 前端
+  //   About 页读 m.homepage_url。3 处同步 (CLAUDE.md §6.4):
+  //   - Rust src-tauri/src/commands/app.rs::HOMEPAGE_URL
+  //   - TS src/types/app.ts::AppMetadata.homepage_url
+  //   - 测试 fixture sampleMetadata.homepage_url
+  // -------------------------------------------------------------------------
+  it('UI-A-05: 关于页项目主页 URL 渲染来自 IPC 的 homepage_url 字段', async () => {
+    render(<AboutPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('about-license-homepage')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('about-license-homepage'),
+    ).toHaveTextContent('https://github.com/coderstory/claude-config-manager');
+  });
+
+  it('UI-A-05: IPC 返回的 homepage_url 含 https:// 前缀 (避免旧 cc-switch-main 短链接残留)', async () => {
+    // 验证 fixture 默认值有 https:// 前缀, 防止后续 rebrand 漏改前缀
+    const meta = sampleMetadata();
+    expect(meta.homepage_url).toMatch(/^https:\/\//);
+    // 不应是短链或 cc-switch-main 残留
+    expect(meta.homepage_url).not.toContain('cc-switch-main');
+  });
+
+  it('UI-A-05: IPC 失败时仍显示 HOMEPAGE_FALLBACK 而非空白 (CLAUDE.md §7 不静默吞错)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_app_metadata') {
+        throw new Error('IPC failed');
+      }
+      return null;
+    });
+    render(<AboutPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('about-metadata-error')).toBeInTheDocument();
+    });
+    // Fallback URL 必须出现, 而不是空白
+    const homepage = screen.getByTestId('about-license-homepage');
+    expect(homepage.textContent).toContain('github.com/coderstory');
   });
 });

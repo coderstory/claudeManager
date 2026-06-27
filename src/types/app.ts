@@ -20,4 +20,12 @@ export interface AppMetadata {
   build_target: string;
   /** Unix epoch seconds at build time. 0 means unavailable. */
   build_timestamp: number;
+  /**
+   * Project homepage URL (UI-A-05, 2026-06-27). Returned by the
+   * Rust `get_app_metadata` IPC from the `HOMEPAGE_URL` const in
+   * `src-tauri/src/commands/app.rs`. The About page renders this
+   * value directly — the URL is **not** hardcoded on the frontend
+   * anymore (CLAUDE.md §6.4 三处同步).
+   */
+  homepage_url: string;
 }
