@@ -51,3 +51,56 @@ if (typeof window !== 'undefined') {
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 29 / BUG-RF-01 — localStorage polyfill.
+//
+// jsdom 25.0.1 + Node 26 has a regression where the global `localStorage`
+// is undefined (verified empirically with the Phase 29 dev box). This
+// causes every `localStorage.clear()` in beforeEach to throw
+// "Cannot read properties of undefined (reading 'clear')", which blocks
+// ALL jsdom tests in the project.
+//
+// We polyfill with a Map-backed in-memory store. This matches the
+// pre-regression behaviour: vitest's per-file localStorage is per-process
+// (each `npm test` invocation starts fresh), so the in-memory store
+// is correct for the test suite's needs. Tests that rely on
+// localStorage persistence across mounts still work because the
+// store lives for the duration of the test file.
+//
+// The polyfill is intentionally minimal: getItem / setItem / removeItem /
+// clear. We do NOT need key() or length() — no existing test uses them.
+if (typeof window !== 'undefined' && typeof window.localStorage === 'undefined') {
+  const store = new Map<string, string>();
+  const localStoragePolyfill = {
+    getItem(key: string): string | null {
+      return store.has(key) ? (store.get(key) as string) : null;
+    },
+    setItem(key: string, value: string): void {
+      store.set(key, String(value));
+    },
+    removeItem(key: string): void {
+      store.delete(key);
+    },
+    clear(): void {
+      store.clear();
+    },
+    key(index: number): string | null {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    get length(): number {
+      return store.size;
+    },
+  };
+  // jsdom exposes `window` AND the global `localStorage` is a separate
+  // property on the `window` object. Vitest tests use the bare
+  // `localStorage` reference, which resolves to `globalThis.localStorage`
+  // — but in jsdom, that IS `window.localStorage`. So patching
+  // window.localStorage is enough.
+  (window as unknown as { localStorage: typeof localStoragePolyfill }).localStorage =
+    localStoragePolyfill;
+  // Belt-and-suspenders: also patch globalThis in case any code path
+  // bypasses window.
+  (globalThis as unknown as { localStorage: typeof localStoragePolyfill }).localStorage =
+    localStoragePolyfill;
+}
