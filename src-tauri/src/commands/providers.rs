@@ -146,6 +146,12 @@ pub struct SqlPreview {
     pub importable: usize,
     /// Number of rows skipped (parse error or write precondition).
     pub skipped: usize,
+    /// BZ-01: parse-level rejections (`parsed.skipped_lines`). Same
+    /// value as `skipped` in the dry-run (no dedup yet — that happens
+    /// at write time); surfaced as a separate "格式错误" card in the
+    /// UI so the user sees "your dump has malformed rows" distinctly
+    /// from dedup hits shown post-import.
+    pub invalid_rows: usize,
     /// The provider rows that will be imported (UI shows a preview list).
     pub preview_providers: Vec<Provider>,
     /// The MCP rows parsed but NOT written (F6 owns write-side; M2.2
@@ -205,6 +211,7 @@ pub async fn parse_sql_preview(
         total_lines,
         importable,
         skipped,
+        invalid_rows: parsed.skipped_lines.len(),
         preview_providers: parsed.providers,
         preview_mcp: parsed.mcp_servers,
         skipped_samples,
@@ -745,6 +752,7 @@ mod tests {
             total_lines: 5,
             importable: 3,
             skipped: 2,
+            invalid_rows: 2,
             preview_providers: vec![],
             preview_mcp: vec![],
             skipped_samples: vec![],
@@ -755,6 +763,7 @@ mod tests {
         assert_eq!(v["total_lines"], 5);
         assert_eq!(v["importable"], 3);
         assert_eq!(v["skipped"], 2);
+        assert_eq!(v["invalid_rows"], 2);
         assert!(v["preview_providers"].is_array());
         assert!(v["preview_mcp"].is_array());
         assert!(v["skipped_samples"].is_array());
