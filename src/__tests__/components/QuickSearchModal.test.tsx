@@ -68,9 +68,10 @@ describe('filterResults', () => {
 
   it('matches case-insensitively on the label', () => {
     const r = filterResults(SAMPLE, 'mcp');
-    // Both the MCP plugin label and the fs-mcp server match.
+    // Phase 27 Fix 6: 'MCP 管理' plugin label was removed (merged into
+    // '资源浏览'). 'mcp' now matches only the fs-mcp server entry.
     expect(r.map((x) => x.label)).toEqual(
-      expect.arrayContaining(['MCP 管理', 'fs-mcp']),
+      expect.arrayContaining(['fs-mcp']),
     );
   });
 
@@ -119,8 +120,10 @@ describe('QuickSearchModal', () => {
     // F2 redirect shim removed (action moved to F1 [激活] button).
     // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins.
     // F8 removed in M5 #18 → 9 plugins + 2 utility views = 11 entries.
+    // Phase 27 Fix 6: 'mcp-management' merged into 'resource-browser'
+    // (D-10) → ALL_VIEWS 12 → 11; minus 'home' → 10 entries.
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(11);
+    expect(results.length).toBe(10);
   });
 
   it('typing filters the result list', async () => {
@@ -261,10 +264,10 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     const input = (await screen.findByTestId('quick-search-input')) as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(input, { target: { value: 'p' } });
+      fireEvent.change(input, { target: { value: '资源' } });
     });
-    // 'p' matches 2 plugin labels (Provider 列表 + MCP 管理) after the
-    // F4 deeplink-import removal — enough for a single Ctrl+N step.
+    // Phase 27 Fix 6: 'MCP 管理' label removed; '资源' now matches 2
+    // plugin labels (资源浏览 + 资源市场) — enough for a single Ctrl+N step.
     const rows = await screen.findAllByTestId(/^quick-search-result-/);
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[0]!.getAttribute('data-highlighted')).toBe('true');
@@ -280,9 +283,9 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     const input = (await screen.findByTestId('quick-search-input')) as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(input, { target: { value: 'p' } });
+      fireEvent.change(input, { target: { value: '资源' } });
     });
-    // 'p' matches 2 labels → max highlight index is 1. Ctrl+N once to
+    // '资源' matches 2 labels → max highlight index is 1. Ctrl+N once to
     // reach index 1, then Ctrl+P back to index 0.
     await act(async () => {
       fireEvent.keyDown(input, { key: 'n', ctrlKey: true });
@@ -308,7 +311,7 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     );
     const input = (await screen.findByTestId('quick-search-input')) as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(input, { target: { value: 'p' } });
+      fireEvent.change(input, { target: { value: '资源' } });
     });
     const beforeRows = await screen.findAllByTestId(/^quick-search-result-/);
     const firstHint = beforeRows[0]!.textContent;
@@ -324,7 +327,7 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     expect(onClose).toHaveBeenCalledTimes(1);
     // We navigated — we just confirm it's a non-empty ViewId string
     // (don't pin the exact id since fuzzy ranking depends on the
-    // 12-plugin seed which is the same for every test).
+    // plugin seed which is the same for every test).
     const calledWith = onNavigate.mock.calls[0]![0];
     expect(typeof calledWith).toBe('string');
     expect((calledWith as string).length).toBeGreaterThan(0);
@@ -400,14 +403,14 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     // Pre-seed 10 history entries via direct localStorage writes,
     // then trigger one more save and verify the 11th is the new
     // front and the oldest is dropped. Use a query that actually
-    // matches a plugin label ("MCP") so Enter will commit.
+    // matches a plugin label ("资源") so Enter will commit.
     const seed = Array.from({ length: 10 }, (_, i) => `seed-${i}`);
     window.localStorage.setItem(HISTORY_KEY, JSON.stringify(seed));
 
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     const input = (await screen.findByTestId('quick-search-input')) as HTMLInputElement;
     await act(async () => {
-      fireEvent.change(input, { target: { value: 'MCP' } });
+      fireEvent.change(input, { target: { value: '资源' } });
     });
     // Wait for the result list to render — proves the fuzzy
     // pipeline finished and visible[0] is non-null.
@@ -418,7 +421,7 @@ describe('QuickSearchModal — M2.11 fuzzy + highlight + history + Ctrl+N/P', ()
     const stored = window.localStorage.getItem(HISTORY_KEY);
     const parsed = JSON.parse(stored!) as string[];
     expect(parsed).toHaveLength(10);
-    expect(parsed[0]).toBe('MCP');
+    expect(parsed[0]).toBe('资源');
     // seed-9 was the oldest; it should be gone now.
     expect(parsed.includes('seed-9')).toBe(false);
   });
