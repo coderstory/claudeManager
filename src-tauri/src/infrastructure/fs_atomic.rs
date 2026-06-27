@@ -50,6 +50,16 @@ pub enum FsAtomicError {
     /// original file is intact, the temp file may be left on disk.
     #[error("atomic rename failed for {dst}: {message}")]
     RenameFailed { dst: PathBuf, message: String },
+
+    /// Restore-from-backup failed (no backup found, directory missing,
+    /// or copy I/O error). P1-04a (v3.3 M7 phase 32-03) — enables the
+    /// `switch_provider` step-5 rollback path: if the provider library
+    /// write fails after settings.json was already advanced, the caller
+    /// restores the latest `.bak.<ts>` snapshot to put settings.json
+    /// back to its pre-switch state (CLAUDE.md §7 — any state change
+    /// must be rollable).
+    #[error("failed to restore from backup: {0}")]
+    Restore(std::io::Error),
 }
 
 /// Write `content` to `path` atomically, taking a timestamped backup
@@ -120,7 +130,105 @@ pub fn write_with_backup(path: &Path, content: &str) -> Result<(), FsAtomicError
     Ok(())
 }
 
-/// Compute the backup path for `path`.
+/// Restore the most recent backup file for `path` (the newest
+/// `path.bak.<ts>` sibling in the same directory), copying it back
+/// over `path`.
+///
+/// P1-04a (v3.3 M7 phase 32-03). Used by `switch_provider` /
+/// `switch_provider_with_active_root` to roll back `settings.json`
+/// when step 5 (provider library `to_json_file`) fails after step 4
+/// (`write_with_backup`) already advanced settings.json to the new
+/// provider's env (CLAUDE.md §7: any state change must be rollable;
+/// SPEC §6.1/§6.2 atomic-write + backup contract).
+///
+/// # Algorithm
+///
+/// 1. Resolve `path`'s parent directory + basename. Either missing
+///    → `FsAtomicError::Restore(NotFound)`.
+/// 2. Enumerate directory entries whose name starts with
+///    `<basename>.bak.` (the exact prefix [`backup_path_for`]
+///    produces). No match → `Restore(NotFound)`.
+/// 3. Pick the newest by modification time (`modified()`). We use
+///    mtime rather than parsing the timestamp suffix because (a) the
+///    suffix is local time, not lexically-sortable across DST
+///    boundaries, and (b) mtime is monotonic for the typical case of
+///    "the user just switched, the newest .bak is the pre-switch
+///    snapshot". Ties fall back to directory order.
+/// 4. `fs::copy(backup, path)` — overwrites `path` in place. Copy is
+///    NOT atomic, but `path` was already destructively rewritten by
+///    step 4 of `write_with_backup`; the backup copy is the source of
+///    truth here and a partial copy still leaves a more-recent-good
+///    snapshot than the half-advanced live file.
+///
+/// # Returns
+/// - `Ok(())` on success.
+/// - `Err(FsAtomicError::Restore(_))` if no parent, no basename, no
+///   backup match, the dir read failed, or the copy failed.
+///
+/// # Caveats
+/// - Does NOT delete the restored backup. Callers / F19 cleanup own
+///   the "保留最近 N 份" policy. Leaving the backup is safer — the
+///   user can re-restore if the switch retry also fails.
+/// - Best-effort: a concurrent writer could land a newer `.bak` between
+///   our dir-scan and our copy. F20 single-instance is not enforced
+///   for Claude Code itself, so this is a known limitation (the same
+///   one `write_with_backup` already accepts — see `OriginalVanished`).
+pub fn restore_from_backup(path: &Path) -> Result<(), FsAtomicError> {
+    let parent = path.parent().ok_or_else(|| {
+        FsAtomicError::Restore(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("path has no parent: {}", path.display()),
+        ))
+    })?;
+    let basename = path.file_name().ok_or_else(|| {
+        FsAtomicError::Restore(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("path has no file name: {}", path.display()),
+        ))
+    })?;
+    let prefix = format!("{}.bak.", basename.to_string_lossy());
+
+    // Enumerate siblings matching the backup prefix. read_dir error
+    // (e.g. parent doesn't exist) → Restore(io) so the caller sees a
+    // clear "no backup available" rather than a panic. We map manually
+    // (rather than `?`) so ALL restore-path errors land in `Restore`,
+    // not the generic `Io` variant — the caller (`switch_provider`)
+    // treats `Restore` as "rollback attempted, may be partial" vs `Io`
+    // as "primary write failed".
+    let read_dir = match std::fs::read_dir(parent) {
+        Ok(rd) => rd,
+        Err(e) => return Err(FsAtomicError::Restore(e)),
+    };
+    let mut entries: Vec<std::fs::DirEntry> = read_dir
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|name| name.starts_with(&prefix))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if entries.is_empty() {
+        return Err(FsAtomicError::Restore(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("no backup found for {}", path.display()),
+        )));
+    }
+
+    // Newest by mtime (descending). `modified()` failure on an entry
+    // is treated as the oldest so a broken entry never wins.
+    entries.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+    entries.reverse();
+
+    let backup_path = entries[0].path();
+    if let Err(e) = std::fs::copy(&backup_path, path) {
+        return Err(FsAtomicError::Restore(e));
+    }
+    Ok(())
+}
+
+
 ///
 /// Format: `<path>.bak.yyyyMMdd-HHmmss` (SPEC §6.1, local time).
 /// Examples:
@@ -474,5 +582,48 @@ mod tests {
         assert_eq!(parts[1].len(), 6); // HHmmss
         // All digits
         assert!(s.chars().all(|c| c.is_ascii_digit() || c == '-'));
+    }
+
+    // ----- restore_from_backup (P1-04a, v3.3 M7 phase 32-03) -----
+
+    #[test]
+    fn restore_from_backup_recovers_latest_backup() {
+        let tmp = TempDir::new().unwrap();
+        let target = tmp.path().join("settings.json");
+
+        // Seed v1, then two backup-taking writes (v2 then v3).
+        fs::write(&target, "v1").unwrap();
+        write_with_backup(&target, "v2").unwrap();
+        // Sleep so the second backup's mtime strictly exceeds the
+        // first; otherwise sort_by_key(mtime) sees a tie and the
+        // "newest" pick is non-deterministic. 1.1s covers both 1s
+        // ext4 and 0.1s APFS mtime granularity.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        write_with_backup(&target, "v3").unwrap();
+
+        // Simulate the failure scenario: live file is corrupted.
+        fs::write(&target, "corrupted").unwrap();
+
+        // Restore should pull back the NEWEST backup (by mtime), which
+        // is the pre-v3 snapshot = "v2". This mirrors the
+        // switch_provider rollback contract: write_with_backup
+        // snapshots the PRE-write state, so restore_from_backup
+        // returns the state immediately before the most recent
+        // advance. (Backup files on disk: .bak.<T1>→"v1", .bak.<T2>→"v2".)
+        restore_from_backup(&target).unwrap();
+        let restored = fs::read_to_string(&target).unwrap();
+        assert_eq!(restored, "v2");
+    }
+
+    #[test]
+    fn restore_from_backup_errors_when_no_backup() {
+        let tmp = TempDir::new().unwrap();
+        let target = tmp.path().join("never-backed-up.json");
+        fs::write(&target, "data").unwrap();
+        // No backup ever written. Must error, and the variant must be
+        // Restore so switch_provider's rollback path can distinguish
+        // "no snapshot" from a generic Io error.
+        let err = restore_from_backup(&target).unwrap_err();
+        assert!(matches!(err, FsAtomicError::Restore(_)));
     }
 }
