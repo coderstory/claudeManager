@@ -26,6 +26,10 @@ const ThemeProviderContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }): ReactElement {
   const [themeId, setThemeId] = useState<ThemeId>(() => {
     if (typeof window === 'undefined') return getDefaultTheme().id;
+    // URL ?theme=xxx 优先级最高 (方便截图测试 / deep link 主题切换)
+    const urlTheme = new URLSearchParams(window.location.search).get('theme');
+    if (urlTheme !== null && isRegisteredTheme(urlTheme)) return urlTheme;
+    // localStorage 其次 (用户上次手动选的主题)
     const stored = window.localStorage.getItem(STORAGE_KEY);
     return stored !== null && isRegisteredTheme(stored) ? stored : getDefaultTheme().id;
   });
