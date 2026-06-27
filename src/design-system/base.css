@@ -450,92 +450,30 @@ table.dense tr.active td { background: var(--accent-soft); }
   filter: none;
 }
 
-/* === macOS 窗口控制按钮 (Task 8, 2026-06-27) ===
- * 红黄绿圆点按钮 (12px 直径, 无内 icon, hover 时显现 × / − / +).
- * 原 Win 风格 chrome-btn 已重写为 .wc-btn (WindowControls.tsx).
- * 主题维度覆写在 tokens.css:
- *   - [data-theme="dark"] .wc-btn.* 加发光
- *   - [data-theme="editorial"] .wc-btn.* 改成 brutalist 黑白
- *   - [data-theme="pixel"] 通过 .wc-btn 圆角 (无) 自动变成方块
+/* === 窗口控制按钮 (M1.9.2 Windows 风格 + M4.8 重设计)
+ * 矩形 32x32 + lucide 图标 (Minus / Maximize2 / X), hover 背景
+ * --modal-cancel-bg, close hover 用 --danger (Windows 约定).
+ * 主题维度 5 主题自动适配 (背景透明 + 文字色 var(--text-primary)).
  */
 .window-controls {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   -webkit-app-region: no-drag;
   align-items: center;
   flex-shrink: 0;
 }
-/* 提高 specificity: .wc-btn 必须覆盖 .titlebar button (0,1,1)
-   否则 .titlebar button 的 width:32px; height:32px; border-radius:6px
-   会 win over .wc-btn 的 12px 圆点 (Task 8 设计意图是 macOS 12px 圆点). */
-.window-controls .wc-btn {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 0;
-  line-height: 0;
-  position: relative;
-  transition: filter 150ms ease;
-  background: transparent;
+/* Hover: 浅背景 (跟 M1.9.2 一致) */
+.chrome-btn-hover:hover {
+  background: var(--modal-cancel-bg);
+  color: var(--text-primary);
 }
-.wc-btn.close { background: #FF5F57; border: 1px solid #E0443E; }
-.wc-btn.min   { background: #FEBC2E; border: 1px solid #DEA123; }
-.wc-btn.max   { background: #28C840; border: 1px solid #1AAB29; }
-.wc-btn:hover { filter: brightness(1.1); }
-.wc-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* Close hover: 红色背景 (Windows 约定, 警告用户关 app) */
+.chrome-btn-close:hover {
+  background: var(--danger);
+  color: var(--accent-fg-on);
 }
-.wc-btn.close:hover::after {
-  content: '×';
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
-.wc-btn.min:hover::after {
-  content: '−';
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
-.wc-btn.max:hover::after {
-  content: '+';
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
+.chrome-btn-close:hover svg {
+  color: var(--accent-fg-on);
 }
 
-/* === topbar-center 居中 app 名 (Task 8) ===
- * absolute 定位脱离文档流, 不影响 data-header-layout="split"
- * + justifyContent: space-between 的布局契约.
- * pointer-events: none 让中间区不拦截 drag (header 仍可拖).
- */
-.topbar-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  pointer-events: none;
-  user-select: none;
-  white-space: nowrap;
-  /* AppHeader 是 relative, 让 absolute 锚定在 titlebar */
-}
 .titlebar { position: relative; }

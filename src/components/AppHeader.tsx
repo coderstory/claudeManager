@@ -15,19 +15,11 @@
  *   `WebkitAppRegion: 'no-drag'` so they stay clickable.
  *
  *   Task 8 (2026-06-27): macOS-style traffic-light cluster
- *   (red / yellow / green 12px dots, no inner icons, hover
- *   glyphs) replaces the previous Windows-style Win chrome
- *   cluster. The 3 dots now sit on the **topbar-left** so the
- *   app's own controls (back button + view title + theme toggle
- *   + settings) cluster on the right per macOS HIG. A new
- *   absolutely-positioned `.topbar-center` element pins the app
- *   product name ("ClaudeManager") to the titlebar centre.
- *   The 5-theme layout invariant (`data-header-layout="split"`
- *   + `justifyContent: space-between`) is preserved — the
- *   centre is layered over the split via `position: absolute`
- *   in base.css, so the regression guard
- *   "header-layout 5 主题统一 split / space-between" (Task 4
- *   fix) keeps passing.
+ *   was introduced. M4.8 重设计: 改回 Windows 风格 (lucide 图标
+ *   + 矩形按钮), 移到 topbar-right (M1.9.2 原位置), 删
+ *   macOS-only 的 `.topbar-center` 居中 app 名效果. 5 主题
+ *   layout invariant (`data-header-layout="split"` +
+ *   `justifyContent: space-between`) 保留.
  *
  *   M1.9 keeps the header lean: back button (when not on
  *   'home'), the current view title, a theme toggle, and a
@@ -143,11 +135,6 @@ export function AppHeader({
           gap: 12,
         }}
       >
-        {/* macOS 红黄绿圆点按钮 (Task 8) — 移到 topbar-left,
-            按 macOS HIG: 红(关闭) → 黄(最小化) → 绿(最大化).
-            整组 sit in no-drag zone (WindowControls 自身已加),
-            不会被 header drag-region 截走 click event. */}
-        <WindowControls />
       <div className="titlebar-title" style={{ ...noDragStyle, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
         {!isHome && (
           <button
@@ -171,29 +158,6 @@ export function AppHeader({
           </button>
         )}
       </div>
-      </div>
-
-      {/* Topbar centre — Task 8 (2026-06-27) macOS-style app name
-          overlay. Absolutely-positioned so it doesn't disturb the
-          split-layout invariant (data-header-layout="split" +
-          justifyContent: space-between) — both regression guards
-          from Task 4 fix stay green. The product name is hard-
-          coded to mirror PRODUCT_NAME in src-tauri/src/commands/
-          app.rs::PRODUCT_NAME = "ClaudeManager"; the runtime
-          source of truth is the Rust constant. CLAUDE.md §6.4
-          三处同步 reminder: if this string ever changes, also
-          update src/pages/about/index.tsx + the
-          sampleMetadata() fixture in
-          src/__tests__/pages/about.test.tsx + Rust PRODUCT_NAME
-          + tauri.conf.json productName.
-
-          页面名 (pageTitle) 不在 topbar 显示, 已在各页面的 .page-header 里显示 — 避免视觉重复. */}
-      <div
-        className="topbar-center"
-        data-testid="app-header-app-name"
-        aria-hidden="true"
-      >
-        ClaudeManager
       </div>
 
       {/* Right zone — settings + window controls.
@@ -250,8 +214,10 @@ export function AppHeader({
         >
           <Settings size={16} />
         </button>
-        {/* WindowControls 已在 Task 8 移到 topbar-left (红黄绿圆点按钮),
-            跟 macOS HIG 一致. 这里不再渲染. */}
+        {/* M4.8 — WindowControls 移回 topbar-right (Windows 风格: 最小化 /
+            最大化 / 关闭 在右上). 整组 sit in no-drag zone
+            (WindowControls 自身已加), 不会被 header drag-region 截走 click. */}
+        <WindowControls />
       </div>
     </header>
   );

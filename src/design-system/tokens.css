@@ -234,21 +234,6 @@ html, body, #root {
 }
 [data-theme="pixel"] body { background: #5BB4E8; }
 
-/* === macOS 窗口按钮主题适配 (Task 8, 2026-06-27) ===
- * 默认 light 主题: base.css 已设红黄绿 (CSS 规范色).
- * dark 主题: 加发光 + 内描边, 暗背景上圆点更显眼.
- * editorial 主题: brutalist 黑白 3 色, 加 box-shadow 1px 立体感.
- * liquid-glass / pixel 主题: 沿用 base.css 默认 (亮/灰 方块自然适配).
- */
-[data-theme="dark"] .wc-btn.close { box-shadow: 0 0 6px rgba(255, 95, 87, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
-[data-theme="dark"] .wc-btn.min   { box-shadow: 0 0 6px rgba(254, 188, 46, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
-[data-theme="dark"] .wc-btn.max   { box-shadow: 0 0 6px rgba(40, 200, 64, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
-
-[data-theme="editorial"] .wc-btn.close { background: #FFFFFF; border: 2px solid #000; box-shadow: 1px 1px 0 #000; border-radius: 0; }
-[data-theme="editorial"] .wc-btn.min   { background: #DDDDDD; border: 2px solid #000; box-shadow: 1px 1px 0 #000; border-radius: 0; }
-[data-theme="editorial"] .wc-btn.max   { background: #000000; border: 2px solid #000; box-shadow: 1px 1px 0 #000; border-radius: 0; }
-[data-theme="editorial"] .wc-btn:hover { filter: none; background: #FFFF00; }
-
 /* === body 基线 === */
 body {
   font-family: var(--font-ui);
