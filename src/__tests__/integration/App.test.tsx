@@ -286,6 +286,32 @@ describe('App — view routing integration', () => {
     });
     expect(screen.queryByTestId('welcome-modal-body')).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-02 — single-file-deploy removed (M5 #18). The
+  // `no-single-file-deploy-refs.test.ts` file already does a
+  // filesystem-wide grep guard; here we add a focused routing
+  // assertion that the sidebar does NOT render a `single-file-deploy`
+  // entry, and that the canonical ALL_VIEWS list does not contain
+  // the id. This catches the failure mode where a future commit
+  // re-adds the sidebar tile before any of the other guards (FS
+  // scan, capability, plugin stub) trips.
+  // -------------------------------------------------------------------------
+  it('BUG-RF-02: sidebar does NOT have a single-file-deploy entry', () => {
+    renderApp();
+    expect(screen.queryByTestId('sidebar-item-single-file-deploy')).toBeNull();
+  });
+
+  it('BUG-RF-02: ALL_VIEWS does NOT contain single-file-deploy', () => {
+    // The canonical list of view ids must never include the removed
+    // F8 id. This is a structural guard — a future commit that adds
+    // 'single-file-deploy' to ALL_VIEWS would silently start routing
+    // the user to the (deleted) PluginPlaceholder, breaking the
+    // M5 #18 removal contract.
+    expect((ALL_VIEWS as readonly string[]).includes('single-file-deploy')).toBe(
+      false,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
