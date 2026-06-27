@@ -8,18 +8,18 @@ import type { ReactElement } from 'react';
 vi.mock('../design-system/ThemeRegistry', () => ({
   listThemes: () => [
     { id: 'light', name: '极简卡片', icon: 'sun', isDefault: true },
-    { id: 'anime', name: '二次元', icon: 'sparkles' },
+    { id: 'dark', name: '暗夜', icon: 'moon' },
   ],
   getTheme: (id: string) => {
     if (id === 'light') return { id: 'light', name: '极简卡片', icon: 'sun', isDefault: true };
-    if (id === 'anime') return { id: 'anime', name: '二次元', icon: 'sparkles' };
+    if (id === 'dark') return { id: 'dark', name: '暗夜', icon: 'moon' };
     return null;
   },
   getDefaultTheme: () => ({ id: 'light', name: '极简卡片', icon: 'sun', isDefault: true }),
   getNextTheme: (id: string) => (id === 'light'
-    ? { id: 'anime', name: '二次元', icon: 'sparkles' }
+    ? { id: 'dark', name: '暗夜', icon: 'moon' }
     : { id: 'light', name: '极简卡片', icon: 'sun', isDefault: true }),
-  isRegisteredTheme: (id: string) => id === 'light' || id === 'anime',
+  isRegisteredTheme: (id: string) => id === 'light' || id === 'dark',
 }));
 
 function Consumer(): ReactElement {
@@ -28,7 +28,7 @@ function Consumer(): ReactElement {
     <div>
       <span data-testid="current-id">{theme.id}</span>
       <span data-testid="theme-count">{themes.length}</span>
-      <button data-testid="switch-anime" onClick={() => setTheme('anime')}>
+      <button data-testid="switch-dark" onClick={() => setTheme('dark')}>
         switch
       </button>
       <button data-testid="switch-invalid" onClick={() => setTheme('nonexistent')}>
@@ -56,12 +56,12 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('theme-count').textContent).toBe('2');
   });
 
-  it('setTheme("anime") 更新当前主题 + 写 data-theme', async () => {
+  it('setTheme("dark") 更新当前主题 + 写 data-theme', async () => {
     render(<ThemeProvider><Consumer /></ThemeProvider>);
-    await userEvent.click(screen.getByTestId('switch-anime'));
-    expect(screen.getByTestId('current-id').textContent).toBe('anime');
-    expect(document.documentElement.dataset.theme).toBe('anime');
-    expect(localStorage.getItem('ccm.theme')).toBe('anime');
+    await userEvent.click(screen.getByTestId('switch-dark'));
+    expect(screen.getByTestId('current-id').textContent).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('ccm.theme')).toBe('dark');
   });
 
   it('setTheme 拒绝未注册 id', async () => {
@@ -76,10 +76,10 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('current-id').textContent).toBe('light');
   });
 
-  it('读取 localStorage 有效值("anime")正确恢复', () => {
-    localStorage.setItem('ccm.theme', 'anime');
+  it('读取 localStorage 有效值("dark")正确恢复', () => {
+    localStorage.setItem('ccm.theme', 'dark');
     render(<ThemeProvider><Consumer /></ThemeProvider>);
-    expect(screen.getByTestId('current-id').textContent).toBe('anime');
+    expect(screen.getByTestId('current-id').textContent).toBe('dark');
   });
 
   it('useTheme() throws when used outside ThemeProvider', () => {

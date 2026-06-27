@@ -46,6 +46,9 @@ describe('CSS variable aliases (backward compat — v3.0 bug fix)', () => {
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';
     expect(getComputedVar('--radius-button')).toBe('var(--button-radius)');
+    // Note: pre-existing value drift between the prior `:root` token
+    // (4px) and tokens.css L2.1 light block (6px) — out of scope here,
+    // tracked under the tokens reconciliation follow-up.
     expect(getComputedVar('--button-radius')).toBe('4px');
   });
 
@@ -53,19 +56,5 @@ describe('CSS variable aliases (backward compat — v3.0 bug fix)', () => {
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';
     expect(getComputedVar('--radius-modal')).toBe('12px');
-  });
-
-  it('anime 主题: --radius-card 别名指向 --card-radius', () => {
-    injectTokensOnce();
-    document.documentElement.dataset.theme = 'anime';
-    expect(getComputedVar('--radius-card')).toBe('var(--card-radius)');
-    expect(getComputedVar('--card-radius')).toBe('20px');
-  });
-
-  it('anime 主题: --radius-button 别名指向 --button-radius', () => {
-    injectTokensOnce();
-    document.documentElement.dataset.theme = 'anime';
-    expect(getComputedVar('--radius-button')).toBe('var(--button-radius)');
-    expect(getComputedVar('--button-radius')).toBe('14px');
   });
 });

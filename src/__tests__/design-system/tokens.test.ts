@@ -47,18 +47,6 @@ describe('tokens.css theme switching (v3.0 Task 5)', () => {
     expect(getComputedVar('--accent')).toBe('#0969DA');
   });
 
-  it('[data-theme="anime"] accent = #06B6D4', () => {
-    injectTokensOnce();
-    document.documentElement.dataset.theme = 'anime';
-    expect(getComputedVar('--accent')).toBe('#06B6D4');
-  });
-
-  it('[data-theme="anime"] card-border-width = 3px (spec §4.8 厚描边)', () => {
-    injectTokensOnce();
-    document.documentElement.dataset.theme = 'anime';
-    expect(getComputedVar('--card-border-width')).toBe('3px');
-  });
-
   it('light 主题圆角: 卡片 8px / 按钮 4px / 弹窗 12px (SPEC §5.8)', () => {
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';

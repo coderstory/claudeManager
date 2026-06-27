@@ -7,12 +7,11 @@ import { resolve } from 'path';
 //
 // vitest 不内置 CSS transform, jsdom 不解析 <link rel=stylesheet>,
 // 所以最可靠的姿势是 readFileSync + inject <style>, 见同目录
-// tokens.test.ts 的同款 pattern. base.css + anime.css 都注入,
-// 然后用 getComputedStyle 验证 base 规则 + anime 覆写都生效.
+// tokens.test.ts 的同款 pattern. 只注入 base.css (5 主题共享骨架),
+// 然后用 getComputedStyle 验证 base 规则在主题切换时仍然生效.
 // ---------------------------------------------------------------------------
 
 const BASE_CSS_PATH = resolve(__dirname, '../../design-system/base.css');
-const ANIME_CSS_PATH = resolve(__dirname, '../../design-system/themes/anime.css');
 
 function injectOnce(id: string, path: string): void {
   if (document.getElementById(id)) return;
@@ -26,7 +25,6 @@ function injectOnce(id: string, path: string): void {
 describe('base.css — 项目级 base class 系统', () => {
   beforeAll(() => {
     injectOnce('__base_css_injected__', BASE_CSS_PATH);
-    injectOnce('__anime_css_injected__', ANIME_CSS_PATH);
   });
 
   afterEach(() => {
@@ -98,16 +96,6 @@ describe('base.css — 项目级 base class 系统', () => {
     el.remove();
   });
 
-  it('anime 主题下 .card:hover 有 translateY 上浮(transform 在 transition 中)', () => {
-    document.documentElement.dataset.theme = 'anime';
-    const el = document.createElement('div');
-    el.className = 'card';
-    document.body.appendChild(el);
-    const t = getComputedStyle(el).transition;
-    expect(t).toContain('transform');
-    el.remove();
-  });
-
   it('.theme-toggle.spinning 触发 animation 属性 (jsdom 不解析 keyframe 但 transition 路径生效)', () => {
     const el = document.createElement('button');
     el.className = 'theme-toggle spinning';
@@ -124,39 +112,5 @@ describe('base.css — 项目级 base class 系统', () => {
     });
     expect(ruleFound).toBe(true);
     el.remove();
-  });
-
-  it('anime 主题下 .sidebar .nav-item 圆胖 padding/margin 覆写命中 CSSRule', () => {
-    document.documentElement.dataset.theme = 'anime';
-    const ruleFound = Array.from(document.styleSheets).some((sheet) => {
-      try {
-        return Array.from(sheet.cssRules).some(
-          (r) =>
-            r.cssText.includes('.sidebar .nav-item') &&
-            r.cssText.includes('border-radius: 16px'),
-        );
-      } catch {
-        return false;
-      }
-    });
-    expect(ruleFound).toBe(true);
-  });
-
-  it('M5 bug #1: anime 主题下 .titlebar .titlebar-title 有独立背景色 + 白边 (chip 风格)', () => {
-    document.documentElement.dataset.theme = 'anime';
-    const wrap = document.createElement('div');
-    wrap.className = 'titlebar';
-    const title = document.createElement('div');
-    title.className = 'titlebar-title';
-    wrap.appendChild(title);
-    document.body.appendChild(wrap);
-    const cs = getComputedStyle(title);
-    // 白边 + 圆角 chip — 跟右侧按钮组呼应
-    expect(cs.borderRadius).toBe('12px');
-    expect(cs.borderStyle).toBe('solid');
-    // 背景非透明 (rgba 形式) — 与 titlebar 主底 (accent) 区分开
-    expect(cs.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-    expect(cs.backgroundColor).not.toBe('transparent');
-    wrap.remove();
   });
 });

@@ -2,11 +2,11 @@
  * ConfirmDialog — v3.0 (M3.0.2) 通用确认弹窗.
  *
  * Replaces native `window.confirm()` / `window.alert()` calls with a
- * themed modal that respects the active theme (light / anime) via
- * base.css + themes/anime.css. CLAUDE.md §7 mandates user-visible
- * confirmation before destructive writes (delete project / close
- * app / wipe settings), so this primitive is needed for every
- * dangerous action across the app.
+ * themed modal that respects the active theme (light / liquid-glass /
+ * dark / editorial / pixel) via base.css + tokens.css. CLAUDE.md §7
+ * mandates user-visible confirmation before destructive writes
+ * (delete project / close app / wipe settings), so this primitive
+ * is needed for every dangerous action across the app.
  *
  * ## Design contract
  *

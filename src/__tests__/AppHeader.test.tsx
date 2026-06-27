@@ -9,18 +9,18 @@ import type { ViewId } from '../hooks/useViewState';
 vi.mock('../design-system/ThemeRegistry', () => ({
   listThemes: () => [
     { id: 'light', name: '极简卡片', icon: 'sun', isDefault: true },
-    { id: 'anime', name: '二次元', icon: 'sparkles' },
+    { id: 'dark', name: '暗夜', icon: 'moon' },
   ],
   getTheme: (id: string) => {
     if (id === 'light') return { id: 'light', name: '极简卡片', icon: 'sun' };
-    if (id === 'anime') return { id: 'anime', name: '二次元', icon: 'sparkles' };
+    if (id === 'dark') return { id: 'dark', name: '暗夜', icon: 'moon' };
     return null;
   },
   getDefaultTheme: () => ({ id: 'light', name: '极简卡片', icon: 'sun', isDefault: true }),
   getNextTheme: (id: string) => (id === 'light'
-    ? { id: 'anime', name: '二次元', icon: 'sparkles' }
+    ? { id: 'dark', name: '暗夜', icon: 'moon' }
     : { id: 'light', name: '极简卡片', icon: 'sun' }),
-  isRegisteredTheme: (id: string) => id === 'light' || id === 'anime',
+  isRegisteredTheme: (id: string) => id === 'light' || id === 'dark',
 }));
 
 const pageTitle = (_v: ViewId) => 'Test Page';
@@ -46,7 +46,7 @@ describe('AppHeader theme toggle', () => {
     const btn = screen.getByTestId('app-header-theme-toggle');
     expect(document.documentElement.dataset.theme).toBe('light');
     await userEvent.click(btn);
-    expect(document.documentElement.dataset.theme).toBe('anime');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     await userEvent.click(btn);
     expect(document.documentElement.dataset.theme).toBe('light');
   });

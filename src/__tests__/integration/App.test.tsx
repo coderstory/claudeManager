@@ -171,10 +171,10 @@ describe('App — view routing integration', () => {
   });
 
   it('theme toggle button IS rendered (v3.0 plugin themes)', () => {
-    // v3.0 主题重构: 主题从单档 light 改为插件式 light + anime,
+    // v3.0 主题重构: 主题从单档 light 改为插件式多主题 (5 主题平级),
     // 切换按钮恢复, 走 ThemeRegistry 的 listThemes() 循环到下一个
     // 主题(见 AppHeader.tsx 第 ~65 行 themeToggleDisabled 分支)。
-    // 本用例是回归 guard — 防止后期误把按钮删掉(2 套主题无按钮无法切换)。
+    // 本用例是回归 guard — 防止后期误把按钮删掉(多主题无按钮无法切换)。
     renderApp();
     const toggle = screen.queryByTestId('app-header-theme-toggle');
     expect(toggle).not.toBeNull();

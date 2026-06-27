@@ -84,23 +84,14 @@ export function AppHeader({
       className="titlebar"
       data-tauri-drag-region=""
       data-testid="app-header"
-      data-header-layout={
-        // UI-A-01 (2026-06-27): 二次元主题在 header 用居中布局
-        // (left spacer + 居中 title + right spacer, 让 title 视觉居中);
-        // 瓷白 / 暗色主题保持原有 space-between (left 标题 + right 按钮组)。
-        // data-header-layout 暴露给 vitest 做断言 + 给 anime.css 做样式钩子。
-        theme.id === 'anime' ? 'centered' : 'split'
-      }
+      data-header-layout="split"
       style={{
         ...dragRegionStyle,
-        // 高度 + 布局: 留 inline; 背景/阴影/边框走 base.css + anime.css
+        // 高度 + 布局: 留 inline; 背景/阴影/边框走 base.css
         height: 'var(--header-height)',
         display: 'flex',
         alignItems: 'center',
-        // UI-A-01: 二次元主题用 flex-start (left spacer + 居中 title + right spacer
-        // 由 inline flex: 1 spacer 撑开), 瓷白 / 暗色保持 space-between (左侧标题
-        // + 右侧按钮组 紧贴两端)。
-        justifyContent: theme.id === 'anime' ? 'flex-start' : 'space-between',
+        justifyContent: 'space-between',
         padding: '0 16px',
         flexShrink: 0,
       }}
@@ -122,22 +113,16 @@ export function AppHeader({
           past the 48px header height (theme at y=-40.4, close at
           y=55.6). Fix: inline the structural rules on the same
           element so they don't depend on Tailwind being present.
-
-          UI-A-01 (2026-06-27): 二次元主题下,这个外层包装用
-          "flex: 1 1 auto + justify-content: center" 让 title 居中
-          (前面有 left spacer flex: 1 1 0%, 后面有 actions 区域,
-          共同把 title 推到 header 水平中心)。瓷白 / 暗色保持
-          maxWidth + 左对齐布局, 与 SPEC 一致。*/}
+          Title wrap uses maxWidth + 左对齐布局 (5 主题一致,
+          与 SPEC 对齐)。*/}
       <div
         className="titlebar-title-wrap"
         style={{
           display: 'flex',
           alignItems: 'center',
-          // UI-A-01: 二次元主题 flex: 1 + justify-content: center 让
-          // 内部 title 居中。瓷白 / 暗色用 maxWidth 限制宽度左对齐。
-          ...(theme.id === 'anime'
-            ? { flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }
-            : { flex: '0 1 auto', maxWidth: 'calc(100% - 280px)', minWidth: 0 }),
+          flex: '0 1 auto',
+          maxWidth: 'calc(100% - 280px)',
+          minWidth: 0,
         }}
       >
       <div
@@ -195,10 +180,8 @@ export function AppHeader({
           even when the left zone title is very long.
 
           v3.0-base: outer wrapper now carries className="actions"
-          so base.css `.titlebar .actions button` + themes/anime.css
-          `[data-theme="anime"] .titlebar .actions button` can
-          layer their sizes/borders (anime uses 34x34 + 2px white
-          border + translucent white fill).
+          so base.css `.titlebar .actions button` can layer theme-
+          specific sizes/borders across all 5 registered themes.
           M2.15-fix-v2: `gap-1` Tailwind class was inert (no
           Tailwind pipeline) — buttons stacked vertically and the
           cluster extended past the 48px header height. Inlined

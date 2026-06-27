@@ -46,9 +46,8 @@ const noDragStyle = {
 } as React.CSSProperties;
 
 // baseButtonStyle 删除 (M3.0.1 inline-fix): 改用 className="chrome-btn",
-// 样式由 base.css `.titlebar .chrome-btn` + themes/anime.css 覆写接管。
-// 之前 inline style 优先级 1000 压住 CSS class, 导致 anime 主题下
-// 最大化/最小化/关闭按钮没变圆胖白边。
+// 样式由 base.css `.titlebar .chrome-btn` 接管, 主题维度调优由各主题
+// 自行覆盖。
 
 async function safeCall(action: () => Promise<void>): Promise<void> {
   try {

@@ -1,6 +1,6 @@
 /* === Claude 配置管理器 — 基础组件类 === */
-/* 与 demo-c-anime.html 对齐: card / btn / list-row / sidebar / kpi / provider-avatar / bar / table.dense 等基础交互规则 */
-/* 主题专属覆写在 themes/anime.css (圆胖厚边 + Fredoka + 双层薄荷阴影) */
+/* 基础交互规则: card / btn / list-row / sidebar / kpi / provider-avatar / bar / table.dense 等 */
+/* 主题维度的视觉微调由各主题自行覆盖 (在 tokens.css 改 token 或在 themes/<id>.css 加规则) */
 
 /* === macOS 适配 (CLAUDE.md §3.2 跨平台) ===
  * macOS WKWebView (Tauri 默认) + WebKit 私有前缀:
@@ -230,7 +230,7 @@
 .bar { width: 100%; height: 8px; background: rgba(0, 0, 0, 0.06); border-radius: 4px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 300ms ease; }
 
-/* ── Provider 头像 (light 默认 + anime 在 themes/anime.css 覆写) ── */
+/* ── Provider 头像 (light 默认, 主题维度可覆写) ── */
 .provider-avatar {
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -297,12 +297,12 @@ table.dense tr.active td { background: var(--accent-soft); }
   }
   .titlebar .actions button.theme-toggle,
   .titlebar .actions button[data-testid="app-header-theme-toggle"] {
-    /* anime 主题下保持 34x34 设计稿视觉, 但 hit area 略大 */
+    /* 主题维度可在此基础上覆盖尺寸 */
   }
 }
 
 /* === 弹窗 (M3.0.2 — 通用确认弹窗, 危险操作 / 普通信息) === */
-/* 主题专属覆写在 themes/anime.css (.modal 圆胖 + bounceIn) */
+/* 主题维度的弹窗样式覆写由各主题自行覆盖 (tokens.css 改 token 或在 themes/<id>.css 加规则) */
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -370,7 +370,7 @@ table.dense tr.active td { background: var(--accent-soft); }
 }
 /* danger 状态: 头部竖条变红 (light 主题红) */
 .modal[data-danger="true"] .modal-header { border-left-color: #D32F2F; }
-/* 弹窗入场动画: 滑下 + 轻微缩放 (light 主题用 240ms, anime 主题在 themes/anime.css 改成 bounceIn 320ms) */
+/* 弹窗入场动画: 滑下 + 轻微缩放 (240ms, 主题维度可覆写) */
 @keyframes modalSlideDown {
   from { opacity: 0; transform: translateY(-12px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0)     scale(1); }
@@ -388,7 +388,7 @@ table.dense tr.active td { background: var(--accent-soft); }
   font-weight: 600;
 }
 .btn-danger:hover {
-  /* light 主题下加深, anime 主题下保持柔和 (anime --danger 是 #FB7185) */
+  /* 主题维度可在此基础上覆盖 (例如: 保持柔和 vs 加深) */
   filter: brightness(0.92);
 }
 .btn-danger:disabled {
@@ -396,7 +396,7 @@ table.dense tr.active td { background: var(--accent-soft); }
   cursor: not-allowed;
 }
 /* === 弹窗专用按钮 (v3.0 confirm dialog redesign) ===
- * 颜色用直接值 (light 主题), anime 主题在 themes/anime.css 覆写.
+ * 颜色用直接值 (light 主题), 主题维度可覆写.
  * 不引用 var(--modal-*) — WebView2 不解析嵌套 var(). */
 .btn-modal-cancel {
   /* appearance: none 同 .btn-modal-confirm — 禁用原生 buttonface background */

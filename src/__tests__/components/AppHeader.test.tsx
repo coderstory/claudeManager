@@ -32,18 +32,18 @@ import { ThemeProvider } from '../../design-system/ThemeProvider';
 vi.mock('../../design-system/ThemeRegistry', () => ({
   listThemes: () => [
     { id: 'light', name: '极简卡片', icon: 'sun', isDefault: true },
-    { id: 'anime', name: '二次元', icon: 'sparkles' },
+    { id: 'dark', name: '暗夜', icon: 'moon' },
   ],
   getTheme: (id: string) => {
     if (id === 'light') return { id: 'light', name: '极简卡片', icon: 'sun' };
-    if (id === 'anime') return { id: 'anime', name: '二次元', icon: 'sparkles' };
+    if (id === 'dark') return { id: 'dark', name: '暗夜', icon: 'moon' };
     return null;
   },
   getDefaultTheme: () => ({ id: 'light', name: '极简卡片', icon: 'sun', isDefault: true }),
   getNextTheme: (id: string) => (id === 'light'
-    ? { id: 'anime', name: '二次元', icon: 'sparkles' }
+    ? { id: 'dark', name: '暗夜', icon: 'moon' }
     : { id: 'light', name: '极简卡片', icon: 'sun' }),
-  isRegisteredTheme: (id: string) => id === 'light' || id === 'anime',
+  isRegisteredTheme: (id: string) => id === 'light' || id === 'dark',
 }));
 
 const noop = (): void => undefined;
@@ -154,50 +154,23 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Phase 30 UI-A-01 — 二次元主题 header layout 与瓷白/暗色对齐
+// header layout (5 主题统一 split / space-between)
 //
-// 旧布局: 所有主题都用 justifyContent: 'space-between',title 左对齐
-//        (在二次元主题下视觉上偏左, 与瓷白/暗色风格不同 → 不一致)。
-// 新布局:
-//   - 二次元主题 (anime): data-header-layout='centered', header
-//     用 justifyContent: 'flex-start', title wrap 用 flex: 1 +
-//     justify-content: center → title 视觉居中 (与瓷白 / 暗色主题的
-//     左对齐不同, 但 anime 主题本身就是活泼风格, 居中合理)。
-//   - 瓷白 / 暗色主题: data-header-layout='split',header 用
-//     justifyContent: 'space-between',title 左对齐。
-//   - actions 按钮组位置 3 主题一致 (右对齐, theme/settings + WindowControls)。
+// data-header-layout 对所有主题恒为 'split', header 用
+// justifyContent: 'space-between', title 左对齐 (无主题维度分支)。
 //
-// 测试只覆盖 layout 形状 (data-header-layout / justifyContent), 不强求
-// 视觉居中像素位置 (依赖 jsdom 渲染, 不可靠)。
+// 这里锁定的契约: 5 主题切换时 layout 形状稳定, 不允许某主题偷偷改回
+// 居中或别的不一致布局 (回归 guard)。测试只覆盖 layout 形状
+// (data-header-layout / justifyContent), 不强求视觉像素位置 (依赖
+// jsdom 渲染, 不可靠)。
 //
 // 测试策略: ThemeProvider 从 localStorage 'ccm.theme' 读 initial theme。
 // 直接设 window.localStorage 让 ThemeProvider mount 时直接拿到目标主题,
 // 不靠 click theme-toggle 间接切 (jsdom 测 setTimeout 旋转动画易卡)。
 // ---------------------------------------------------------------------------
 
-describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', () => {
-  it('UI-A-01: 二次元主题下 header data-header-layout=centered', () => {
-    // 直接设 localStorage 为 anime → ThemeProvider mount 时初始主题 = anime
-    window.localStorage.setItem('ccm.theme', 'anime');
-    render(
-      wrap(
-        <AppHeader
-          currentView="optimizer"
-          onNavigate={noop}
-          pageTitle={pageTitle}
-        />,
-      ),
-    );
-    const header = screen.getByTestId('app-header');
-    expect(header.getAttribute('data-header-layout')).toBe('centered');
-    // anime 主题下 header 的 justify-content = flex-start (让 spacer 把 title 推到中心)
-    const style = (header.style as unknown as Record<string, string>);
-    expect(style.justifyContent).toBe('flex-start');
-    // 重置 localStorage 避免影响后续 test
-    window.localStorage.removeItem('ccm.theme');
-  });
-
-  it('UI-A-01: 瓷白主题下 header data-header-layout=split (space-between)', () => {
+describe('AppHeader — header layout (5 主题统一 split / space-between)', () => {
+  it('light 主题下 header data-header-layout=split (space-between)', () => {
     // 默认 light 主题 (不设 localStorage)
     window.localStorage.removeItem('ccm.theme');
     render(
@@ -215,7 +188,7 @@ describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', (
     expect(style.justifyContent).toBe('space-between');
   });
 
-  it('UI-A-01: 暗色主题下 header data-header-layout=split (space-between)', () => {
+  it('dark 主题下 header data-header-layout=split (space-between)', () => {
     // 直接设 localStorage 为 dark → ThemeProvider mount 时初始主题 = dark
     window.localStorage.setItem('ccm.theme', 'dark');
     render(
@@ -234,8 +207,8 @@ describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', (
     window.localStorage.removeItem('ccm.theme');
   });
 
-  it('UI-A-01: 二次元主题下 actions 按钮位置仍右对齐 (3 主题一致)', () => {
-    window.localStorage.setItem('ccm.theme', 'anime');
+  it('actions 按钮位置右对齐 (所有主题一致)', () => {
+    window.localStorage.removeItem('ccm.theme');
     render(
       wrap(
         <AppHeader
@@ -245,8 +218,8 @@ describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', (
         />,
       ),
     );
-    expect(screen.getByTestId('app-header').getAttribute('data-header-layout')).toBe('centered');
-    // actions 区域 flexShrink: 0 → 始终右对齐 (与瓷白 / 暗色一致)
+    expect(screen.getByTestId('app-header').getAttribute('data-header-layout')).toBe('split');
+    // actions 区域 flexShrink: 0 → 始终右对齐 (与所有主题一致)
     const themeToggle = screen.getByTestId('app-header-theme-toggle') as HTMLElement;
     const settings = screen.getByTestId('app-header-settings') as HTMLElement;
     expect(themeToggle).toBeInTheDocument();
@@ -254,7 +227,6 @@ describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', (
     // 两者同属 actions 区, 父级 actions 容器存在
     const actions = themeToggle.parentElement as HTMLElement;
     expect(actions).toBe(settings.parentElement);
-    window.localStorage.removeItem('ccm.theme');
   });
 });
 
