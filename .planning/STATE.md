@@ -1538,3 +1538,10 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 **Last session:** 2026-06-26T08:05:30.105Z
 **Stopped at:** Phase 27 UI-SPEC approved
 **Resume file:** .planning/phases/27-v3-2-m6-critical-5-bug-bug-cr-01-05/27-UI-SPEC.md
+
+## Deferred Verification
+
+| Phase | State | Resume |
+|-------|-------|--------|
+| 28 | verification_deferred_gaps | /gsd-plan-phase 28 --gaps (gap: BZ-01 Done-view copy UX deferred to v3.2.1, DTO shipped) |
+
