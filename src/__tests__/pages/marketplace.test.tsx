@@ -210,10 +210,13 @@ describe('MarketplacePage — F17 (M2.16)', () => {
   });
 
   it('clone failure surfaces a red error banner', async () => {
+    // BZ-07 — 错误经 localizeMarketplaceError 翻译;使用 Rust
+    // Git variant 的 Display 模板前缀 'git error:' 让本地化函数
+    // 命中 Git 分支 (返回中文 'Git 操作失败')。
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === 'list_marketplace_repos') return Promise.resolve([]);
       if (cmd === 'clone_and_scan') {
-        return Promise.reject(new Error('git clone failed: network unreachable'));
+        return Promise.reject(new Error('git error: network unreachable'));
       }
       return Promise.resolve(null);
     });
@@ -234,8 +237,9 @@ describe('MarketplacePage — F17 (M2.16)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('marketplace-clone-error')).toBeInTheDocument();
     });
+    // BZ-07 — 文案已翻译为中文
     expect(
-      screen.getByText(/git clone failed/),
+      screen.getByText(/Git 操作失败/),
     ).toBeInTheDocument();
   });
 
