@@ -113,8 +113,9 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
   it('renders snapshot tokens value', async () => {
     render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
+      // Phase 30 UI-A-03: 12345 → "1.2万" (10,000+ 走中文大数, Y 1 位小数).
       expect(screen.getByTestId('usage-tokens-value').textContent).toContain(
-        '12,345',
+        '1.2万',
       );
     });
     // M5 bug #15 — 费用 / 余额卡片已删除。
@@ -203,7 +204,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
         screen.getByTestId('usage-window-1w').getAttribute('aria-pressed'),
       ).toBe('true');
       expect(screen.getByTestId('usage-tokens-value').textContent).toContain(
-        '67,890',
+        '6.8万',
       );
     });
     // The 2nd call must be window='1w'.
@@ -285,7 +286,8 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
 
   // M5 bug #14 — tokens >= 1亿 时显示 "X 亿 Y 万" (formatChineseTokenCount),
   // 而不是 "1,234,567" 字符串 (toLocaleString 原始格式).
-  it('M5 bug #14: tokens_used = 123_456_789 显示 "1 亿 2345 万" 而非 "123,456,789"', async () => {
+  // Phase 30 UI-A-03 调整: 123_456_789 → "1 亿 2345.7万" (Y 保留 1 位小数).
+  it('M5 bug #14: tokens_used = 123_456_789 显示 "1 亿 2345.7万" 而非 "123,456,789"', async () => {
     mockInvoke.mockImplementation(async (cmd: string, args?: { window?: string }) => {
       if (cmd === 'get_current_usage' || cmd === 'refresh_usage') {
         return sampleSnapshot((args?.window as '5h' | '1w' | '1m') ?? '5h', { tokens_used: 123_456_789 });
@@ -298,7 +300,7 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
       expect(screen.getByTestId('usage-tokens-value').textContent).toContain('1 亿');
     });
     const txt = screen.getByTestId('usage-tokens-value').textContent ?? '';
-    expect(txt).toContain('2345 万');
+    expect(txt).toContain('2345.7万');
     // 反事故: 不要出现原始 toLocaleString 千分位格式 (这是 bug)
     expect(txt).not.toContain('123,456,789');
   });
