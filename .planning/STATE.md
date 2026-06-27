@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: M6 用户实测反馈修复
-current_phase: 28
-current_phase_name: BUG-BZ-01~13
-status: complete
-stopped_at: Phase 28 verified, queued for master merge
-last_updated: "2026-06-27T00:55:00.000Z"
+current_phase: 29
+current_phase_name: BUG-RF-01~09
+status: verifying
+stopped_at: Phase 27 UI-SPEC approved
+last_updated: "2026-06-27T01:01:07.074Z"
 last_activity: 2026-06-27
-last_activity_desc: Phase 28 v3.2 M6 业务 13 bug 修復 ship-ready (7 fixes + 4 regression tests + 1 stub plan)
+last_activity_desc: Phase 28 complete, transitioned to Phase 29
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 5
-  percent: 40
+  completed_plans: 4
+  percent: 20
 ---
 
 <!--
@@ -70,10 +70,10 @@ progress:
 
 ## Current Position
 
-Phase: 28 — v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13)
-Plan: COMPLETE (28-01 7 fixes ship + 28-02 stub for BUG-BZ-08~13 deferred to v3.2.1)
+Phase: 29 — v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09)
+Plan: Not started
 Status: Phase 28 verified, queued for master merge
-Last activity: 2026-06-27 — Phase 28 complete, summary/verification written
+Last activity: 2026-06-27 — Phase 28 complete, transitioned to Phase 29
 
 **v3.2 plan summary** (ROADMAP.md Phase 27-31):
 
@@ -1544,4 +1544,3 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 | Phase | State | Resume |
 |-------|-------|--------|
 | 28 | verification_deferred_gaps | /gsd-plan-phase 28 --gaps (gap: BZ-01 Done-view copy UX deferred to v3.2.1, DTO shipped) |
-

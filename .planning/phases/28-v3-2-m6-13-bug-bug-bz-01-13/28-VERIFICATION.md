@@ -1,7 +1,7 @@
 ---
 phase: 28-v3-2-m6-13-bug-bug-bz-01-13
 verified: 2026-06-27T00:50:00Z
-status: passed_with_gaps
+status: passed
 score: 8/9 must-haves verified
 behavior_unverified: 1 (BZ-01 frontend render of invalid_rows)
 overrides_applied: 0

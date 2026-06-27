@@ -436,7 +436,7 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 | 25. M5 重构 9 bug (#18 真修) | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 | 26. M5 A 类 5 + 整合验证 + tag v3.0.1 | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 | 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 2/2 | Complete    | 2026-06-26 |
-| 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/2 | Complete    | 2026-06-27 |
+| 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/3 | Complete    | 2026-06-27 |
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 0/1 | In Progress | - |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 0/1 | In Progress | - |
 | 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 0/1 | In Progress | - |
@@ -524,7 +524,7 @@ Plans:
 **Requirements**: BUG-BZ-01 (SQL 过滤无效行) / BUG-BZ-02 (JSON 全屏编辑) / BUG-BZ-03 (JSON 目录树) / BUG-BZ-04 (MCP 文案) / BUG-BZ-05 (用量 7 天) / BUG-BZ-06 (资源市场 browse URL) / BUG-BZ-07 (CliNotFound 本地化) / BUG-BZ-08~13 (留空待用户实测补)
 **Depends on:** Phase 27
 **Status**: ✅ Complete
-**Plans:** 2 plans (28-01 7 真修 + 28-02 stub 0 代码改动;BUG-BZ-08~13 留空待 v3.2.1)
+**Plans:** 2/3 plans complete
 **Verification:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/28-VERIFICATION.md` (status: passed_with_gaps; BZ-01 UI render deferred) + test-all.sh 6 stages PASS
 **Archive:** `milestones/v3.2-phases/28-v32-m6-biz-13-bug-*/`
 
