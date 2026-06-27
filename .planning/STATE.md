@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.2
-milestone_name: M6 用户实测反馈修复
+milestone: v2.0
+milestone_name: 用户反馈修复 + 双模式
 current_phase: 31
-current_phase_name: INT-01~06
-status: complete
-stopped_at: "v3.2 M6 shipped — tag v3.2 created + pushed"
-last_updated: "2026-06-27T10:20:00Z"
+status: v3.2 M6 shipped — tag v3.2 created + pushed
+stopped_at: Phase 27 UI-SPEC approved
+last_updated: "2026-06-27T02:31:03.451Z"
 last_activity: 2026-06-27
-last_activity_desc: Phase 31 complete — v3.2 M6 shipped, tag v3.2
+last_activity_desc: Phase 31 complete
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 7
+  completed_phases: 4
+  total_plans: 8
   completed_plans: 7
-  percent: 100
+  percent: 80
+current_phase_name: INT-01~06
 ---
 
 <!--
@@ -70,10 +70,10 @@ progress:
 
 ## Current Position
 
-Phase: 31 — v3.2 M6 整合验证 (INT-01~06) + tag v3.2
-Plan: Complete
+Phase: 31
+Plan: Not started
 Status: v3.2 M6 shipped — tag v3.2 created + pushed
-Last activity: 2026-06-27 — Phase 31 complete, v3.2 milestone closed
+Last activity: 2026-06-27 — Phase 31 complete
 
 **v3.2 M6 ship summary (2026-06-27)**:
 

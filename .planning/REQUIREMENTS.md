@@ -73,12 +73,12 @@ shipped: pending
 
 > M6 ship gate — 所有 phase 完成后的最终验证 + tag v3.2。
 
-- [ ] **INT-01**: test-all 6 阶段全 PASS (ui-check / frontend / rust / e2e / smoke / m4-e2e)
-- [ ] **INT-02**: M4 e2e 15/15 回归 (14 hard-fail + 1 stub)
-- [ ] **INT-03**: vitest 全 PASS (含 v3.2 新增测试)
-- [ ] **INT-04**: ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK
-- [ ] **INT-05**: STATE.md 写 M6 完成段
-- [ ] **INT-06**: tag v3.2
+- [x] **INT-01**: test-all 6 阶段全 PASS (ui-check / frontend / rust / e2e / smoke / m4-e2e)
+- [x] **INT-02**: M4 e2e 15/15 回归 (14 hard-fail + 1 stub)
+- [x] **INT-03**: vitest 全 PASS (含 v3.2 新增测试)
+- [x] **INT-04**: ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK
+- [x] **INT-05**: STATE.md 写 M6 完成段
+- [x] **INT-06**: tag v3.2
 
 ## Future (backlog, 不进 v3.2)
 

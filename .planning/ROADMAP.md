@@ -439,7 +439,7 @@ Phase 27 → 28 → 29 → 30 → 31 ✅ (v3.2 M6: critical 5 → 业务 13 → 
 | 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/3 | Complete    | 2026-06-27 |
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 1/1 | Complete    | 2026-06-27 |
-| 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 1/1 | Complete | 2026-06-27 |
+| 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 </invoke>
 
 ### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27)
@@ -602,13 +602,13 @@ Plans:
 **Requirements**: INT-01 (test-all 6 stages) / INT-02 (M4 e2e 15/15) / INT-03 (vitest 全 PASS) / INT-04 (ClaudeManager.app rebuild OK) / INT-05 (STATE.md M6 段) / INT-06 (tag v3.2)
 **Depends on:** Phase 30
 **Status**: 🚧 In Progress
-**Plans:** 1 plan (估时 1-2 天,沿用 v3.0.1 Phase 26 整合模式)
+**Plans:** 1/1 plans complete
 **Verification:** `milestones/v3.2-phases/31-v32-m6-integrate-*/31-VERIFICATION.md` (status: passed) + `v3.2-MILESTONE-AUDIT.md` (status: passed) + `git tag v3.2` 成功
 **Archive:** `milestones/v3.2-phases/31-v32-m6-integrate-*/`
 
 Plans:
 
-- [ ] 31-01-PLAN.md — 整合验证 subagent:跑 scripts/test-all.sh 6 阶段 (ui-check / frontend / rust / e2e / smoke / m4-e2e) 全 PASS;vitest 全 PASS (550+ 含 v3.2 新增);ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK;M4 e2e 15/15 (14 hard-fail + 1 stub) 回归;STATE.md 写 "M6 完成" 段;`git tag v3.2` + push tag
+- [x] 31-01-PLAN.md — 整合验证 subagent:跑 scripts/test-all.sh 6 阶段 (ui-check / frontend / rust / e2e / smoke / m4-e2e) 全 PASS;vitest 全 PASS (550+ 含 v3.2 新增);ClaudeManager.app rebuild + 装 + 启动 1 窗口 OK;M4 e2e 15/15 (14 hard-fail + 1 stub) 回归;STATE.md 写 "M6 完成" 段;`git tag v3.2` + push tag
 
 **Success Criteria** (observable user behaviors):
 
