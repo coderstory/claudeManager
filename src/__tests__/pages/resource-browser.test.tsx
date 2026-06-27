@@ -1446,3 +1446,83 @@ describe('ResourceBrowserPage — Phase 27 Fix 6: URL ?tab=mcp initial kind', ()
     expect((firstCall![1] as { kind: string }).kind).toBe('mcp');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 30 UI-A-04: 重新扫描按钮从 page header 迁到 tab row 右上角
+// ---------------------------------------------------------------------------
+//
+// 旧布局: header 区 [h2/p] [重新扫描]  横向并排 → 重新扫描在右上但
+//          和 h2/p 同一行,视觉上不与 tab 关联 (用户实测反馈:以为是
+//          页面级 reload,不知道是 list 的 rescan)。
+// 新布局: 独立 tab row [tabs ............] [重新扫描],tab 行内右对齐
+//          → 与 tab 同一行右侧,语义清晰 (rescan 当前 tab 的列表)。
+//
+// 验证:
+//   1. tabs 与 重新扫描按钮 在同一个 tabs-row 容器内
+//   2. tabs-row 仍包住 tabs (DOM contains)
+//   3. 重新扫描按钮位置在 tabs-row 内,不再是 page header 的同级
+//   4. 重新扫描按钮文案 "重新扫描" / data-testid 不变 (向后兼容)
+
+describe('ResourceBrowserPage — Phase 30 UI-A-04 重新扫描按钮位置', () => {
+  // UI-A-04 test suite — 必须先重置 window URL, 否则 Phase 27 Fix 6
+  // describe 块会泄漏 ?tab=mcp 到本 describe, 首次 list_resources 会用
+  // kind='mcp' 而不是 'plugin' (3rd test case 期望 'plugin')。
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('重新扫描按钮与 tabs 在同一 tabs-row 容器内 (UI-A-04)', async () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-browser-tabs')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('resource-browser-rescan-btn'),
+      ).toBeInTheDocument();
+    });
+    // 顶层 row 容器存在
+    const tabsRow = screen.getByTestId('resource-browser-tabs-row');
+    expect(tabsRow).toBeInTheDocument();
+    // tabs 在 row 内
+    const tabs = screen.getByTestId('resource-browser-tabs');
+    expect(tabsRow.contains(tabs)).toBe(true);
+    // 重新扫描按钮在 row 内
+    const rescan = screen.getByTestId('resource-browser-rescan-btn');
+    expect(tabsRow.contains(rescan)).toBe(true);
+  });
+
+  it('重新扫描按钮文案保留为 "重新扫描" (向后兼容 UI-A-04)', async () => {
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-rescan-btn'),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('resource-browser-rescan-btn'),
+    ).toHaveTextContent('重新扫描');
+  });
+
+  it('点击重新扫描按钮仍触发 list_resources (UI-A-04 回归)', async () => {
+    // reset mock: mount 调一次 list_resources('plugin') 用于初始加载
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('resource-browser-rescan-btn'),
+      ).toBeInTheDocument();
+    });
+    // 清掉之前的调用
+    mockInvoke.mockClear();
+    mockInvoke.mockResolvedValue([]);
+    fireEvent.click(screen.getByTestId('resource-browser-rescan-btn'));
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'list_resources',
+      );
+      expect(calls.length).toBe(1);
+      expect((calls[0][1] as { kind: string }).kind).toBe('plugin');
+    });
+  });
+});
