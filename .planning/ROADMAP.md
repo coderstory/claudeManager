@@ -13,6 +13,7 @@
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 (shipped 2026-06-26, tag v3.0-M4)
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 (shipped 2026-06-26, tag v3.0.1; 33/33 bug 修完, ClaudeManager.app 14M rebuild + 1 窗口 OK, 详见 [v3.0.1-ROADMAP.md](milestones/v3.0.1-ROADMAP.md))
 - ✅ **v3.2 M6 用户实测反馈修复** — Phases 27-31 (shipped 2026-06-27, tag v3.2; critical 5 + 业务 7 真修/6 留空 + 重构 9 + A 类 5 + 整合验证 INT-01~06; test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app rebuild 14M)
+- 🚧 **v3.3 M7 代码审计修复** — Phases 32-36 (planning 2026-06-27; opencode M6 audit 37 issue: P0 release 3 + P1 runtime 5 + P2 CI 4 + P3 arch 6 + P4 quality 12 + P5 nice 7 + INT-01~06; ⚠️ VERIFY-FIRST 纪律; tag v3.3 待打; 详见 [v3.3-ROADMAP.md](milestones/v3.3-ROADMAP.md))
 - ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;原 Phase 19/20/21 标记弃用,不进新 milestone
 
 ## Phases
