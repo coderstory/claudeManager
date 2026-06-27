@@ -84,13 +84,23 @@ export function AppHeader({
       className="titlebar"
       data-tauri-drag-region=""
       data-testid="app-header"
+      data-header-layout={
+        // UI-A-01 (2026-06-27): 二次元主题在 header 用居中布局
+        // (left spacer + 居中 title + right spacer, 让 title 视觉居中);
+        // 瓷白 / 暗色主题保持原有 space-between (left 标题 + right 按钮组)。
+        // data-header-layout 暴露给 vitest 做断言 + 给 anime.css 做样式钩子。
+        theme.id === 'anime' ? 'centered' : 'split'
+      }
       style={{
         ...dragRegionStyle,
         // 高度 + 布局: 留 inline; 背景/阴影/边框走 base.css + anime.css
         height: 'var(--header-height)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        // UI-A-01: 二次元主题用 flex-start (left spacer + 居中 title + right spacer
+        // 由 inline flex: 1 spacer 撑开), 瓷白 / 暗色保持 space-between (左侧标题
+        // + 右侧按钮组 紧贴两端)。
+        justifyContent: theme.id === 'anime' ? 'flex-start' : 'space-between',
         padding: '0 16px',
         flexShrink: 0,
       }}
@@ -111,11 +121,28 @@ export function AppHeader({
           buttons stacked vertically, and the chrome cluster blew
           past the 48px header height (theme at y=-40.4, close at
           y=55.6). Fix: inline the structural rules on the same
-          element so they don't depend on Tailwind being present. */}
+          element so they don't depend on Tailwind being present.
+
+          UI-A-01 (2026-06-27): 二次元主题下,这个外层包装用
+          "flex: 1 1 auto + justify-content: center" 让 title 居中
+          (前面有 left spacer flex: 1 1 0%, 后面有 actions 区域,
+          共同把 title 推到 header 水平中心)。瓷白 / 暗色保持
+          maxWidth + 左对齐布局, 与 SPEC 一致。*/}
+      <div
+        className="titlebar-title-wrap"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          // UI-A-01: 二次元主题 flex: 1 + justify-content: center 让
+          // 内部 title 居中。瓷白 / 暗色用 maxWidth 限制宽度左对齐。
+          ...(theme.id === 'anime'
+            ? { flex: '1 1 auto', justifyContent: 'center', minWidth: 0 }
+            : { flex: '0 1 auto', maxWidth: 'calc(100% - 280px)', minWidth: 0 }),
+        }}
+      >
       <div
         className="titlebar-title"
         style={{
-          maxWidth: 'calc(100% - 280px)',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -158,6 +185,7 @@ export function AppHeader({
         >
           {pageTitle(currentView)}
         </h1>
+      </div>
       </div>
 
       {/* Right zone — settings + window controls.
