@@ -210,6 +210,30 @@ html, body, #root {
   --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms;
 }
 
+/* === pixel 主题背景贴图 (base64 16x16 PNG, Minecraft 风) === */
+[data-theme="pixel"] .main {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAm0lEQVR4nGMoOeDxv+ZEwH8YTQxG1sOQv8PlPzJO32CDQhPCDD2Xov7jwy2nglBodMxAifNBNENVvM3/ObVB/7vz3f8XhZuA2c3p9v+RxfGxGfApghk0pdQLpxoGUmyDGQRzKYjNQIpt6GyQQTi9gM02rF4gxTZsAcxAim3YAhirF0iJTqK8gC+AGchJPMhexvACqdFJ0AuEAhgA/zBQT1QiM0UAAAAASUVORK5CYII=);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+[data-theme="pixel"] .sidebar {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAI0lEQVR4nGPo7u7+P3v27P/k0gwgghLMMOqCUReMumCQuAAAPjTEH1rQf4oAAAAASUVORK5CYII=);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+  background-color: #8B8B8B;
+}
+[data-theme="pixel"] .topbar {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAANklEQVR4nGPIDzf7v6Ah5D+5NAMlmkE0w8C7oDvfHcwgl2agRDOIHgQuGPhYGHgXDHwsDLgLAOl1Kl9A64P9AAAAAElFTkSuQmCC);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+[data-theme="pixel"] .card {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGO4c2Lif0oww4sbK/5Tghk+PNz5H4RJtRmmjwEmQKrNGF6AmUgsHvXCqBdo4wVyMQOpfkfHAE0/Xq5LW9yLAAAAAElFTkSuQmCC);
+  background-size: 16px 16px;
+  background-repeat: repeat;
+}
+[data-theme="pixel"] body { background: #5BB4E8; }
+
 /* === body 基线 === */
 body {
   font-family: var(--font-ui);
