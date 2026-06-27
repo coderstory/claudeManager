@@ -1,5 +1,15 @@
 # Milestones Archive Index
 
+## v3.2 M6 用户实测反馈修复 (Shipped: 2026-06-27)
+
+**Phases completed:** 5 phases, 8 plans, 0 tasks
+
+**Key accomplishments:**
+
+- 31-v3-2-m6-integration-int-01-06-tag-v3-2
+
+---
+
 | Version | Name | Shipped | Phases | Tag | Notes |
 |---|---|---|---|---|---|
 | v1.0 | 架构期 (M1.1~M1.12) | 2026-06-19 | 12 | - | Tauri v2 scaffold + OS 抽象 + plugin host + TDD |
@@ -10,12 +20,14 @@
 | **v3.2** | **M6 用户实测反馈修复 (critical 5 + 业务 7 + 重构 9 + A 类 5 + 整合)** | **2026-06-27** | **5** | **v3.2** | **Phases 27-31: BUG-CR-01~05 critical 5 / BUG-BZ-01~07 真修+08~13 留空 / BUG-RF-01~09 重构 9 / UI-A-01~05 A 类 5 / INT-01~06 整合验证 (test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app 14M rebuild + smoke 10/10 macOS)** |
 
 ## v2.0 关键产物
+
 - 12 个 ship exe (~30 MB each) 在 `~/Desktop/ClaudeConfigManager-M3/`
 - 11 phase SUMMARY 在 `.planning/phases/`
 - v2.0-MILESTONE-AUDIT.md (status=passed, D8 user OK)
 - 3 个 session 沉淀 (feedback/gsd-planning-fits / pattern/ship-and-commit-stall-recovery / feedback/tauri-cargo-test-status-entrypoint)
 
 ## v3.0-M4 关键产物
+
 - 4 phase 8 commits (driver libs + 14 scenarios + test-all stage 6 wired)
 - `tests/M4-e2e/` 完整框架 (orchestrator + 4 lib + 15 scenarios + 1 fixture)
 - 14/14 scenarios PASS + 00-stub soft-skip (15 scenarios total)

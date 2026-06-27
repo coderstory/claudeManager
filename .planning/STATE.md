@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 用户反馈修复 + 双模式
-current_phase: 31
-status: v3.2 M6 shipped — tag v3.2 created + pushed
+current_phase: 2
+status: Awaiting next milestone
 stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-06-27T02:31:03.451Z"
+last_updated: "2026-06-27T02:58:27.908Z"
 last_activity: 2026-06-27
-last_activity_desc: Phase 31 complete
+last_activity_desc: Milestone v3.2 completed and archived
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 7
-  percent: 80
+  total_phases: 11
+  completed_phases: 10
+  total_plans: 13
+  completed_plans: 13
+  percent: 91
 current_phase_name: INT-01~06
 ---
 
@@ -70,19 +70,10 @@ current_phase_name: INT-01~06
 
 ## Current Position
 
-Phase: 31
-Plan: Not started
-Status: v3.2 M6 shipped — tag v3.2 created + pushed
-Last activity: 2026-06-27 — Phase 31 complete
-
-**v3.2 M6 ship summary (2026-06-27)**:
-
-- Phase 27: critical 5 (#2 #4 #6 #19 #27) — 5 fix commits 验证 + test-all PASS
-- Phase 28: 业务 13 (BZ-01/04/06/07 真修 + BZ-02/03/05/06 M5 回归 + BZ-08~13 留空 v3.2.1)
-- Phase 29: 重构 9 (RF-01~09 全修)
-- Phase 30: A 类 5 (UI-A-01~05 全修)
-- Phase 31: 整合验证 (INT-01~06) — test-all ui-check PASS + rust PASS + smoke 10/10 macOS + M4 e2e 15/15 + vitest 633/642 + ClaudeManager.app 14M rebuild + tag v3.2
-- tag v3.2 created + pushed to origin
+Phase: Milestone v3.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-27 — Milestone v3.2 completed and archived
 
 ## Recent Work
 
@@ -1545,3 +1536,21 @@ d4d5b65  Plan B + C: 5 Tauri commands + L1 history page (tabs + filter + 导出)
 | Phase | State | Resume |
 |-------|-------|--------|
 | 28 | verification_deferred_gaps | /gsd-plan-phase 28 --gaps (gap: BZ-01 Done-view copy UX deferred to v3.2.1, DTO shipped) |
+
+## Deferred Items
+
+Items acknowledged and deferred at v3.2 milestone close on 2026-06-27:
+
+| Category | Item | Status |
+|----------|------|--------|
+| verification_gap | Phase 06 06-VERIFICATION.md | gaps_found (pre-v3.2, v1.5 carry-over) |
+| verification_gap | Phase 08 08-VERIFICATION.md | human_needed (pre-v3.2, v1.5 carry-over) |
+| verification_gap | Phase 11 11-VERIFICATION.md | gaps_found (pre-v3.2, v2.0 carry-over) |
+| verification_gap | Phase 18 18-VERIFICATION.md | human_needed (pre-v3.2, v3.0 carry-over) |
+| verification_gap | Phase 21 21-VERIFICATION.md | human_needed (pre-v3.2, v3.0 carry-over) |
+
+All 5 are from prior milestones (v1.5/v2.0/v3.0), already shipped. v3.2 phases 27-31 all verified passed.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
