@@ -31,6 +31,13 @@ export interface UsageHistoryFilter {
   to_ts?: number | null;
   /** Cap on rows returned. Default = 1000 if undefined. */
   limit?: number | null;
+  /**
+   * BUG-RF-08 — cursor pagination: rows with `id > after_id` (server
+   * is expected to apply this filter to the indexed `id` column).
+   * `null` = start from the beginning. The page consumer (HistoryPage)
+   * uses this to load the next batch via a "Load more" button.
+   */
+  after_id?: number | null;
 }
 
 export interface BackupHistoryFilter {
@@ -40,6 +47,8 @@ export interface BackupHistoryFilter {
   from_ts?: number | null;
   to_ts?: number | null;
   limit?: number | null;
+  /** BUG-RF-08 — cursor pagination. See UsageHistoryFilter::after_id. */
+  after_id?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +64,8 @@ export interface DailyStatsFilter {
   to_date?: string | null;
   /** Cap on rows returned. Default = 1000 if undefined. */
   limit?: number | null;
+  /** BUG-RF-08 — cursor pagination. See UsageHistoryFilter::after_id. */
+  after_id?: number | null;
 }
 
 /** Mirrors `DailyStatRow` in Rust (`usage_daily_stats` table). */

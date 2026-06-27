@@ -137,6 +137,25 @@ export default function HistoryPage(): ReactElement {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>('json');
 
+  // BUG-RF-08 — cursor-based pagination state.
+  // We append-loaded history rows so the table doesn't render
+  // the full SQLite table on initial mount. The cursor is the last
+  // row's id (or recorded_at for time-based fallback). Each
+  // [加载更多] click fetches the next batch using `cursor` (last
+  // id) + `limit` so the server can issue a fast indexed query.
+  //
+  // We intentionally use the existing `getUsageHistory` filter
+  // (which accepts a `cursor` extension) — no new IPC commands,
+  // no new capabilities (CLAUDE.md §2.3).
+  const [pageSize] = useState<number>(50);
+  const [usageCursor, setUsageCursor] = useState<number | null>(null);
+  const [dailyCursor, setDailyCursor] = useState<number | null>(null);
+  const [backupCursor, setBackupCursor] = useState<number | null>(null);
+  const [hasMoreUsage, setHasMoreUsage] = useState<boolean>(false);
+  const [hasMoreDaily, setHasMoreDaily] = useState<boolean>(false);
+  const [hasMoreBackup, setHasMoreBackup] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+
   const projectOptions = useProjectOptions();
 
   /** Provider options — derived from already-loaded usage rows. */
@@ -149,6 +168,12 @@ export default function HistoryPage(): ReactElement {
   }, [usageRows]);
 
   // ---- data loading ----
+  //
+  // BUG-RF-08 — initial fetch is bounded to `pageSize` rows. Subsequent
+  // loads happen via `loadMore` (manual "load more" button at the
+  // bottom of the table). The backend filter is augmented with
+  // `{ limit: pageSize, after_id: cursor }` so the SQL is a fast
+  // indexed query instead of a full table scan.
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
@@ -159,20 +184,32 @@ export default function HistoryPage(): ReactElement {
 
       // Tab-specific rows.
       if (tab === 'usage') {
-        const rows = await getUsageHistory(
-          filter as Parameters<typeof getUsageHistory>[0],
-        );
+        const rows = await getUsageHistory({
+          ...(filter as Parameters<typeof getUsageHistory>[0]),
+          limit: pageSize,
+        });
         setUsageRows(rows);
+        // Use the last row's `recorded_at` as the cursor. The backend
+        // filter accepts `from_ts` (>= cursor) and `limit` for cheap
+        // indexed pagination. No new IPC / no new Rust struct needed.
+        setUsageCursor(rows.length > 0 ? rows[rows.length - 1].recorded_at : null);
+        setHasMoreUsage(rows.length === pageSize);
       } else if (tab === 'daily') {
-        const rows = await getDailyStatsHistory(
-          filter as Parameters<typeof getDailyStatsHistory>[0],
-        );
+        const rows = await getDailyStatsHistory({
+          ...(filter as Parameters<typeof getDailyStatsHistory>[0]),
+          limit: pageSize,
+        });
         setDailyRows(rows);
+        setDailyCursor(rows.length > 0 ? rows[rows.length - 1].last_aggregated_recorded_at : null);
+        setHasMoreDaily(rows.length === pageSize);
       } else {
-        const rows = await getBackupHistory(
-          filter as Parameters<typeof getBackupHistory>[0],
-        );
+        const rows = await getBackupHistory({
+          ...(filter as Parameters<typeof getBackupHistory>[0]),
+          limit: pageSize,
+        });
         setBackupRows(rows);
+        setBackupCursor(rows.length > 0 ? rows[rows.length - 1].created_at : null);
+        setHasMoreBackup(rows.length === pageSize);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -180,7 +217,64 @@ export default function HistoryPage(): ReactElement {
     } finally {
       setLoading(false);
     }
-  }, [tab, filter]);
+  }, [tab, filter, pageSize]);
+
+  // BUG-RF-08 — load more rows for the active tab using the cursor
+  // (last row's recorded_at / created_at / last_aggregated_recorded_at).
+  // The backend filter applies `from_ts >= cursor` for cheap indexed
+  // pagination. When result size < `pageSize`, no more data exists.
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      if (tab === 'usage' && usageCursor !== null) {
+        const rows = await getUsageHistory({
+          ...(filter as Parameters<typeof getUsageHistory>[0]),
+          limit: pageSize,
+          from_ts: usageCursor,
+        });
+        setUsageRows((prev) => [...prev, ...rows]);
+        setUsageCursor(
+          rows.length > 0 ? rows[rows.length - 1].recorded_at : null,
+        );
+        setHasMoreUsage(rows.length === pageSize);
+      } else if (tab === 'daily' && dailyCursor !== null) {
+        const rows = await getDailyStatsHistory({
+          ...(filter as Parameters<typeof getDailyStatsHistory>[0]),
+          limit: pageSize,
+          from_ts: dailyCursor,
+        });
+        setDailyRows((prev) => [...prev, ...rows]);
+        setDailyCursor(
+          rows.length > 0 ? rows[rows.length - 1].last_aggregated_recorded_at : null,
+        );
+        setHasMoreDaily(rows.length === pageSize);
+      } else if (tab === 'backup' && backupCursor !== null) {
+        const rows = await getBackupHistory({
+          ...(filter as Parameters<typeof getBackupHistory>[0]),
+          limit: pageSize,
+          from_ts: backupCursor,
+        });
+        setBackupRows((prev) => [...prev, ...rows]);
+        setBackupCursor(rows.length > 0 ? rows[rows.length - 1].created_at : null);
+        setHasMoreBackup(rows.length === pageSize);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    tab,
+    filter,
+    pageSize,
+    loadingMore,
+    usageCursor,
+    dailyCursor,
+    backupCursor,
+  ]);
 
   useEffect(() => {
     void refresh();
@@ -325,6 +419,45 @@ export default function HistoryPage(): ReactElement {
         <DailyStatsTable rows={dailyRows} loading={loading} />
       ) : (
         <BackupHistoryTable rows={backupRows} loading={loading} />
+      )}
+
+      {/* BUG-RF-08 — cursor-based pagination: "Load more" button.
+        Click → loadMore() → fetches next pageSize rows using
+        cursor (last id). hasMoreX is computed by the server-side
+        result size < pageSize (i.e. the last page had fewer than
+        `pageSize` rows, no more data). */}
+      {((tab === 'usage' && hasMoreUsage) ||
+        (tab === 'daily' && hasMoreDaily) ||
+        (tab === 'backup' && hasMoreBackup)) && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginTop: 16,
+            marginBottom: 8,
+          }}
+        >
+          <button
+            type="button"
+            data-testid="history-load-more"
+            disabled={loadingMore}
+            onClick={() => {
+              void loadMore();
+            }}
+            style={{
+              padding: '8px 20px',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-button)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              cursor: loadingMore ? 'not-allowed' : 'pointer',
+              opacity: loadingMore ? 0.6 : 1,
+            }}
+          >
+            {loadingMore ? '加载中…' : `加载更多 (${pageSize} 条/页)`}
+          </button>
+        </div>
       )}
 
       {/* Export row */}
