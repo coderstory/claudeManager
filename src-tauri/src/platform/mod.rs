@@ -4,8 +4,8 @@
 //! `services/`, `domain/`, etc. are forbidden by [`CLAUDE.md` §3.2`].
 //!
 //! Layout:
-//! - [`traits`]   — the 8 platform traits + shared types (`AppPaths`,
-//!                  `WindowChromeOptions`, `PlatformError`, …)
+//! - [`traits`]   — the 7 platform traits + shared types (`AppPaths`,
+//!                  `PlatformError`, …)
 //! - [`windows`] — Windows implementations (`WindowsPaths`,
 //!                  `WindowsSingleInstance`, …)
 //! - [`macos`]   — macOS stubs (matching signatures, `unimplemented!()`
@@ -18,6 +18,11 @@
 //! Windows-only). Both halves are kept so the trait contract stays
 //! object-safe and so a mac build can be added later without touching
 //! every call site.
+//!
+//! M4.8 — IPlatformWindowChrome / WindowChromeOptions / TitleBarStyle /
+//! WindowChromeShim 全删 (4 轮 vibrancy 失败后用户决定"纯 CSS 模拟").
+//! 5 主题的 glass 视觉由 tokens.css / base.css / 组件 backdrop-filter
+//! 保留, 调用路径移除。
 
 pub mod traits;
 pub mod windows;
@@ -25,8 +30,8 @@ pub mod macos;
 
 pub use traits::{
     AppPaths, IGitHost, IPlatformAppMenu, IPlatformAutostart, IPlatformNotifier,
-    IPlatformPaths, IPlatformReveal, IPlatformSingleInstance, IPlatformWindowChrome,
-    PlatformError, RevealError, SingleInstanceGuard, TitleBarStyle, WindowChromeOptions,
+    IPlatformPaths, IPlatformReveal, IPlatformSingleInstance, PlatformError, RevealError,
+    SingleInstanceGuard,
 };
 
 // ---------------------------------------------------------------------------
@@ -128,24 +133,6 @@ pub mod runtime {
         #[cfg(target_os = "macos")]
         {
             Box::new(macos::MacAppMenu::new(app))
-        }
-    }
-
-    /// Window-chrome (Mica / vibrancy / transparent title bar) for the host OS.
-    ///
-    /// M4.6 — factory now accepts `&tauri::WebviewWindow` so the macOS impl
-    /// can inject the window handle into `MacWindowChrome` for real
-    /// `apply_vibrancy` calls. The Windows impl ignores the window parameter
-    /// (it resolves HWND via `current_main_hwnd()` internally).
-    pub fn window_chrome(window: &tauri::WebviewWindow) -> Box<dyn IPlatformWindowChrome> {
-        #[cfg(windows)]
-        {
-            let _ = window;
-            Box::new(windows::WindowsWindowChrome)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            Box::new(macos::MacWindowChrome::new(window.clone()))
         }
     }
 

@@ -356,110 +356,14 @@ pub fn run() {
                     }
                 });
 
-                // M2.16 — 原生窗口 backdrop（Win11 Mica / macOS vibrancy）。
-                //
-                // 真根因（M2.16 深度诊断实测确认）：
-                //   Tauri v2 `transparent: true` 只让 tao 窗口层透明，**不自动**
-                //   设 WebView2 的 DefaultBackgroundColor 为透明。WebView2 默认
-                //   不透明白底（#FFFFFF），盖住窗口层 Mica backdrop → 三套主题
-                //   真机全白底。
-                //
-                //   原生 DWM 查询证据（dwm-mica-query.ps1）：
-                //     - DWMWA_SYSTEMBACKDROP_TYPE = 2 (Mica) ← Mica 属性确实设上了
-                //     - DwmIsCompositionEnabled = True
-                //     - 子窗口链: WRY_WEBVIEW → Chrome_WidgetWin_1(noredirbitmap=True)
-                //       → Intermediate D3D Window(layered+True) ← WebView2 D3D surface
-                //   像素采样证据（dwm-pixel-sample.ps1）：窗口内容区大面积 #FFFFFF，
-                //     而窗口外桌面壁纸 #F7F8F8 —— 窗口内纯白，没透出壁纸。
-                //
-                // 修复（Tauri v2 官方 API，文档 docs.rs/tauri/2.11.3）：
-                //   WebviewWindow::set_background_color(Some(Color { a: 0 }))。
-                //   Windows 平台特定："if the alpha channel is not 0, it will be
-                //   ignored" —— alpha=0 是唯一让 webview 透明的方式。
-                //   webview 透明后，窗口层 Mica backdrop 才能透过 webview 显示。
-                //
-                // M4.6 — 架构统一：窗口层 backdrop 通过 IPlatformWindowChrome trait
-                // 派发（不再直接调 window-vibrancy）。macOS 侧通过 MacWindowChrome
-                // 工厂传入 WebviewWindow 句柄，Windows 侧通过 WindowsWindowChrome
-                // 内部分辨 HWND。
-                //
-                // 日志：用 log::error! 而非 eprintln!。release exe 用
-                // windows_subsystem="windows" 无 stderr，eprintln 静默失败；
-                // tauri-plugin-log 捕获 log facade，写入日志文件可查。
-                //
-                // M2.16 — macOS 侧 apply_vibrancy + NSVisualEffectMaterial::Sidebar
-                // 对应原 applyEffects.ts 的 Effect.Sidebar。macOSPrivateApi:true +
-                // tauri macos-private-api feature 已在 tauri.conf.json / Cargo.toml
-                // 启用（macOS vibrancy + transparent:true 必需）。
-                // H5: 同步调用可能因为 NSWindow/HWND 未完全 realized 而失败
-                // (macOS 真机未验证,Win11 已验证)。改为 spawn 出去 +
-                // 加 200ms 缓冲,让 webview 完全初始化后再 apply。失败
-                // 不阻断启动,跟同步路径行为一致。
-                let window_for_effect = window.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(200));
-
-                    // 第一步：设 WebView2 背景透明（让 Mica 透出来）。
-                    // 这一步是关键修复 —— 不调它，webview 白底盖住一切。
-                    // Color(r, g, b, a) 是 tuple struct；a=0 在 Windows 8+ 是唯一
-                    // 透明方式（alpha!=0 被强制 255，见 Tauri 文档）。
-                    use tauri::webview::Color;
-                    if let Err(e) = window_for_effect.set_background_color(Some(Color(0, 0, 0, 0))) {
-                        log::error!("[M2.16] set_background_color(a=0) failed (webview will stay opaque, Mica won't show through): {e}");
-                    }
-
-                    // 第二步：窗口层 backdrop — 通过 IPlatformWindowChrome trait
-                    // 统一派发（M4.6 架构统一，消除 §3.2 违规）。
-                    //
-                    // M2.16 决定性验证（纯红壁纸 + CDP captureScreenshot + CopyFromScreen
-                    // 像素采样）结论：apply_mica / apply_acrylic 在 Tauri v2
-                    // transparent:true + decorations:false 下无视觉效果。
-                    // 方案 C（诚实 CSS 模拟）：tokens.css glass-clear/glass-tinted
-                    // 用 backdrop-filter 模拟磨砂瓷白，不依赖 OS Mica 透壁纸。
-                    // macOS vibrancy 路径在真机上独立有效。
-                    //
-                    // 此处通过 trait dispatch 触发——Windows 侧由 DWM 属性处理，
-                    // macOS 侧调用 apply_vibrancy（在 MacWindowChrome 内部）。
-                    // 调用失败不阻断启动，跟旧路径行为一致。
-                    {
-                        let opts = crate::platform::WindowChromeOptions {
-                            vibrancy: true,
-                            mica: true,
-                            title_bar_style: crate::platform::TitleBarStyle::Transparent,
-                        };
-                        let chrome = crate::platform::runtime::window_chrome(&window_for_effect);
-                        if let Err(e) = chrome.apply(&opts) {
-                            log::warn!("[M4.6] window_chrome.apply failed: {e}");
-                        }
-                    }
-
-                    // M1.9.2 — 测试契约守卫：M2.16-era 直调保留，让
-                    // `src/__tests__/integration/m1-9-2.test.tsx` 的
-                    // "Rust setup hook applies window-vibrancy backdrop"
-                    // 断言命中。trait dispatch 已在上一步做过同样调用
-                    // （Windows 走 DwmSetWindowAttribute，macOS 走
-                    // apply_vibrancy），此处为幂等审计轨：调用同
-                    // window-vibrancy crate，函数签名一致。失败不阻断
-                    // 启动。
-                    #[cfg(target_os = "windows")]
-                    {
-                        if let Err(e) = window_vibrancy::apply_mica(&window_for_effect, None) {
-                            log::warn!("[M1.9.2] window_vibrancy::apply_mica returned Err (Mica backdrop attribute not set, CSS fallback will be used): {e}");
-                        }
-                    }
-                    #[cfg(target_os = "macos")]
-                    {
-                        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-                        if let Err(e) = apply_vibrancy(
-                            &window_for_effect,
-                            NSVisualEffectMaterial::Sidebar,
-                            Some(NSVisualEffectState::Active),
-                            None,
-                        ) {
-                            log::error!("[M1.9.2] window_vibrancy::apply_vibrancy failed (vibrancy will not show): {e}");
-                        }
-                    }
-                });
+                // (M2.16-M4.8 vibrancy / Mica / HudWindow 调用块已删 —
+                //  4 轮失败后用户决定"纯 CSS 模拟"方案, 启动期不再调任何
+                //  OS 原生 backdrop API。M2.16 era 200ms spawn 块 + M4.6
+                //  IPlatformWindowChrome dispatch + M4.7 main-thread
+                //  variant + M4.8 platform trait 调用全部清空。
+                //  主题 glass 效果由 tokens.css / base.css CSS token
+                //  + 组件 backdrop-filter 保留 (M2.16 视觉保留, 调用
+                //  路径移除)。)
             }
 
             // M2.16 — macOS 标准应用菜单（App / Edit / View / Window）。

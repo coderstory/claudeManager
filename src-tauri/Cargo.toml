@@ -74,13 +74,10 @@ tauri-plugin-updater     = "=2.10.1"  # v1.1 release 自动更新（M3 阶段启
 tauri-plugin-autostart   = "=2.5.1"   # M1.7 开机自启（IPlatformAutostart trait 实现）
 tauri-plugin-process     = "=2.3.1"   # 进程管理（kill 重启 / exit 用）
 
-# M2.16 — 原生窗口 backdrop（Win11 Mica / macOS vibrancy）。
-# Tauri JS setEffects(Effect.Mica) 在 decorations:false 无边框窗口上不稳定
-# (tao#72: DWM 合成路径与无边框冲突)。window-vibrancy 是 Tauri 团队官方维护的
-# 底层 backdrop 库，直接对 HWND 调 DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE)，
-# 绕过 tao 装饰状态判断。0.6.0 已在 Cargo.lock 传递依赖中，直接声明不引入新下载。
-# 文档: https://github.com/tauri-apps/window-vibrancy#readme
-window-vibrancy = "=0.6.0"
+# M4.8 — window-vibrancy 依赖已删 (4 轮 vibrancy 失败: window-vibrancy
+# crate / Tauri 官方 EffectsBuilder / objc2 FFI 都未在 macOS 26 Tahoe
+# 生效, 用户决定"纯 CSS 模拟" + 5 主题 glass 视觉由 tokens.css + 组件
+# backdrop-filter 保留)。
 
 # M2.16 — log facade。tauri-plugin-log 默认捕获 log crate 的宏
 # (error!/warn!/info!)，release exe (windows_subsystem="windows" 无 stderr)

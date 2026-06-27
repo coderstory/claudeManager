@@ -647,7 +647,6 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
- "window-vibrancy",
  "windows",
  "winreg 0.52.0",
 ]

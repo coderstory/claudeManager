@@ -63,41 +63,7 @@ impl AppPaths {
 }
 
 // ---------------------------------------------------------------------------
-// WindowChrome
-// ---------------------------------------------------------------------------
-
-/// What the platform's window decorator should do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WindowChromeOptions {
-    /// macOS: enable `NSVisualEffectView` vibrancy behind the window.
-    /// No effect on Windows.
-    pub vibrancy: bool,
-    /// Windows 11: enable the DWM Mica backdrop.
-    /// No effect on macOS.
-    pub mica: bool,
-    /// Title bar style — see [`TitleBarStyle`].
-    pub title_bar_style: TitleBarStyle,
-}
-
-impl Default for WindowChromeOptions {
-    fn default() -> Self {
-        Self {
-            vibrancy: false,
-            mica: false,
-            title_bar_style: TitleBarStyle::Default,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TitleBarStyle {
-    /// Use the platform's default decorated title bar.
-    Default,
-    /// Transparent / custom-drawn title bar. The app draws its own
-    /// min/max/close buttons.
-    Transparent,
-}
-
+// AppMenu
 // ---------------------------------------------------------------------------
 // SingleInstanceGuard
 // ---------------------------------------------------------------------------
@@ -191,7 +157,7 @@ impl Drop for SingleInstanceGuard {
 #[derive(Debug, Error)]
 pub enum PlatformError {
     /// Operation is not applicable on this platform (e.g. `install_app_menu`
-    /// on Windows, `apply(vibrancy)` on Windows).
+    /// on Windows).
     #[error("operation not supported on this platform")]
     NotSupported,
 
@@ -386,12 +352,6 @@ pub trait IPlatformAppMenu: Send + Sync {
     fn build_app_menu(&self) -> Result<(), PlatformError>;
 }
 
-/// Apply native window-chrome effects (Mica, vibrancy, transparent title
-/// bar).
-pub trait IPlatformWindowChrome: Send + Sync {
-    fn apply(&self, options: &WindowChromeOptions) -> Result<(), PlatformError>;
-}
-
 /// Wrapper around the `git` CLI. We delegate to git rather than linking
 /// libgit2 — keeps the binary small and we only need a handful of operations.
 pub trait IGitHost: Send + Sync {
@@ -458,13 +418,6 @@ mod tests {
         pub AppMenuShim {}
         impl IPlatformAppMenu for AppMenuShim {
             fn build_app_menu(&self) -> Result<(), PlatformError>;
-        }
-    }
-
-    mock! {
-        pub WindowChromeShim {}
-        impl IPlatformWindowChrome for WindowChromeShim {
-            fn apply(&self, options: &WindowChromeOptions) -> Result<(), PlatformError>;
         }
     }
 
@@ -657,22 +610,6 @@ mod tests {
     }
 
     #[test]
-    fn window_chrome_apply_dispatch() {
-        let opts = WindowChromeOptions {
-            vibrancy: true,
-            mica: true,
-            title_bar_style: TitleBarStyle::Transparent,
-        };
-        let mut m = MockWindowChromeShim::new();
-        m.expect_apply()
-            .withf(|o| o.vibrancy && o.mica && matches!(o.title_bar_style, TitleBarStyle::Transparent))
-            .times(1)
-            .returning(|_| Ok(()));
-        let wc: Box<dyn IPlatformWindowChrome> = Box::new(m);
-        wc.apply(&opts).unwrap();
-    }
-
-    #[test]
     fn git_host_clone_dispatch() {
         let mut m = MockGitHostShim::new();
         m.expect_clone()
@@ -721,13 +658,5 @@ mod tests {
             history_db: PathBuf::from("/home/foo/.config/ClaudeConfigManager/history.db"),
         };
         assert_eq!(p.claude_dir(), Some(Path::new("/home/foo/.claude")));
-    }
-
-    #[test]
-    fn window_chrome_options_default_is_off() {
-        let o = WindowChromeOptions::default();
-        assert!(!o.vibrancy);
-        assert!(!o.mica);
-        assert_eq!(o.title_bar_style, TitleBarStyle::Default);
     }
 }

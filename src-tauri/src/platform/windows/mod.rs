@@ -19,7 +19,6 @@ pub mod notifier;
 pub mod paths;
 pub mod reveal;
 pub mod single_instance;
-pub mod window_chrome;
 
 pub use app_menu::WindowsAppMenu;
 pub use autostart::WindowsAutostart;
@@ -28,4 +27,3 @@ pub use notifier::WindowsNotifier;
 pub use paths::WindowsPaths;
 pub use reveal::WindowsReveal;
 pub use single_instance::WindowsSingleInstance;
-pub use window_chrome::WindowsWindowChrome;
