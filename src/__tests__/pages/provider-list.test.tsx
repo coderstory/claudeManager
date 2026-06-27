@@ -835,4 +835,72 @@ describe('ProviderListPage — M3.0.4 defensive handling of missing models.by_ti
     // 旧文案 "Default Model (ANTHROPIC_MODEL)" 必须不出现
     expect(src).not.toContain('Default Model (ANTHROPIC_MODEL)');
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 30 UI-A-02 — Default Model 字段存在 + 编辑保留值
+  //
+  // 验证 provider 表单的 Default Model 字段:
+  //   1. testid `provider-form-model-default` 存在 + 标签 "Default Model"
+  //   2. 编辑现有 provider 时, 字段值从 settings.json model 字段读取
+  //      (这里用 provider.models.default 模拟 settings.json 持久化值 —
+  //       list_providers → 选中 → 打开 form → 字段预填)
+  //   3. placeholder 提示用户填什么 (claude-sonnet-4-6)
+  //
+  // 范围限制 (UI-A-02, Claude discretion):
+  //   "值从 settings.json model 字段读取" 走的路径是:
+  //     list_providers → 选中 provider → 打开 form → field 预填。
+  //     这与已有 M3.6 编辑流程一致 (existing?.models.default)。
+  //   新建 provider 时预填 settings.json 当前 model 是 deferred to v3.2.1
+  //     (需要新增 IPC read_current_settings_model 跨 provider 边界,
+  //     改动范围超过本 phase "UI polish" 范畴 — 见 SUMMARY.md deviations)。
+  // -------------------------------------------------------------------------
+  it('UI-A-02: 编辑现有 provider 时, Default Model 字段值从 provider.models.default 读取', async () => {
+    const target = {
+      id: 'glm', name: 'GLM-4.6', provider_type: 'anthropic',
+      api_base: 'https://api.glm.example', api_key: 'sk-glm',
+      models: {
+        default: 'claude-sonnet-4-6-from-settings-json',
+        haiku: null, sonnet: null, opus: null,
+        by_tier: {},
+      },
+      is_active: false, created_at: 1700000000, last_used_at: null, notes: null,
+    };
+    mockInvoke.mockResolvedValueOnce([target]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-row-glm')).toBeInTheDocument();
+    });
+
+    // 打开 edit modal
+    fireEvent.click(screen.getByTestId('provider-edit-glm'));
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+
+    // Default Model 字段必须存在 (testid 锁定, UI-A-02)
+    const defaultModelInput = screen.getByTestId('provider-form-model-default') as HTMLInputElement;
+    expect(defaultModelInput).toBeInTheDocument();
+
+    // 值必须等于 provider.models.default (即 settings.json 持久化的 model)
+    expect(defaultModelInput.value).toBe('claude-sonnet-4-6-from-settings-json');
+  });
+
+  it('UI-A-02: + Add 新建时 Default Model 字段为空 + placeholder 提示', async () => {
+    mockInvoke.mockResolvedValueOnce([]);
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-empty')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('provider-list-add'));
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+
+    const defaultModelInput = screen.getByTestId('provider-form-model-default') as HTMLInputElement;
+    // 新建时为空 (用户自己填)
+    expect(defaultModelInput.value).toBe('');
+    // placeholder 提示默认模型名 (用户有线索)
+    expect(defaultModelInput.placeholder).toBe('claude-sonnet-4-6');
+  });
 });
