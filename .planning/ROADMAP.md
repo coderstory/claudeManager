@@ -437,7 +437,7 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 | 26. M5 A 类 5 + 整合验证 + tag v3.0.1 | v3.0.1 | 1 commit | Complete | 2026-06-26 |
 | 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 2/2 | Complete    | 2026-06-26 |
 | 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/3 | Complete    | 2026-06-27 |
-| 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 0/1 | In Progress | - |
+| 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 0/1 | In Progress | - |
 | 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 0/1 | In Progress | - |
 </invoke>
@@ -552,13 +552,13 @@ Plans:
 **Requirements**: BUG-RF-01 (欢迎页弹窗逻辑) / BUG-RF-02 (单文件部署已删,M6 需保持) / BUG-RF-03 (第三方仓库文案) / BUG-RF-04 (手动处理 checkbox) / BUG-RF-05 (手动出 JSON 编辑入口) / BUG-RF-06 (备份分页+多选) / BUG-RF-07 (备份文件不误删) / BUG-RF-08 (历史分页) / BUG-RF-09 (JSON 搜 settings 路径)
 **Depends on:** Phase 28
 **Status**: 🚧 In Progress
-**Plans:** 1 plan (估时 2-3 天,沿用 M5-PLAN §6 模式;含 #18 删单文件部署 M6 regression check)
+**Plans:** 1/1 plans complete
 **Verification:** `milestones/v3.2-phases/29-v32-m6-refactor-9-bug-*/29-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS + 全 33+13+9 = 55 bug 手测
 **Archive:** `milestones/v3.2-phases/29-v32-m6-refactor-9-bug-*/`
 
 Plans:
 
-- [ ] 29-01-PLAN.md — 9 重构 bug fix:欢迎页 onMount 弹窗时序修正 (等 sqlite ready 后再弹);M5 #18 单文件部署删除回归测试 (确保 M6 期间不被误加回);F17 第三方仓库 tab 文案 (保留 + 改写警告语);手动处理 checkbox 半选状态正确渲染;手动出 JSON 编辑入口按钮跳转 `/json-editor` 正确路由;F13 备份页分页 (20/page) + 多选 + 批量删除;BackupService::delete 加 trash + 二次确认 (避免误删);history page 分页 (从全量 list 改 cursor-based);F5 JSON 搜 settings 路径解析 (`~/.claude/settings.json` 而非 `~/.claude/`)
+- [x] 29-01-PLAN.md — 9 重构 bug fix:欢迎页 onMount 弹窗时序修正 (等 sqlite ready 后再弹);M5 #18 单文件部署删除回归测试 (确保 M6 期间不被误加回);F17 第三方仓库 tab 文案 (保留 + 改写警告语);手动处理 checkbox 半选状态正确渲染;手动出 JSON 编辑入口按钮跳转 `/json-editor` 正确路由;F13 备份页分页 (20/page) + 多选 + 批量删除;BackupService::delete 加 trash + 二次确认 (避免误删);history page 分页 (从全量 list 改 cursor-based);F5 JSON 搜 settings 路径解析 (`~/.claude/settings.json` 而非 `~/.claude/`)
 
 **Success Criteria** (observable user behaviors):
 

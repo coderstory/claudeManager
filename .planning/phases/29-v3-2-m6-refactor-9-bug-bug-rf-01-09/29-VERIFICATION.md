@@ -1,3 +1,14 @@
+---
+phase: 29-v3-2-m6-refactor-9-bug-bug-rf-01-09
+verified: 2026-06-27T00:50:00Z
+status: passed
+score: 9/9 functional + 8/8 invariant verified
+behavior_unverified: 0
+overrides_applied: 0
+gaps: []
+human_verification: []
+---
+
 # Phase 29 Verification: v3.2 M6 重构 9 bug 修复
 
 **Date:** 2026-06-27
