@@ -440,37 +440,86 @@ export default function ResourceBrowserPage(): ReactElement {
       }}
     >
       {/* Header */}
+      <div>
+        <h2
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            margin: 0,
+          }}
+        >
+          资源浏览
+        </h2>
+        <p
+          style={{
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+            marginTop: 4,
+            marginBottom: 0,
+          }}
+        >
+          查看 ~/.claude/ 下的 5 类启用资源(Plugins / Skills / Commands /
+          LSP / MCP),点击「显示」按钮跳到对应文件。
+        </p>
+      </div>
+
+      {/* Tabs + 重新扫描按钮 (UI-A-04) — 重新扫描按钮从原 header 右侧
+          移到 tab row 右上角,与 tab 同一行右侧,布局:
+          [tabs ............... ] [重新扫描]
+          使用 flex (justify-content: space-between, align-items: flex-end)
+          让 tabs 的下边框与 button 底边对齐。button 自身仍是独立按钮
+          (data-testid='resource-browser-rescan-btn') 不变,仅位置迁移。*/}
       <div
+        data-testid="resource-browser-tabs-row"
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'flex-end',
           justifyContent: 'space-between',
           gap: 12,
         }}
       >
-        <div>
-          <h2
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              margin: 0,
-            }}
-          >
-            资源浏览
-          </h2>
-          <p
-            style={{
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              marginTop: 4,
-              marginBottom: 0,
-            }}
-          >
-            查看 ~/.claude/ 下的 5 类启用资源(Plugins / Skills / Commands /
-            LSP / MCP),点击「显示」按钮跳到对应文件。
-          </p>
+        {/* Tabs */}
+        <div
+          data-testid="resource-browser-tabs"
+          role="tablist"
+          style={{
+            display: 'flex',
+            gap: 4,
+            borderBottom: '1px solid var(--border)',
+            flex: '1 1 auto',
+          }}
+        >
+          {ALL_RESOURCE_KINDS.map((k) => {
+            const active = k === state.kind;
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={`resource-browser-tab-${k}`}
+                onClick={() => handleTabClick(k)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: active
+                    ? '2px solid var(--accent)'
+                    : '2px solid transparent',
+                  cursor: 'pointer',
+                  marginBottom: -1,
+                }}
+              >
+                {resourceKindLabel(k)}
+              </button>
+            );
+          })}
         </div>
+        {/* 重新扫描按钮 — UI-A-04 移到 tab row 右上角 */}
         <button
           type="button"
           data-testid="resource-browser-rescan-btn"
@@ -495,51 +544,15 @@ export default function ResourceBrowserPage(): ReactElement {
             minWidth: 110,
             whiteSpace: 'nowrap',
             flexShrink: 0,
+            // UI-A-04 — 与 tab 同一行, 顶对齐 button 高度, 让 button 居中
+            // 在 tab 下边线附近 (避免 tab border-bottom 与 button 底边错位).
+            alignSelf: 'flex-end',
+            marginBottom: 4,
           }}
         >
           <RefreshCw size={14} />
           {state.loading ? '扫描中...' : '重新扫描'}
         </button>
-      </div>
-
-      {/* Tabs */}
-      <div
-        data-testid="resource-browser-tabs"
-        role="tablist"
-        style={{
-          display: 'flex',
-          gap: 4,
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        {ALL_RESOURCE_KINDS.map((k) => {
-          const active = k === state.kind;
-          return (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              data-testid={`resource-browser-tab-${k}`}
-              onClick={() => handleTabClick(k)}
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: active
-                  ? '2px solid var(--accent)'
-                  : '2px solid transparent',
-                cursor: 'pointer',
-                marginBottom: -1,
-              }}
-            >
-              {resourceKindLabel(k)}
-            </button>
-          );
-        })}
       </div>
 
       {/* Sub-directory hint */}

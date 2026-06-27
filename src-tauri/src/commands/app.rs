@@ -67,6 +67,17 @@ const IDENTIFIER: &str = "com.claudeconfigmanager.desktop";
 /// on the OS / installer / registry.
 const DISPLAY_IDENTIFIER: &str = "com.claudemanager.app";
 
+/// Project homepage URL displayed on the About page (UI-A-05, 2026-06-27).
+///
+/// CLAUDE.md §6.5 分层: 这是 **显示文案** (前端 + 关于页),不动
+/// `IDENTIFIER` (bundle id) / `DISPLAY_IDENTIFIER` (display bundle id)。
+/// 改此 URL 不影响 OS / installer / registry / mutex / AppData 路径。
+///
+/// 命名规则: 跟随仓库当前显示名 (claude-config-manager)。如果未来
+/// 再 rebrand (例如改成 ClaudeManager),改这一行 + 前端 PROJECT_HOMEPAGE
+/// (如果用 const) + 测试 fixture sampleMetadata 三处同步 (CLAUDE.md §6.4)。
+const HOMEPAGE_URL: &str = "https://github.com/coderstory/claude-config-manager";
+
 /// Snapshot of "which app is running" — version, build provenance,
 /// target triple. Returned to the frontend by `get_app_metadata`.
 ///
@@ -90,6 +101,10 @@ pub struct AppMetadata {
     pub build_target: String,
     /// Unix epoch seconds at build time. 0 means unavailable.
     pub build_timestamp: i64,
+    /// Project homepage URL, e.g. "https://github.com/.../...".
+    /// UI-A-05 (2026-06-27): 由 Rust 端 HOMEPAGE_URL 常量持有, 走 IPC
+    /// 返回给前端 About 页, 不再硬编码在前端 (CLAUDE.md §6.4 三处同步)。
+    pub homepage_url: String,
 }
 
 impl AppMetadata {
@@ -112,6 +127,7 @@ impl AppMetadata {
             git_commit,
             build_target,
             build_timestamp,
+            homepage_url: HOMEPAGE_URL.to_string(),
         }
     }
 }
@@ -144,6 +160,9 @@ mod tests {
         assert!(!m.product_name.is_empty(), "product_name should never be empty");
         assert!(!m.git_commit.is_empty(), "git_commit defaults to 'unknown'");
         assert!(!m.build_target.is_empty(), "build_target derived from std::env::consts");
+        // UI-A-05 — homepage_url is now a required field returned to the
+        // frontend (CLAUDE.md §6.4 三处同步). Must never be empty.
+        assert!(!m.homepage_url.is_empty(), "homepage_url should never be empty");
     }
 
     #[test]
@@ -201,9 +220,23 @@ mod tests {
         assert!(json.contains("\"git_commit\""));
         assert!(json.contains("\"build_target\""));
         assert!(json.contains("\"build_timestamp\""));
+        assert!(json.contains("\"homepage_url\""));
         // No camelCase leakage.
         assert!(!json.contains("productName"));
         assert!(!json.contains("buildTarget"));
+        assert!(!json.contains("homepageUrl"));
+    }
+
+    /// UI-A-05 — homepage_url stability. The value pinned to HOMEPAGE_URL
+    /// is what the About page renders; tests anchor the exact string so
+    /// any drift (e.g. accidental shortening to 'github.com/...' without
+    /// the https:// prefix) fails loudly.
+    #[test]
+    fn homepage_url_is_stable() {
+        assert_eq!(
+            AppMetadata::current().homepage_url,
+            "https://github.com/coderstory/claude-config-manager"
+        );
     }
 
     /// Compile-time check: `get_app_metadata` signature is stable.

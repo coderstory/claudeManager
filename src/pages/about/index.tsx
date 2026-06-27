@@ -50,7 +50,16 @@ const INITIAL_STATE: PageState = {
 // ---------------------------------------------------------------------------
 
 const LICENSE_TYPE = 'MIT';
-const PROJECT_HOMEPAGE = 'github.com/coderstory/claude-config-manager';
+
+// UI-A-05 (2026-06-27) — 项目主页 URL 改由 Rust IPC `get_app_metadata`
+// 返回的 `homepage_url` 字段持有 (src-tauri/src/commands/app.rs::HOMEPAGE_URL
+// 常量),不再硬编码在前端常量 (CLAUDE.md §6.4 三处同步: 前端字符串 +
+// Rust IPC 常量 + 测试 fixture)。这样改 URL 时:
+//   1. 改 Rust HOMEPAGE_URL (单点)
+//   2. 改测试 fixture sampleMetadata
+//   3. 不用动前端代码 (前端只从 metadata 读)
+// Fallback 在 metadata 加载失败时用,避免 UI 空白 (CLAUDE.md §7)。
+const HOMEPAGE_FALLBACK = 'https://github.com/coderstory/claude-config-manager';
 
 const CREDITS: ReadonlyArray<{ label: string; value: string }> = [
   {
@@ -288,7 +297,7 @@ export default function AboutPage(): ReactElement {
                 margin: 0,
               }}
             >
-              {PROJECT_HOMEPAGE}
+              {m?.homepage_url ?? HOMEPAGE_FALLBACK}
             </dd>
           </div>
         </dl>
