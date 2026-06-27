@@ -48,6 +48,53 @@ html, body, #root {
 
   /* Layout */
   --detail-page-max-width: 720px;
+
+  /* === Backward-compat (M2.x — Task 3 重构 L1+L2 时删了这些 token,
+   * 但 27 处组件还在引用. 补回 :where(:root) 让所有主题继承统一基线,
+   * 主题维度可在自己的 [data-theme] 块覆写 (实际 light 也补一份,
+   * 因为原始 :root 定义用的是 light 的值). === */
+
+  /* Font size caption (旧版 light 12px) */
+  --fs-caption: 12px;
+
+  /* Disabled 状态色 (旧版 rgba(0,0,0,0.4)) */
+  --disabled: rgba(0, 0, 0, 0.4);
+
+  /* Border soft (旧版 light 边框 #E1E4E8) */
+  --border-soft: #E1E4E8;
+
+  /* 卡片描边宽度 (旧版 1px; anime 主题原固定 3px, 但 anime 已删除) */
+  --card-border-width: 1px;
+
+  /* Radius 别名 (旧版 .card / .btn 用的名字, 现以 card-radius / button-radius 为源) */
+  --radius-card: var(--card-radius);
+  --radius-button: var(--button-radius);
+
+  /* === Hover / overlay variants (跨主题共享, base.css 用)
+   * light 主题的 bg-overlay 是 rgba(0,0,0,0.04); 这些更细颗粒度变体给
+   * 列表行 / 卡片 / 按钮 hover 用. 深色主题里改 --hover-* 系列即可. === */
+  --hover-subtle: rgba(0, 0, 0, 0.02);  /* table.dense tr:hover */
+  --hover-soft:   rgba(0, 0, 0, 0.03);  /* sidebar nav-item hover, table.dense th bg */
+  --hover-medium: rgba(0, 0, 0, 0.06);  /* bar bg, modal-close-btn hover */
+
+  /* === Modal overlay backdrop (跨主题共享, .modal-overlay bg) === */
+  --modal-overlay-bg: rgba(0, 0, 0, 0.45);
+
+  /* === Modal box shadow 第二个 shadow 分量 (跨主题共享) === */
+  --modal-shadow: 0 24px 48px rgba(0, 0, 0, 0.08);
+
+  /* === Avatar 4 色相 (跨主题共享 — 设计是 brand 风格, 不随主题变) === */
+  --avatar-mint-bg:   #CFFAFE; --avatar-mint-fg:   #06B6D4;
+  --avatar-indigo-bg: #E0E7FF; --avatar-indigo-fg: #6366F1;
+  --avatar-amber-bg:  #FEF3C7; --avatar-amber-fg:  #D97706;
+  --avatar-rose-bg:   #FFE4E6; --avatar-rose-fg:   #FB7185;
+
+  /* === Input focus ring (light accent 的 15% 透明, 跨主题共享) === */
+  --accent-focus-ring: rgba(9, 105, 218, 0.15);
+
+  /* === Modal cancel button hover (light 主题 hover 状态, 跨主题共享) === */
+  --modal-cancel-hover-bg: #F6F8FA;
+  --modal-cancel-hover-border: #C8CCD1;
 }
 
 /* === L2.1 light 主题 (默认, Linear/Vercel 风) === */
@@ -59,6 +106,10 @@ html, body, #root {
   --accent-fg-on: #FFFFFF;
   --success: #388E3C; --warning: #F57C00; --danger: #D32F2F; --info: #0969DA;
   --border: #E1E4E8;
+  /* Backward-compat 3 token (Task 3 重构时丢了, light 原本就有) */
+  --border-soft: #E1E4E8;
+  --fs-caption: 12px;
+  --disabled: rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
   --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
@@ -166,4 +217,16 @@ body {
   color: var(--text-primary);
   background: var(--bg-primary);
   transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* === View transition (M1.9.3 P1 fix — framer-motion 移除后的 CSS 替代)
+ * @keyframes 必须在规则顶层 (不能嵌套进 [data-theme] 块, 否则 CSS 解析器跳过).
+ * App.tsx <div className="view-transition" key={view}> 切换 view 时
+ * React 重挂载触发 animation 重启 (M1.9.1 AnimatePresence 等价 UX). === */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.view-transition {
+  animation: fadeIn 150ms ease-out;
 }
