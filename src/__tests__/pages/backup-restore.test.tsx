@@ -265,8 +265,14 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(batchBtn).not.toBeDisabled();
     });
-    // Click to delete (confirm already mocked to true).
+    // BUG-RF-07 — clicking [删除选中] opens ConfirmDialog (not direct
+    // delete). User must click [确认] in modal to actually trigger
+    // delete_backup IPC.
     fireEvent.click(batchBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       const calls = mockInvoke.mock.calls.filter(
         (c) => c[0] === 'delete_backup',
@@ -349,11 +355,12 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     expect(deleteBtns.length).toBe(2);
   });
 
-  it('clicking delete + confirm → invokes delete_backup + refreshes', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('BUG-RF-07: clicking delete + confirm → invokes delete_backup + refreshes', async () => {
+    // BUG-RF-07 — replaced window.confirm with the themed ConfirmDialog.
+    // Click [delete-btn] → modal appears → click [confirm-dialog-confirm] →
+    // executeDelete → delete_backup IPC.
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
-        // First call: 2 rows. Second call (refresh after delete): 1 row.
         return [
           sampleEntry('C:\\bak1.bak.20260619-142305', 1_781_929_385),
           sampleEntry('C:\\bak2.bak.20260619-120000', 1_781_838_000),
@@ -366,8 +373,13 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
-    const deleteBtn = screen.getAllByTestId('backup-delete-btn')[0];
-    fireEvent.click(deleteBtn);
+    fireEvent.click(screen.getAllByTestId('backup-delete-btn')[0]);
+    // Confirm dialog 出现 (data-testid 由 ConfirmDialog 内部渲染)
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    // 点 [确认删除]
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('delete_backup', {
         path: 'C:\\bak1.bak.20260619-142305',
@@ -377,11 +389,9 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('backup-message')).toHaveTextContent('已删除');
     });
-    confirmSpy.mockRestore();
   });
 
-  it('clicking delete + cancel confirm → does NOT invoke delete_backup', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('BUG-RF-07: clicking delete + cancel modal → does NOT invoke delete_backup', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
         return [sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385)];
@@ -393,13 +403,17 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId('backup-delete-btn'));
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    // 点 [取消] 而不是 [删除]
+    fireEvent.click(screen.getByTestId('confirm-dialog-cancel'));
+    await new Promise((r) => setTimeout(r, 50));
     const calls = mockInvoke.mock.calls.map((c) => c[0]);
     expect(calls).not.toContain('delete_backup');
   });
 
-  it('delete error from backend → error InfoBar + row kept', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('BUG-RF-07: delete error from backend → error InfoBar + row kept', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
         return [sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385)];
@@ -412,6 +426,10 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId('backup-delete-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       expect(screen.getByTestId('backup-message')).toHaveTextContent(
         /删除失败.*permission denied/,
