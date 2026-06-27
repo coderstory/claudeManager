@@ -148,19 +148,7 @@ export function AppHeader({
             整组 sit in no-drag zone (WindowControls 自身已加),
             不会被 header drag-region 截走 click event. */}
         <WindowControls />
-      <div
-        className="titlebar-title"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          minWidth: 0,
-          flexShrink: 1,
-          background: 'var(--glass-bg)',
-          WebkitBackdropFilter: 'blur(var(--blur-md)) saturate(160%)',
-          backdropFilter: 'blur(var(--blur-md)) saturate(160%)',
-        } as React.CSSProperties}
-      >
+      <div className="titlebar-title" style={{ ...noDragStyle, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
         {!isHome && (
           <button
             type="button"
@@ -182,17 +170,6 @@ export function AppHeader({
             <ArrowLeft size={16} />
           </button>
         )}
-        <h1
-          style={{
-            // truncate: nowrap + overflow hidden + ellipsis
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minWidth: 0,
-          }}
-        >
-          {pageTitle(currentView)}
-        </h1>
       </div>
       </div>
 
@@ -208,7 +185,9 @@ export function AppHeader({
           update src/pages/about/index.tsx + the
           sampleMetadata() fixture in
           src/__tests__/pages/about.test.tsx + Rust PRODUCT_NAME
-          + tauri.conf.json productName. */}
+          + tauri.conf.json productName.
+
+          页面名 (pageTitle) 不在 topbar 显示, 已在各页面的 .page-header 里显示 — 避免视觉重复. */}
       <div
         className="topbar-center"
         data-testid="app-header-app-name"
