@@ -10,7 +10,7 @@
 # failed). They are safe to call repeatedly (idempotent where it makes sense).
 
 # === Constants ===
-APP_BUNDLE="/Applications/ClaudeManager.app"
+APP_BUNDLE="$HOME/Applications/ClaudeManager.app"
 APP_PROCESS="ClaudeManager"
 APP_BIN_PATTERN="ClaudeManager.app/Contents/MacOS/claude-config-manager"
 

@@ -14,7 +14,7 @@
  * data-testid wrappers exist.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Shared mocks

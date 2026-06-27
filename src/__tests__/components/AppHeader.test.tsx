@@ -258,4 +258,3 @@ describe('AppHeader — Phase 30 UI-A-01 二次元主题 header 居中布局', (
   });
 });
 
-import { fireEvent, waitFor } from '@testing-library/react';
