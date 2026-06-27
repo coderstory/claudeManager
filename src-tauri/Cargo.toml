@@ -120,16 +120,6 @@ tauri = { version = "2", features = ["tray-icon", "macos-private-api", "test"] }
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Graphics_Dwm", "Win32_Security", "Win32_UI_Controls"] }
 winreg = "0.52"
 
-# M31 — macOS 原生 NSWindow 透明背景调用 (Tauri 2 官方方案).
-#   docs.rs/tauri/2.11.3 — WebviewWindow::ns_window() 返回 *mut AnyObject,
-#   需要 cast 成 *mut NSWindow 才能调 setBackgroundColor(Color(0,0,0,0)).
-#   objc2-app-kit 0.3.2 + objc2 0.6.4 已在 Cargo.lock 中 (wry 传递依赖),
-#   升级到 direct dep 不会改 Cargo.lock. CLAUDE.md §2.3 合规 (版本锁,
-#   不引入新下载). macOS-only: Windows impl 不依赖此 crate.
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "=0.6.4"
-objc2-app-kit = { version = "=0.3.2", features = ["NSColor", "NSWindow"] }
-
 # === target/ 长期治理 (2026-06-24 M3.0.3 cleanup) ===
 # 历史: target/ 曾涨到 9.6GB (debug 7.4G + release 2.3G).
 # 根因: cargo 默认 incremental + 完整 .rlib 符号表 + release 不 strip.
