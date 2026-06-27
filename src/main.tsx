@@ -1,12 +1,7 @@
 import "./design-system/base.css";
+import "./design-system/fonts.css";
 import "./design-system/tokens.css";
-// M2.x-inline: shared style block that provides the (no-Tailwind-pipeline)
-// :hover / :focus / @keyframes rules used by AppHeader, AppSidebar,
-// HomeView, QuickSearchModal, UsageQueryPage.
-// See src/design-system/utilities.css for the full rationale.
 import "./design-system/utilities.css";
-// v3.0 主题专属 CSS (静态 import, 不走 glob — CSS 必须 eager)
-import "./design-system/themes/light.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
