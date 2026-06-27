@@ -1,8 +1,14 @@
 import type { ThemeId, ThemeMeta } from './themeTypes';
 
 // glob 必须用字面量 './themes/*.ts' 写在这里, 不能抽成变量
+// 注: 排除 themeIds.ts — 它只导出 named const THEME_IDS, 没有 default,
+// vite 'import: default' 会 throw "does not provide an export named 'default'",
+// 进而阻塞整个 ThemeProvider mount (ThemeRegistry.ts 顶层 import).
 const modules = import.meta.glob<ThemeMeta>(
-  './themes/*.ts',
+  [
+    './themes/*.ts',
+    '!./themes/themeIds.ts',
+  ],
   { eager: true, import: 'default' },
 );
 
