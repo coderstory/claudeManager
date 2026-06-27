@@ -16,7 +16,12 @@ pub mod traits;
 
 pub mod stubs;
 
+// Phase 42 — dispatch module will be added by the next subagent pass.
+// pub mod dispatch;
+pub mod service_registry;
+
 pub use host::PluginHost;
+pub use service_registry::ServiceRegistry;
 pub use traits::{
     IPlugin, PluginContext, PluginError, PluginRoute, PluginService,
 };

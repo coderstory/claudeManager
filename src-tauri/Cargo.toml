@@ -84,6 +84,13 @@ tauri-plugin-process     = "=2.3.1"   # 进程管理（kill 重启 / exit 用）
 # 也能写入日志文件。log 0.4.32 已在 Cargo.lock 传递依赖中，直接声明不引入新下载。
 log = "0.4"
 
+# Phase 42 — inventory crate for compile-time plugin command registration.
+# D-42-A (CLAUDE.md §2.3 exception): dtolnay, 6+ years stable, MIT/Apache.
+# Version locked to =0.3.24 (exact). Used by Phase 42 IPC dispatch via
+# `inventory::submit!(CommandSpec {...})` in each plugin's commands.rs.
+# Rollback path: drop this line + revert plugins/dispatch.rs + lib.rs change.
+inventory = "=0.3.24"
+
 # M4.6 — Phase 21 SQLite 历史持久层。
 #   - rusqlite         同步 API,bundled feature 自带 SQLite C 库(无需系统安装)
 #   - rusqlite_migration 同步 migration runner,基于 `user_version` PRAGMA
