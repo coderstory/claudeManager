@@ -63,11 +63,11 @@ shipped: pending
 
 > 文本/样式 polish,不影响功能。
 
-- [ ] **UI-A-01**: 二次元主题 header 排版
-- [ ] **UI-A-02**: Default Model 字段显示
-- [ ] **UI-A-03**: formatChineseTokenCount 函数正确
-- [ ] **UI-A-04**: 资源市场"重新扫描"按钮位置
-- [ ] **UI-A-05**: 关于页项目主页 URL
+- [x] **UI-A-01**: 二次元主题 header 排版
+- [x] **UI-A-02**: Default Model 字段显示
+- [x] **UI-A-03**: formatChineseTokenCount 函数正确
+- [x] **UI-A-04**: 资源市场"重新扫描"按钮位置
+- [x] **UI-A-05**: 关于页项目主页 URL
 
 ### 整合验证 (phase 31)
 

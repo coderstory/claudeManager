@@ -438,7 +438,7 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 | 27. v3.2 M6 critical 5 bug 修复 (BUG-CR-01~05) | v3.2 | 2/2 | Complete    | 2026-06-26 |
 | 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/3 | Complete    | 2026-06-27 |
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 1/1 | Complete    | 2026-06-27 |
-| 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 0/1 | In Progress | - |
+| 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 0/1 | In Progress | - |
 </invoke>
 
@@ -578,13 +578,13 @@ Plans:
 **Requirements**: UI-A-01 (二次元主题 header 排版) / UI-A-02 (Default Model 字段显示) / UI-A-03 (formatChineseTokenCount 函数) / UI-A-04 (资源市场"重新扫描"按钮位置) / UI-A-05 (关于页项目主页 URL)
 **Depends on:** Phase 29
 **Status**: 🚧 In Progress
-**Plans:** 1 plan (估时 1-2 天,沿用 M5-PLAN §7 模式;5 fix commits 或 subagent fix)
+**Plans:** 1/1 plans complete
 **Verification:** `milestones/v3.2-phases/30-v32-m6-a-5-bug-*/30-VERIFICATION.md` (status: passed) + test-all.sh 6 stages PASS + 视觉回归 (h1=18px / padding=24px / max-width=896px 与 baseline 对齐)
 **Archive:** `milestones/v3.2-phases/30-v32-m6-a-5-bug-*/`
 
 Plans:
 
-- [ ] 30-01-PLAN.md — 5 A 类 fix:二次元主题 header logo 居中 + spacing 调整 (与瓷白/暗色主题对齐);provider 编辑 form 显示 Default Model 字段 (从 settings.json `model` 字段);formatChineseTokenCount 函数 bug 修复 (中文单位"万"正确换算,不报 NaN);F17 资源市场"重新扫描"按钮移到 tab 右上角 (而不是底部);关于页项目主页 URL 改成新 identifier URL (CLAUDE.md §6.5 显示名 vs 系统标识分层规则)
+- [x] 30-01-PLAN.md — 5 A 类 fix:二次元主题 header logo 居中 + spacing 调整 (与瓷白/暗色主题对齐);provider 编辑 form 显示 Default Model 字段 (从 settings.json `model` 字段);formatChineseTokenCount 函数 bug 修复 (中文单位"万"正确换算,不报 NaN);F17 资源市场"重新扫描"按钮移到 tab 右上角 (而不是底部);关于页项目主页 URL 改成新 identifier URL (CLAUDE.md §6.5 显示名 vs 系统标识分层规则)
 
 **Success Criteria** (observable user behaviors):
 

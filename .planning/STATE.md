@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: M6 用户实测反馈修复
-current_phase: 30
-current_phase_name: UI-A-01~05
+current_phase: 31
+current_phase_name: INT-01~06
 status: verifying
 stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-06-27T01:36:43.490Z"
+last_updated: "2026-06-27T01:50:10.064Z"
 last_activity: 2026-06-27
-last_activity_desc: Phase 29 complete, transitioned to Phase 30
+last_activity_desc: Phase 30 complete, transitioned to Phase 31
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 5
-  percent: 40
+  completed_phases: 3
+  total_plans: 7
+  completed_plans: 6
+  percent: 60
 ---
 
 <!--
@@ -70,10 +70,10 @@ progress:
 
 ## Current Position
 
-Phase: 30 — v3.2 M6 A 类 5 bug 修复 (UI-A-01~05)
+Phase: 31 — v3.2 M6 整合验证 (INT-01~06) + tag v3.2
 Plan: Not started
 Status: Phase 28 verified, queued for master merge
-Last activity: 2026-06-27 — Phase 29 complete, transitioned to Phase 30
+Last activity: 2026-06-27 — Phase 30 complete, transitioned to Phase 31
 
 **v3.2 plan summary** (ROADMAP.md Phase 27-31):
 
