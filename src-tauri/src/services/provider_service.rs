@@ -734,6 +734,7 @@ impl ProviderService {
         // list the UI can show as a unified "skipped lines" panel.
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -749,9 +750,18 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: count parse-level rejections separately from
+        // dedup hits (`skipped`). `parsed.skipped_lines` is the parser
+        // reject list (bad JSON / invalid id / missing field). Write
+        // errors stay inside `errors` (not counted in either bucket —
+        // they're "we tried to write but the disk said no", not
+        // "the row was malformed before it ever got to disk").
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -827,6 +837,7 @@ impl ProviderService {
         // list the UI can show as a unified "skipped lines" panel.
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -842,9 +853,13 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: parse-level rejects distinct from dedup (`skipped`).
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -964,6 +979,7 @@ impl ProviderService {
 
         let errors = parsed
             .skipped_lines
+            .clone()
             .into_iter()
             .map(|s| ImportSkip {
                 kind: "parse".into(),
@@ -979,9 +995,13 @@ impl ProviderService {
             }))
             .collect();
 
+        // BUG-BZ-01: parse-level rejects distinct from dedup (`skipped`).
+        let invalid_rows = parsed.skipped_lines.len();
+
         Ok(ImportResult {
             imported,
             skipped,
+            invalid_rows,
             errors,
             mcp_count: parsed.mcp_servers.len(),
         })
@@ -1063,6 +1083,12 @@ pub struct ImportResult {
     /// Number of provider rows skipped because the target file already
     /// existed (idempotency — re-running with the same dump is safe).
     pub skipped: usize,
+    /// Number of rows the SQL parser rejected (bad JSON, invalid id,
+    /// missing required field, etc.). BUG-BZ-01: previously lumped
+    /// into `skipped`, conflating "your dump has malformed rows"
+    /// with "you re-imported the same dump". The UI now surfaces this
+    /// as a distinct "格式错误" card (danger tone).
+    pub invalid_rows: usize,
     /// Parsing or write errors encountered. Each entry is one row that
     /// couldn't be processed — the UI shows them in a details panel.
     pub errors: Vec<ImportSkip>,
@@ -1707,6 +1733,56 @@ INSERT INTO providers (id, app_type, name, settings_config) VALUES ('also-ok', '
         // Files exist for the two valid rows.
         assert!(p_dir.join("ok.json").exists());
         assert!(p_dir.join("also-ok.json").exists());
+        assert!(!p_dir.join("Bad.ID.json").exists());
+    }
+
+    // ----- BZ-01 — invalid_rows distinct from dedup skips (Phase 28) -----
+    //
+    // BUG-BZ-01: previous ImportResult.skipped lumped together (a) parse
+    // errors, (b) write failures, and (c) dedup hits (already on disk).
+    // The UI couldn't distinguish "your dump has a malformed row" from
+    // "you re-imported the same dump" — both showed as the same `skipped`
+    // count. This test asserts the new `invalid_rows` field carries the
+    // parse-error count, while `skipped` carries ONLY the dedup count.
+
+    #[test]
+    fn bz01_invalid_row_distinct_from_dedup() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // Pre-existing provider — exercises the dedup path (fs::exists check).
+        write_provider(&p_dir, &sample_provider("dup", "DUP", "https://dup.example"));
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // 2 valid new + 1 invalid (Bad.ID) + 1 dedup hit (dup, already on disk).
+        let sql = r#"
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('new-a', 'claude', 'New A', '{"env":{"ANTHROPIC_BASE_URL":"https://a","ANTHROPIC_AUTH_TOKEN":"k1","ANTHROPIC_MODEL":"m1"},"model":"m1"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('Bad.ID', 'claude', 'Bad', '{"env":{"ANTHROPIC_BASE_URL":"https://x","ANTHROPIC_AUTH_TOKEN":"k","ANTHROPIC_MODEL":"m"},"model":"m"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('dup', 'claude', 'Dup', '{"env":{"ANTHROPIC_BASE_URL":"https://dup2","ANTHROPIC_AUTH_TOKEN":"k","ANTHROPIC_MODEL":"m"},"model":"m"}');
+INSERT INTO providers (id, app_type, name, settings_config) VALUES ('new-b', 'claude', 'New B', '{"env":{"ANTHROPIC_BASE_URL":"https://b","ANTHROPIC_AUTH_TOKEN":"k2","ANTHROPIC_MODEL":"m2"},"model":"m2"}');
+"#;
+        let result = svc.import_providers_from_sql(sql).unwrap();
+        assert_eq!(result.imported, 2, "new-a + new-b should import");
+        // D-16 / idempotency: dedup hits live in `skipped`, NOT `invalid_rows`.
+        assert_eq!(
+            result.skipped, 1,
+            "skipped must only count dedup hits (dup), not parse errors",
+        );
+        // BZ-01: parse-error rows are reported separately so the UI can
+        // surface "格式错误" as a distinct count from dedup skips.
+        assert_eq!(
+            result.invalid_rows, 1,
+            "invalid_rows must count parse errors (Bad.ID) — distinct from `skipped`",
+        );
+        // The parse error must also appear in `errors` (single source of truth).
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0].kind, "parse");
+
+        // Sanity: the 2 new files exist; the dedup'd file is untouched.
+        assert!(p_dir.join("new-a.json").exists());
+        assert!(p_dir.join("new-b.json").exists());
+        let dup_raw = fs::read_to_string(p_dir.join("dup.json")).unwrap();
+        assert!(dup_raw.contains("DUP"), "pre-existing dup file untouched");
         assert!(!p_dir.join("Bad.ID.json").exists());
     }
 

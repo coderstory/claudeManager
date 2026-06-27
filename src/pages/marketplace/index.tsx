@@ -56,6 +56,9 @@ import type {
   MarketplaceRepo,
   ScanResult,
 } from '../../lib/api/marketplace';
+// BZ-07 — 把 Rust MarketplaceError Display 翻译成中文
+// (title + hint + detail),ErrorBanner 显示本地化红条。
+import { localizeMarketplaceError } from '../../lib/errors';
 import type { ResourceItem } from '../../types/resource';
 import {
   formatSize,
@@ -508,13 +511,16 @@ export default function MarketplacePage(): ReactElement {
         </div>
       )}
 
-      {/* clone 错误 */}
-      {cloneError && (
-        <ErrorBanner
-          testId="marketplace-clone-error"
-          message={cloneError}
-        />
-      )}
+      {/* clone 错误 — BZ-07 走 localizeMarketplaceError 给中文红条 + 安装指引 */}
+      {cloneError && (() => {
+        const loc = localizeMarketplaceError(cloneError);
+        return (
+          <ErrorBanner
+            testId="marketplace-clone-error"
+            message={loc.hint ? `${loc.title}\n${loc.hint}` : loc.title}
+          />
+        );
+      })()}
 
       {/* 扫描结果 */}
       {scanResult && !cloning && (
@@ -868,22 +874,48 @@ function RepoCard({
         {repo.url}
       </div>
 
-      {/* M3.4 — install 状态行内展示 */}
-      {error && (
-        <div
-          data-testid={`marketplace-repo-error-${repo.id}`}
-          style={{
-            fontSize: 11,
-            color: 'var(--danger)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 4,
-          }}
-        >
-          <AlertCircle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>{error}</span>
-        </div>
-      )}
+      {/* M3.4 — install 状态行内展示;BZ-07 走 localizeMarketplaceError 翻译 */}
+      {error && (() => {
+        const loc = localizeMarketplaceError(error);
+        return (
+          <div
+            data-testid={`marketplace-repo-error-${repo.id}`}
+            data-localized-error="true"
+            style={{
+              fontSize: 11,
+              color: 'var(--danger)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 4,
+              }}
+            >
+              <AlertCircle size={11} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span data-testid={`marketplace-repo-error-title-${repo.id}`}>
+                {loc.title}
+              </span>
+            </div>
+            {loc.hint && (
+              <div
+                data-testid={`marketplace-repo-error-hint-${repo.id}`}
+                style={{
+                  fontSize: 10,
+                  color: 'var(--text-secondary)',
+                  paddingLeft: 15,
+                }}
+              >
+                {loc.hint}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {result && result.installed && (
         <div
           data-testid={`marketplace-repo-success-${repo.id}`}

@@ -422,3 +422,54 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     expect(bars.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 28 BZ-05 — 7-day trend chart regression (M5 #16 already shipped)
+// ---------------------------------------------------------------------------
+
+describe('UsageQueryPage — Phase 28 BZ-05 trend chart regression', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it('usage_query_trend_chart_renders_daily_buckets', async () => {
+    // BZ-05 regression — TrendChart must render one bar per daily stat
+    // row, with stable testids. Use fixed 7 days (not relative to today)
+    // so the test is deterministic.
+    const FIXED_DATES = [
+      '2026-06-21',
+      '2026-06-22',
+      '2026-06-23',
+      '2026-06-24',
+      '2026-06-25',
+      '2026-06-26',
+      '2026-06-27',
+    ];
+    const rows = FIXED_DATES.map((date, i) => ({
+      provider_id: 'p1',
+      stat_date: date,
+      tokens_used: 1000 + i * 100,
+      snapshot_count: 1,
+      last_aggregated_recorded_at: 1_700_000_000,
+    }));
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_current_usage') return sampleSnapshot('5h');
+      if (cmd === 'get_usage_history') return [];
+      if (cmd === 'get_daily_stats_history') return rows;
+      return null;
+    });
+
+    render(<UsageQueryPage />, { wrapper: wrap });
+    // Chart root testid present (one svg, not the empty hint)
+    await waitFor(() => {
+      expect(screen.getByTestId('usage-trend-chart')).toBeInTheDocument();
+    });
+    // 7 bars, one per date
+    for (const date of FIXED_DATES) {
+      expect(
+        screen.getByTestId(`usage-trend-bar-${date}`),
+      ).toBeInTheDocument();
+    }
+    expect(screen.getAllByTestId(/^usage-trend-bar-/).length).toBe(7);
+  });
+});

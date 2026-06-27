@@ -73,6 +73,7 @@ function samplePreview(overrides: Partial<SqlPreview> = {}): SqlPreview {
     total_lines: 4,
     importable: 3,
     skipped: 0,
+    invalid_rows: 0,
     preview_providers: [p('a', 'A'), p('b', 'B'), p('c', 'C')],
     preview_mcp: [],
     skipped_samples: [],
@@ -94,6 +95,7 @@ function sampleImportResult(overrides: Partial<ImportResult> = {}): ImportResult
   return {
     imported: 3,
     skipped: 0,
+    invalid_rows: 0,
     mcp_count: 0,
     errors: [],
     ...overrides,

@@ -584,3 +584,77 @@ describe('JsonEditorPage — M5 bug #9 fullscreen', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 28 — BZ-02 / BZ-03 regression tests for M5 already-shipped fixes
+// (fullscreen toggle + JsonFileTree component rendering)
+// ---------------------------------------------------------------------------
+
+describe('JsonEditorPage — Phase 28 BZ-02 / BZ-03 regression', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it('json_editor_fullscreen_toggle_button_exists_with_aria_pressed', async () => {
+    render(<JsonEditorPage />);
+    const btn = screen.getByTestId('json-editor-fullscreen-toggle');
+    expect(btn).toBeInTheDocument();
+    // Initial state: fullscreen OFF → aria-pressed must be "false"
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+
+    // Click → overlay appears, aria-pressed flips to "true"
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('json-editor-fullscreen-overlay'),
+      ).toBeInTheDocument();
+    });
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('json_editor_filetree_component_is_rendered', async () => {
+    // BZ-03 regression — JsonFileTree must mount and render entries
+    // from BOTH user and project roots (not just one scope).
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_editable_jsons') {
+        return [
+          {
+            path: '/home/u/.claude/settings.json',
+            relative_path: 'settings.json',
+            scope: 'user',
+            scope_label: '用户级',
+            size: 100,
+            last_modified: 1700000000,
+          },
+          {
+            path: '/proj/.claude/agents/coder.json',
+            relative_path: 'agents/coder.json',
+            scope: 'project',
+            scope_label: '项目级',
+            size: 200,
+            last_modified: 1700000300,
+          },
+        ];
+      }
+      if (cmd === 'read_file') return SAMPLE_JSON;
+      if (cmd === 'write_file_atomic') return null;
+      return null;
+    });
+
+    render(<JsonEditorPage />);
+    // JsonFileTree root container present
+    await waitFor(() => {
+      expect(screen.getByTestId('json-file-tree')).toBeInTheDocument();
+    });
+    // Both scopes have their scope-group testid
+    expect(
+      screen.getByTestId('json-file-tree-scope-user'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId('json-file-tree-scope-project'),
+    ).toBeInTheDocument();
+    // 2 file entries (one per scope)
+    const entries = screen.getAllByTestId('json-file-tree-entry');
+    expect(entries.length).toBe(2);
+  });
+});

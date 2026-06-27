@@ -96,6 +96,10 @@ export interface SqlPreview {
   total_lines: number;
   importable: number;
   skipped: number;
+  /** BZ-01: parse-level rejections (bad JSON / invalid id / missing
+   *  field). In the dry-run preview this equals `skipped` because no
+   *  dedup has happened yet — the split matters at import time. */
+  invalid_rows: number;
   preview_providers: Provider[];
   preview_mcp: McpServer[];
   skipped_samples: SkippedLine[];
@@ -129,12 +133,17 @@ export interface DedupOutcome {
  *
  * `imported` is the count of newly-written provider files; `skipped`
  * is the count of provider rows that were skipped because a file with
- * that id already existed (idempotency). `errors` is the union of
- * parse + write failures — surfaced as a details panel in the UI.
+ * that id already existed (idempotency). `invalid_rows` is the count
+ * of parse-level rejections (bad JSON / invalid id / missing field)
+ * — BZ-01 separates these from dedup hits so the UI can warn the
+ * user "your dump has malformed rows" distinctly from "you
+ * re-imported the same dump". `errors` is the union of parse + write
+ * failures — surfaced as a details panel in the UI.
  */
 export interface ImportResult {
   imported: number;
   skipped: number;
+  invalid_rows: number;
   mcp_count: number;
   errors: ImportSkip[];
 }

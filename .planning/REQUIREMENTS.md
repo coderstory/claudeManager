@@ -28,14 +28,16 @@ shipped: pending
 ### 业务 Bug Fix (P1, phase 28)
 
 > 单功能 bug,影响具体功能不阻塞主流程。
+>
+> **Phase 28 status (2026-06-27)**: BUG-BZ-01~07 ✅ shipped; BUG-BZ-08~13 ⏸ deferred to v3.2.1.
 
-- [ ] **BUG-BZ-01**: SQL 导入过滤 — 过滤无效行
-- [ ] **BUG-BZ-02**: JSON 全屏编辑可用
-- [ ] **BUG-BZ-03**: JSON 目录树渲染正常
-- [ ] **BUG-BZ-04**: MCP 文案修正
-- [ ] **BUG-BZ-05**: 用量趋势 7 天显示正确
-- [ ] **BUG-BZ-06**: 资源市场 browse URL 修正
-- [ ] **BUG-BZ-07**: CliNotFound 错误信息本地化
+- [x] **BUG-BZ-01**: SQL 导入过滤 — 过滤无效行 (DTO shipped, UI render deferred to v3.2.1)
+- [x] **BUG-BZ-02**: JSON 全屏编辑可用
+- [x] **BUG-BZ-03**: JSON 目录树渲染正常
+- [x] **BUG-BZ-04**: MCP 文案修正
+- [x] **BUG-BZ-05**: 用量趋势 7 天显示正确
+- [x] **BUG-BZ-06**: 资源市场 browse URL 修正
+- [x] **BUG-BZ-07**: CliNotFound 错误信息本地化
 - [ ] **BUG-BZ-08**: (留空待用户实测补)
 - [ ] **BUG-BZ-09**: (留空待用户实测补)
 - [ ] **BUG-BZ-10**: (留空待用户实测补)
@@ -106,14 +108,14 @@ shipped: pending
 | BUG-CR-03 | Phase 27 | JSON 编辑器 path::field 协议 (D-19~D-21) |
 | BUG-CR-04 | Phase 27 | scope 切换 useScope 强制 remount (D-01~D-05) |
 | BUG-CR-05 | Phase 27 | SQL 导入 1 INSERT = 1 provider + UNIQUE 去重 (D-15~D-18) |
-| BUG-BZ-01 | Phase 28 | SQL 导入过滤无效行 |
-| BUG-BZ-02 | Phase 28 | JSON 全屏编辑 |
-| BUG-BZ-03 | Phase 28 | JSON 目录树渲染 |
-| BUG-BZ-04 | Phase 28 | MCP 文案 |
-| BUG-BZ-05 | Phase 28 | 用量趋势 7 天 |
-| BUG-BZ-06 | Phase 28 | 资源市场 browse URL |
-| BUG-BZ-07 | Phase 28 | CliNotFound 本地化 |
-| BUG-BZ-08 ~ 13 | Phase 28 | 留空待用户实测补 (v3.2.1 follow-up) |
+| BUG-BZ-01 | Phase 28 | SQL 导入过滤无效行 (DTO shipped; UI render deferred to v3.2.1) |
+| BUG-BZ-02 | Phase 28 | JSON 全屏编辑 (verified via 28-02-verify regression) |
+| BUG-BZ-03 | Phase 28 | JSON 目录树渲染 (verified via 28-02-verify regression) |
+| BUG-BZ-04 | Phase 28 | MCP 文案 (commit 99f5687 恢复 ccswitch:// hint) |
+| BUG-BZ-05 | Phase 28 | 用量趋势 7 天 (verified via 28-02-verify regression) |
+| BUG-BZ-06 | Phase 28 | 资源市场 browse URL (commit d98dc6d lock test) |
+| BUG-BZ-07 | Phase 28 | CliNotFound 本地化 (commit 32b3b03 新建 lib/errors.ts) |
+| BUG-BZ-08 ~ 13 | Phase 28 (28-02 stub) | 留空待用户实测补 (v3.2.1 follow-up) |
 | BUG-RF-01 | Phase 29 | 欢迎页弹窗逻辑 |
 | BUG-RF-02 | Phase 29 | 单文件部署删除保持 (M5 #18 regression) |
 | BUG-RF-03 | Phase 29 | 第三方仓库文案 |
@@ -139,4 +141,18 @@ shipped: pending
 
 ---
 
-*Last updated: 2026-06-26 (v3.2 M6 roadmap filled traceability + Phase 27-31 mapped)*
+## v3.2.1 Backlog (post-v3.2 follow-up)
+
+Per D17 + D18: 6 留空 slot (BUG-BZ-08~13) 在 v3.2 ship 时保持 [ ],等 v3.2 用户实测 ClaudeManager.app 后补具体描述。v3.2.1 milestone 启动时按用户反馈顺序填充:
+
+- [ ] **BUG-BZ-08**: (留空待用户实测补)
+- [ ] **BUG-BZ-09**: (留空待用户实测补)
+- [ ] **BUG-BZ-10**: (留空待用户实测补)
+- [ ] **BUG-BZ-11**: (留空待用户实测补)
+- [ ] **BUG-BZ-12**: (留空待用户实测补)
+- [ ] **BUG-BZ-13**: (留空待用户实测补)
+- [ ] **BZ-01-UI-render**: import-sql Done view 显示 invalid_rows 区别于 skipped count (deferred from v3.2 phase 28,verifies against DTO 准备好的状态)
+
+---
+
+*Last updated: 2026-06-27 (Phase 28 ship: 7 fixes + 4 regression + 1 stub; v3.2.1 backlog section created)*

@@ -210,10 +210,13 @@ describe('MarketplacePage — F17 (M2.16)', () => {
   });
 
   it('clone failure surfaces a red error banner', async () => {
+    // BZ-07 — 错误经 localizeMarketplaceError 翻译;使用 Rust
+    // Git variant 的 Display 模板前缀 'git error:' 让本地化函数
+    // 命中 Git 分支 (返回中文 'Git 操作失败')。
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === 'list_marketplace_repos') return Promise.resolve([]);
       if (cmd === 'clone_and_scan') {
-        return Promise.reject(new Error('git clone failed: network unreachable'));
+        return Promise.reject(new Error('git error: network unreachable'));
       }
       return Promise.resolve(null);
     });
@@ -234,8 +237,9 @@ describe('MarketplacePage — F17 (M2.16)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('marketplace-clone-error')).toBeInTheDocument();
     });
+    // BZ-07 — 文案已翻译为中文
     expect(
-      screen.getByText(/git clone failed/),
+      screen.getByText(/Git 操作失败/),
     ).toBeInTheDocument();
   });
 
@@ -659,13 +663,15 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     });
   });
 
-  it('install_builtin_plugin failure shows red error banner on card', async () => {
+  it('install_builtin_plugin failure shows red error banner on card (with BZ-07 localized title)', async () => {
+    // BZ-07 — Rust 端返回 CliNotFound 字符串,前端走 localizeMarketplaceError
+    // 翻成中文 title。原来的 raw error text 已被替换 (M6 用户实测需求)。
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_marketplace_repos') {
         return [builtinRepo('superpowers', 'builtin', 'superpowers@x')];
       }
       if (cmd === 'install_builtin_plugin') {
-        throw new Error('claude plugin install 失败: command not found');
+        throw new Error("无法启动 'claude' CLI (请确认已安装)");
       }
       return null;
     });
@@ -683,6 +689,17 @@ describe('MarketplacePage — M3.4 三类 install', () => {
         screen.getByTestId('marketplace-repo-error-superpowers'),
       ).toBeInTheDocument();
     });
+    // BZ-07 — 错误条显示本地化中文 title "无法启动 claude 命令行工具"
+    expect(
+      screen.getByTestId('marketplace-repo-error-title-superpowers'),
+    ).toHaveTextContent('无法启动 claude 命令行工具');
+    // BZ-07 — hint 给出 brew / Windows 安装指引
+    expect(
+      screen.getByTestId('marketplace-repo-error-hint-superpowers'),
+    ).toHaveTextContent('brew install claude-code');
+    expect(
+      screen.getByTestId('marketplace-repo-error-hint-superpowers'),
+    ).toHaveTextContent('Windows');
   });
 
   it('GSD-* resources get the "Get Shit Done" category badge (清单 16)', async () => {
@@ -853,5 +870,80 @@ describe('MarketplacePage — M3.4 三类 install', () => {
     // 未勾选任何资源 → 按钮 disabled
     const btn = screen.getByTestId('marketplace-batch-install-btn');
     expect(btn).toBeDisabled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 28 BZ-06 — marketplace browse button regression (M5 #22 already shipped)
+// ---------------------------------------------------------------------------
+
+describe('MarketplacePage — Phase 28 BZ-06 browse-button regression', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockOpenUrl.mockReset();
+    mockOpenUrl.mockResolvedValue(undefined);
+  });
+
+  it('marketplace_browse_button_calls_openUrl_with_repo_url', async () => {
+    // BZ-06 regression — clicking the Git-mode repo card's clone/browse
+    // button must call openUrl(repo.url) (NOT clone_and_scan), so the
+    // user gets the GitHub page in their default browser.
+    const repoUrl = 'https://github.com/anthropics/claude-cookbooks.git';
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [
+          builtinRepo('claude-cookbooks', 'git', '', { url: repoUrl }),
+        ];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('marketplace-repo-card-claude-cookbooks'),
+      ).toBeInTheDocument();
+    });
+    // Click the repo's action button (Git mode → "浏览")
+    fireEvent.click(
+      screen.getByTestId('marketplace-repo-clone-claude-cookbooks'),
+    );
+    await waitFor(() => {
+      expect(mockOpenUrl).toHaveBeenCalledWith(repoUrl);
+    });
+    // Should NOT have called clone_and_scan (that path moved to
+    // the custom-URL input section)
+    const cloneCalls = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'clone_and_scan',
+    );
+    expect(cloneCalls.length).toBe(0);
+  });
+
+  it('rendered_repo_url_does_not_contain_cc_switch_main_path', async () => {
+    // BZ-06 — RepoCard 底部显示 repo.url (行 868);这条字串
+    // 不能含 'cc-switch-main' 旧路径占位 (M6 用户实测反馈:
+    // 看到 URL 后误以为是私仓库/失效 → 不敢点「浏览」)。
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [
+          builtinRepo('superpowers', 'builtin', 'superpowers@claude-plugins-official'),
+          builtinRepo('gsd-core', 'npx', '@opengsd/gsd-core@latest'),
+          builtinRepo('claude-cookbooks', 'git', ''),
+        ];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-superpowers')).toBeInTheDocument();
+    });
+    // 三张卡片全文都不能出现 'cc-switch-main'
+    const cardSuperpowers = screen.getByTestId('marketplace-repo-card-superpowers');
+    const cardGsd = screen.getByTestId('marketplace-repo-card-gsd-core');
+    const cardCookbooks = screen.getByTestId('marketplace-repo-card-claude-cookbooks');
+    for (const card of [cardSuperpowers, cardGsd, cardCookbooks]) {
+      expect(card.textContent).not.toContain('cc-switch-main');
+      // 必须是 github.com 链接
+      expect(card.textContent).toContain('github.com');
+    }
   });
 });
