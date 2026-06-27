@@ -19,11 +19,11 @@
 - **Success metric**: 桌面 ship 的 Claude Config Manager 安装包能稳定切换 ≥3 个 provider 不出错
 - **Strategy notes**: 无（项目方向由 STATE.md 决策日志 + 用户反馈清单驱动）
 
-## Current State (v3.2 planning)
+## Current State (v3.2 shipped)
 
-**Latest shipped milestone:** v3.0.1 — M5 用户 bug 修复 (33 bug, shipped 2026-06-26, tag v3.0.1)
-**Active milestone:** v3.2 — M6 用户实测反馈修复 (planning 2026-06-26)
-**Goal:** v3.0.1 M5 修了 33 bug 后用户重新实测 ClaudeManager.app,根据新发现 bug 清单按 critical 优先原则 4 阶段修。
+**Latest shipped milestone:** v3.2 — M6 用户实测反馈修复 (5 phases, shipped 2026-06-27, tag v3.2)
+**Active milestone:** none (v3.2 just shipped; next milestone TBD via /gsd-new-milestone)
+**v3.2 delivered:** 5 critical + 7 business (6 deferred to v3.2.1) + 9 refactor + 5 UI-A + 6 integration bug fixes; 33/33 requirements satisfied; 11/11 cross-phase integration wired; 9/9 E2E flows; test-all 6 stages PASS; M4 e2e 15/15; ClaudeManager.app 14M rebuild + 1 window OK.
 
 ## Current Milestone
 
@@ -32,7 +32,7 @@
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 shipped 2026-06-26 (tag v3.0-M4); 14/14 scenarios PASS, test-all stage 6 hard-fail wired
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 shipped 2026-06-26 (tag v3.0.1); 33/33 bug 修完; ClaudeManager.app 14M rebuild OK + 1 窗口 OK; test-all 6 阶段 PASS
 - ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;见 Out of Scope
-- 🚧 **v3.2 M6 用户实测反馈修复** — planning (2026-06-26);4 阶段 critical → 业务 → 重构 → A 类+整合;tag v3.2
+- 🚧 ~~**v3.2 M6 用户实测反馈修复**~~ → ✅ **shipped 2026-06-27 (tag v3.2)** — 5 phases (27-31); critical 5 + 业务 7 真修/6 留空 + 重构 9 + A 类 5 + 整合 INT-01~06; 33/33 requirements satisfied; test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app rebuild 14M
 
 ## Current Milestone
 
@@ -157,6 +157,6 @@
 
 ---
 
-*Last updated: 2026-06-26 — v3.2 (M6 用户实测反馈修复) started, REQUIREMENTS.md + STATE.md reset for new milestone*
+*Last updated: 2026-06-27 — v3.2 (M6 用户实测反馈修复) shipped, 5 phases 33/33 requirements satisfied, tag v3.2*
 </content>
 </invoke>
