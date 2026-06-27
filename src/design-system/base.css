@@ -465,7 +465,10 @@ table.dense tr.active td { background: var(--accent-soft); }
   align-items: center;
   flex-shrink: 0;
 }
-.wc-btn {
+/* 提高 specificity: .wc-btn 必须覆盖 .titlebar button (0,1,1)
+   否则 .titlebar button 的 width:32px; height:32px; border-radius:6px
+   会 win over .wc-btn 的 12px 圆点 (Task 8 设计意图是 macOS 12px 圆点). */
+.window-controls .wc-btn {
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -476,6 +479,7 @@ table.dense tr.active td { background: var(--accent-soft); }
   line-height: 0;
   position: relative;
   transition: filter 150ms ease;
+  background: transparent;
 }
 .wc-btn.close { background: #FF5F57; border: 1px solid #E0443E; }
 .wc-btn.min   { background: #FEBC2E; border: 1px solid #DEA123; }
