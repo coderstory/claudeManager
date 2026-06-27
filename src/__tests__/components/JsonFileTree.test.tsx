@@ -315,4 +315,118 @@ describe('JsonFileTree — M5 bug #10 folder headers', () => {
     render(<JsonFileTree entries={rootOnly} selectedPath={null} onSelect={() => {}} />);
     expect(screen.queryAllByTestId('json-file-tree-folder').length).toBe(0);
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-09 — search "settings" prioritizes basename matches.
+  //
+  // When the user types "settings" in the search box, the FIRST entry
+  // rendered must be the `settings.json` file (basename match),
+  // not the `~/.claude/` directory (substring match on absolute path).
+  // The scoring in JsonFileTree's filteredEntries useMemo guarantees:
+  //   score 0 = basename exact match
+  //   score 1 = basename substring match
+  //   score 2 = relative path substring match
+  //   score 3 = absolute path substring match only
+  // -------------------------------------------------------------------------
+  it('BUG-RF-09: 搜 "settings" → settings.json 排在 ~/.claude/ 之前', () => {
+    const entries: JsonFileEntry[] = [
+      {
+        path: '/home/user/.claude/',
+        relative_path: 'claude',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 0,
+        last_modified: 1,
+      },
+      {
+        path: '/home/user/.claude/settings.json',
+        relative_path: 'settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 100,
+        last_modified: 1,
+      },
+      {
+        path: '/home/user/.claude/agents/foo.settings.json',
+        relative_path: 'agents/foo.settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 50,
+        last_modified: 1,
+      },
+    ];
+    render(
+      <JsonFileTree entries={entries} selectedPath={null} onSelect={() => {}} />,
+    );
+    const search = screen.getByTestId('json-file-tree-search');
+    fireEvent.change(search, { target: { value: 'settings' } });
+    // 找到所有 file 节点 (data-testid="json-file-tree-entry")
+    const fileNodes = screen.getAllByTestId('json-file-tree-entry');
+    // 至少 2 个 file 节点命中 (settings.json + foo.settings.json)
+    expect(fileNodes.length).toBeGreaterThanOrEqual(2);
+    // 第一个 file 节点的 data-path 必须是 settings.json
+    expect(fileNodes[0].getAttribute('data-path')).toBe(
+      '/home/user/.claude/settings.json',
+    );
+  });
+
+  it('BUG-RF-09: 搜 "settings.json" → 精确 basename 匹配排第一', () => {
+    const entries: JsonFileEntry[] = [
+      {
+        path: '/home/user/.claude/agents/foo.settings.json',
+        relative_path: 'agents/foo.settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 50,
+        last_modified: 1,
+      },
+      {
+        path: '/home/user/.claude/settings.json',
+        relative_path: 'settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 100,
+        last_modified: 1,
+      },
+    ];
+    render(
+      <JsonFileTree entries={entries} selectedPath={null} onSelect={() => {}} />,
+    );
+    const search = screen.getByTestId('json-file-tree-search');
+    fireEvent.change(search, { target: { value: 'settings.json' } });
+    const fileNodes = screen.getAllByTestId('json-file-tree-entry');
+    // 第一名必须是精确 basename 匹配
+    expect(fileNodes[0].getAttribute('data-path')).toBe(
+      '/home/user/.claude/settings.json',
+    );
+  });
+
+  it('BUG-RF-09: 中文文件名 substring 匹配也命中', () => {
+    const entries: JsonFileEntry[] = [
+      {
+        path: '/home/user/.claude/配置.json',
+        relative_path: '配置.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 100,
+        last_modified: 1,
+      },
+      {
+        path: '/home/user/.claude/settings.json',
+        relative_path: 'settings.json',
+        scope: 'user',
+        scope_label: '用户级',
+        size: 100,
+        last_modified: 1,
+      },
+    ];
+    render(
+      <JsonFileTree entries={entries} selectedPath={null} onSelect={() => {}} />,
+    );
+    const search = screen.getByTestId('json-file-tree-search');
+    fireEvent.change(search, { target: { value: '配置' } });
+    const fileNodes = screen.getAllByTestId('json-file-tree-entry');
+    expect(fileNodes.length).toBe(1);
+    expect(fileNodes[0].getAttribute('data-path')).toBe('/home/user/.claude/配置.json');
+  });
 });
