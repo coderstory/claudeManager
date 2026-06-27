@@ -111,6 +111,7 @@ fn marketplace_repo_round_trips_with_install_fields() {
         description: "test".into(),
         install_mode: InstallMode::Builtin,
         install_target: "superpowers@claude-plugins-official".into(),
+        source: Default::default(),
     };
     let json = serde_json::to_string(&repo).expect("serialize");
     let parsed: MarketplaceRepo = serde_json::from_str(&json).expect("deserialize");

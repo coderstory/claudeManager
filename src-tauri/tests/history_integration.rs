@@ -188,6 +188,7 @@ fn cross_project_filter_returns_only_matching_root() {
         timestamp: 1,
         breakdown: Vec::new(),
         model_count: 0,
+        inserted_rows: 0,
     };
     let snap_b = UsageSnapshot {
         provider_id: "p2".into(),
@@ -196,6 +197,7 @@ fn cross_project_filter_returns_only_matching_root() {
         timestamp: 2,
         breakdown: Vec::new(),
         model_count: 0,
+        inserted_rows: 0,
     };
     history.record_usage(&snap_a, Some("/proj-a")).unwrap();
     history.record_usage(&snap_b, Some("/proj-b")).unwrap();

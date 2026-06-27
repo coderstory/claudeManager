@@ -7,7 +7,7 @@
 | **v2.0** | **用户反馈修复 + 双模式 (M2.17 + M3.1~M3.10)** | **2026-06-22** | **11** | **v2.0** | **27 条清单全修复 + M3.10 双模式架构 + D14 cc-switch JSONL** |
 | **v3.0-M4** | **e2e 框架 (14 端到端场景 ship gate)** | **2026-06-26** | **4** | **v3.0-M4** | **黑盒端到端测试 (真 .app + 真 FS) + test-all.sh stage 6 硬关卡** |
 | **v3.0.1** | **M5 用户 bug 修复 (33 bug)** | **2026-06-26** | **4** | **v3.0.1** | **33/33 bug 修完 (4 critical 5 / 业务 13 / 重构 9 / A 类 5+整合) + ClaudeManager.app 14M rebuild + tag v3.0.1** |
-| ❌ | ~~v3.0 round 3 (云备份 + updater UI + M4.6)~~ | **2026-06-26 废弃** | ~~3~~ | — | ~~v3.0 round 3 backlog (Phase 19/20/21) 用户拍板不做;project 停在 v3.0.1~~ |
+| **v3.2** | **M6 用户实测反馈修复 (critical 5 + 业务 7 + 重构 9 + A 类 5 + 整合)** | **2026-06-27** | **5** | **v3.2** | **Phases 27-31: BUG-CR-01~05 critical 5 / BUG-BZ-01~07 真修+08~13 留空 / BUG-RF-01~09 重构 9 / UI-A-01~05 A 类 5 / INT-01~06 整合验证 (test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app 14M rebuild + smoke 10/10 macOS)** |
 
 ## v2.0 关键产物
 - 12 个 ship exe (~30 MB each) 在 `~/Desktop/ClaudeConfigManager-M3/`

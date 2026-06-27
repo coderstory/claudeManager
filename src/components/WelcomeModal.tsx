@@ -47,7 +47,7 @@ export function WelcomeModal({
   return (
     <ConfirmDialog
       open={open}
-      title={
+      title={(
         <span
           data-testid="welcome-modal-title"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -55,7 +55,7 @@ export function WelcomeModal({
           <Sparkles size={16} aria-hidden="true" />
           欢迎使用 Claude 配置管理器
         </span>
-      }
+      ) as unknown as string}
       message={
         <div data-testid="welcome-modal-body">
           <p style={{ margin: '0 0 8px 0' }}>

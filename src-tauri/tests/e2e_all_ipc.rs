@@ -315,7 +315,7 @@ async fn e2e_fs_read_missing() {
     use claude_config_manager_lib::commands::fs;
     let state = test_state();
     let s_ = s(&state);
-    let res = fs::read_file(s_, "/nonexistent/path/to/file.json".to_string()).await;
+    let res = fs::read_file(s_, "/nonexistent/path/to/file.json".to_string(), None).await;
     assert!(res.is_err());
 }
 

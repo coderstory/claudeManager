@@ -4,17 +4,17 @@ milestone: v3.2
 milestone_name: M6 用户实测反馈修复
 current_phase: 31
 current_phase_name: INT-01~06
-status: verifying
-stopped_at: Phase 27 UI-SPEC approved
-last_updated: "2026-06-27T01:50:10.064Z"
+status: complete
+stopped_at: "v3.2 M6 shipped — tag v3.2 created + pushed"
+last_updated: "2026-06-27T10:20:00Z"
 last_activity: 2026-06-27
-last_activity_desc: Phase 30 complete, transitioned to Phase 31
+last_activity_desc: Phase 31 complete — v3.2 M6 shipped, tag v3.2
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 5
   total_plans: 7
-  completed_plans: 6
-  percent: 60
+  completed_plans: 7
+  percent: 100
 ---
 
 <!--
@@ -71,17 +71,18 @@ progress:
 ## Current Position
 
 Phase: 31 — v3.2 M6 整合验证 (INT-01~06) + tag v3.2
-Plan: Not started
-Status: Phase 28 verified, queued for master merge
-Last activity: 2026-06-27 — Phase 30 complete, transitioned to Phase 31
+Plan: Complete
+Status: v3.2 M6 shipped — tag v3.2 created + pushed
+Last activity: 2026-06-27 — Phase 31 complete, v3.2 milestone closed
 
-**v3.2 plan summary** (ROADMAP.md Phase 27-31):
+**v3.2 M6 ship summary (2026-06-27)**:
 
-- Phase 27: critical 5 bug 修复 (BUG-CR-01~05)
-- Phase 28: 业务 13 bug 修复 (BUG-BZ-01~07 真修 + BUG-BZ-08~13 留空待 v3.2.1)
-- Phase 29: 重构 9 bug 修复 (BUG-RF-01~09)
-- Phase 30: A 类 5 bug 修复 (UI-A-01~05)
-- Phase 31: 整合验证 (INT-01~06) + tag v3.2 (test-all 6 + M4 e2e 15/15 + ClaudeManager.app rebuild)
+- Phase 27: critical 5 (#2 #4 #6 #19 #27) — 5 fix commits 验证 + test-all PASS
+- Phase 28: 业务 13 (BZ-01/04/06/07 真修 + BZ-02/03/05/06 M5 回归 + BZ-08~13 留空 v3.2.1)
+- Phase 29: 重构 9 (RF-01~09 全修)
+- Phase 30: A 类 5 (UI-A-01~05 全修)
+- Phase 31: 整合验证 (INT-01~06) — test-all ui-check PASS + rust PASS + smoke 10/10 macOS + M4 e2e 15/15 + vitest 633/642 + ClaudeManager.app 14M rebuild + tag v3.2
+- tag v3.2 created + pushed to origin
 
 ## Recent Work
 

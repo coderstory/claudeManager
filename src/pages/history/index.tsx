@@ -243,7 +243,7 @@ export default function HistoryPage(): ReactElement {
         const rows = await getDailyStatsHistory({
           ...(filter as Parameters<typeof getDailyStatsHistory>[0]),
           limit: pageSize,
-          from_ts: dailyCursor,
+          from_date: new Date(dailyCursor).toISOString().slice(0, 10),
         });
         setDailyRows((prev) => [...prev, ...rows]);
         setDailyCursor(

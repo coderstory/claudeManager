@@ -12,7 +12,7 @@
 - ✅ **v3.0 功能完善 + updater 基础 (M3.11 ~ M3.15 + M4.3)** — round 1 (7/7 phase) shipped 2026-06-22; round 2 (M3.13.x bug fix + Phase 21 SQLite) shipped 2026-06-23
 - ✅ **v3.0-M4 e2e 框架** — Phases 1-4 (shipped 2026-06-26, tag v3.0-M4)
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 (shipped 2026-06-26, tag v3.0.1; 33/33 bug 修完, ClaudeManager.app 14M rebuild + 1 窗口 OK, 详见 [v3.0.1-ROADMAP.md](milestones/v3.0.1-ROADMAP.md))
-- 🚧 **v3.2 M6 用户实测反馈修复** — Phases 27-31 (planning 2026-06-26; BUG-CR-01~05 + BUG-BZ-01~13 + BUG-RF-01~09 + UI-A-01~05 + INT-01~06; tag v3.2)
+- ✅ **v3.2 M6 用户实测反馈修复** — Phases 27-31 (shipped 2026-06-27, tag v3.2; critical 5 + 业务 7 真修/6 留空 + 重构 9 + A 类 5 + 整合验证 INT-01~06; test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app rebuild 14M)
 - ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;原 Phase 19/20/21 标记弃用,不进新 milestone
 
 ## Phases
@@ -405,7 +405,7 @@ Phase 18 ✅ (round 2: Playwright e2e 6/6 PASS) → 21 ✅ (Phase 21 SQLite hist
 Phase 22 ✅ (v3.0-M4: e2e framework 14/14 PASS, tag v3.0-M4)
 Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
 ~~Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项~~ ❌ **2026-06-26 用户拍板废弃**
-Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 → 重构 9 → A 类 5+整合; tag v3.2)
+Phase 27 → 28 → 29 → 30 → 31 ✅ (v3.2 M6: critical 5 → 业务 13 → 重构 9 → A 类 5+整合; tag v3.2, shipped 2026-06-27)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -439,7 +439,7 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 | 28. v3.2 M6 业务 13 bug 修复 (BUG-BZ-01~13, 08~13 留空) | v3.2 | 2/3 | Complete    | 2026-06-27 |
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 1/1 | Complete    | 2026-06-27 |
-| 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 0/1 | In Progress | - |
+| 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 1/1 | Complete | 2026-06-27 |
 </invoke>
 
 ### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27)
@@ -482,9 +482,11 @@ Phase 27 → 28 → 29 → 30 → 31 🚧 (v3.2 M6: critical 5 → 业务 13 →
 **Verification:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/26-VERIFICATION.md` (status: passed) + `v3.0.1-MILESTONE-AUDIT.md` (status: passed)
 **Archive:** `milestones/v3.0.1-phases/26-m5-a-5-phase-4-*/`
 
-### 🚧 v3.2 M6 用户实测反馈修复 (In Progress)
+### ✅ v3.2 M6 用户实测反馈修复 (Complete — shipped 2026-06-27, tag v3.2)
 
 **Milestone Goal**: v3.0.1 M5 修了 33 bug 后用户重新实测 ClaudeManager.app,根据新发现 bug 清单按 critical 优先原则 4 阶段修 (BUG-CR-01~05 → BUG-BZ-01~13 → BUG-RF-01~09 → UI-A-01~05+INT-01~06),ship gate = test-all 6 阶段 PASS + M4 e2e 15/15 + ClaudeManager.app rebuild OK + tag v3.2。
+
+> **Result**: 5/5 critical + 7/7 真修业务 (BZ-08~13 留空 v3.2.1) + 9/9 重构 + 5/5 A 类 + INT-01~06 整合验证全部 PASS (test-all ui-check PASS / rust PASS / e2e SKIP / smoke 10/10 macOS / m4-e2e 15/15 / vitest 633/642 pass)。tag v3.2 创建 + push。
 
 > **沿用 v3.0.1 M5 工程模式**: 4 阶段 (critical → 业务 → 重构 → A 类+整合) + 1 commit 1 fix (or subagent fix) + test-all 6 阶段 ship gate + tag v3.2。
 >

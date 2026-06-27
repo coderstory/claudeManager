@@ -47,6 +47,7 @@ fn make_snap(provider: &str, ts: i64, tokens: u64) -> claude_config_manager_lib:
         timestamp: ts,
         breakdown: Vec::new(),
         model_count: 0,
+        inserted_rows: 0,
     }
 }
 
