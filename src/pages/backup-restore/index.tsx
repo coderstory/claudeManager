@@ -360,6 +360,58 @@ export default function BackupRestorePage(): ReactElement {
     pageStart + PAGE_SIZE,
   );
 
+  // BUG-RF-04 — tri-state select-all for the visible page items.
+  // The page-scoped select-all checkbox has 3 states:
+  //   - none:    0 of page items selected → unchecked
+  //   - partial: some (but not all) of page items selected → indeterminate (—)
+  //   - all:     all page items selected → checked
+  //
+  // The indeterminate state is set via the `indeterminate` DOM property
+  // (NOT the `checked` property — React only supports `checked` as a
+  // controlled prop). We use a ref callback to flip the DOM property
+  // directly.
+  const pageSelectedCount = useMemo<number>(() => {
+    const pagePaths = new Set(pageEntries.map((e) => e.path));
+    return state.selected.filter((p) => pagePaths.has(p)).length;
+  }, [state.selected, pageEntries]);
+
+  const pageSelectAllState: 'none' | 'partial' | 'all' = useMemo(() => {
+    if (pageEntries.length === 0) return 'none';
+    if (pageSelectedCount === 0) return 'none';
+    if (pageSelectedCount === pageEntries.length) return 'all';
+    return 'partial';
+  }, [pageSelectedCount, pageEntries.length]);
+
+  const toggleSelectAllPage = useCallback((): void => {
+    setState((prev) => {
+      const pagePaths = pageEntries.map((e) => e.path);
+      const pageSet = new Set(pagePaths);
+      // 当前页选中的 path 集合
+      const currentlySelectedOnPage = prev.selected.filter((p) =>
+        pageSet.has(p),
+      );
+      let nextSelected: string[];
+      if (
+        currentlySelectedOnPage.length === pageEntries.length &&
+        pageEntries.length > 0
+      ) {
+        // all → none: 取消当前页所有选择
+        nextSelected = prev.selected.filter((p) => !pageSet.has(p));
+      } else {
+        // none / partial → all: 合并当前页 paths
+        const merged = new Set(prev.selected);
+        for (const p of pagePaths) merged.add(p);
+        nextSelected = Array.from(merged);
+      }
+      return {
+        ...prev,
+        selected: nextSelected,
+        // diff 只在恰好 2 个时有效;切换全选会破坏这个条件
+        diff: prev.selected.length === 2 ? null : prev.diff,
+      };
+    });
+  }, [pageEntries]);
+
   // ---- render ----
 
   const isEmpty = !state.loading && dedupedEntries.length === 0;
@@ -596,7 +648,45 @@ export default function BackupRestorePage(): ReactElement {
               </div>
             </div>
           ) : (
-            pageEntries.map((e) => {
+            <>
+              {/* BUG-RF-04 — tri-state select-all header.
+                3 states: none / partial / all.
+                - `checked` reflects the boolean part (all → true, else false).
+                - `indeterminate` is the DOM-only property set via ref callback
+                  (React 19 doesn't expose it as a controlled prop). */}
+              <div
+                data-testid="backup-select-all-header"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 14px',
+                  borderBottom: '1px solid var(--border)',
+                  background: 'rgba(0, 0, 0, 0.02)',
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  data-testid="backup-select-all-page"
+                  data-select-state={pageSelectAllState}
+                  aria-label={`全选当前页 ${pageEntries.length} 个备份(已选 ${pageSelectedCount})`}
+                  checked={pageSelectAllState === 'all'}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = pageSelectAllState === 'partial';
+                    }
+                  }}
+                  onChange={() => {
+                    toggleSelectAllPage();
+                  }}
+                />
+                <span>
+                  全选当前页 ({pageSelectedCount} / {pageEntries.length})
+                </span>
+              </div>
+              {pageEntries.map((e) => {
               // M4.6.13 — `dedupedEntries` is a useMemo that
               // collapses `state.entries` by `path` (defense in
               // depth on top of the backend's canonical-path
@@ -708,7 +798,8 @@ export default function BackupRestorePage(): ReactElement {
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
           {/* M5 #29 — pagination control for the timeline. */}
           <Pagination

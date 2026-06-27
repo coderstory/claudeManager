@@ -580,4 +580,119 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(screen.getByTestId('backup-fullscreen-overlay')).toBeInTheDocument();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-04 — backup tri-state checkbox (none / partial / all).
+  //
+  // The select-all checkbox in the timeline header has 3 states:
+  //  - none:    0 of page items selected  → checked=false, indeterminate=false
+  //  - partial: some but not all selected  → checked=false, indeterminate=true
+  //  - all:     all page items selected    → checked=true,  indeterminate=false
+  //
+  // We expose the state via data-select-state attribute (string) AND
+  // set the DOM `indeterminate` property via ref callback (verified by
+  // reading it back from the rendered element).
+  // -------------------------------------------------------------------------
+  it('BUG-RF-04: select-all checkbox starts in "none" state', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+    expect(selectAll.dataset.selectState).toBe('none');
+    expect(selectAll.checked).toBe(false);
+    expect(selectAll.indeterminate).toBe(false);
+  });
+
+  it('BUG-RF-04: select-all is "partial" when some (but not all) page items are selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    // Select just one item.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    await waitFor(() => {
+      const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(selectAll.dataset.selectState).toBe('partial');
+      expect(selectAll.checked).toBe(false);
+      expect(selectAll.indeterminate).toBe(true);
+    });
+  });
+
+  it('BUG-RF-04: select-all is "all" when all page items are selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    // Select all rows.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[1]);
+    await waitFor(() => {
+      const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(selectAll.dataset.selectState).toBe('all');
+      expect(selectAll.checked).toBe(true);
+      expect(selectAll.indeterminate).toBe(false);
+    });
+  });
+
+  it('BUG-RF-04: clicking select-all in "partial" state selects all page items', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    // Pre-select 1 of 3 → partial.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // Click select-all → should select remaining 2 (merge), state → all.
+    const selectAll = screen.getByTestId('backup-select-all-page');
+    fireEvent.click(selectAll);
+    await waitFor(() => {
+      const sa = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(sa.dataset.selectState).toBe('all');
+      expect(sa.checked).toBe(true);
+    });
+  });
+
+  it('BUG-RF-04: clicking select-all in "all" state deselects all page items', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[1]);
+    // Now click select-all again → deselect all.
+    const selectAll = screen.getByTestId('backup-select-all-page');
+    fireEvent.click(selectAll);
+    await waitFor(() => {
+      const sa = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(sa.dataset.selectState).toBe('none');
+      expect(sa.checked).toBe(false);
+    });
+  });
 });
