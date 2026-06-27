@@ -13,6 +13,13 @@ import type { ResourceItem } from '../../types/resource';
 /** M3.4 — Install 模式 (镜像 Rust `InstallMode`)。 */
 export type InstallMode = 'builtin' | 'git' | 'npx';
 
+/** BUG-RF-03 — catalog 来源 (镜像 Rust `CatalogSource`)。
+ *  - `builtin` = 项目维护的内置推荐源(用户无需特别警惕)
+ *  - `third_party` = 第三方仓库,前端在对应 tab 顶部显示警告条
+ *    "第三方仓库未经 Claude 官方审核, 请自行甄别"。
+ *  锁定字符串值与 Rust serde 保持一致。 */
+export type CatalogSource = 'builtin' | 'third_party';
+
 /** 内置推荐仓库条目(后端 `MarketplaceRepo` 镜像,M3.4 扩展)。 */
 export interface MarketplaceRepo {
   id: string;
@@ -23,6 +30,10 @@ export interface MarketplaceRepo {
   install_mode?: InstallMode;
   /** M3.4 — install 命令 / 包名 (按 install_mode 解释) */
   install_target?: string;
+  /** BUG-RF-03 — catalog 来源 (Builtin / ThirdParty)。后端 serde
+   *  default = "builtin",所以老调用方 / 老 fixture 不带这个字段也 OK。
+   *  前端按这个字段分 tab + 渲染警告。 */
+  source?: CatalogSource;
 }
 
 /** clone + 扫描结果(后端 `ScanResult` 镜像)。`repo_path` 原样回传给
