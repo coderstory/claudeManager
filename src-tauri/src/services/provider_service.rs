@@ -246,12 +246,26 @@ impl ProviderService {
 
         // Update provider library: stamp last_used_at + is_active (M2.3+
         // will own this fully — for M2.1 we just write the file back).
+        //
+        // P1-04b (v3.3 M7 phase 32-03) — rollback on step-5 failure.
+        // Step 4 above just advanced settings.json to the new provider's
+        // env. If the provider library write below fails (disk full /
+        // permission / path invalid), settings.json is left pointing at
+        // a provider whose library metadata (last_used_at / is_active)
+        // never updated — an inconsistent state. Roll settings.json
+        // back to its pre-switch snapshot via the .bak.<ts> file that
+        // write_with_backup just created (CLAUDE.md §7: any state
+        // change must be rollable). The restore is best-effort: if it
+        // also fails we surface the original step-5 error (the user
+        // needs to act on the write failure; the .bak is still on disk
+        // for manual recovery).
         let mut updated = provider.clone();
         updated.last_used_at = Some(now_unix_secs());
         updated.is_active = true;
-        updated
-            .to_json_file(&provider_path)
-            .map_err(|e| ProviderError::Io(std::io::Error::other(format!("{e}"))))?;
+        if let Err(e) = updated.to_json_file(&provider_path) {
+            let _ = fs_atomic::restore_from_backup(&self.paths.settings_json);
+            return Err(ProviderError::Io(std::io::Error::other(format!("{e}"))));
+        }
 
         Ok(updated)
     }
@@ -310,12 +324,22 @@ impl ProviderService {
         fs_atomic::write_with_backup(&settings_path, &json)
             .map_err(map_fs_atomic_to_provider)?;
 
+        // P1-04c (v3.3 M7 phase 32-03) — same rollback pattern as
+        // `switch_provider` (P1-04b). The audit missed this M3.10
+        // active_root variant: it has the identical "step 4 advanced
+        // settings.json → step 5 (provider library write) fails →
+        // settings.json left inconsistent" hazard. Roll back via the
+        // .bak.<ts> file write_with_backup just created in the
+        // `<active_root>/.claude/` dir (or user-level dir when
+        // active_root is None). Best-effort; surface the original
+        // step-5 error if restore also fails.
         let mut updated = provider.clone();
         updated.last_used_at = Some(now_unix_secs());
         updated.is_active = true;
-        updated
-            .to_json_file(&provider_path)
-            .map_err(|e| ProviderError::Io(std::io::Error::other(format!("{e}"))))?;
+        if let Err(e) = updated.to_json_file(&provider_path) {
+            let _ = fs_atomic::restore_from_backup(&settings_path);
+            return Err(ProviderError::Io(std::io::Error::other(format!("{e}"))));
+        }
 
         Ok(updated)
     }
@@ -1593,6 +1617,125 @@ mod tests {
 
         let err = svc.switch_provider("nonexistent").unwrap_err();
         assert!(matches!(err, ProviderError::Io(_)));
+    }
+
+    // ----- P1-04d (v3.3 M7 phase 32-03) — rollback on step-5 failure -----
+    //
+    // switch_provider has 5 steps:
+    //   1. read provider JSON (from_json_file)
+    //   2. load settings.json
+    //   3. patch env
+    //   4. write_with_backup(settings.json)  ← advances settings.json
+    //   5. to_json_file(provider_path)       ← stamps last_used_at/is_active
+    //
+    // Pre-P1-04b: if step 5 failed, settings.json was left pointing at
+    // the new provider's env while the provider library file never got
+    // its is_active/last_used_at stamp — an inconsistent state the user
+    // could not recover from without hand-editing. P1-04b adds a
+    // restore_from_backup call so settings.json rolls back to its
+    // pre-switch snapshot when step 5 fails.
+    //
+    // We force step-5 failure by making the provider JSON file
+    // read-only (chmod 0444) before calling switch_provider. Step 1
+    // (read) still succeeds on a readonly file; step 4 (settings.json
+    // write) is unaffected; step 5 (std::fs::write → open O_WRONLY)
+    // fails with EACCES on POSIX. The test then asserts settings.json
+    // was rolled back to its pre-switch content.
+    #[test]
+    fn switch_provider_rolls_back_settings_when_provider_write_fails() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        // Pre-switch settings.json: a known marker the rollback must
+        // restore. Using a distinctive env value so we can assert it
+        // survived (NOT the new provider's env).
+        write_settings(&settings, "https://pre-switch.example", "pre-switch-key");
+        write_provider(
+            &p_dir,
+            &sample_provider("deepseek", "DeepSeek", "https://api.deepseek.com"),
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        // Make the provider file readonly so step 5 (to_json_file)
+        // fails with EACCES. Step 1 read is unaffected.
+        let provider_file = p_dir.join("deepseek.json");
+        let mut perms = fs::metadata(&provider_file).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&provider_file, perms).unwrap();
+
+        let result = svc.switch_provider("deepseek");
+
+        // Restore write perms FIRST so TempDir cleanup can delete the
+        // file (and so we can read it back if needed below).
+        let mut perms = fs::metadata(&provider_file).unwrap().permissions();
+        perms.set_readonly(false);
+        fs::set_permissions(&provider_file, perms).unwrap();
+
+        // Step 5 must have failed.
+        assert!(
+            result.is_err(),
+            "switch_provider should fail when provider library write fails"
+        );
+
+        // The rollback invariant (P1-04b core): settings.json must be
+        // back to its pre-switch state, NOT advanced to deepseek's env.
+        let restored = fs::read_to_string(&settings).unwrap();
+        assert!(
+            restored.contains("pre-switch-key"),
+            "settings.json should be rolled back to pre-switch state; got: {restored}"
+        );
+        assert!(
+            restored.contains("https://pre-switch.example"),
+            "rolled-back settings.json must retain pre-switch base_url; got: {restored}"
+        );
+        assert!(
+            !restored.contains("api.deepseek.com"),
+            "rolled-back settings.json must NOT contain the new provider's env; got: {restored}"
+        );
+        assert!(
+            !restored.contains("key-for-deepseek"),
+            "rolled-back settings.json must NOT contain the new provider's key; got: {restored}"
+        );
+    }
+
+    // P1-04c — same rollback invariant for the M3.10 active_root
+    // variant (the audit missed this one). active_root=None takes the
+    // user-level settings.json path, exercising the same step-5
+    // rollback code added in P1-04c.
+    #[test]
+    fn switch_provider_with_active_root_rolls_back_on_step5_failure() {
+        let tmp = TempDir::new().unwrap();
+        let p_dir = tmp.path().join("providers");
+        let settings = tmp.path().join("settings.json");
+        write_settings(&settings, "https://pre-switch.example", "pre-switch-key");
+        write_provider(
+            &p_dir,
+            &sample_provider("deepseek", "DeepSeek", "https://api.deepseek.com"),
+        );
+        let svc = ProviderService::new(test_paths(tmp.path(), &settings));
+
+        let provider_file = p_dir.join("deepseek.json");
+        let mut perms = fs::metadata(&provider_file).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&provider_file, perms).unwrap();
+
+        let result = svc.switch_provider_with_active_root("deepseek", None);
+
+        let mut perms = fs::metadata(&provider_file).unwrap().permissions();
+        perms.set_readonly(false);
+        fs::set_permissions(&provider_file, perms).unwrap();
+
+        assert!(result.is_err(), "switch should fail when library write fails");
+
+        let restored = fs::read_to_string(&settings).unwrap();
+        assert!(
+            restored.contains("pre-switch-key"),
+            "active_root variant must also roll back settings.json; got: {restored}"
+        );
+        assert!(
+            !restored.contains("api.deepseek.com"),
+            "active_root variant must NOT advance settings.json on failure; got: {restored}"
+        );
     }
 
     #[test]
