@@ -283,11 +283,23 @@ impl Provider {
     /// Write a provider to a JSON file on disk (pretty-printed, 2-space indent —
     /// matches SPEC §2.2 "human-readable").
     ///
-    /// **NOT atomic.** For atomic write + backup use
+    /// **NOT atomic on its own.** For atomic write + backup use
     /// [`crate::infrastructure::fs_atomic::write_with_backup`]. This method
     /// exists so the `ProviderService` can write per-provider files with a
     /// single call (small files, low blast radius) — settings.json, which
     /// is shared with Claude Code, MUST go through `fs_atomic`.
+    ///
+    /// **Caller responsibility** (M6 audit H1 / phase 32-02): production
+    /// code paths in `provider_service.rs` already wrap provider-file
+    /// writes in `fs_atomic::write_with_backup` — see
+    /// `import_single_provider`, `add_provider`, `update_provider`, and
+    /// `import_providers_from_sql*`, all of which call
+    /// `fs_atomic::write_with_backup(&target, &json)` directly (NOT this
+    /// method). This `to_json_file` only does a plain `std::fs::write` and
+    /// is preserved for test fixtures that write directly to disk without
+    /// the backup ceremony. The two `switch_provider*` paths DO call this
+    /// method to stamp `last_used_at` — that step-5 write is the subject
+    /// of P1-04 (rollback on failure), not this fix.
     pub fn to_json_file(&self, path: &Path) -> Result<(), ProviderError> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;

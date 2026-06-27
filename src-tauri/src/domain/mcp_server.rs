@@ -169,9 +169,26 @@ impl McpServer {
 
     /// Write a single `McpServer` to a JSON file (pretty-printed,
     /// 2-space indent).
+    ///
+    /// **Atomic + backup.** This method goes through
+    /// [`crate::infrastructure::fs_atomic::write_with_backup`] so a
+    /// power loss / kill mid-write leaves the file in either the old
+    /// or new state (never half-written) and takes a `.bak.<ts>`
+    /// snapshot of the previous content first (CLAUDE.md §7).
+    ///
+    /// **Caller responsibility**: the production write path for the
+    /// shared `~/.claude/mcp.json` is [`crate::services::mcp_service`]
+    /// (`McpService::write_all`), which already calls
+    /// `fs_atomic::write_with_backup` directly on the whole
+    /// `mcpServers` map. This `to_json_file` writes a *single* server
+    /// to its own file and is preserved for test fixtures + the rare
+    /// single-server snapshot read/write symmetry with
+    /// [`McpServer::from_json_file`]. Do NOT use it to write the
+    /// shared `mcp.json` — that drops every other server entry.
     pub fn to_json_file(&self, path: &Path) -> Result<(), McpError> {
         let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)?;
+        crate::infrastructure::fs_atomic::write_with_backup(path, &json)
+            .map_err(map_fs_atomic_to_mcp)?;
         Ok(())
     }
 
@@ -251,6 +268,20 @@ fn now_unix_secs() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Convert `fs_atomic::FsAtomicError` → `McpError`. Mirrors the
+/// adapter in `services::mcp_service` so the domain `to_json_file`
+/// can go through `fs_atomic` without leaking `FsAtomicError` past
+/// the public `McpError` surface.
+fn map_fs_atomic_to_mcp(e: crate::infrastructure::fs_atomic::FsAtomicError) -> McpError {
+    use crate::infrastructure::fs_atomic::FsAtomicError;
+    match e {
+        FsAtomicError::Io(io) => McpError::Io(io),
+        other => McpError::Io(std::io::Error::other(format!(
+            "atomic write failed: {other}"
+        ))),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -506,5 +537,64 @@ mod tests {
         sample_stdio().to_json_file(&path).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(raw.contains("  \"id\""), "expected 2-space indent:\n{raw}");
+    }
+
+    // P1-03a (phase 32-02) — `to_json_file` MUST route through
+    // `fs_atomic::write_with_backup` (M6 audit H1). The proof: writing
+    // to a path that already has content leaves a `.bak.<ts>` snapshot
+    // of the previous content, which a plain `std::fs::write` never
+    // would. This test pins that contract so a regression to
+    // `std::fs::write` fails loudly.
+    #[test]
+    fn to_json_file_is_atomic_with_backup() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("fs.json");
+
+        // First write — fresh file, no prior content to back up.
+        let first = sample_stdio();
+        first.to_json_file(&path).unwrap();
+        assert!(path.exists());
+
+        // Pre-seed a *different* server so the second write has
+        // something to back up. We write it directly via std::fs to
+        // avoid going through the method under test for the seed.
+        let seed_json = serde_json::to_string_pretty(&sample_http()).unwrap();
+        std::fs::write(&path, seed_json).unwrap();
+
+        // Second write — must atomically replace + take a .bak.
+        first.to_json_file(&path).unwrap();
+
+        // Current file now holds the stdio server (name "filesystem").
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("\"filesystem\""), "new content written");
+        assert!(!raw.contains("\"remote-search\""), "old content replaced");
+
+        // A .bak.<ts> file must exist and hold the pre-write (http)
+        // content — only fs_atomic::write_with_backup produces these.
+        let mut found_bak = None;
+        for entry in std::fs::read_dir(tmp.path()).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            if name.starts_with("fs.json.bak.") {
+                found_bak = Some(name);
+                break;
+            }
+        }
+        let bak = found_bak.expect("fs_atomic backup (.bak.<ts>) should exist");
+        let bak_raw = std::fs::read_to_string(tmp.path().join(&bak)).unwrap();
+        assert!(
+            bak_raw.contains("\"remote-search\""),
+            "backup must preserve pre-write content"
+        );
+        assert!(
+            !bak_raw.contains("\"filesystem\""),
+            "backup must NOT contain post-write content"
+        );
+
+        // No leftover .tmp.<uuid> temp file (fs_atomic cleans up on
+        // success).
+        for entry in std::fs::read_dir(tmp.path()).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            assert!(!name.contains(".tmp."), "leftover temp file: {name}");
+        }
     }
 }
