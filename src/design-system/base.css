@@ -41,14 +41,14 @@
   cursor: pointer; font-family: inherit;
   transition: background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
-.btn:hover { background: rgba(0, 0, 0, 0.04); }
+.btn:hover { background: var(--bg-overlay); }
 .btn:active { transform: scale(0.97); }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.btn-primary { background: var(--accent); color: var(--accent-fg-on); border-color: var(--accent); font-weight: 600; }
 .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { background: transparent; border-color: transparent; }
-.btn-ghost:hover { background: rgba(0, 0, 0, 0.05); }
+.btn-ghost:hover { background: var(--modal-cancel-bg); }
 
 /* ── 列表行 ── */
 .list-row {
@@ -78,10 +78,10 @@
   padding: 2px 8px; border-radius: 4px;
   font-size: 11px; font-weight: 600; line-height: 1;
   height: 20px; box-sizing: border-box; flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--modal-cancel-bg);
   color: var(--text-secondary);
 }
-.badge-active { background: var(--accent); color: #fff; }
+.badge-active { background: var(--accent); color: var(--accent-fg-on); }
 
 /* ── 侧边栏 ── */
 .sidebar {
@@ -127,7 +127,7 @@
   transition: background-color 120ms ease, color 120ms ease, transform 120ms ease, border-left-color 120ms ease;
   font-family: inherit;
 }
-.sidebar .nav-item:hover { background: rgba(0, 0, 0, 0.03); }
+.sidebar .nav-item:hover { background: var(--hover-soft); }
 .sidebar .nav-item.active {
   border-left-color: var(--accent);
   background: var(--accent-soft);
@@ -188,10 +188,10 @@
 .titlebar button:hover,
 .titlebar .actions button:hover,
 .titlebar .back-btn:hover,
-.titlebar .chrome-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--text-primary); }
+.titlebar .chrome-btn:hover { background: var(--modal-cancel-bg); color: var(--text-primary); }
 .titlebar button.close:hover,
 .titlebar .actions button.close:hover,
-.titlebar .chrome-btn.close:hover { background: var(--danger); color: #fff; }
+.titlebar .chrome-btn.close:hover { background: var(--danger); color: var(--accent-fg-on); }
 .titlebar h1 {
   margin: 0;
   flex: 1;
@@ -227,7 +227,7 @@
 .kpi .kpi-trend.down { color: var(--danger); }
 
 /* ── chart bar ── */
-.bar { width: 100%; height: 8px; background: rgba(0, 0, 0, 0.06); border-radius: 4px; overflow: hidden; }
+.bar { width: 100%; height: 8px; background: var(--hover-medium); border-radius: 4px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 300ms ease; }
 
 /* ── Provider 头像 (light 默认, 主题维度可覆写) ── */
@@ -239,22 +239,22 @@
   background: var(--accent-soft); color: var(--accent);
 }
 /* 4 色相分工 */
-.avatar-mint   { background: #CFFAFE; color: #06B6D4; }
-.avatar-indigo { background: #E0E7FF; color: #6366F1; }
-.avatar-amber  { background: #FEF3C7; color: #D97706; }
-.avatar-rose   { background: #FFE4E6; color: #FB7185; }
+.avatar-mint   { background: var(--avatar-mint-bg);   color: var(--avatar-mint-fg); }
+.avatar-indigo { background: var(--avatar-indigo-bg); color: var(--avatar-indigo-fg); }
+.avatar-amber  { background: var(--avatar-amber-bg);  color: var(--avatar-amber-fg); }
+.avatar-rose   { background: var(--avatar-rose-bg);   color: var(--avatar-rose-fg); }
 
 /* ── 表头 ── */
 table.dense { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.dense th {
   text-align: left; padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--hover-soft);
   border-bottom: 1px solid var(--border-soft);
   font-weight: 600; color: var(--text-secondary);
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
 }
 table.dense td { padding: 8px 12px; border-bottom: 1px solid var(--border-soft); }
-table.dense tr:hover td { background: rgba(0, 0, 0, 0.02); }
+table.dense tr:hover td { background: var(--hover-subtle); }
 table.dense tr.active td { background: var(--accent-soft); }
 
 /* ── 输入 ── */
@@ -267,7 +267,7 @@ table.dense tr.active td { background: var(--accent-soft); }
   color: var(--text-primary);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-focus-ring); }
 .label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
 
 /* ── 字体工具 ── */
@@ -305,16 +305,16 @@ table.dense tr.active td { background: var(--accent-soft); }
 /* 主题维度的弹窗样式覆写由各主题自行覆盖 (tokens.css 改 token 或在 themes/<id>.css 加规则) */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--modal-overlay-bg);
   display: flex; align-items: center; justify-content: center;
   z-index: 1000;
   animation: fadeIn 120ms ease-out;
 }
 .modal {
-  background: #FFFFFF;                  /* 直接值 (light 主题瓷白) — WebView2 不解析 var() 引用 */
+  background: var(--modal-body-bg);
   border: var(--card-border-width) solid var(--border);
   border-radius: var(--card-radius);
-  box-shadow: var(--shadow-md), 0 24px 48px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md), var(--modal-shadow);
   max-width: 480px; width: calc(100% - 48px);
   max-height: calc(100vh - 96px);
   overflow: hidden;
@@ -323,8 +323,8 @@ table.dense tr.active td { background: var(--accent-soft); }
 }
 .modal-header {
   padding: 18px 20px 14px;
-  background: #FFFFFF;                  /* 直接值 */
-  border-left: 4px solid #0969DA;       /* 直接值 (light accent 蓝); danger 时变 #D32F2F (见下) */
+  background: var(--modal-header-bg);
+  border-left: 4px solid var(--modal-accent-bar);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -350,10 +350,10 @@ table.dense tr.active td { background: var(--accent-soft); }
   flex-shrink: 0;
   transition: background-color 120ms ease, color 120ms ease;
 }
-.modal-close-btn:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-primary); }
+.modal-close-btn:hover { background: var(--hover-medium); color: var(--text-primary); }
 .modal-body {
   padding: 4px 20px 18px;
-  background: #FFFFFF;                  /* 直接值 */
+  background: var(--modal-body-bg);
   color: var(--text-secondary);
   font-size: var(--fs-body);
   line-height: 1.55;
@@ -364,12 +364,12 @@ table.dense tr.active td { background: var(--accent-soft); }
 .modal-body p { margin: 0; }
 .modal-footer {
   padding: 14px 20px 18px;
-  background: #FFFFFF;                  /* 直接值 */
+  background: var(--modal-footer-bg);
   display: flex; justify-content: flex-end; gap: 10px;
   flex-shrink: 0;
 }
-/* danger 状态: 头部竖条变红 (light 主题红) */
-.modal[data-danger="true"] .modal-header { border-left-color: #D32F2F; }
+/* danger 状态: 头部竖条变红 */
+.modal[data-danger="true"] .modal-header { border-left-color: var(--modal-danger-bar); }
 /* 弹窗入场动画: 滑下 + 轻微缩放 (240ms, 主题维度可覆写) */
 @keyframes modalSlideDown {
   from { opacity: 0; transform: translateY(-12px) scale(0.98); }
@@ -383,7 +383,7 @@ table.dense tr.active td { background: var(--accent-soft); }
 /* danger 按钮 — 红色 (跟 --danger token 一致, 主题可覆写) */
 .btn-danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--accent-fg-on);
   border-color: var(--danger);
   font-weight: 600;
 }
@@ -396,15 +396,14 @@ table.dense tr.active td { background: var(--accent-soft); }
   cursor: not-allowed;
 }
 /* === 弹窗专用按钮 (v3.0 confirm dialog redesign) ===
- * 颜色用直接值 (light 主题), 主题维度可覆写.
- * 不引用 var(--modal-*) — WebView2 不解析嵌套 var(). */
+ * 颜色用 token (跨主题共享) — 主题维度可在 tokens.css 改 --modal-* 覆写. */
 .btn-modal-cancel {
   /* appearance: none 同 .btn-modal-confirm — 禁用原生 buttonface background */
   appearance: none;
   -webkit-appearance: none;
-  background: #FFFFFF;                  /* 直接值: light 主题瓷白 */
-  color: #1F2328;                       /* 直接值: light 主题深灰 */
-  border: 1px solid #E1E4E8;           /* 直接值: light 主题边框 */
+  background: var(--modal-cancel-bg);
+  color: var(--modal-cancel-fg);
+  border: 1px solid var(--border-soft);
   border-radius: var(--button-radius);
   padding: 8px 18px;
   min-width: 80px;                      /* 与 .btn-modal-confirm 同宽, 视觉对齐 */
@@ -415,8 +414,8 @@ table.dense tr.active td { background: var(--accent-soft); }
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .btn-modal-cancel:hover {
-  background: #F6F8FA;                  /* 直接值 hover 状态 */
-  border-color: #C8CCD1;
+  background: var(--modal-cancel-hover-bg);
+  border-color: var(--modal-cancel-hover-border);
 }
 .btn-modal-cancel:focus-visible {
   outline: 2px solid var(--accent);
@@ -427,9 +426,9 @@ table.dense tr.active td { background: var(--accent-soft); }
    * 否则 CSS background shorthand 在 <button> 上不生效, fall back 到 transparent */
   appearance: none;
   -webkit-appearance: none;
-  background: #1F2328;                  /* 直接值: light 主题深灰 solid */
-  color: #fff;
-  border: 1px solid #1F2328;            /* 直接值 */
+  background: var(--modal-confirm-bg);
+  color: var(--accent-fg-on);
+  border: 1px solid var(--modal-confirm-bg);
   border-radius: var(--button-radius);
   padding: 8px 18px;
   font-size: 14px;
