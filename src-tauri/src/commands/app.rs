@@ -76,7 +76,7 @@ const DISPLAY_IDENTIFIER: &str = "com.claudemanager.app";
 /// 命名规则: 跟随仓库当前显示名 (claude-config-manager)。如果未来
 /// 再 rebrand (例如改成 ClaudeManager),改这一行 + 前端 PROJECT_HOMEPAGE
 /// (如果用 const) + 测试 fixture sampleMetadata 三处同步 (CLAUDE.md §6.4)。
-const HOMEPAGE_URL: &str = "https://github.com/coderstory/claude-config-manager";
+const HOMEPAGE_URL: &str = "https://github.com/coderstory/claudeManager";
 
 /// Snapshot of "which app is running" — version, build provenance,
 /// target triple. Returned to the frontend by `get_app_metadata`.
@@ -235,7 +235,7 @@ mod tests {
     fn homepage_url_is_stable() {
         assert_eq!(
             AppMetadata::current().homepage_url,
-            "https://github.com/coderstory/claude-config-manager"
+            "https://github.com/coderstory/claudeManager"
         );
     }
 

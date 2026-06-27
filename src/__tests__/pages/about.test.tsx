@@ -33,7 +33,7 @@ const sampleMetadata = (overrides: Partial<AppMetadata> = {}): AppMetadata => ({
   build_timestamp: 1_700_000_000,
   // UI-A-05 (2026-06-27) — homepage_url 是新字段, 测试 fixture 必须同步
   // (CLAUDE.md §6.4 三处同步)。默认填 HOMEPAGE_URL 常量值。
-  homepage_url: 'https://github.com/coderstory/claude-config-manager',
+  homepage_url: 'https://github.com/coderstory/claudeManager',
   ...overrides,
 });
 
@@ -181,7 +181,7 @@ describe('AboutPage — M3.7 (清单 18)', () => {
     });
     expect(
       screen.getByTestId('about-license-homepage'),
-    ).toHaveTextContent('https://github.com/coderstory/claude-config-manager');
+    ).toHaveTextContent('https://github.com/coderstory/claudeManager');
   });
 
   it('UI-A-05: IPC 返回的 homepage_url 含 https:// 前缀 (避免旧 cc-switch-main 短链接残留)', async () => {

@@ -59,7 +59,7 @@ const LICENSE_TYPE = 'MIT';
 //   2. 改测试 fixture sampleMetadata
 //   3. 不用动前端代码 (前端只从 metadata 读)
 // Fallback 在 metadata 加载失败时用,避免 UI 空白 (CLAUDE.md §7)。
-const HOMEPAGE_FALLBACK = 'https://github.com/coderstory/claude-config-manager';
+const HOMEPAGE_FALLBACK = 'https://github.com/coderstory/claudeManager';
 
 const CREDITS: ReadonlyArray<{ label: string; value: string }> = [
   {
