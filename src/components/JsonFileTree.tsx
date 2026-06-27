@@ -188,20 +188,52 @@ export function JsonFileTree(props: JsonFileTreeProps): ReactElement {
   const [query, setQuery] = useState('');
   const [collapsedScopes, setCollapsedScopes] = useState<Set<string>>(new Set());
 
-  // 过滤:query 对 relative_path / path / basename 做 case-insensitive
-  // contains。M5 #33 — 用户报告"搜索不到 settings.json"。相对路径
-  // 匹配是主路径(用户看树就是按这个走的);但兜底也匹配绝对路径 +
-  // basename,以防后端相对路径格式异常(例如返回空字符串 / scope 名)
-  // 时仍能找到文件。
+  // BUG-RF-09 — search ranking.
+  //
+  // M5 user bug: 搜 "settings" → 旧实现按相对路径 substring 匹配,
+  // 第一个命中的是 `~/.claude/` 目录(/[scope]/claude/CLAUDE.md 之类),
+  // 用户焦点跳到目录而不是 settings.json 文件。
+  //
+  // 修复:排序时优先 basename 精确匹配,再按 substring (相对路径 → 全路径)。
+  // 这保证:
+  //  - 搜 `settings` → settings.json 排第一,而不是 `~/.claude/`
+  //  - 搜 `agents/assistant.settings` → 路径里含 settings 的文件
+  //    也匹配(保留 substring 兜底)
+  //  - 中文文件名按 substring 同样能命中
   const filteredEntries = useMemo<JsonFileEntry[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return entries;
-    return entries.filter((e) => {
+    type Scored = { entry: JsonFileEntry; score: number };
+    const scored: Scored[] = [];
+    for (const e of entries) {
       const rel = e.relative_path.toLowerCase();
       const abs = e.path.toLowerCase();
       const base = (rel.split('/').pop() ?? '').toLowerCase();
-      return rel.includes(q) || abs.includes(q) || base.includes(q);
+      if (!rel.includes(q) && !abs.includes(q) && !base.includes(q)) continue;
+      // score: 越高越靠前
+      // 0 = basename exact match (e.g. "settings.json" for query "settings.json")
+      // 1 = basename substring match (e.g. "settings.json" for query "settings")
+      // 2 = relative path substring match
+      // 3 = absolute path substring match only (rare; folder name leaked)
+      let score: number;
+      if (base === q) score = 0;
+      else if (base.includes(q)) score = 1;
+      else if (rel.includes(q)) score = 2;
+      else score = 3;
+      scored.push({ entry: e, score });
+    }
+    scored.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      // Tie-breaker: shorter relative_path first (root file before
+      // deeply-nested file with same basename match).
+      if (a.entry.relative_path.length !== b.entry.relative_path.length) {
+        return (
+          a.entry.relative_path.length - b.entry.relative_path.length
+        );
+      }
+      return a.entry.relative_path.localeCompare(b.entry.relative_path);
     });
+    return scored.map((s) => s.entry);
   }, [entries, query]);
 
   const rows = useMemo(

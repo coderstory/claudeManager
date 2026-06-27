@@ -76,6 +76,23 @@ const SKIP_DIRS = new Set(['node_modules', 'target', 'dist', '.archive', '.plann
 const SELF_PATH = 'src/__tests__/integration/no-single-file-deploy-refs.test.ts';
 
 /**
+ * Additional files excluded from the scan — they mention the literal
+ * "single-file-deploy" string to assert AGAINST it (e.g. RF-02 regression
+ * guards in App.test.tsx that verify sidebar / ALL_VIEWS do NOT
+ * contain the removed id). These exclusions MUST stay minimal — if
+ * a new file mentions the string, the scan should trip, forcing the
+ * author to justify it.
+ */
+const EXTRA_EXCLUDED_PATHS: ReadonlySet<string> = new Set([
+  // App.test.tsx — RF-02 phase 29 added BUG-RF-02 assertions that
+  // assert the literal "single-file-deploy" string is NOT present
+  // in sidebar / ALL_VIEWS. Excluding this file from the FS scan
+  // mirrors the SELF_PATH pattern (the file must mention the
+  // string to assert against it).
+  'src/__tests__/integration/App.test.tsx',
+]);
+
+/**
  * Recursively collect files under `dir` that match EXTS, skipping
  * SKIP_DIRS. Returns absolute paths.
  */
@@ -122,6 +139,9 @@ function findRefs(): Hit[] {
       // Skip the regression test itself (it has to mention the
       // literal string to assert against it).
       if (rel === SELF_PATH) continue;
+      // Skip additional test files that intentionally mention the
+      // string in their assertions (see EXTRA_EXCLUDED_PATHS).
+      if (EXTRA_EXCLUDED_PATHS.has(rel)) continue;
       // Defensive: any OTHER file with 'single-file-deploy' in its
       // path is a regression (e.g. someone re-creates
       // src/pages/single-file-deploy/index.tsx).

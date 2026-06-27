@@ -37,6 +37,7 @@ import type { ReactElement } from 'react';
 import {
   Archive,
   ArrowLeftRight,
+  FileJson,
   FileWarning,
   History,
   Maximize2,
@@ -66,6 +67,7 @@ import {
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useViewState } from '../../hooks/useViewState';
 import { Pagination } from '../../components/Pagination';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 // ---------------------------------------------------------------------------
 // Page state
@@ -107,6 +109,14 @@ export default function BackupRestorePage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
   // M4.6 / Phase 21-C — F21 history link-out.
   const { setView } = useViewState();
+
+  // BUG-RF-07 — 二次确认 modal 状态。`pendingDeletePaths` 是待删除的
+  // path 列表,null = modal 未显示。点 [删除选中] 按钮 → 设置
+  // pendingDeletePaths → modal 出现 → 用户确认 → 实际调
+  // deleteBackup 走 .trash/。
+  const [pendingDeletePaths, setPendingDeletePaths] = useState<
+    string[] | null
+  >(null);
 
   // Initial load.
   const refresh = useCallback(async (): Promise<void> => {
@@ -267,46 +277,21 @@ export default function BackupRestorePage(): ReactElement {
 
   const handleDelete = useCallback(
     async (path: string): Promise<void> => {
-      const ok = window.confirm(
-        '删除备份将永久移入回收目录(同目录下的 .trash/)并从列表移除。\n\n此操作无法撤销,确认继续?',
-      );
-      if (!ok) return;
-      try {
-        await deleteBackup(path);
-        setState((prev) => ({
-          ...prev,
-          // 乐观更新:立刻把已删的 path 从 entries / selected /
-          // detail 里抹掉,UI 不会短暂"看起来还在"。
-          entries: prev.entries.filter((e) => e.path !== path),
-          selected: prev.selected.filter((p) => p !== path),
-          detail:
-            prev.detail && prev.detail.path === path ? null : prev.detail,
-          message: { kind: 'success', text: '已删除' },
-        }));
-        // 二次校验:与磁盘对齐(用户若在外部也删了,状态要一致)。
-        await refresh();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setState((prev) => ({
-          ...prev,
-          message: { kind: 'error', text: `删除失败: ${msg}` },
-        }));
-      }
+      // BUG-RF-07 — 用 ConfirmDialog 替代 window.confirm。设置
+      // pendingDeletePaths → modal 出现 → 用户点 [删除] → executeDelete。
+      // 同 batch 路径,backend delete_backup 走 .trash/。
+      setPendingDeletePaths([path]);
     },
-    [refresh],
+    [],
   );
 
-  // M5 #29 — batch delete for the multi-selected backups. Iterates
-  // the existing single-delete IPC; the backend's allow-list + .trash
-  // safety applies per-call, so the user is never at risk of wiping
-  // unrelated files even if some deletions fail mid-loop.
-  const handleBatchDelete = useCallback(
+  // M5 #29 — batch delete for the multi-selected backups.
+  // BUG-RF-07 — replaced window.confirm with the themed ConfirmDialog.
+  // Click [删除选中] → setPendingDeletePaths(selected) → modal 出现
+  // → 用户点确认 → executeDelete 实际调 deleteBackup 走 .trash/。
+  const executeDelete = useCallback(
     async (paths: string[]): Promise<void> => {
       if (paths.length === 0) return;
-      const ok = window.confirm(
-        `将永久删除选中的 ${paths.length} 个备份(每个会先移入 .trash/,再删除 trash 副本)。\n\n此操作无法撤销,确认继续?`,
-      );
-      if (!ok) return;
       // Optimistic UI: remove all from entries/selected/detail.
       setState((prev) => ({
         ...prev,
@@ -317,6 +302,8 @@ export default function BackupRestorePage(): ReactElement {
         message: { kind: 'success', text: `已删除 ${paths.length} 个备份` },
       }));
       // Per-path backend delete; surface the first failure.
+      // Backend delete_backup moves file → .trash/<basename>.<nanos>
+      // (M4.6.13 — 可恢复 30 天内的删除操作)。
       let failed: string | null = null;
       for (const p of paths) {
         try {
@@ -339,6 +326,23 @@ export default function BackupRestorePage(): ReactElement {
     [refresh],
   );
 
+  const handleBatchDelete = useCallback(
+    (paths: string[]): void => {
+      if (paths.length === 0) return;
+      // 触发 ConfirmDialog(纯 UI state 设置,实际删除在 confirm 后执行)。
+      setPendingDeletePaths([...paths]);
+    },
+    [],
+  );
+
+  const handleConfirmDelete = useCallback((): void => {
+    const paths = pendingDeletePaths ?? [];
+    setPendingDeletePaths(null);
+    if (paths.length > 0) {
+      void executeDelete(paths);
+    }
+  }, [pendingDeletePaths, executeDelete]);
+
   // ---- M4.6.13 — frontend dedupe safeguard ----
   const dedupedEntries = useMemo<BackupEntry[]>(() => {
     const seen = new Set<string>();
@@ -359,6 +363,58 @@ export default function BackupRestorePage(): ReactElement {
     pageStart,
     pageStart + PAGE_SIZE,
   );
+
+  // BUG-RF-04 — tri-state select-all for the visible page items.
+  // The page-scoped select-all checkbox has 3 states:
+  //   - none:    0 of page items selected → unchecked
+  //   - partial: some (but not all) of page items selected → indeterminate (—)
+  //   - all:     all page items selected → checked
+  //
+  // The indeterminate state is set via the `indeterminate` DOM property
+  // (NOT the `checked` property — React only supports `checked` as a
+  // controlled prop). We use a ref callback to flip the DOM property
+  // directly.
+  const pageSelectedCount = useMemo<number>(() => {
+    const pagePaths = new Set(pageEntries.map((e) => e.path));
+    return state.selected.filter((p) => pagePaths.has(p)).length;
+  }, [state.selected, pageEntries]);
+
+  const pageSelectAllState: 'none' | 'partial' | 'all' = useMemo(() => {
+    if (pageEntries.length === 0) return 'none';
+    if (pageSelectedCount === 0) return 'none';
+    if (pageSelectedCount === pageEntries.length) return 'all';
+    return 'partial';
+  }, [pageSelectedCount, pageEntries.length]);
+
+  const toggleSelectAllPage = useCallback((): void => {
+    setState((prev) => {
+      const pagePaths = pageEntries.map((e) => e.path);
+      const pageSet = new Set(pagePaths);
+      // 当前页选中的 path 集合
+      const currentlySelectedOnPage = prev.selected.filter((p) =>
+        pageSet.has(p),
+      );
+      let nextSelected: string[];
+      if (
+        currentlySelectedOnPage.length === pageEntries.length &&
+        pageEntries.length > 0
+      ) {
+        // all → none: 取消当前页所有选择
+        nextSelected = prev.selected.filter((p) => !pageSet.has(p));
+      } else {
+        // none / partial → all: 合并当前页 paths
+        const merged = new Set(prev.selected);
+        for (const p of pagePaths) merged.add(p);
+        nextSelected = Array.from(merged);
+      }
+      return {
+        ...prev,
+        selected: nextSelected,
+        // diff 只在恰好 2 个时有效;切换全选会破坏这个条件
+        diff: prev.selected.length === 2 ? null : prev.diff,
+      };
+    });
+  }, [pageEntries]);
 
   // ---- render ----
 
@@ -504,6 +560,40 @@ export default function BackupRestorePage(): ReactElement {
         >
           刷新
         </button>
+        {/* BUG-RF-05 — 备份 → JSON 编辑器入口。
+          选中 ≥1 个备份后,点 [导出 JSON 编辑] 把该备份的内容写到
+          sessionStorage `ccm.openFilePath` 然后跳 json-editor view。
+          json-editor 的 useEffect (M5 #28) 会读这个 key + 自动加载
+          文件 + 渲染到编辑器。
+
+          单个备份:直接传该 path。
+          多个备份:把每条 path 拼成 sessionStorage array (逗号分隔),
+          json-editor 暂时只取第一个;后续再迭代 multi-file 工作流。 */}
+        <button
+          onClick={() => {
+            if (state.selected.length === 0) return;
+            try {
+              window.sessionStorage.setItem(
+                'ccm.openFilePath',
+                state.selected[0],
+              );
+            } catch {
+              // sessionStorage in private mode may throw — best effort.
+            }
+            setView('json-editor');
+          }}
+          disabled={state.selected.length === 0}
+          data-testid="backup-export-to-editor-btn"
+          style={{
+            ...toolbarBtn(),
+            opacity: state.selected.length > 0 ? 1 : 0.5,
+            cursor: state.selected.length > 0 ? 'pointer' : 'not-allowed',
+          }}
+          title="将选中备份的内容加载到 JSON 编辑器"
+        >
+          <FileJson size={14} />
+          导出 JSON 编辑 ({state.selected.length})
+        </button>
         {/* M4.6 / Phase 21-C — F21 history link: 当前页是 F13 即时
             时间线,跳转 F21 看 SQLite 持久化的历史(可筛选 / 导出). */}
         <button
@@ -596,7 +686,45 @@ export default function BackupRestorePage(): ReactElement {
               </div>
             </div>
           ) : (
-            pageEntries.map((e) => {
+            <>
+              {/* BUG-RF-04 — tri-state select-all header.
+                3 states: none / partial / all.
+                - `checked` reflects the boolean part (all → true, else false).
+                - `indeterminate` is the DOM-only property set via ref callback
+                  (React 19 doesn't expose it as a controlled prop). */}
+              <div
+                data-testid="backup-select-all-header"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 14px',
+                  borderBottom: '1px solid var(--border)',
+                  background: 'rgba(0, 0, 0, 0.02)',
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  data-testid="backup-select-all-page"
+                  data-select-state={pageSelectAllState}
+                  aria-label={`全选当前页 ${pageEntries.length} 个备份(已选 ${pageSelectedCount})`}
+                  checked={pageSelectAllState === 'all'}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = pageSelectAllState === 'partial';
+                    }
+                  }}
+                  onChange={() => {
+                    toggleSelectAllPage();
+                  }}
+                />
+                <span>
+                  全选当前页 ({pageSelectedCount} / {pageEntries.length})
+                </span>
+              </div>
+              {pageEntries.map((e) => {
               // M4.6.13 — `dedupedEntries` is a useMemo that
               // collapses `state.entries` by `path` (defense in
               // depth on top of the backend's canonical-path
@@ -708,7 +836,8 @@ export default function BackupRestorePage(): ReactElement {
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
           {/* M5 #29 — pagination control for the timeline. */}
           <Pagination
@@ -865,6 +994,52 @@ export default function BackupRestorePage(): ReactElement {
           </div>
         </div>
       )}
+      {/* BUG-RF-07 — 二次确认 modal。
+        触发条件:
+        - 每行的 [删除此备份] 图标按钮 (single)
+        - toolbar 的 [删除选中 (N)] 按钮 (batch)
+        用户确认 → executeDelete 走 .trash/ + delete_backup IPC。
+        danger=true (红色 destructive 按钮),dismissable=true (点
+        overlay 或按 Esc 取消)。 */}
+      <ConfirmDialog
+        open={pendingDeletePaths !== null}
+        title="删除备份"
+        message={
+          <div data-testid="backup-delete-confirm">
+            <p style={{ margin: '0 0 8px 0' }}>
+              确定删除{' '}
+              <strong>{pendingDeletePaths?.length ?? 0}</strong>{' '}
+              个备份?每个备份会先移入回收目录 (
+              <code
+                style={{
+                  background: 'var(--bg-elevated)',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                }}
+              >
+                .trash/
+              </code>
+              ) 然后再删除。
+            </p>
+            <p
+              style={{
+                margin: '8px 0 0 0',
+                fontSize: 12,
+                color: 'var(--text-muted)',
+              }}
+            >
+              此操作会从 F13 时间线移除该备份。文件本身可在 .trash/
+              目录手动恢复 (30 天内)。
+            </p>
+          </div>
+        }
+        confirmLabel="删除"
+        cancelLabel="取消"
+        danger
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDeletePaths(null)}
+      />
     </div>
   );
 }

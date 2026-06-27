@@ -53,6 +53,11 @@ import { AppSidebar } from './components/AppSidebar';
 import { ErrorBanner } from './components/ErrorBanner';
 import { PluginPlaceholder } from './components/PluginPlaceholder';
 import { QuickSearchModal } from './components/QuickSearchModal';
+// BUG-RF-01 — first-time user welcome modal. Only rendered after
+// `useWelcomeModal` flips dbReady=true (in a useEffect, so the modal
+// never pops up during the initial mount / loading phase).
+import { WelcomeModal } from './components/WelcomeModal';
+import { useWelcomeModal } from './hooks/useWelcomeModal';
 import { HomeView } from './pages/home';
 import { ProviderListPage } from './pages/provider-list';
 import { ImportSqlPage } from './pages/import-sql';
@@ -149,6 +154,12 @@ export default function App(): ReactElement {
   // Esc closes. Kept in App.tsx (rather than in a store) because
   // it's a single global overlay with no other consumers yet.
   const [quickSearchOpen, setQuickSearchOpen] = useState(false);
+
+  // BUG-RF-01 — first-time user welcome modal. dbReady flips true
+  // inside a useEffect (see useWelcomeModal.ts), so the modal only
+  // appears AFTER React commit + first paint, never during the
+  // initial mount / loading phase.
+  const welcome = useWelcomeModal();
 
   // Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 stale
   // 'mcp-management'(Fix 6 之前最后一次访问的值)→ useViewState 的
@@ -699,6 +710,11 @@ export default function App(): ReactElement {
           </div>
         </div>
       )}
+      {/* BUG-RF-01 — first-time user welcome modal. The hook's
+          dbReady flag flips true only after React commit + first
+          paint (see useWelcomeModal.ts), so the modal can never
+          pop up during the initial mount / loading phase. */}
+      <WelcomeModal open={welcome.open} onClose={welcome.dismiss} />
     </div>
   );
 }

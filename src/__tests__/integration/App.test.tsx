@@ -249,6 +249,69 @@ describe('App — view routing integration', () => {
       screen.queryByText('plugin: backup-restore'),
     ).not.toBeInTheDocument();
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-01 — welcome modal timing.
+  //
+  // The modal must only appear AFTER React has mounted + first paint has
+  // occurred. On a freshly-welcomed user (no localStorage flag), the
+  // initial App render must NOT show the modal — it must wait for the
+  // useEffect-driven dbReady flip.
+  // -------------------------------------------------------------------------
+  it('BUG-RF-01: welcome modal is NOT visible on the first render (dbReady=false gate)', () => {
+    // Clean state — never welcomed.
+    window.localStorage.removeItem('ccm.welcomed');
+    renderApp();
+    // The modal's title is "欢迎使用 Claude 配置管理器" — but the modal
+    // body content "这是你第一次使用本应用" is also unique to the modal.
+    // We check that the modal-specific testid is absent at render time.
+    expect(screen.queryByTestId('welcome-modal-body')).toBeNull();
+  });
+
+  it('BUG-RF-01: welcome modal appears after the dbReady flip (post-paint)', async () => {
+    window.localStorage.removeItem('ccm.welcomed');
+    renderApp();
+    // Wait for the 50ms setTimeout in useWelcomeModal + microtask settle.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(screen.queryByTestId('welcome-modal-body')).not.toBeNull();
+  });
+
+  it('BUG-RF-01: previously-welcomed user does NOT see the modal', async () => {
+    window.localStorage.setItem('ccm.welcomed', 'true');
+    renderApp();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(screen.queryByTestId('welcome-modal-body')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-02 — single-file-deploy removed (M5 #18). The
+  // `no-single-file-deploy-refs.test.ts` file already does a
+  // filesystem-wide grep guard; here we add a focused routing
+  // assertion that the sidebar does NOT render a `single-file-deploy`
+  // entry, and that the canonical ALL_VIEWS list does not contain
+  // the id. This catches the failure mode where a future commit
+  // re-adds the sidebar tile before any of the other guards (FS
+  // scan, capability, plugin stub) trips.
+  // -------------------------------------------------------------------------
+  it('BUG-RF-02: sidebar does NOT have a single-file-deploy entry', () => {
+    renderApp();
+    expect(screen.queryByTestId('sidebar-item-single-file-deploy')).toBeNull();
+  });
+
+  it('BUG-RF-02: ALL_VIEWS does NOT contain single-file-deploy', () => {
+    // The canonical list of view ids must never include the removed
+    // F8 id. This is a structural guard — a future commit that adds
+    // 'single-file-deploy' to ALL_VIEWS would silently start routing
+    // the user to the (deleted) PluginPlaceholder, breaking the
+    // M5 #18 removal contract.
+    expect((ALL_VIEWS as readonly string[]).includes('single-file-deploy')).toBe(
+      false,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

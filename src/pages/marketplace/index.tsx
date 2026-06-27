@@ -31,6 +31,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -424,6 +425,41 @@ export default function MarketplacePage(): ReactElement {
         >
           <GitBranch size={15} />
           第三方仓库
+        </div>
+        {/* BUG-RF-03 — 第三方仓库警告条。提示用户这些仓库未经 Claude
+            官方审核,需要自行甄别内容 / 安全风险。视觉上用 warning
+            黄色 + 警告图标 + 边框,与普通 section 视觉对比明显。 */}
+        <div
+          data-testid="marketplace-third-party-warning"
+          role="alert"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            padding: '8px 12px',
+            background: 'rgba(245, 124, 0, 0.10)',
+            border: '1px solid var(--warning)',
+            borderRadius: 'var(--radius-button)',
+            color: 'var(--warning)',
+            fontSize: 12,
+            lineHeight: 1.6,
+          }}
+        >
+          <AlertTriangle
+            size={14}
+            style={{ flexShrink: 0, marginTop: 2 }}
+            aria-hidden="true"
+          />
+          <div>
+            <strong style={{ display: 'block', marginBottom: 2 }}>
+              第三方仓库未经 Claude 官方审核
+            </strong>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              粘贴的 git URL 属于社区 / 个人维护,内容安全性、质量与兼容性
+              请自行甄别。建议在安装前先 review 仓库源码,再决定是否
+              装到本机的 ~/.claude/。
+            </span>
+          </div>
         </div>
         {/* M5 #25 — 用户问"第三方仓库功能干啥的"。补充 1 行解释,
             说明这个 input 的用途:贴 git URL → 预览 → 勾选装其内的

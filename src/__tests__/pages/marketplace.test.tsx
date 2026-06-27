@@ -946,4 +946,49 @@ describe('MarketplacePage — Phase 28 BZ-06 browse-button regression', () => {
       expect(card.textContent).toContain('github.com');
     }
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-03 — 第三方仓库警告条
+  //
+  // 第三方仓库未经 Claude 官方审核,需在第三方 URL section 顶部显示
+  // 警告条。这是用户实测反馈:之前无警告 → 用户随手粘了任意 git URL
+  // 直接 install 装到 ~/.claude/ 之后才发现仓库内容可能含恶意。
+  // -------------------------------------------------------------------------
+  it('BUG-RF-03: 第三方仓库 section 顶部显示警告条', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') return [];
+      return null;
+    });
+    render(<MarketplacePage />);
+    // 等待 mount 后 listMarketplaceRepos 调用完成(空数组)
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-custom-section')).toBeInTheDocument();
+    });
+    // 警告条必须出现,文案含 "未经 Claude 官方审核" 关键字。
+    const warn = screen.getByTestId('marketplace-third-party-warning');
+    expect(warn).toBeInTheDocument();
+    expect(warn.textContent).toContain('第三方仓库未经 Claude 官方审核');
+    expect(warn.textContent).toContain('请自行甄别');
+  });
+
+  it('BUG-RF-03: 内置推荐源不显示第三方警告(只在第三方 section 顶部显示)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'list_marketplace_repos') {
+        return [builtinRepo('superpowers', 'builtin', 'superpowers@claude-plugins-official')];
+      }
+      return null;
+    });
+    render(<MarketplacePage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('marketplace-repo-card-superpowers')).toBeInTheDocument();
+    });
+    // 警告条在「第三方 git URL」section 顶部,只出现 1 次。
+    const warns = screen.getAllByTestId('marketplace-third-party-warning');
+    expect(warns).toHaveLength(1);
+    // 内置推荐卡片不内嵌警告条。
+    const card = screen.getByTestId('marketplace-repo-card-superpowers');
+    expect(
+      card.querySelector('[data-testid="marketplace-third-party-warning"]'),
+    ).toBeNull();
+  });
 });

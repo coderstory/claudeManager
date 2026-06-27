@@ -265,8 +265,14 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(batchBtn).not.toBeDisabled();
     });
-    // Click to delete (confirm already mocked to true).
+    // BUG-RF-07 — clicking [删除选中] opens ConfirmDialog (not direct
+    // delete). User must click [确认] in modal to actually trigger
+    // delete_backup IPC.
     fireEvent.click(batchBtn);
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       const calls = mockInvoke.mock.calls.filter(
         (c) => c[0] === 'delete_backup',
@@ -349,11 +355,12 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     expect(deleteBtns.length).toBe(2);
   });
 
-  it('clicking delete + confirm → invokes delete_backup + refreshes', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('BUG-RF-07: clicking delete + confirm → invokes delete_backup + refreshes', async () => {
+    // BUG-RF-07 — replaced window.confirm with the themed ConfirmDialog.
+    // Click [delete-btn] → modal appears → click [confirm-dialog-confirm] →
+    // executeDelete → delete_backup IPC.
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
-        // First call: 2 rows. Second call (refresh after delete): 1 row.
         return [
           sampleEntry('C:\\bak1.bak.20260619-142305', 1_781_929_385),
           sampleEntry('C:\\bak2.bak.20260619-120000', 1_781_838_000),
@@ -366,8 +373,13 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('backup-row').length).toBe(2);
     });
-    const deleteBtn = screen.getAllByTestId('backup-delete-btn')[0];
-    fireEvent.click(deleteBtn);
+    fireEvent.click(screen.getAllByTestId('backup-delete-btn')[0]);
+    // Confirm dialog 出现 (data-testid 由 ConfirmDialog 内部渲染)
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    // 点 [确认删除]
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('delete_backup', {
         path: 'C:\\bak1.bak.20260619-142305',
@@ -377,11 +389,9 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('backup-message')).toHaveTextContent('已删除');
     });
-    confirmSpy.mockRestore();
   });
 
-  it('clicking delete + cancel confirm → does NOT invoke delete_backup', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('BUG-RF-07: clicking delete + cancel modal → does NOT invoke delete_backup', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
         return [sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385)];
@@ -393,13 +403,17 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId('backup-delete-btn'));
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    // 点 [取消] 而不是 [删除]
+    fireEvent.click(screen.getByTestId('confirm-dialog-cancel'));
+    await new Promise((r) => setTimeout(r, 50));
     const calls = mockInvoke.mock.calls.map((c) => c[0]);
     expect(calls).not.toContain('delete_backup');
   });
 
-  it('delete error from backend → error InfoBar + row kept', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('BUG-RF-07: delete error from backend → error InfoBar + row kept', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_backups') {
         return [sampleEntry('C:\\bak.bak.20260619-142305', 1_781_929_385)];
@@ -412,6 +426,10 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(screen.getByTestId('backup-row')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId('backup-delete-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('backup-delete-confirm')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     await waitFor(() => {
       expect(screen.getByTestId('backup-message')).toHaveTextContent(
         /删除失败.*permission denied/,
@@ -579,5 +597,239 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('backup-fullscreen-overlay')).toBeInTheDocument();
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-04 — backup tri-state checkbox (none / partial / all).
+  //
+  // The select-all checkbox in the timeline header has 3 states:
+  //  - none:    0 of page items selected  → checked=false, indeterminate=false
+  //  - partial: some but not all selected  → checked=false, indeterminate=true
+  //  - all:     all page items selected    → checked=true,  indeterminate=false
+  //
+  // We expose the state via data-select-state attribute (string) AND
+  // set the DOM `indeterminate` property via ref callback (verified by
+  // reading it back from the rendered element).
+  // -------------------------------------------------------------------------
+  it('BUG-RF-04: select-all checkbox starts in "none" state', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+    expect(selectAll.dataset.selectState).toBe('none');
+    expect(selectAll.checked).toBe(false);
+    expect(selectAll.indeterminate).toBe(false);
+  });
+
+  it('BUG-RF-04: select-all is "partial" when some (but not all) page items are selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    // Select just one item.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    await waitFor(() => {
+      const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(selectAll.dataset.selectState).toBe('partial');
+      expect(selectAll.checked).toBe(false);
+      expect(selectAll.indeterminate).toBe(true);
+    });
+  });
+
+  it('BUG-RF-04: select-all is "all" when all page items are selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    // Select all rows.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[1]);
+    await waitFor(() => {
+      const selectAll = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(selectAll.dataset.selectState).toBe('all');
+      expect(selectAll.checked).toBe(true);
+      expect(selectAll.indeterminate).toBe(false);
+    });
+  });
+
+  it('BUG-RF-04: clicking select-all in "partial" state selects all page items', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+      sampleEntry('/bak/c', 1_781_750_000, 'settings', 1024),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(3);
+    });
+    // Pre-select 1 of 3 → partial.
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // Click select-all → should select remaining 2 (merge), state → all.
+    const selectAll = screen.getByTestId('backup-select-all-page');
+    fireEvent.click(selectAll);
+    await waitFor(() => {
+      const sa = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(sa.dataset.selectState).toBe('all');
+      expect(sa.checked).toBe(true);
+    });
+  });
+
+  it('BUG-RF-04: clicking select-all in "all" state deselects all page items', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[1]);
+    // Now click select-all again → deselect all.
+    const selectAll = screen.getByTestId('backup-select-all-page');
+    fireEvent.click(selectAll);
+    await waitFor(() => {
+      const sa = screen.getByTestId('backup-select-all-page') as HTMLInputElement;
+      expect(sa.dataset.selectState).toBe('none');
+      expect(sa.checked).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-05 — backup → json-editor route.
+  //
+  // The "导出 JSON 编辑" button writes the first selected backup's
+  // path to sessionStorage (`ccm.openFilePath`) and navigates to
+  // the json-editor view. The editor's existing M5 #28 useEffect
+  // reads that key on mount and loads the file. We assert:
+  //  1. Button is disabled when nothing is selected.
+  //  2. Button writes the selected path to sessionStorage on click.
+  //  3. After click, the active view is 'json-editor' (localStorage
+  //     ccm.lastView flips accordingly).
+  // -------------------------------------------------------------------------
+  it('BUG-RF-05: export-to-editor button is disabled when no backup is selected', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+    ]);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(1);
+    });
+    const btn = screen.getByTestId('backup-export-to-editor-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    // 计数应为 0
+    expect(btn.textContent).toContain('0');
+  });
+
+  it('BUG-RF-05: export-to-editor writes selected path to sessionStorage and navigates', async () => {
+    mockInvoke.mockResolvedValueOnce([
+      sampleEntry('/bak/a', 1_781_929_385, 'settings', 2048),
+      sampleEntry('/bak/b', 1_781_838_000, 'claude', 1536),
+    ]);
+    // 清空 sessionStorage + ccm.lastView
+    window.sessionStorage.clear();
+    window.localStorage.removeItem('ccm.lastView');
+
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(2);
+    });
+    // 选中第一个
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // 点 [导出 JSON 编辑]
+    const btn = screen.getByTestId('backup-export-to-editor-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    fireEvent.click(btn);
+
+    // sessionStorage 必须写入第一个 selected 的 path
+    expect(window.sessionStorage.getItem('ccm.openFilePath')).toBe('/bak/a');
+    // 视图必须切到 json-editor(useViewState 持久化到 ccm.lastView)
+    await waitFor(() => {
+      expect(window.localStorage.getItem('ccm.lastView')).toBe('json-editor');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-06 — backup pagination 20/page + multi-select.
+  //
+  // Pagination component is wired into the timeline (PAGE_SIZE = 20).
+  // Multi-select is exercised via BUG-RF-04 tests above. Here we add
+  // a focused pagination test:
+  //  - 25 backups → only 20 rows visible (page 1).
+  //  - Click "next page" → 5 rows visible (page 2, last page).
+  //  - selectedIds survive page transitions.
+  // -------------------------------------------------------------------------
+  it('BUG-RF-06: 25 backups → only 20 visible on page 1, 5 on page 2', async () => {
+    const items = Array.from({ length: 25 }, (_, i) =>
+      sampleEntry(`/bak/${i.toString().padStart(2, '0')}`, 1_781_929_385 - i * 60, 'settings', 1024),
+    );
+    mockInvoke.mockResolvedValueOnce(items);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      // 期望 20 个 backup-row (page 1)
+      expect(screen.getAllByTestId('backup-row').length).toBe(20);
+    });
+    // pagination 应该存在 (test-id 由 Pagination 组件生成,带前缀)
+    const pagination = document.querySelector('[data-testid^="backup-timeline-pagination"]');
+    expect(pagination).not.toBeNull();
+    // 找 next 按钮 (Pagination 组件的文字)
+    const nextBtn = Array.from(pagination?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.includes('›') || b.textContent?.includes('Next') || b.textContent?.includes('下一页'),
+    );
+    expect(nextBtn).toBeDefined();
+    fireEvent.click(nextBtn!);
+    // page 2 应该只剩 5 条
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(5);
+    });
+  });
+
+  it('BUG-RF-06: multi-select survives pagination (page 1 → page 2)', async () => {
+    const items = Array.from({ length: 25 }, (_, i) =>
+      sampleEntry(`/bak/${i.toString().padStart(2, '0')}`, 1_781_929_385 - i * 60, 'settings', 1024),
+    );
+    mockInvoke.mockResolvedValueOnce(items);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(20);
+    });
+    // 选 page 1 第 1 条
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // 切到 page 2
+    const pagination = document.querySelector('[data-testid^="backup-timeline-pagination"]');
+    const nextBtn = Array.from(pagination?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.includes('›') || b.textContent?.includes('Next') || b.textContent?.includes('下一页'),
+    );
+    fireEvent.click(nextBtn!);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(5);
+    });
+    // 选 page 2 第 1 条
+    const checks2 = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks2[0]);
+    // 已选计数应为 2 (跨页保持)
+    const btn = screen.getByTestId('backup-export-to-editor-btn');
+    expect(btn.textContent).toContain('2');
   });
 });

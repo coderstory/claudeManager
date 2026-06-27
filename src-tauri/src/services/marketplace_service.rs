@@ -96,10 +96,28 @@ pub enum InstallMode {
     Npx,
 }
 
+/// BUG-RF-03 — catalog 来源标签 (内置 / 第三方)。
+///
+/// `Builtin` = 项目维护的内置推荐源 (curated by us),用户在 UI 上
+/// 无需特别警惕。`ThirdParty` = 用户粘贴的 git URL 或社区共享的
+/// catalog,前端在对应 tab 顶部显示警告条 "第三方仓库未经 Claude
+/// 官方审核, 请自行甄别"。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CatalogSource {
+    #[default]
+    Builtin,
+    ThirdParty,
+}
+
 /// M2.16 + M3.4 — 内置推荐仓库条目。
 ///
 /// `id` 稳定 (前端 React key 用)。
 /// `install_mode` + `install_target` (M3.4 新增) 决定 install 语义。
+///
+/// BUG-RF-03 — 加 `source` 字段 (Builtin / ThirdParty) 让前端能按来源
+/// 分 tab + 第三方仓库显示警告语。serde default = Builtin 保持向
+/// 后兼容(老调用方不会带这个字段)。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MarketplaceRepo {
     pub id: String,
@@ -115,6 +133,11 @@ pub struct MarketplaceRepo {
     /// - Git: 可空 (直接走 `url` clone)
     #[serde(default)]
     pub install_target: String,
+    /// BUG-RF-03 — catalog 来源 (内置 / 第三方)。
+    /// 第三方仓库 UI 顶部加 "未经 Claude 官方审核" 警告条。
+    /// Default = Builtin (向后兼容 — 老调用方无此字段时按内置处理)。
+    #[serde(default)]
+    pub source: CatalogSource,
 }
 
 /// M3.4 — 内置推荐列表 (M2.16-005-M: placeholder URL → 真 URL)。
@@ -137,6 +160,7 @@ pub fn builtin_repos() -> Vec<MarketplaceRepo> {
             description: "Claude Code 官方插件集合(superpowers / debugging / collaboration 等)。M3.4: 走 `claude plugin install` CLI 一步到位,无需 git clone。".into(),
             install_mode: InstallMode::Builtin,
             install_target: "superpowers@claude-plugins-official".into(),
+            source: CatalogSource::Builtin,
         },
         MarketplaceRepo {
             id: "gsd-core".into(),
@@ -145,6 +169,7 @@ pub fn builtin_repos() -> Vec<MarketplaceRepo> {
             description: "GSD — 结构化 Claude Code 工作流(discuss / plan / execute / verify)。M3.4: 走 `npx @opengsd/gsd-core@latest --global --silent`,无需 git clone。".into(),
             install_mode: InstallMode::Npx,
             install_target: "@opengsd/gsd-core@latest".into(),
+            source: CatalogSource::Builtin,
         },
         MarketplaceRepo {
             id: "claude-cookbooks".into(),
@@ -153,6 +178,7 @@ pub fn builtin_repos() -> Vec<MarketplaceRepo> {
             description: "Anthropic 官方示例集合(plugins / skills / commands)。M3.4: 走 git clone + 用户选资源 install。".into(),
             install_mode: InstallMode::Git,
             install_target: String::new(),
+            source: CatalogSource::Builtin,
         },
     ]
 }
@@ -1281,6 +1307,42 @@ mod tests {
             "BZ-06: gsd-core url 必须 https://github.com 开头 (实际: {:?})",
             urls.get("gsd-core")
         );
+    }
+
+    /// BUG-RF-03 — builtin_repos() 返回的所有条目都标 `Builtin`,
+    /// 不会触发第三方警告条。第三方警告由前端按 source 字段分 tab
+    /// 渲染,后端只负责给数据。
+    #[test]
+    fn rf03_builtin_repos_all_have_builtin_source() {
+        let repos = builtin_repos();
+        assert!(!repos.is_empty());
+        for r in &repos {
+            assert_eq!(
+                r.source,
+                CatalogSource::Builtin,
+                "RF-03: builtin_repos[{}] 的 source 必须是 Builtin (实际: {:?})",
+                r.id,
+                r.source
+            );
+        }
+    }
+
+    /// BUG-RF-03 — CatalogSource 的 serde 表示稳定(`builtin` / `third_party`)。
+    /// 前端 `marketplace.ts` 的 TS 镜像 `CatalogSource` 枚举对应这两个
+    /// 字符串值,锁定该合约防止悄悄重命名。
+    #[test]
+    fn rf03_catalog_source_serde_values_are_stable() {
+        // Builtin → "builtin"
+        let b = serde_json::to_string(&CatalogSource::Builtin).unwrap();
+        assert_eq!(b, "\"builtin\"");
+        // ThirdParty → "third_party"
+        let t = serde_json::to_string(&CatalogSource::ThirdParty).unwrap();
+        assert_eq!(t, "\"third_party\"");
+        // 反向解析: 字符串能还原为正确的 enum variant。
+        let parsed: CatalogSource = serde_json::from_str("\"third_party\"").unwrap();
+        assert_eq!(parsed, CatalogSource::ThirdParty);
+        let parsed: CatalogSource = serde_json::from_str("\"builtin\"").unwrap();
+        assert_eq!(parsed, CatalogSource::Builtin);
     }
 
     /// M3.4: install_builtin 拒绝未知 plugin_id。
