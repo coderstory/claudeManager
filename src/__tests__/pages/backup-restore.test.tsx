@@ -750,4 +750,68 @@ describe('BackupRestorePage — F13 (M2.6)', () => {
       expect(window.localStorage.getItem('ccm.lastView')).toBe('json-editor');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // BUG-RF-06 — backup pagination 20/page + multi-select.
+  //
+  // Pagination component is wired into the timeline (PAGE_SIZE = 20).
+  // Multi-select is exercised via BUG-RF-04 tests above. Here we add
+  // a focused pagination test:
+  //  - 25 backups → only 20 rows visible (page 1).
+  //  - Click "next page" → 5 rows visible (page 2, last page).
+  //  - selectedIds survive page transitions.
+  // -------------------------------------------------------------------------
+  it('BUG-RF-06: 25 backups → only 20 visible on page 1, 5 on page 2', async () => {
+    const items = Array.from({ length: 25 }, (_, i) =>
+      sampleEntry(`/bak/${i.toString().padStart(2, '0')}`, 1_781_929_385 - i * 60, 'settings', 1024),
+    );
+    mockInvoke.mockResolvedValueOnce(items);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      // 期望 20 个 backup-row (page 1)
+      expect(screen.getAllByTestId('backup-row').length).toBe(20);
+    });
+    // pagination 应该存在 (test-id 由 Pagination 组件生成,带前缀)
+    const pagination = document.querySelector('[data-testid^="backup-timeline-pagination"]');
+    expect(pagination).not.toBeNull();
+    // 找 next 按钮 (Pagination 组件的文字)
+    const nextBtn = Array.from(pagination?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.includes('›') || b.textContent?.includes('Next') || b.textContent?.includes('下一页'),
+    );
+    expect(nextBtn).toBeDefined();
+    fireEvent.click(nextBtn!);
+    // page 2 应该只剩 5 条
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(5);
+    });
+  });
+
+  it('BUG-RF-06: multi-select survives pagination (page 1 → page 2)', async () => {
+    const items = Array.from({ length: 25 }, (_, i) =>
+      sampleEntry(`/bak/${i.toString().padStart(2, '0')}`, 1_781_929_385 - i * 60, 'settings', 1024),
+    );
+    mockInvoke.mockResolvedValueOnce(items);
+    render(<BackupRestorePage />, { wrapper: wrap });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(20);
+    });
+    // 选 page 1 第 1 条
+    const checks = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks[0]);
+    // 切到 page 2
+    const pagination = document.querySelector('[data-testid^="backup-timeline-pagination"]');
+    const nextBtn = Array.from(pagination?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.includes('›') || b.textContent?.includes('Next') || b.textContent?.includes('下一页'),
+    );
+    fireEvent.click(nextBtn!);
+    await waitFor(() => {
+      expect(screen.getAllByTestId('backup-row').length).toBe(5);
+    });
+    // 选 page 2 第 1 条
+    const checks2 = screen.getAllByTestId('backup-row-check');
+    fireEvent.click(checks2[0]);
+    // 已选计数应为 2 (跨页保持)
+    const btn = screen.getByTestId('backup-export-to-editor-btn');
+    expect(btn.textContent).toContain('2');
+  });
 });
