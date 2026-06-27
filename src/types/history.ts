@@ -130,11 +130,27 @@ export interface PurgeReport {
   cutoff_ts: number;
 }
 
-/** Mirrors `ExportReport` (Plan B contract — backend defines it). */
+/**
+ * Mirrors `ExportReport` in Rust (`commands/history.rs:78-90`).
+ *
+ * Phase 32-01 (P1-01): the old shape `{ path; count; format }` drifted
+ * from the Rust struct — the backend serialises `output_path` /
+ * `usage_rows` / `backup_rows` / `file_size_bytes` (serde snake_case).
+ * Reading `result.path` / `result.count` returned `undefined` at
+ * runtime. This interface now matches the wire shape 1:1 so consumers
+ * (history page success banner) render real data.
+ */
 export interface ExportReport {
-  path: string;
-  count: number;
+  /** Resolved absolute path the export was written to. */
+  output_path: string;
+  /** `"json"` / `"csv"` — mirrors the requested format. */
   format: 'json' | 'csv';
+  /** Number of `usage_history` rows included. */
+  usage_rows: number;
+  /** Number of `backup_history` rows included. */
+  backup_rows: number;
+  /** Total file size in bytes on disk (post-write). */
+  file_size_bytes: number;
 }
 
 export type ExportFormat = 'json' | 'csv';

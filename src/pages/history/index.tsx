@@ -13,7 +13,7 @@
  *   - `get_usage_history(filter?)`     → `UsageHistoryRow[]`
  *   - `get_backup_history(filter?)`    → `BackupHistoryRow[]`
  *   - `get_history_stats()`            → `HistoryStats`
- *   - `export_history(format)`         → `ExportReport`
+ *   - `export_history(format, target_path)` → `ExportReport`
  *   - `purge_history(older_than_days)` → `PurgeReport`
  *
  * Wrapped in `src/lib/api/history.ts` — pages must import the
@@ -38,6 +38,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Database } from 'lucide-react';
 
+import { invoke } from '@tauri-apps/api/core';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   exportHistory,
@@ -281,12 +282,43 @@ export default function HistoryPage(): ReactElement {
   }, [refresh]);
 
   // ---- export ----
+  //
+  // Phase 32-01 (P1-02): the Rust `export_history` command requires a
+  // `target_path: String` — it does NOT pop a save dialog itself (see
+  // `src/lib/api/history.ts::exportHistory` doc). We pop the native
+  // save dialog via the Tauri v2 dialog plugin's IPC command
+  // (`plugin:dialog|save`), which the `dialog:allow-save` capability
+  // already permits (`src-tauri/capabilities/default.json:27`).
+  //
+  // We use `invoke('plugin:dialog|save', ...)` directly instead of the
+  // `@tauri-apps/plugin-dialog` JS wrapper because that wrapper is
+  // intentionally not installed (CLAUDE.md §2.3; same discipline as
+  // F14/F23, though those two pop the dialog Rust-side). The
+  // `plugin:dialog|save` command resolves to `null` when the user
+  // cancels — we treat that as a no-op (no error banner, no toast),
+  // matching the F14/F23 UX.
   const handleExport = useCallback(async (): Promise<void> => {
     setError(null);
     setSuccessMsg(null);
     try {
-      const report = await exportHistory(exportFormat);
-      setSuccessMsg(`已导出 ${report.count} 条到 ${report.path}`);
+      const targetPath = await invoke<string | null>('plugin:dialog|save', {
+        title: '导出历史',
+        defaultPath: `history-export-${Date.now()}.${exportFormat}`,
+        filters: [
+          {
+            name: exportFormat.toUpperCase(),
+            extensions: [exportFormat],
+          },
+        ],
+      });
+      // User cancelled the save dialog — silent no-op (CLAUDE.md §7:
+      // never silent on *errors*, but a cancel is not an error).
+      if (!targetPath) return;
+
+      const report = await exportHistory(exportFormat, targetPath);
+      setSuccessMsg(
+        `已导出 ${report.usage_rows} 条用量 + ${report.backup_rows} 条备份到 ${report.output_path}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(`导出失败: ${msg}`);

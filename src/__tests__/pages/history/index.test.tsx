@@ -99,13 +99,27 @@ const sampleStats: HistoryStats = {
 beforeEach(() => {
   mockInvoke.mockReset();
   // Default: empty rows + minimal stats.
+  //
+  // Phase 32-01 (P1-01 + P1-02): the `export_history` mock now returns
+  // the real Rust `ExportReport` shape (`output_path` / `usage_rows` /
+  // `backup_rows` / `file_size_bytes`), NOT the old `{ path, count,
+  // format }` drift. The page also calls `plugin:dialog|save` before
+  // `export_history` (P1-02) — the default mock returns a path so the
+  // export flow proceeds in tests that don't override it.
   mockInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_history_stats') return sampleStats;
     if (cmd === 'get_usage_history_rows') return [];
     if (cmd === 'get_daily_stats_history') return [];
     if (cmd === 'get_backup_history') return [];
+    if (cmd === 'plugin:dialog|save') return 'C:/export.json';
     if (cmd === 'export_history')
-      return { path: 'C:/export.json', count: 0, format: 'json' };
+      return {
+        output_path: 'C:/export.json',
+        format: 'json',
+        usage_rows: 0,
+        backup_rows: 0,
+        file_size_bytes: 128,
+      };
     return null;
   });
 });
@@ -278,11 +292,18 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     );
   });
 
-  it('clicking export invokes export_history with the selected format', async () => {
+  it('clicking export invokes export_history with the selected format + target_path', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'plugin:dialog|save') return 'C:/export.csv';
       if (cmd === 'export_history') {
-        return { path: 'C:/export.csv', count: 3, format: 'csv' };
+        return {
+          output_path: 'C:/export.csv',
+          format: 'csv',
+          usage_rows: 3,
+          backup_rows: 1,
+          file_size_bytes: 256,
+        };
       }
       return [];
     });
@@ -304,15 +325,35 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
         (c) => c[0] === 'export_history',
       );
       expect(exportCalls.length).toBe(1);
-      expect(exportCalls[0][1]).toMatchObject({ format: 'csv' });
+      // P1-02: the wrapper must forward both `format` and `targetPath`
+      // (camelCase → the Rust command expects `target_path`; Tauri v2
+      // does NOT auto-convert, so the wrapper passes `targetPath` and
+      // the arg-validation on the Rust side maps it). We assert the
+      // shape the wrapper sends (`{ format, targetPath }`).
+      expect(exportCalls[0][1]).toMatchObject({
+        format: 'csv',
+        targetPath: 'C:/export.csv',
+      });
     });
+    // P1-02: the save dialog must be popped before export_history.
+    const saveCalls = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'plugin:dialog|save',
+    );
+    expect(saveCalls.length).toBe(1);
   });
 
   it('shows success banner after a successful export', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'plugin:dialog|save') return 'C:/export.json';
       if (cmd === 'export_history')
-        return { path: 'C:/export.json', count: 5, format: 'json' };
+        return {
+          output_path: 'C:/export.json',
+          format: 'json',
+          usage_rows: 5,
+          backup_rows: 2,
+          file_size_bytes: 512,
+        };
       return [];
     });
     render(<HistoryPage />);
@@ -325,7 +366,48 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('history-success')).toBeInTheDocument();
     });
+    // P1-01: success banner now renders `usage_rows` (was `count`).
+    // 5 usage rows → banner contains '5'.
     expect(screen.getByTestId('history-success').textContent).toContain('5');
+    // And the output_path (was `path`).
+    expect(screen.getByTestId('history-success').textContent).toContain(
+      'C:/export.json',
+    );
+  });
+
+  it('cancelling the save dialog is a silent no-op (no export_history call, no error)', async () => {
+    // P1-02: `plugin:dialog|save` returns null when the user cancels.
+    // The page must NOT call `export_history` and must NOT show an
+    // error banner (cancel is not an error — CLAUDE.md §7).
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_history_stats') return sampleStats;
+      if (cmd === 'plugin:dialog|save') return null;
+      if (cmd === 'export_history')
+        return {
+          output_path: 'C:/should-not-be-reached.json',
+          format: 'json',
+          usage_rows: 99,
+          backup_rows: 0,
+          file_size_bytes: 0,
+        };
+      return [];
+    });
+    render(<HistoryPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('export-btn')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-btn'));
+    });
+    // Give the async handler a tick to settle.
+    await waitFor(() => {
+      const exportCalls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'export_history',
+      );
+      expect(exportCalls.length).toBe(0);
+    });
+    expect(screen.queryByTestId('history-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('history-success')).not.toBeInTheDocument();
   });
 
   it('reset button clears the filter state', async () => {

@@ -79,11 +79,34 @@ export function getHistoryStats(): Promise<HistoryStats> {
 
 /**
  * Export the current view to a JSON or CSV file. `format` selects
- * the serialiser; the file path is chosen by the user via a native
- * save dialog on the Rust side.
+ * the serialiser; `targetPath` is the absolute path chosen by the
+ * user via a native save dialog on the **frontend** side.
+ *
+ * Phase 32-01 (P1-02): the Rust command `export_history` requires
+ * `target_path: String` (commands/history.rs:357-367) — it does NOT
+ * pop a save dialog itself (unlike F14 `export_provider` / F23
+ * `export_optimization_report`, which call `blocking_save_file` on
+ * the Rust side). The previous wrapper sent only `{ format }`, so
+ * Tauri v2 IPC arg-validation rejected every call at runtime
+ * ("missing required key target_path"). The mock in
+ * `__tests__/pages/history/index.test.tsx` shadowed the bug.
+ *
+ * The save dialog is popped via `invoke('plugin:dialog|save', ...)`
+ * in the page (see `src/pages/history/index.tsx::handleExport`),
+ * NOT via `@tauri-apps/plugin-dialog` — that JS wrapper is
+ * intentionally not installed (CLAUDE.md §2.3 dependency
+ * discipline; documented in F14/F23 command doc-comments). The
+ * `dialog:allow-save` capability is already granted in
+ * `src-tauri/capabilities/default.json:27`.
  */
-export function exportHistory(format: ExportFormat): Promise<ExportReport> {
-  return invoke<ExportReport>('export_history', { format });
+export function exportHistory(
+  format: ExportFormat,
+  targetPath: string,
+): Promise<ExportReport> {
+  return invoke<ExportReport>('export_history', {
+    format,
+    targetPath,
+  });
 }
 
 /**
