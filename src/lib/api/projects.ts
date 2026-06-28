@@ -40,7 +40,15 @@ const NO_PROJECTS: ProjectsListResult = {
 /** M3.10 — list all projects + the active id. Auto-seeds system project. */
 export async function listProjects(): Promise<ProjectsListResult> {
   if (!isTauriRuntime()) return NO_PROJECTS;
-  return invoke<ProjectsListResult>('list_projects');
+  const result = await invoke<ProjectsListResult | null>('list_projects');
+  // Defensive: when running under the main.tsx shim (vite dev or
+  // first-paint Tauri release), `invoke` resolves with `null`
+  // instead of a typed payload. Treat null/undefined as the empty
+  // project set so the React tree renders a stable "no projects"
+  // state instead of crashing with
+  // "Cannot read properties of null (reading 'projects')".
+  if (!result || !Array.isArray(result.projects)) return NO_PROJECTS;
+  return result;
 }
 
 /** M3.10 — add a new user project. Validates root_dir has .claude/. */

@@ -37,6 +37,14 @@ if (
   // are tracked, but the callback registry stays empty (so any
   // later .then() is a no-op rather than throwing).
   let nextCallbackId = 0;
+  // Fake stub results keyed by command name — fed back to
+  // `lib/api/*.ts` callers so vite-dev previews render a stable
+  // empty state instead of crashing on null returns. Keep this
+  // minimal: every stub returns the empty/no-op shape of its
+  // real Rust counterpart. Commands that take args get
+  // `undefined` and resolve null (matches the behaviour of "no
+  // data" without surfacing a TypeError to the React tree).
+  const emptyResult = (): unknown => null;
   (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
     transformCallback: (
       _callback: (...args: unknown[]) => unknown,
@@ -46,7 +54,7 @@ if (
       nextCallbackId += 1;
       return id;
     },
-    invoke: () => Promise.resolve(null),
+    invoke: (_cmd: string, _args?: unknown) => Promise.resolve(emptyResult()),
   };
 }
 
