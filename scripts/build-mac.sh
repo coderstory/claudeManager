@@ -81,10 +81,18 @@ compute_dist_hash_inline() {
   local dir="$1"
   [[ ! -d "$dir" ]] && { echo "0"; return; }
   local max=0
+  # Quantize to 5-second buckets (BUCKET_SECS) to tolerate ~1s mtime
+  # drift between dist/ and target/.../tauri-codegen-assets/ (Tauri's
+  # codegen copies dist mid-build, bumping its mtime by 1s). Without
+  # bucketing, [1.5/3] would always report stale on warm cache and
+  # clear the codegen dir, defeating sccache warm cache.
+  # Must mirror compute_dist_mtime_max in src-tauri/build.rs.
+  local BUCKET_SECS=5
   while IFS= read -r f; do
     [[ -z "$f" ]] && continue
     local secs
     secs=$(stat -f '%m' "$f" 2>/dev/null || echo 0)
+    secs=$(( (secs / BUCKET_SECS) * BUCKET_SECS ))
     (( secs > max )) && max=$secs
   done < <(find "$dir" -type f 2>/dev/null)
   printf '%x\n' "$max"

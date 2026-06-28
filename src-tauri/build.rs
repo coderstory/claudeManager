@@ -80,6 +80,14 @@ fn main() {
 /// `compute_dist_hash_inline` helper in scripts/build-mac.sh so any
 /// divergence between Rust and bash sides is caught at verification time.
 fn compute_dist_mtime_max(dir: &Path) -> String {
+    // Quantize to 5-second buckets to tolerate the ~1s mtime drift
+    // between dist/ and target/.../tauri-codegen-assets/ (Tauri's
+    // codegen step copies dist into codegen-assets during the build,
+    // bumping its mtime by 1s). Without bucketing, [1.5/3] would
+    // always report stale on warm cache and clear the codegen dir,
+    // defeating the sccache warm-cache optimization.
+    // Mirrors `compute_dist_hash_inline` in scripts/build-mac.sh.
+    const BUCKET_SECS: u64 = 5;
     let mut max_secs: u64 = 0;
     if dir.exists() {
         for entry in WalkDir::new(dir)
@@ -90,7 +98,8 @@ fn compute_dist_mtime_max(dir: &Path) -> String {
             if let Ok(meta) = entry.metadata() {
                 if let Ok(mtime) = meta.modified() {
                     if let Ok(d) = mtime.duration_since(UNIX_EPOCH) {
-                        max_secs = max_secs.max(d.as_secs());
+                        let secs = (d.as_secs() / BUCKET_SECS) * BUCKET_SECS;
+                        max_secs = max_secs.max(secs);
                     }
                 }
             }

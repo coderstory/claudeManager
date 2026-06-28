@@ -6,18 +6,21 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// Build marker — embedded in binary .rodata as raw text. Grepable via
-/// `strings <binary> | grep ccm-build-mtime-`. Re-computed at every
-/// build from `dist/*` max mtime (see `src-tauri/build.rs`); if dist
-/// changes, this const changes → cargo re-runs build.rs → tauri-build
-/// re-inlines fresh dist. Companion to scripts/build-mac.sh step
-/// [2.5/3] which verifies the marker in the built binary matches
-/// the current dist hash. Without this safeguard, Tauri 2.x silently
-/// serves stale dist from `target/$MODE/build/claude-config-manager-*/
-/// out/tauri-codegen-assets/` even after `cargo tauri build` succeeds.
-/// See:
+/// `strings <binary> | grep ccm-build-mtime-`. Declared as `static` (not
+/// `const`) because `#[used]` cannot be applied to consts; static gives us
+/// the same .rodata embedding + the `#[used]` attribute prevents dead-code
+/// elimination. Re-computed at every build from `dist/*` max mtime (see
+/// `src-tauri/build.rs`); if dist changes, this static changes → cargo
+/// re-runs build.rs → tauri-build re-inlines fresh dist. Companion to
+/// scripts/build-mac.sh step [2.5/3] which verifies the marker in the
+/// built binary matches the current dist hash. Without this safeguard,
+/// Tauri 2.x silently serves stale dist from
+/// `target/$MODE/build/claude-config-manager-*/out/tauri-codegen-assets/`
+/// even after `cargo tauri build` succeeds. See:
 ///   - .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
 ///   - docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md
-pub const BUILD_MARKER: &str = concat!("ccm-build-mtime-", env!("DIST_HASH"));
+#[used]
+pub static BUILD_MARKER: &str = concat!("ccm-build-mtime-", env!("DIST_HASH"));
 
 pub mod app_state;
 pub mod commands;
