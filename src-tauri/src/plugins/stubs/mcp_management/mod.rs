@@ -1,5 +1,7 @@
 //! F6 — MCP 管理 (stub).
 
+pub mod commands;
+
 use super::super::traits::*;
 
 pub struct McpManagementPlugin;
