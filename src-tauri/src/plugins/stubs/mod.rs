@@ -19,6 +19,7 @@ pub mod marketplace;
 pub mod optimizer;
 pub mod backup_restore;
 pub mod updater;
+pub mod history_view;
 
 pub use provider_list::ProviderListPlugin;
 pub use import_sql::ImportSqlPlugin;
@@ -30,3 +31,4 @@ pub use marketplace::MarketplacePlugin;
 pub use optimizer::OptimizerPlugin;
 pub use backup_restore::BackupRestorePlugin;
 pub use updater::UpdaterPlugin;
+pub use history_view::HistoryViewPlugin;

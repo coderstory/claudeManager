@@ -55,6 +55,9 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     host.register(Box::new(stubs::OptimizerPlugin))?;
     host.register(Box::new(stubs::BackupRestorePlugin))?;
 
+    // Phase 21 — history page (SQLite 查询 UI, M4.6)
+    host.register(Box::new(stubs::HistoryViewPlugin))?;
+
     // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
     host.register(Box::new(stubs::UpdaterPlugin))?;
 
