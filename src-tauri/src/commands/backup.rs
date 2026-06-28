@@ -8,6 +8,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::infrastructure::backup_scanner::BackupEntry;
 use crate::infrastructure::json_diff::DiffEntry;
 use crate::services::backup_service::ManualBackupResult;
@@ -27,7 +28,8 @@ pub async fn list_backups(state: State<'_, AppState>) -> CmdResult<Vec<BackupEnt
     // M3.12 — read live active root (state.paths is a startup
     // snapshot; active_root can change at runtime).
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    Ok(state.backup_service.list_backups(active_root.as_deref()))
+    Ok(get_service!(state, crate::services::backup_service::BackupService)
+        .list_backups(active_root.as_deref()))
 }
 
 /// F13 — read the full text content of a single backup file.
@@ -41,8 +43,7 @@ pub async fn read_backup_content(
     path: String,
 ) -> CmdResult<String> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .backup_service
+    get_service!(state, crate::services::backup_service::BackupService)
         .read_backup_content(
             std::path::Path::new(&path),
             active_root.as_deref(),
@@ -58,8 +59,7 @@ pub async fn diff_backups(
     path2: String,
 ) -> CmdResult<Vec<DiffEntry>> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .backup_service
+    get_service!(state, crate::services::backup_service::BackupService)
         .diff_backups(
             std::path::Path::new(&path1),
             std::path::Path::new(&path2),
@@ -83,8 +83,7 @@ pub async fn restore_backup(
     backup_path: String,
 ) -> CmdResult<()> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .backup_service
+    get_service!(state, crate::services::backup_service::BackupService)
         .restore_backup(
             std::path::Path::new(&backup_path),
             active_root.as_deref(),
@@ -110,8 +109,7 @@ pub async fn backup_now(
         Some(t) => std::path::PathBuf::from(t),
         None => state.paths.settings_json.clone(),
     };
-    let entry = state
-        .backup_service
+    let entry = get_service!(state, crate::services::backup_service::BackupService)
         .backup_now(&target_path)
         .map_err(|e| e.to_string())?;
     Ok(ManualBackupResult {
@@ -139,8 +137,7 @@ pub async fn backup_now(
 #[tauri::command]
 pub async fn delete_backup(state: State<'_, AppState>, path: String) -> CmdResult<()> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .backup_service
+    get_service!(state, crate::services::backup_service::BackupService)
         .delete_backup(std::path::Path::new(&path), active_root.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -166,8 +163,7 @@ pub async fn backup_incremental(
         None => state.paths.settings_json.clone(),
     };
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    match state
-        .backup_service
+    match get_service!(state, crate::services::backup_service::BackupService)
         .backup_incremental(&target_path, active_root.as_deref())
     {
         Ok(entry) => Ok(ManualBackupResult {

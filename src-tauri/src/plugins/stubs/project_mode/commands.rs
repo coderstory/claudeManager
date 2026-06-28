@@ -3,6 +3,10 @@
 //! Phase 42 physical migration: 7 `#[tauri::command]` fns from
 //! `src-tauri/src/commands/project.rs` → this module's 7 `dispatch_*`
 //! shims + 7 `inventory::submit!` registrations.
+//!
+//! Phase 45 service-registry refactor: dispatch fns look up
+//! `ProjectService` via `crate::get_service!` (registered in
+//! `service_registry` by `plugins::host` at startup).
 
 use tauri::ipc::Invoke;
 use tauri::Manager;
@@ -11,6 +15,7 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::commands::project::ProjectsListResult;
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
 
 // ---------------------------------------------------------------------------
@@ -23,7 +28,8 @@ pub fn dispatch_list_projects(invoke: Invoke<tauri::Wry>) -> bool {
     tauri::async_runtime::block_on(async move {
         let s: tauri::State<AppState> = app.state::<AppState>();
         let result: Result<ProjectsListResult, String> = (|| async {
-            let pf = s.inner().project_service.load().map_err(|e| e.to_string())?;
+            let svc = get_service!(s.inner(), crate::services::project_service::ProjectService);
+            let pf = svc.load().map_err(|e| e.to_string())?;
             let summaries: Vec<crate::commands::project::ProjectSummary> = pf
                 .projects
                 .iter()
@@ -70,11 +76,12 @@ pub fn dispatch_add_project(invoke: Invoke<tauri::Wry>) -> bool {
             .unwrap_or("")
             .to_string();
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<crate::domain::Project, String> = s
-            .inner()
-            .project_service
-            .add(name, std::path::PathBuf::from(root_str))
-            .map_err(|e| e.to_string());
+        let result: Result<crate::domain::Project, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::project_service::ProjectService);
+            svc.add(name, std::path::PathBuf::from(root_str))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -106,11 +113,11 @@ pub fn dispatch_remove_project(invoke: Invoke<tauri::Wry>) -> bool {
             }
         };
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<(), String> = s
-            .inner()
-            .project_service
-            .remove(id)
-            .map_err(|e| e.to_string());
+        let result: Result<(), String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::project_service::ProjectService);
+            svc.remove(id).map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -143,11 +150,11 @@ pub fn dispatch_switch_project(invoke: Invoke<tauri::Wry>) -> bool {
             }
         };
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<crate::domain::Project, String> = s
-            .inner()
-            .project_service
-            .switch(id)
-            .map_err(|e| e.to_string());
+        let result: Result<crate::domain::Project, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::project_service::ProjectService);
+            svc.switch(id).map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -163,7 +170,8 @@ pub fn dispatch_current_project(invoke: Invoke<tauri::Wry>) -> bool {
     tauri::async_runtime::block_on(async move {
         let s: tauri::State<AppState> = app.state::<AppState>();
         let result: Result<Option<crate::domain::Project>, String> = (|| async {
-            let pf = s.inner().project_service.load().map_err(|e| e.to_string())?;
+            let svc = get_service!(s.inner(), crate::services::project_service::ProjectService);
+            let pf = svc.load().map_err(|e| e.to_string())?;
             Ok(pf.current().cloned())
         })()
         .await;

@@ -17,6 +17,14 @@ impl IPlugin for UsageQueryPlugin {
     fn name(&self) -> &'static str {
         "用量查询"
     }
+    /// Phase 45 — `usage-service` is the primary backing store
+    /// for the 3 commands (`get_current_usage` / `get_usage_history`
+    /// / `refresh_usage`). `history-service` is a secondary dep
+    /// because `refresh_usage` also touches `HistoryService` for the
+    /// "已写入 N 条" verify counter (Phase 27 BUG-CR-02).
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["usage-service", "history-service"]
+    }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/usage".to_string(),

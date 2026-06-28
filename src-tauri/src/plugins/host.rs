@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 
 use super::menu_registry::{PluginAppMenuItem, PluginTrayItem};
+use super::topological::{topo_sort, TopologicalError};
 use super::traits::*;
 
 // ---------------------------------------------------------------------------
@@ -125,6 +126,54 @@ impl PluginHost {
             }
         }
         Ok(())
+    }
+
+    /// **Phase 45** — run `init` on every plugin in **topological
+    /// order** of their [`IPlugin::depends_on`] declarations.
+    /// Replaces `init_all` for any plugin graph that includes
+    /// service plugins (which need other services registered
+    /// before they can wire up — e.g. `provider-service` calls
+    /// `.with_backup_service(...)` + `.with_history(...)` and
+    /// needs both registered first).
+    ///
+    /// Returns the resolved init order (in dependency-first form)
+    /// so the caller can log it / use it as a stable init sequence
+    /// for tests.
+    ///
+    /// # Errors
+    /// - [`PluginError::CycleDetected`] if the graph has a cycle
+    /// - [`PluginError::MissingDependency`] if any plugin references
+    ///   an id not in the registry
+    /// - Bubbles up the first plugin's `init` error
+    pub fn init_all_topological(
+        &mut self,
+        ctx: &mut PluginContext,
+    ) -> Result<Vec<&'static str>, PluginError> {
+        // 1. Build id → deps map (snapshot; we can't hold `&self` while
+        //    taking `&mut` for the init loop).
+        let mut deps_map: HashMap<&'static str, Vec<&'static str>> = HashMap::new();
+        let order_snapshot: Vec<&'static str> = self.init_order.clone();
+        for id in &order_snapshot {
+            if let Some(plugin) = self.plugins.get(id) {
+                deps_map.insert(*id, plugin.depends_on());
+            }
+        }
+        // 2. Topological sort (errors carry offending path / missing id).
+        let topo_order = topo_sort(&deps_map).map_err(|e| match e {
+            TopologicalError::Cycle { path } => PluginError::CycleDetected { path },
+            TopologicalError::MissingDependency { plugin, missing } => {
+                PluginError::MissingDependency { plugin, missing }
+            }
+        })?;
+        // 3. Init in order. `topo_order` is dependency-first, so by the
+        //    time we reach a plugin all its `depends_on` services have
+        //    been `register_arc`'d into `ctx.services`.
+        for id in &topo_order {
+            if let Some(plugin) = self.plugins.get_mut(id) {
+                plugin.init(&mut *ctx)?;
+            }
+        }
+        Ok(topo_order)
     }
 
     /// Run `shutdown` on every plugin, in reverse registration order
@@ -605,5 +654,172 @@ mod tests {
         let plugin = NoOpPlugin;
         let items: Vec<PluginAppMenuItem> = plugin.app_menu_items();
         assert!(items.is_empty());
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 45 — init_all_topological (depends_on wiring)
+    // -----------------------------------------------------------------
+
+    /// Test plugin that declares `depends_on` and records its init
+    /// order to a shared log. Distinct ids so multiple instances can
+    /// coexist on the same host.
+    struct DepPlugin {
+        id: &'static str,
+        deps: Vec<&'static str>,
+        log: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl DepPlugin {
+        fn new(id: &'static str, deps: &[&'static str], log: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                id,
+                deps: deps.to_vec(),
+                log,
+            }
+        }
+    }
+
+    impl IPlugin for DepPlugin {
+        fn id(&self) -> &'static str {
+            self.id
+        }
+        fn name(&self) -> &'static str {
+            self.id
+        }
+        fn depends_on(&self) -> Vec<&'static str> {
+            self.deps.clone()
+        }
+        fn init(&mut self, _ctx: &mut PluginContext) -> Result<(), PluginError> {
+            self.log.lock().unwrap().push(format!("init:{}", self.id));
+            Ok(())
+        }
+    }
+
+    /// A → B; topo order must be B before A.
+    #[test]
+    fn init_all_topological_respects_depends_on() {
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let mut host = PluginHost::new();
+        host.register(Box::new(DepPlugin::new(
+            "A",
+            &["B"],
+            log.clone(),
+        )))
+        .unwrap();
+        host.register(Box::new(DepPlugin::new(
+            "B",
+            &[],
+            log.clone(),
+        )))
+        .unwrap();
+        let mut ctx = dummy_ctx();
+        let order = host.init_all_topological(&mut ctx).unwrap();
+        let log_snapshot = log.lock().unwrap().clone();
+        let b_idx = log_snapshot.iter().position(|s| s == "init:B").unwrap();
+        let a_idx = log_snapshot.iter().position(|s| s == "init:A").unwrap();
+        assert!(b_idx < a_idx, "B must init before A; got {:?}", log_snapshot);
+        // Order returned also dependency-first.
+        let b_pos = order.iter().position(|&x| x == "B").unwrap();
+        let a_pos = order.iter().position(|&x| x == "A").unwrap();
+        assert!(b_pos < a_pos, "topo order must list B before A");
+    }
+
+    /// A → B → A → cycle, must surface as `PluginError::CycleDetected`
+    /// carrying both ids in the path.
+    #[test]
+    fn init_all_topological_detects_cycle() {
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let mut host = PluginHost::new();
+        host.register(Box::new(DepPlugin::new("A", &["B"], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("B", &["A"], log.clone()))).unwrap();
+        let mut ctx = dummy_ctx();
+        let err = host.init_all_topological(&mut ctx).unwrap_err();
+        match err {
+            PluginError::CycleDetected { path } => {
+                assert!(path.contains(&"A".to_string()), "path includes A: {path:?}");
+                assert!(path.contains(&"B".to_string()), "path includes B: {path:?}");
+            }
+            other => panic!("expected CycleDetected, got {other:?}"),
+        }
+    }
+
+    /// A depends on "nonexistent" → `MissingDependency` error names the
+    /// missing plugin.
+    #[test]
+    fn init_all_topological_missing_dep_errors() {
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let mut host = PluginHost::new();
+        host.register(Box::new(DepPlugin::new("A", &["nonexistent"], log.clone()))).unwrap();
+        let mut ctx = dummy_ctx();
+        let err = host.init_all_topological(&mut ctx).unwrap_err();
+        match err {
+            PluginError::MissingDependency { plugin, missing } => {
+                assert_eq!(plugin, "A");
+                assert_eq!(missing, "nonexistent");
+            }
+            other => panic!("expected MissingDependency, got {other:?}"),
+        }
+    }
+
+    /// G10 — full 9-service dependency graph resolves in the expected
+    /// dependency-first order. (Service plugin types aren't required —
+    /// we just need any IPlugin that declares the right `depends_on`.)
+    #[test]
+    fn init_all_topological_9_service_order() {
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let mut host = PluginHost::new();
+        host.register(Box::new(DepPlugin::new("history-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("backup-service", &["history-service"], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("usage-service", &["history-service"], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("mcp-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("optimizer-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("resource-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("marketplace-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new("project-service", &[], log.clone()))).unwrap();
+        host.register(Box::new(DepPlugin::new(
+            "provider-service",
+            &["backup-service", "history-service"],
+            log.clone(),
+        )))
+        .unwrap();
+
+        let mut ctx = dummy_ctx();
+        let order = host.init_all_topological(&mut ctx).unwrap();
+
+        // provider-service is the only plugin with non-empty deps —
+        // it must appear after both history-service and backup-service.
+        // (usage-service is a sibling of provider-service: both depend
+        // only on history, so their relative order is NOT constrained
+        // by the graph.)
+        let pos = |id: &str| order.iter().position(|&x| x == id).unwrap();
+        let h = pos("history-service");
+        let b = pos("backup-service");
+        let p = pos("provider-service");
+        assert!(h < b, "history before backup");
+        assert!(h < p, "history before provider");
+        assert!(b < p, "backup before provider");
+
+        // And the init log must reflect the same dependency-first order.
+        let log_snapshot = log.lock().unwrap().clone();
+        let init_h = log_snapshot.iter().position(|s| s == "init:history-service").unwrap();
+        let init_b = log_snapshot.iter().position(|s| s == "init:backup-service").unwrap();
+        let init_p = log_snapshot.iter().position(|s| s == "init:provider-service").unwrap();
+        assert!(init_h < init_b, "history.init before backup.init");
+        assert!(init_b < init_p, "backup.init before provider.init");
+    }
+
+    /// Plugins without `depends_on` overrides still init via topo-sort
+    /// (in registration order, no error).
+    #[test]
+    fn init_all_topological_handles_no_deps() {
+        let log = Arc::new(Mutex::new(Vec::<String>::new()));
+        let mut host = PluginHost::new();
+        host.register(Box::new(RecordingPlugin::new("a", "A", log.clone()))).unwrap();
+        host.register(Box::new(RecordingPlugin::new("b", "B", log.clone()))).unwrap();
+        let mut ctx = dummy_ctx();
+        let order = host.init_all_topological(&mut ctx).unwrap();
+        assert_eq!(order.len(), 2);
+        assert!(order.contains(&"a"));
+        assert!(order.contains(&"b"));
     }
 }

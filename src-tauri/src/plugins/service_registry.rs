@@ -29,29 +29,33 @@
 //! `IPlugin::init`. The tests below pin the Phase 45 contract.
 
 use std::any::{Any, TypeId};
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // ---------------------------------------------------------------------------
 // ServiceRegistry
 // ---------------------------------------------------------------------------
 
-/// Type-erased, thread-unsafe service container.
+/// Type-erased service container.
 ///
-/// "Thread-unsafe" is intentional: Phase 45 inserts happen during
-/// `IPlugin::init` (single-threaded bootstrap), and reads happen via
-/// `State<'_, Arc<ServiceRegistry>>` from Tauri commands. The interior
-/// `RefCell` is enough — no `Mutex` overhead.
+/// `Send + Sync` so it can live inside `Arc<ServiceRegistry>` on
+/// `AppState` (Tauri commands pull `State<'_, AppState>` and may
+/// dispatch on worker threads). Interior mutability is a `Mutex`
+/// — `RefCell` would not satisfy `Sync`.
+///
+/// **Phase 45 init invariant** — all `register_arc` calls happen
+/// during the single-threaded `init_all_topological` bootstrap; the
+/// `Mutex` is only contended during startup. After init the
+/// registry is read-only for the rest of the process.
 pub struct ServiceRegistry {
-    map: RefCell<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
+    map: Mutex<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
 }
 
 impl ServiceRegistry {
     /// Construct an empty registry.
     pub fn new() -> Self {
         Self {
-            map: RefCell::new(HashMap::new()),
+            map: Mutex::new(HashMap::new()),
         }
     }
 
@@ -63,9 +67,15 @@ impl ServiceRegistry {
     /// order is responsible for ensuring the "last writer wins" is
     /// the correct behavior (no id collision today; future Phase 45
     /// may add a duplicate-detection log).
+    ///
+    /// # Panics
+    /// Panics if the inner mutex is poisoned (a previous holder
+    /// panicked while holding it). Startup-time only — `init` is
+    /// single-threaded and the panic would already abort the process.
     pub fn register_arc<T: 'static + Send + Sync>(&self, svc: Arc<T>) {
         self.map
-            .borrow_mut()
+            .lock()
+            .expect("ServiceRegistry mutex poisoned")
             .insert(TypeId::of::<T>(), svc as Arc<dyn Any + Send + Sync>);
     }
 
@@ -73,19 +83,26 @@ impl ServiceRegistry {
     /// if no service of type `T` has been registered.
     pub fn get<T: 'static + Send + Sync>(&self) -> Option<Arc<T>> {
         self.map
-            .borrow()
+            .lock()
+            .expect("ServiceRegistry mutex poisoned")
             .get(&TypeId::of::<T>())
             .and_then(|a| a.clone().downcast::<T>().ok())
     }
 
     /// Check whether a service of type `T` is registered.
     pub fn contains<T: 'static>(&self) -> bool {
-        self.map.borrow().contains_key(&TypeId::of::<T>())
+        self.map
+            .lock()
+            .expect("ServiceRegistry mutex poisoned")
+            .contains_key(&TypeId::of::<T>())
     }
 
     /// Number of distinct services registered.
     pub fn count(&self) -> usize {
-        self.map.borrow().len()
+        self.map
+            .lock()
+            .expect("ServiceRegistry mutex poisoned")
+            .len()
     }
 }
 

@@ -48,7 +48,9 @@ use tauri::Manager;
 
 use crate::app_state::AppState;
 use crate::domain::{UsageHistoryEntry, UsageSnapshot, UsageWindow};
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
+use crate::services::{history_service::HistoryService, usage_service::UsageService};
 
 /// Pull the JSON args off an `InvokeMessage` payload.
 ///
@@ -146,8 +148,7 @@ pub fn dispatch_get_current_usage(invoke: Invoke<tauri::Wry>) -> bool {
         let provider_id = resolve_active_provider_id(&state);
         // M3.12 (A1#13) — read live active root via the platform shim.
         let active_root = crate::platform::runtime::paths().active_root_dir();
-        state
-            .usage_service
+        get_service!(state, UsageService)
             .get_snapshot_only_with_active_root(&provider_id, w, active_root.as_deref())
             .map_err(|e| e.to_string())
     });
@@ -174,8 +175,7 @@ pub fn dispatch_get_usage_history(invoke: Invoke<tauri::Wry>) -> bool {
             let w = window_from_args(&args)?;
             let provider_id = resolve_active_provider_id(&state);
             let active_root = crate::platform::runtime::paths().active_root_dir();
-            state
-                .usage_service
+            get_service!(state, UsageService)
                 .get_history_only_with_active_root(&provider_id, w, active_root.as_deref())
                 .map_err(|e| e.to_string())
         });
@@ -203,16 +203,14 @@ pub fn dispatch_refresh_usage(invoke: Invoke<tauri::Wry>) -> bool {
         let w = window_from_args(&args)?;
         let provider_id = resolve_active_provider_id(&state);
         let active_root = crate::platform::runtime::paths().active_root_dir();
-        let (mut snap, _history) = state
-            .usage_service
+        let (mut snap, _history) = get_service!(state, UsageService)
             .refresh_with_active_root(&provider_id, w, active_root.as_deref())
             .map_err(|e| e.to_string())?;
         // Phase 27 Fix 2 (BUG-CR-02 / D-09) — verify the SQLite
         // write side by counting rows in `usage_history` that
         // landed within the last 30 days. If `history_service`
         // is missing (shouldn't happen), fall back to 0.
-        let inserted = state
-            .history_service
+        let inserted = get_service!(state, HistoryService)
             .count_recent_usage_rows(30 * 86_400)
             .unwrap_or(0);
         snap.inserted_rows = inserted;

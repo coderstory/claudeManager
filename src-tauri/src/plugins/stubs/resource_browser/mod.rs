@@ -18,6 +18,11 @@ impl IPlugin for ResourceBrowserPlugin {
     fn name(&self) -> &'static str {
         "资源浏览"
     }
+    /// Phase 45 — `resource-service` is the primary backing store
+    /// (5 resource kinds + reveal failures).
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["resource-service"]
+    }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/resources".to_string(),

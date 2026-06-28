@@ -30,6 +30,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 use crate::domain::{ApplyResult, OptimizationFinding, Severity};
+use crate::get_service;
 use crate::infrastructure::fs_atomic;
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. `String`
@@ -49,8 +50,7 @@ pub async fn scan_optimizations(
     // (state.paths is a one-shot startup snapshot; active_root can
     // change at runtime via the project switcher).
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .optimizer_service
+    get_service!(state, crate::services::optimizer_service::OptimizerService)
         .scan_with_root(active_root.as_deref())
         .map_err(|e| format!("配置扫描失败: {e}"))
 }
@@ -78,8 +78,7 @@ pub async fn apply_optimizations(
     // is taken here (command boundary) so the service stays a pure
     // `&self` method.
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .optimizer_service
+    get_service!(state, crate::services::optimizer_service::OptimizerService)
         .apply_findings(finding_ids, active_root.as_deref())
         .map_err(|e| format!("应用优化失败: {e}"))
 }
@@ -104,8 +103,7 @@ pub async fn apply_rule_fix(
     rule_id: String,
 ) -> CmdResult<Vec<ApplyResult>> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let results = state
-        .optimizer_service
+    let results = get_service!(state, crate::services::optimizer_service::OptimizerService)
         .apply_rule_fix(&rule_id, active_root.as_deref())
         .map_err(|e| format!("应用规则修复失败: {e}"))?;
     if results.is_empty() {
@@ -113,7 +111,13 @@ pub async fn apply_rule_fix(
         // unknown OR when the rule didn't fire on the current
         // config. Distinguish by checking the registry directly so
         // the UI gets a useful message.
-        if state.optimizer_service.find_rule(&rule_id).is_none() {
+        if get_service!(
+            state,
+            crate::services::optimizer_service::OptimizerService
+        )
+        .find_rule(&rule_id)
+        .is_none()
+        {
             return Err(format!("未知规则: {rule_id}"));
         }
         // Known rule but no findings — surface as a no-op success

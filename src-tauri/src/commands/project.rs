@@ -25,6 +25,7 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::domain::{Project, ProjectsFile};
+use crate::get_service;
 use crate::services::project_service::ProjectServiceError;
 
 /// Tauri-friendly error type — matches the rest of `commands::*`.
@@ -78,7 +79,9 @@ pub struct ProjectsListResult {
 /// and persists it. The returned `file` reflects the post-seed state.
 #[tauri::command]
 pub async fn list_projects(state: State<'_, AppState>) -> CmdResult<ProjectsListResult> {
-    let pf = state.project_service.load().map_err(|e| e.to_string())?;
+    let pf = get_service!(state, crate::services::project_service::ProjectService)
+        .load()
+        .map_err(|e| e.to_string())?;
     let current = pf.current_project_id;
     Ok(ProjectsListResult {
         projects: pf.projects.iter().map(ProjectSummary::from).collect(),
@@ -97,8 +100,7 @@ pub async fn add_project(
     root_dir: String,
 ) -> CmdResult<Project> {
     let root = PathBuf::from(root_dir);
-    state
-        .project_service
+    get_service!(state, crate::services::project_service::ProjectService)
         .add(name, root)
         .map_err(|e| e.to_string())
 }
@@ -107,8 +109,7 @@ pub async fn add_project(
 /// project (UI surfaces the rejection via the InfoBar).
 #[tauri::command]
 pub async fn remove_project(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
-    state
-        .project_service
+    get_service!(state, crate::services::project_service::ProjectService)
         .remove(id)
         .map_err(|e| e.to_string())
 }
@@ -124,8 +125,7 @@ pub async fn switch_project(
     state: State<'_, AppState>,
     id: Uuid,
 ) -> CmdResult<Project> {
-    let project = state
-        .project_service
+    let project = get_service!(state, crate::services::project_service::ProjectService)
         .switch(id)
         .map_err(|e| e.to_string())?;
     // Emit a Tauri event so other open pages can refresh their
@@ -142,7 +142,9 @@ pub async fn switch_project(
 /// possible during the very first launch's atomic write window).
 #[tauri::command]
 pub async fn current_project(state: State<'_, AppState>) -> CmdResult<Option<Project>> {
-    let pf = state.project_service.load().map_err(|e| e.to_string())?;
+    let pf = get_service!(state, crate::services::project_service::ProjectService)
+        .load()
+        .map_err(|e| e.to_string())?;
     Ok(pf.current().cloned())
 }
 

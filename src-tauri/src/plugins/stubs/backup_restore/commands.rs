@@ -37,7 +37,7 @@ use crate::app_state::AppState;
 use crate::infrastructure::backup_scanner::BackupEntry;
 use crate::infrastructure::json_diff::DiffEntry;
 use crate::plugins::dispatch::CommandSpec;
-use crate::services::backup_service::ManualBackupResult;
+use crate::services::backup_service::{BackupService, ManualBackupResult};
 
 // ---------------------------------------------------------------------------
 // Args extraction helpers
@@ -113,9 +113,7 @@ pub fn dispatch_list_backups(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     tauri::async_runtime::block_on(async move {
         let active_root = active_root();
-        let v: Vec<BackupEntry> = state
-            .backup_service
-            .list_backups(active_root.as_deref());
+        let v: Vec<BackupEntry> = crate::get_service!(state, BackupService).list_backups(active_root.as_deref());
         let result: Result<Vec<BackupEntry>, tauri::ipc::InvokeError> = Ok(v);
         invoke.resolver.respond(result);
     });
@@ -135,8 +133,7 @@ pub fn dispatch_read_backup_content(invoke: Invoke<tauri::Wry>) -> bool {
     let result: Result<String, tauri::ipc::InvokeError> = tauri::async_runtime::block_on(
         async move {
             let active_root = active_root();
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .read_backup_content(
                     std::path::Path::new(&path),
                     active_root.as_deref(),
@@ -158,8 +155,7 @@ pub fn dispatch_diff_backups(invoke: Invoke<tauri::Wry>) -> bool {
     let result: Result<Vec<DiffEntry>, tauri::ipc::InvokeError> = tauri::async_runtime::block_on(
         async move {
             let active_root = active_root();
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .diff_backups(
                     std::path::Path::new(&path1),
                     std::path::Path::new(&path2),
@@ -186,8 +182,7 @@ pub fn dispatch_restore_backup(invoke: Invoke<tauri::Wry>) -> bool {
     let result: Result<(), tauri::ipc::InvokeError> = tauri::async_runtime::block_on(
         async move {
             let active_root = active_root();
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .restore_backup(
                     std::path::Path::new(&backup_path),
                     active_root.as_deref(),
@@ -216,8 +211,7 @@ pub fn dispatch_backup_now(invoke: Invoke<tauri::Wry>) -> bool {
                 Some(t) => std::path::PathBuf::from(t),
                 None => state.paths.settings_json.clone(),
             };
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .backup_now(&target_path)
                 .map(to_manual_result)
                 .map_err(|e| e.to_string().into())
@@ -240,8 +234,7 @@ pub fn dispatch_delete_backup(invoke: Invoke<tauri::Wry>) -> bool {
     let result: Result<(), tauri::ipc::InvokeError> = tauri::async_runtime::block_on(
         async move {
             let active_root = active_root();
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .delete_backup(std::path::Path::new(&path), active_root.as_deref())
                 .map_err(|e| e.to_string().into())
         },
@@ -272,8 +265,7 @@ pub fn dispatch_backup_incremental(invoke: Invoke<tauri::Wry>) -> bool {
                 None => state.paths.settings_json.clone(),
             };
             let active_root = active_root();
-            state
-                .backup_service
+            crate::get_service!(state, BackupService)
                 .backup_incremental(&target_path, active_root.as_deref())
                 .map(to_manual_result)
                 .map_err(|e| e.to_string().into())

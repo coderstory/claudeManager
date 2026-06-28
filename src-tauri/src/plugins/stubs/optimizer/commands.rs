@@ -38,8 +38,10 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 use crate::domain::{ApplyResult, OptimizationFinding, Severity};
+use crate::get_service;
 use crate::infrastructure::fs_atomic;
 use crate::plugins::dispatch::CommandSpec;
+use crate::services::optimizer_service::OptimizerService;
 
 /// Pull the JSON args off an `InvokeMessage` payload.
 fn json_args(invoke: &Invoke<tauri::Wry>) -> serde_json::Value {
@@ -98,8 +100,7 @@ pub fn dispatch_scan_optimizations(invoke: Invoke<tauri::Wry>) -> bool {
             // (state.paths is a one-shot startup snapshot; active_root can
             // change at runtime via the project switcher).
             let active_root = crate::platform::runtime::paths().active_root_dir();
-            state
-                .optimizer_service
+            get_service!(state, OptimizerService)
                 .scan_with_root(active_root.as_deref())
                 .map_err(|e| format!("配置扫描失败: {e}"))
         });
@@ -133,8 +134,7 @@ pub fn dispatch_apply_optimizations(invoke: Invoke<tauri::Wry>) -> bool {
     let state = webview.state::<AppState>();
     let result: Result<Vec<ApplyResult>, String> = tauri::async_runtime::block_on(async move {
         let active_root = crate::platform::runtime::paths().active_root_dir();
-        state
-            .optimizer_service
+        get_service!(state, OptimizerService)
             .apply_findings(finding_ids, active_root.as_deref())
             .map_err(|e| format!("应用优化失败: {e}"))
     });
@@ -168,8 +168,7 @@ pub fn dispatch_apply_rule_fix(invoke: Invoke<tauri::Wry>) -> bool {
     let state = webview.state::<AppState>();
     let result: Result<Vec<ApplyResult>, String> = tauri::async_runtime::block_on(async move {
         let active_root = crate::platform::runtime::paths().active_root_dir();
-        let results = state
-            .optimizer_service
+        let results = get_service!(state, OptimizerService)
             .apply_rule_fix(&rule_id, active_root.as_deref())
             .map_err(|e| format!("应用规则修复失败: {e}"))?;
         if results.is_empty() {
@@ -177,7 +176,13 @@ pub fn dispatch_apply_rule_fix(invoke: Invoke<tauri::Wry>) -> bool {
             // unknown OR when the rule didn't fire on the current
             // config. Distinguish by checking the registry directly so
             // the UI gets a useful message.
-            if state.optimizer_service.find_rule(&rule_id).is_none() {
+            if crate::get_service!(
+                state,
+                crate::services::optimizer_service::OptimizerService
+            )
+            .find_rule(&rule_id)
+            .is_none()
+            {
                 return Err(format!("未知规则: {rule_id}"));
             }
             // Known rule but no findings — surface as a no-op success

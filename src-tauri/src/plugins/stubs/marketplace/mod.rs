@@ -17,6 +17,10 @@ impl IPlugin for MarketplacePlugin {
     fn name(&self) -> &'static str {
         "资源市场"
     }
+    /// Phase 45 — `marketplace-service` (git clone + scan + install).
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["marketplace-service"]
+    }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/marketplace".to_string(),

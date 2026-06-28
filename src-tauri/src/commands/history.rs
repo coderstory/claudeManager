@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::services::history_service::{
     BackupHistoryFilter, BackupHistoryRow, DailyStatsFilter, DailyStatRow, HistoryService,
     HistoryStats, PurgeReport, UsageHistoryFilter, UsageHistoryRow,
@@ -315,7 +316,10 @@ pub async fn get_usage_history_rows(
     state: State<'_, AppState>,
     filter: UsageHistoryFilter,
 ) -> CmdResult<Vec<UsageHistoryRow>> {
-    get_usage_history_impl(state.history_service.as_ref(), filter)
+    get_usage_history_impl(
+        get_service!(state, crate::services::history_service::HistoryService).as_ref(),
+        filter,
+    )
 }
 
 /// F21 / Phase 21 — read daily-aggregated usage stats (from
@@ -330,7 +334,10 @@ pub async fn get_daily_stats_history(
     state: State<'_, AppState>,
     filter: DailyStatsFilter,
 ) -> CmdResult<Vec<DailyStatRow>> {
-    get_daily_stats_history_impl(state.history_service.as_ref(), filter)
+    get_daily_stats_history_impl(
+        get_service!(state, crate::services::history_service::HistoryService).as_ref(),
+        filter,
+    )
 }
 
 /// F21 / Phase 21 — read backup_history rows.
@@ -339,13 +346,22 @@ pub async fn get_backup_history(
     state: State<'_, AppState>,
     filter: BackupHistoryFilter,
 ) -> CmdResult<Vec<BackupHistoryRow>> {
-    get_backup_history_impl(state.history_service.as_ref(), filter)
+    get_backup_history_impl(
+        get_service!(state, crate::services::history_service::HistoryService).as_ref(),
+        filter,
+    )
 }
 
 /// F21 / Phase 21 — aggregate counters + db size.
 #[tauri::command]
 pub async fn get_history_stats(state: State<'_, AppState>) -> CmdResult<HistoryStats> {
-    get_history_stats_impl(state.history_service.as_ref())
+    get_history_stats_impl(
+        get_service!(
+            state,
+            crate::services::history_service::HistoryService
+        )
+        .as_ref(),
+    )
 }
 
 /// F21 / Phase 21 — export both history tables to a JSON or CSV file.
@@ -360,7 +376,7 @@ pub async fn export_history(
     target_path: String,
 ) -> CmdResult<ExportReport> {
     export_history_impl(
-        state.history_service.as_ref(),
+        get_service!(state, crate::services::history_service::HistoryService).as_ref(),
         format,
         Path::new(&target_path),
     )
@@ -372,7 +388,10 @@ pub async fn purge_history(
     state: State<'_, AppState>,
     older_than_days: u32,
 ) -> CmdResult<PurgeReport> {
-    purge_history_impl(state.history_service.as_ref(), older_than_days)
+    purge_history_impl(
+        get_service!(state, crate::services::history_service::HistoryService).as_ref(),
+        older_than_days,
+    )
 }
 
 // ---------------------------------------------------------------------------

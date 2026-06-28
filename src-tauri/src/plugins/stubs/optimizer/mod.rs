@@ -17,6 +17,10 @@ impl IPlugin for OptimizerPlugin {
     fn name(&self) -> &'static str {
         "配置优化"
     }
+    /// Phase 45 — `optimizer-service` (13 rules + scan/apply).
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["optimizer-service"]
+    }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/optimizer".to_string(),

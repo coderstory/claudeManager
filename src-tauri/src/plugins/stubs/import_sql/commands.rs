@@ -4,11 +4,16 @@
 //! `src-tauri/src/commands/providers.rs` (parse_sql_preview +
 //! import_providers_from_sql) → this module's 2 `dispatch_*` shims +
 //! 2 `inventory::submit!` registrations.
+//!
+//! Phase 45 service-registry refactor: dispatch fns look up
+//! `ProviderService` via `crate::get_service!` (registered in
+//! `service_registry` by `plugins::host` at startup).
 
 use tauri::ipc::Invoke;
 use tauri::Manager;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
 
 // ---------------------------------------------------------------------------
@@ -69,10 +74,9 @@ pub fn dispatch_import_providers_from_sql(invoke: Invoke<tauri::Wry>) -> bool {
             })
             .unwrap_or_default();
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .import_providers_from_sql_with_selected_ids(
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.import_providers_from_sql_with_selected_ids(
                 &sql,
                 &selected_ids,
                 crate::platform::runtime::paths().active_root_dir().as_deref(),
@@ -83,7 +87,9 @@ pub fn dispatch_import_providers_from_sql(invoke: Invoke<tauri::Wry>) -> bool {
                     "skipped": r.skipped,
                 })
             })
-            .map_err(|e| e.to_string());
+            .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true

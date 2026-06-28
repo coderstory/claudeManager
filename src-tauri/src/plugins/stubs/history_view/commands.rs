@@ -8,7 +8,9 @@ use tauri::ipc::Invoke;
 use tauri::Manager;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
+use crate::services::history_service::HistoryService;
 
 // ---------------------------------------------------------------------------
 // dispatch_get_usage_history_rows
@@ -28,9 +30,7 @@ pub fn dispatch_get_usage_history_rows(invoke: Invoke<tauri::Wry>) -> bool {
             match serde_json::from_value::<crate::services::history_service::UsageHistoryFilter>(
                 json_args,
             ) {
-                Ok(filter) => s
-                    .inner()
-                    .history_service
+                Ok(filter) => get_service!(s, HistoryService)
                     .query_usage(&filter)
                     .map_err(|e| e.to_string()),
                 Err(e) => Err(format!("get_usage_history_rows: invalid filter: {e}")),
@@ -60,9 +60,7 @@ pub fn dispatch_get_daily_stats_history(invoke: Invoke<tauri::Wry>) -> bool {
             match serde_json::from_value::<crate::services::history_service::DailyStatsFilter>(
                 json_args,
             ) {
-                Ok(filter) => s
-                    .inner()
-                    .history_service
+                Ok(filter) => get_service!(s, HistoryService)
                     .query_daily_stats(&filter)
                     .map_err(|e| e.to_string()),
                 Err(e) => Err(format!("get_daily_stats_history: invalid filter: {e}")),
@@ -92,9 +90,7 @@ pub fn dispatch_get_backup_history(invoke: Invoke<tauri::Wry>) -> bool {
             match serde_json::from_value::<crate::services::history_service::BackupHistoryFilter>(
                 json_args,
             ) {
-                Ok(filter) => s
-                    .inner()
-                    .history_service
+                Ok(filter) => get_service!(s, HistoryService)
                     .query_backup(&filter)
                     .map_err(|e| e.to_string()),
                 Err(e) => Err(format!("get_backup_history: invalid filter: {e}")),
@@ -115,11 +111,10 @@ pub fn dispatch_get_history_stats(invoke: Invoke<tauri::Wry>) -> bool {
     let app = invoke.message.webview().app_handle().clone();
     tauri::async_runtime::block_on(async move {
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<crate::services::history_service::HistoryStats, String> = s
-            .inner()
-            .history_service
-            .stats()
-            .map_err(|e| e.to_string());
+        let result: Result<crate::services::history_service::HistoryStats, String> =
+            get_service!(s, HistoryService)
+                .stats()
+                .map_err(|e| e.to_string());
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -150,7 +145,7 @@ pub fn dispatch_export_history(invoke: Invoke<tauri::Wry>) -> bool {
         let s: tauri::State<AppState> = app.state::<AppState>();
         let result: Result<crate::commands::history::ExportReport, String> =
             crate::commands::history::export_history_impl(
-                s.inner().history_service.as_ref(),
+                get_service!(s, HistoryService).as_ref(),
                 crate::commands::history::ExportFormat::from_str(format_str)
                     .unwrap_or(crate::commands::history::ExportFormat::Json),
                 std::path::Path::new(&target_path),
@@ -178,11 +173,10 @@ pub fn dispatch_purge_history(invoke: Invoke<tauri::Wry>) -> bool {
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<crate::services::history_service::PurgeReport, String> = s
-            .inner()
-            .history_service
-            .purge(older_than_days)
-            .map_err(|e| e.to_string());
+        let result: Result<crate::services::history_service::PurgeReport, String> =
+            get_service!(s, HistoryService)
+                .purge(older_than_days)
+                .map_err(|e| e.to_string());
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true

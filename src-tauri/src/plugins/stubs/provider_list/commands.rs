@@ -8,11 +8,16 @@
 //! 注: 私有 DTO (ParsedDeeplink / ExportedProvider / ListProvidersResult)
 //! 不可跨模块访问,且非 IpcResponse (Serialize),所以本 stub 返
 //! serde_json::Value 占位。完整 schema 由 commands::providers 保留。
+//!
+//! Phase 45 service-registry refactor: dispatch fns look up
+//! `ProviderService` via `crate::get_service!` (registered in
+//! `service_registry` by `plugins::host` at startup).
 
 use tauri::ipc::Invoke;
 use tauri::Manager;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
 
 // ---------------------------------------------------------------------------
@@ -26,9 +31,8 @@ pub fn dispatch_list_providers(invoke: Invoke<tauri::Wry>) -> bool {
         let s: tauri::State<AppState> = app.state::<AppState>();
         let result: Result<serde_json::Value, String> = (|| async {
             let active_root = crate::platform::runtime::paths().active_root_dir();
-            let (providers, _warnings) = s
-                .inner()
-                .provider_service
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            let (providers, _warnings) = svc
                 .list_providers_with_active_root(active_root.as_deref())
                 .map_err(|e| e.to_string())?;
             serde_json::to_value(&providers).map_err(|e| e.to_string())
@@ -50,9 +54,8 @@ pub fn dispatch_list_providers_with_warnings(invoke: Invoke<tauri::Wry>) -> bool
         let s: tauri::State<AppState> = app.state::<AppState>();
         let result: Result<serde_json::Value, String> = (|| async {
             let active_root = crate::platform::runtime::paths().active_root_dir();
-            s.inner()
-                .provider_service
-                .list_providers_with_active_root(active_root.as_deref())
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.list_providers_with_active_root(active_root.as_deref())
                 .map(|(ps, ws)| serde_json::json!({"providers": ps, "warnings": ws}))
                 .map_err(|e| e.to_string())
         })()
@@ -82,12 +85,13 @@ pub fn dispatch_switch_provider(invoke: Invoke<tauri::Wry>) -> bool {
             .unwrap_or("")
             .to_string();
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .switch_provider(&id)
-            .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
-            .map_err(|e| e.to_string());
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.switch_provider(&id)
+                .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -143,11 +147,11 @@ pub fn dispatch_import_single_provider(invoke: Invoke<tauri::Wry>) -> bool {
             }
         };
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<(), String> = s
-            .inner()
-            .provider_service
-            .import_single_provider(provider)
-            .map_err(|e| e.to_string());
+        let result: Result<(), String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.import_single_provider(provider).map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -173,12 +177,13 @@ pub fn dispatch_get_provider_details(invoke: Invoke<tauri::Wry>) -> bool {
             .unwrap_or("")
             .to_string();
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .get_provider(&id)
-            .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
-            .map_err(|e| e.to_string());
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.get_provider(&id)
+                .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -207,12 +212,13 @@ pub fn dispatch_add_provider(invoke: Invoke<tauri::Wry>) -> bool {
             }
         };
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .add_provider(input)
-            .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
-            .map_err(|e| e.to_string());
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.add_provider(input)
+                .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -242,12 +248,13 @@ pub fn dispatch_update_provider(invoke: Invoke<tauri::Wry>) -> bool {
             }
         };
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .update_provider(&id, input)
-            .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
-            .map_err(|e| e.to_string());
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.update_provider(&id, input)
+                .map(|p| serde_json::to_value(&p).unwrap_or(serde_json::Value::Null))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -269,11 +276,11 @@ pub fn dispatch_delete_provider(invoke: Invoke<tauri::Wry>) -> bool {
             .unwrap_or("")
             .to_string();
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<(), String> = s
-            .inner()
-            .provider_service
-            .delete_provider(&id)
-            .map_err(|e| e.to_string());
+        let result: Result<(), String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.delete_provider(&id).map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true
@@ -288,12 +295,13 @@ pub fn dispatch_generate_from_current_config(invoke: Invoke<tauri::Wry>) -> bool
     let app = invoke.message.webview().app_handle().clone();
     tauri::async_runtime::block_on(async move {
         let s: tauri::State<AppState> = app.state::<AppState>();
-        let result: Result<serde_json::Value, String> = s
-            .inner()
-            .provider_service
-            .generate_from_current_config()
-            .map(|gp| serde_json::json!({"generated": true, "stub": true}))
-            .map_err(|e| e.to_string());
+        let result: Result<serde_json::Value, String> = (|| async {
+            let svc = get_service!(s.inner(), crate::services::provider_service::ProviderService);
+            svc.generate_from_current_config()
+                .map(|_gp| serde_json::json!({"generated": true, "stub": true}))
+                .map_err(|e| e.to_string())
+        })()
+        .await;
         invoke.resolver.respond(result.map_err(Into::into));
     });
     true

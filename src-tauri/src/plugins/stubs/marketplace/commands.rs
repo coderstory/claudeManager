@@ -101,7 +101,11 @@ fn payload_string_vec(invoke: &Invoke<tauri::Wry>, key: &str) -> Vec<String> {
 pub fn dispatch_list_marketplace_repos(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     tauri::async_runtime::block_on(async move {
-        let v: Vec<MarketplaceRepo> = state.marketplace_service.list_builtin_repos();
+        let v: Vec<MarketplaceRepo> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .list_builtin_repos();
         let result: Result<Vec<MarketplaceRepo>, tauri::ipc::InvokeError> = Ok(v);
         invoke.resolver.respond(result);
     });
@@ -113,10 +117,12 @@ pub fn dispatch_clone_and_scan(invoke: Invoke<tauri::Wry>) -> bool {
     let url = payload_str(&invoke, "url").unwrap_or_default();
     let state = invoke.message.state_ref().get::<AppState>();
     tauri::async_runtime::block_on(async move {
-        let result: Result<_, tauri::ipc::InvokeError> = state
-            .marketplace_service
-            .clone_and_scan(&url)
-            .map_err(|e| e.to_string().into());
+        let result: Result<_, tauri::ipc::InvokeError> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .clone_and_scan(&url)
+        .map_err(|e| e.to_string().into());
         invoke.resolver.respond(result);
     });
     true
@@ -131,15 +137,17 @@ pub fn dispatch_install_from_marketplace(invoke: Invoke<tauri::Wry>) -> bool {
     // M3.12 (A1#12) — read live active root via the platform shim.
     let active_root = crate::platform::runtime::paths().active_root_dir();
     tauri::async_runtime::block_on(async move {
-        let result: Result<_, tauri::ipc::InvokeError> = state
-            .marketplace_service
-            .install_resource_with_active_root(
-                &repo_path,
-                &resource_id,
-                options,
-                active_root.as_deref(),
-            )
-            .map_err(|e| e.to_string().into());
+        let result: Result<_, tauri::ipc::InvokeError> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .install_resource_with_active_root(
+            &repo_path,
+            &resource_id,
+            options,
+            active_root.as_deref(),
+        )
+        .map_err(|e| e.to_string().into());
         invoke.resolver.respond(result);
     });
     true
@@ -151,10 +159,12 @@ pub fn dispatch_install_builtin_plugin(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     let active_root = crate::platform::runtime::paths().active_root_dir();
     tauri::async_runtime::block_on(async move {
-        let result: Result<_, tauri::ipc::InvokeError> = state
-            .marketplace_service
-            .install_builtin_with_active_root(&plugin_id, active_root.as_deref())
-            .map_err(|e| e.to_string().into());
+        let result: Result<_, tauri::ipc::InvokeError> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .install_builtin_with_active_root(&plugin_id, active_root.as_deref())
+        .map_err(|e| e.to_string().into());
         invoke.resolver.respond(result);
     });
     true
@@ -168,15 +178,17 @@ pub fn dispatch_install_third_party_repo(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     let active_root = crate::platform::runtime::paths().active_root_dir();
     tauri::async_runtime::block_on(async move {
-        let result: Result<_, tauri::ipc::InvokeError> = state
-            .marketplace_service
-            .install_third_party_with_active_root(
-                &url,
-                selections,
-                options,
-                active_root.as_deref(),
-            )
-            .map_err(|e| e.to_string().into());
+        let result: Result<_, tauri::ipc::InvokeError> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .install_third_party_with_active_root(
+            &url,
+            selections,
+            options,
+            active_root.as_deref(),
+        )
+        .map_err(|e| e.to_string().into());
         invoke.resolver.respond(result);
     });
     true
@@ -188,10 +200,12 @@ pub fn dispatch_install_npx_package(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     let active_root = crate::platform::runtime::paths().active_root_dir();
     tauri::async_runtime::block_on(async move {
-        let result: Result<_, tauri::ipc::InvokeError> = state
-            .marketplace_service
-            .install_npx_with_active_root(&package, active_root.as_deref())
-            .map_err(|e| e.to_string().into());
+        let result: Result<_, tauri::ipc::InvokeError> = crate::get_service!(
+            state,
+            crate::services::marketplace_service::MarketplaceService
+        )
+        .install_npx_with_active_root(&package, active_root.as_deref())
+        .map_err(|e| e.to_string().into());
         invoke.resolver.respond(result);
     });
     true

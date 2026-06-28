@@ -27,6 +27,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::app_state::AppState;
 use crate::domain::{ParsedMcpServer, Provider, ProviderModels};
+use crate::get_service;
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::infrastructure::encoding::decode_sql_bytes;
 use crate::infrastructure::sql_parser::{
@@ -61,8 +62,7 @@ pub async fn list_providers(state: State<'_, AppState>) -> CmdResult<Vec<Provide
     // change at runtime via the project switcher).
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();
-    let (providers, _warnings) = state
-        .provider_service
+    let (providers, _warnings) = get_service!(state, crate::services::provider_service::ProviderService)
         .list_providers_with_active_root(active_root_ref)
         .map_err(|e| e.to_string())?;
     Ok(providers)
@@ -80,8 +80,7 @@ pub async fn list_providers_with_warnings(
 ) -> CmdResult<ListProvidersResult> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();
-    let (providers, warnings) = state
-        .provider_service
+    let (providers, warnings) = get_service!(state, crate::services::provider_service::ProviderService)
         .list_providers_with_active_root(active_root_ref)
         .map_err(|e| e.to_string())?;
     let warnings = warnings
@@ -125,8 +124,7 @@ pub async fn switch_provider(
     // `state.paths` — those are resolved once at startup).
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .switch_provider_with_active_root(&provider_id, active_root_ref)
         .map_err(|e| e.to_string())
 }
@@ -194,8 +192,7 @@ pub async fn parse_sql_preview(
     // Fetch existing providers (user library) for dedup. Cheap on-disk
     // scan; runs synchronously inside the command.
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let existing = state
-        .provider_service
+    let existing = get_service!(state, crate::services::provider_service::ProviderService)
         .list_providers_with_active_root(active_root.as_deref())
         .map(|(v, _)| v)
         .unwrap_or_default();
@@ -248,8 +245,7 @@ pub async fn import_providers_from_sql(
     // M3.12 (A1#3) — query the live active root via the platform shim.
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();
-    let result = state
-        .provider_service
+    let result = get_service!(state, crate::services::provider_service::ProviderService)
         .import_providers_from_sql_with_selected_ids(&content, &selected_ids, active_root_ref)
         .map_err(|e| e.to_string())?;
     Ok(result.into())
@@ -332,8 +328,7 @@ pub async fn import_single_provider(
     state: State<'_, AppState>,
     provider: Provider,
 ) -> CmdResult<()> {
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .import_single_provider(provider)
         .map_err(|e| e.to_string())
 }
@@ -352,8 +347,7 @@ pub async fn get_provider_details(
     state: State<'_, AppState>,
     provider_id: String,
 ) -> CmdResult<Provider> {
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .get_provider(&provider_id)
         .map_err(|e| e.to_string())
 }
@@ -366,8 +360,7 @@ pub async fn add_provider(
     state: State<'_, AppState>,
     input: crate::domain::ProviderInput,
 ) -> CmdResult<Provider> {
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .add_provider(input)
         .map_err(|e| e.to_string())
 }
@@ -382,8 +375,7 @@ pub async fn update_provider(
     id: String,
     input: crate::domain::ProviderInput,
 ) -> CmdResult<Provider> {
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .update_provider(&id, input)
         .map_err(|e| e.to_string())
 }
@@ -396,8 +388,7 @@ pub async fn delete_provider(
     state: State<'_, AppState>,
     provider_id: String,
 ) -> CmdResult<()> {
-    state
-        .provider_service
+    get_service!(state, crate::services::provider_service::ProviderService)
         .delete_provider(&provider_id)
         .map_err(|e| e.to_string())
 }
@@ -418,8 +409,7 @@ pub async fn generate_from_current_config(
 ) -> CmdResult<GenerateFromCurrentConfigResult> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let active_root_ref = active_root.as_deref();
-    let result = state
-        .provider_service
+    let result = get_service!(state, crate::services::provider_service::ProviderService)
         .generate_with_active_root(active_root_ref)
         .map_err(|e| e.to_string())?;
     Ok(GenerateFromCurrentConfigResult {
@@ -494,8 +484,7 @@ pub async fn export_provider(
     _app_type: String,
 ) -> CmdResult<Option<String>> {
     // 1. 纯读 — 不碰 settings.json,不触发 is_active 重算。
-    let provider = state
-        .provider_service
+    let provider = get_service!(state, crate::services::provider_service::ProviderService)
         .get_provider(&provider_id)
         .map_err(|e| format!("读取 provider '{}' 失败: {e}", provider_id))?;
 

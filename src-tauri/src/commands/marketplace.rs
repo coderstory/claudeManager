@@ -18,6 +18,7 @@
 use tauri::State;
 
 use crate::app_state::AppState;
+use crate::get_service;
 use crate::services::marketplace_service::{
     InstallOptions, InstallResult, MarketplaceRepo, ScanResult,
 };
@@ -32,7 +33,11 @@ type CmdResult<T> = Result<T, String>;
 pub async fn list_marketplace_repos(
     state: State<'_, AppState>,
 ) -> CmdResult<Vec<MarketplaceRepo>> {
-    Ok(state.marketplace_service.list_builtin_repos())
+    Ok(get_service!(
+        state,
+        crate::services::marketplace_service::MarketplaceService
+    )
+    .list_builtin_repos())
 }
 
 /// F17 —— clone 第三方 / 推荐 git URL 并扫描 5 种 kind。
@@ -48,8 +53,7 @@ pub async fn clone_and_scan(
     state: State<'_, AppState>,
     url: String,
 ) -> CmdResult<ScanResult> {
-    state
-        .marketplace_service
+    get_service!(state, crate::services::marketplace_service::MarketplaceService)
         .clone_and_scan(&url)
         .map_err(|e| e.to_string())
 }
@@ -75,8 +79,7 @@ pub async fn install_from_marketplace(
 ) -> CmdResult<InstallResult> {
     // M3.12 (A1#12) — read live active root via the platform shim.
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .marketplace_service
+    get_service!(state, crate::services::marketplace_service::MarketplaceService)
         .install_resource_with_active_root(
             &repo_path,
             &resource_id,
@@ -99,8 +102,7 @@ pub async fn install_builtin_plugin(
     plugin_id: String,
 ) -> CmdResult<InstallResult> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .marketplace_service
+    get_service!(state, crate::services::marketplace_service::MarketplaceService)
         .install_builtin_with_active_root(&plugin_id, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -120,8 +122,7 @@ pub async fn install_third_party_repo(
     options: Option<InstallOptions>,
 ) -> CmdResult<Vec<InstallResult>> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .marketplace_service
+    get_service!(state, crate::services::marketplace_service::MarketplaceService)
         .install_third_party_with_active_root(
             &url,
             selections,
@@ -143,8 +144,7 @@ pub async fn install_npx_package(
     package: String,
 ) -> CmdResult<InstallResult> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .marketplace_service
+    get_service!(state, crate::services::marketplace_service::MarketplaceService)
         .install_npx_with_active_root(&package, active_root.as_deref())
         .map_err(|e| e.to_string())
 }

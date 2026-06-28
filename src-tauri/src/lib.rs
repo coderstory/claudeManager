@@ -14,7 +14,7 @@ pub mod plugins;
 pub mod services;
 
 use crate::app_state::AppState;
-use crate::plugins::{init_all, PluginHost};
+use crate::plugins::{init_all_topological, PluginHost};
 
 /// F20 — 从启动 argv 中提取 `.sql` 文件绝对路径。
 ///
@@ -131,16 +131,14 @@ pub fn run() {
             let state = AppState::build();
             app.manage(state);
 
-            // M2.17 — wire the 11 plugin stubs into the running app.
+            // M2.17 — wire the plugin stubs into the running app.
             //
-            // M1.3 created `plugins::init_all` (registers the 11 stubs and
-            // runs their `init`) but never wired it from `lib.rs::run`. As
-            // a result the PluginHost existed only on paper: it was never
-            // constructed at runtime, the `init` hooks never fired, and
-            // `shutdown_all` was never reachable. M2.x business logic
-            // (F1~F24) lives in `services/` + `commands/`, not in plugin
-            // `init` hooks, so this is purely the "let the architecture
-            // match the spec" step — no business behaviour changes.
+            // Phase 45 — service plugins (history / backup / provider
+            // / usage / mcp / optimizer / resource / marketplace /
+            // project) participate in topological init via
+            // `depends_on()`. The 9 service plugins run first so the
+            // `Arc<ServiceRegistry>` is fully populated before any
+            // business plugin's `init` (which may pull a service).
             //
             // Why `Mutex<PluginHost>` (vs. plain `PluginHost`):
             // - Tauri's `State<T>` derefs to `&T`; we cannot `&mut` a
@@ -157,16 +155,30 @@ pub fn run() {
             // IPlatformPaths>`; bind it to a let so the borrow inside
             // `PluginContext::new` outlives the call.
             //
-            // M2.17 / Phase 43 / D-CC-A — `init_all` now builds the
-            // `PluginHost` AND the `PluginContext` internally, so
-            // `lib.rs` only needs to hand it the `AppHandle` +
-            // platform paths. Task 6 will split the registry into
-            // `register_all` + `host.init_all(ctx)` for finer-grained
-            // Phase 47 control; today this single entry point keeps
-            // the lib.rs surface small.
+            // Phase 45 startup order (D-45-DECISIONS §6, 45-PLAN.md
+            // §5.5):
+            //
+            // 1. `AppState::build()` constructs an empty
+            //    `Arc<ServiceRegistry>` (refcount=1).
+            // 2. Register 9 service plugins + 13 business plugins on
+            //    the host (no init yet — just id bookkeeping).
+            // 3. Build the `PluginContext` with a `&mut ServiceRegistry`
+            //    tied to `state.service_registry`. Since refcount=1,
+            //    `&mut` is uncontested.
+            // 4. `init_all_topological` walks the dependency DAG,
+            //    resolves init order, and runs each plugin's `init`.
+            //    Service plugins `register_arc` themselves; business
+            //    plugins may `get_service!(ctx.services, SvcType)` if
+            //    they need a service at init time (none today).
+            // 5. AFTER init completes, `app.manage(state)` bumps
+            //    refcount to 2 (Tauri also holds). From this point
+            //    commands can pull `State<'_, AppState>` and look
+            //    services up via `crate::get_service!`.
             let paths_impl = platform::runtime::paths();
-            let host = init_all(app.app_handle(), &*paths_impl)
+            let mut state = AppState::build();
+            let host = init_all_topological(app.app_handle(), &*paths_impl, &mut state)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            app.manage(state);
             app.manage(Mutex::new(host));
 
             // M2.3 — F4 deeplink plugin 事件桥接

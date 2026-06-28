@@ -41,6 +41,10 @@
 //! `"permission_denied"` / `"network_path"` / `"launcher_failed"`).
 //! `RevealFailure` derives `Serialize`, so it converts to
 //! `InvokeError` the same way `String` does.
+//!
+//! Phase 45 service-registry refactor: `ResourceService` is looked up
+//! via `crate::get_service!` (registered in `service_registry` by
+//! `plugins::host` at startup).
 
 use std::path::PathBuf;
 
@@ -49,6 +53,7 @@ use tauri::Manager;
 
 use crate::app_state::AppState;
 use crate::domain::{ResourceDetail, ResourceItem, ResourceKind};
+use crate::get_service;
 use crate::plugins::dispatch::CommandSpec;
 use crate::services::resource_service::{RevealFailure, ResourceServiceError};
 
@@ -112,9 +117,8 @@ pub fn dispatch_list_resources(invoke: Invoke<tauri::Wry>) -> bool {
             // M3.12 (A1#11) — read live active root via the platform
             // shim (state.paths is a one-shot startup snapshot).
             let active_root = crate::platform::runtime::paths().active_root_dir();
-            state
-                .resource_service
-                .list_with_active_root(kind, active_root.as_deref())
+            let svc = get_service!(state, crate::services::resource_service::ResourceService);
+            svc.list_with_active_root(kind, active_root.as_deref())
                 .map_err(|e| e.to_string())
         });
     let response: Result<Vec<ResourceItem>, tauri::ipc::InvokeError> =
@@ -141,10 +145,8 @@ pub fn dispatch_get_resource_detail(invoke: Invoke<tauri::Wry>) -> bool {
         tauri::async_runtime::block_on(async move {
             let path = path_from_args(&args)?;
             let kind = kind_from_args(&args)?;
-            state
-                .resource_service
-                .detail(&path, kind)
-                .map_err(|e| e.to_string())
+            let svc = get_service!(state, crate::services::resource_service::ResourceService);
+            svc.detail(&path, kind).map_err(|e| e.to_string())
         });
     let response: Result<ResourceDetail, tauri::ipc::InvokeError> =
         result.map_err(Into::into);
@@ -190,9 +192,8 @@ pub fn dispatch_reveal_in_file_manager(invoke: Invoke<tauri::Wry>) -> bool {
                 path: String::new(),
             });
         }
-        state
-            .resource_service
-            .reveal(&PathBuf::from(path_str))
+        let svc = get_service!(state, crate::services::resource_service::ResourceService);
+        svc.reveal(&PathBuf::from(path_str))
             .map_err(|e| match e {
                 ResourceServiceError::Reveal { kind, message, path } => {
                     RevealFailure { kind, message, path }

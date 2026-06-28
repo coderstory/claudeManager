@@ -17,6 +17,12 @@ impl IPlugin for BackupRestorePlugin {
     fn name(&self) -> &'static str {
         "备份与恢复"
     }
+    /// Phase 45 — depends on backup-service (its primary backing
+    /// store) AND history-service (auto-history writes via
+    /// BackupService::with_history). Both must register first.
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["backup-service", "history-service"]
+    }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
             path: "/backup".to_string(),

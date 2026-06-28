@@ -218,6 +218,22 @@ pub trait IPlugin: Send + Sync {
         Vec::new()
     }
 
+    /// **Phase 45 (G7)** — plugin ids this plugin depends on.
+    /// `PluginHost::init_all_topological` walks `depends_on` for every
+    /// plugin, topologically sorts the resulting DAG, and runs `init`
+    /// in dependency-first order. A plugin whose `depends_on()` is
+    /// missing a required service would otherwise panic at runtime
+    /// when its `init` looks up the service via [`ServiceRegistry`].
+    ///
+    /// Defaults to empty vec (no deps). **Service plugins (Phase 45)**
+    /// must override this to declare their inter-service wiring; for
+    /// example, `provider-service` depends on
+    /// `["backup-service", "history-service"]` so it can call
+    /// `.with_backup_service(...)` + `.with_history(...)` during init.
+    fn depends_on(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
+
     /// Called once at app startup. Use to register Tauri commands,
     /// IPC handlers, etc. Default = no-op.
     ///
@@ -251,6 +267,19 @@ pub enum PluginError {
     /// `unregister` was called with an id that isn't in the registry.
     #[error("plugin not found: {0}")]
     NotFound(String),
+
+    /// **Phase 45** — dependency cycle detected during
+    /// `init_all_topological`. `path` is the offending edge chain
+    /// (e.g. `["A", "B", "A"]`) — surfaces from
+    /// [`TopologicalError::Cycle`].
+    #[error("plugin dependency cycle: {}", path.join(" -> "))]
+    CycleDetected { path: Vec<String> },
+
+    /// **Phase 45** — a plugin's `depends_on()` references an id
+    /// that was never registered. Surfaces from
+    /// [`TopologicalError::MissingDependency`].
+    #[error("plugin '{plugin}' depends on '{missing}' which is not registered")]
+    MissingDependency { plugin: String, missing: String },
 
     /// Platform-layer error (file I/O, registry, etc.) bubbled up through
     /// a plugin's `init` / `shutdown`.

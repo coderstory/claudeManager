@@ -28,6 +28,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::domain::{UsageHistoryEntry, UsageSnapshot, UsageWindow};
+use crate::get_service;
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
 /// is the user-visible message (SPEC §6.5).
@@ -95,8 +96,7 @@ pub async fn get_current_usage(
     let provider_id = resolve_active_provider_id(&state);
     // M3.12 (A1#13) — read live active root via the platform shim.
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .usage_service
+    get_service!(state, crate::services::usage_service::UsageService)
         .get_snapshot_only_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -115,8 +115,7 @@ pub async fn get_usage_history(
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .usage_service
+    get_service!(state, crate::services::usage_service::UsageService)
         .get_history_only_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -141,8 +140,7 @@ pub async fn refresh_usage(
         .ok_or_else(|| format!("未知的窗口: '{window}'，请用 5h / 1w / 1m"))?;
     let provider_id = resolve_active_provider_id(&state);
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let (mut snap, _history) = state
-        .usage_service
+    let (mut snap, _history) = get_service!(state, crate::services::usage_service::UsageService)
         .refresh_with_active_root(&provider_id, w, active_root.as_deref())
         .map_err(|e| e.to_string())?;
     // Phase 27 Fix 2 (BUG-CR-02 / D-09) — verify the SQLite write
@@ -151,8 +149,7 @@ pub async fn refresh_usage(
     // is the most informative number for the toast ("已写入 N 条").
     // If `history_service` is missing (shouldn't happen, but
     // best-effort), fall back to 0 — the snapshot is still valid.
-    let inserted = state
-        .history_service
+    let inserted = get_service!(state, crate::services::history_service::HistoryService)
         .count_recent_usage_rows(30 * 86_400)
         .unwrap_or(0);
     snap.inserted_rows = inserted;

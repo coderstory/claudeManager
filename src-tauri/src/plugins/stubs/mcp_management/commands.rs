@@ -43,11 +43,16 @@
 //! `with_root` re-resolves the path so project-mode (active project in
 //! `projects.json`) immediately affects reads/writes without
 //! requiring an app restart.
+//!
+//! Phase 45 service-registry refactor: `McpService` is looked up via
+//! `crate::get_service!` (registered in `service_registry` by
+//! `plugins::host` at startup).
 
 use tauri::ipc::{Invoke, InvokeBody};
 
 use crate::app_state::AppState;
 use crate::domain::McpServer;
+use crate::get_service;
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 use crate::plugins::dispatch::CommandSpec;
 
@@ -118,10 +123,8 @@ pub fn dispatch_list_mcp_servers(invoke: Invoke<tauri::Wry>) -> bool {
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<Vec<McpServer>, tauri::ipc::InvokeError> =
         tauri::async_runtime::block_on(async move {
-            let v: Vec<McpServer> = state
-                .mcp_service
-                .with_root(active_root.as_deref())
-                .list();
+            let svc = get_service!(state, crate::services::mcp_service::McpService);
+            let v: Vec<McpServer> = svc.with_root(active_root.as_deref()).list();
             Ok(v)
         });
     invoke.resolver.respond(result);
@@ -141,10 +144,8 @@ pub fn dispatch_list_mcp_servers_with_warnings(invoke: Invoke<tauri::Wry>) -> bo
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<ListMcpServersResult, tauri::ipc::InvokeError> =
         tauri::async_runtime::block_on(async move {
-            let (servers, warning) = state
-                .mcp_service
-                .with_root(active_root.as_deref())
-                .list_with_warnings();
+            let svc = get_service!(state, crate::services::mcp_service::McpService);
+            let (servers, warning) = svc.with_root(active_root.as_deref()).list_with_warnings();
             Ok(ListMcpServersResult { servers, warning })
         });
     invoke.resolver.respond(result);
@@ -167,9 +168,8 @@ pub fn dispatch_toggle_mcp_server(invoke: Invoke<tauri::Wry>) -> bool {
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<McpServer, tauri::ipc::InvokeError> =
         tauri::async_runtime::block_on(async move {
-            state
-                .mcp_service
-                .with_root(active_root.as_deref())
+            let svc = get_service!(state, crate::services::mcp_service::McpService);
+            svc.with_root(active_root.as_deref())
                 .toggle(&id, enabled)
                 .map_err(|e| e.to_string().into())
         });
@@ -198,9 +198,8 @@ pub fn dispatch_add_mcp_server(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<(), tauri::ipc::InvokeError> = tauri::async_runtime::block_on(async move {
-        state
-            .mcp_service
-            .with_root(active_root.as_deref())
+        let svc = get_service!(state, crate::services::mcp_service::McpService);
+        svc.with_root(active_root.as_deref())
             .add(server)
             .map_err(|e| e.to_string().into())
     });
@@ -231,9 +230,8 @@ pub fn dispatch_update_mcp_server(invoke: Invoke<tauri::Wry>) -> bool {
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<McpServer, tauri::ipc::InvokeError> =
         tauri::async_runtime::block_on(async move {
-            state
-                .mcp_service
-                .with_root(active_root.as_deref())
+            let svc = get_service!(state, crate::services::mcp_service::McpService);
+            svc.with_root(active_root.as_deref())
                 .update(&id, server)
                 .map_err(|e| e.to_string().into())
         });
@@ -254,9 +252,8 @@ pub fn dispatch_remove_mcp_server(invoke: Invoke<tauri::Wry>) -> bool {
     let state = invoke.message.state_ref().get::<AppState>();
     let active_root = crate::platform::runtime::paths().active_root_dir();
     let result: Result<(), tauri::ipc::InvokeError> = tauri::async_runtime::block_on(async move {
-        state
-            .mcp_service
-            .with_root(active_root.as_deref())
+        let svc = get_service!(state, crate::services::mcp_service::McpService);
+        svc.with_root(active_root.as_deref())
             .remove(&id)
             .map_err(|e| e.to_string().into())
     });
