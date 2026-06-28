@@ -20,7 +20,14 @@ pub mod stubs;
 pub mod dispatch;
 pub mod service_registry;
 
+// Phase 43 — MenuRegistry: tray + macOS AppMenu assembly.
+pub mod menu_registry;
+
 pub use host::PluginHost;
+pub use menu_registry::{
+    AppMenuRole, PluginAction, PluginAppMenuItem, PluginAppMenuItemKind,
+    PluginTrayItem,
+};
 pub use service_registry::ServiceRegistry;
 pub use traits::{
     IPlugin, PluginContext, PluginError, PluginRoute, PluginService,
