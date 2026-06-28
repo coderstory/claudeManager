@@ -103,100 +103,17 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![
-            commands::autostart::get_autostart_status,
-            commands::autostart::set_autostart_enabled,
-            commands::providers::list_providers,
-            commands::providers::list_providers_with_warnings,
-            commands::providers::switch_provider,
-            commands::providers::parse_sql_preview,
-            commands::providers::import_providers_from_sql,
-            commands::providers::parse_deeplink_url,
-            commands::providers::import_single_provider,
-            // M2.16 — F14 导出单 provider（Rust 侧弹保存框 + 原子写盘）
-            commands::providers::export_provider,
-            // 2026-06-24 — Provider 列表"从当前配置生成"按钮 (b6aa402)
-            commands::providers::read_current_claude_config,
-            commands::providers::generate_from_current_config,
-            // 2026-06-25 — Provider 列表 CRUD IPC (清单 22: add/update/delete/get_details)
-            commands::providers::get_provider_details,
-            commands::providers::add_provider,
-            commands::providers::update_provider,
-            commands::providers::delete_provider,
-            commands::fs::read_file,
-            commands::fs::write_file_atomic,
-            // F20 — 读取任意路径 .sql 文件(文件关联双击导入用)
-            commands::fs::read_sql_file,
-            // M2.16 — F20 冷启动 .sql 路径取走(setup 阶段 webview 未挂,
-            // emit 会丢,改用 state 缓存 + 前端 mount 后主动拉取)。
-            commands::fs::take_pending_sql_file,
-            // M3.11 (A4#12) — F5 JSON 编辑器文件目录树(白名单扫描
-            // ~/.claude/ + active project 的 .claude/)。
-            commands::fs::list_editable_jsons,
-            commands::mcp::list_mcp_servers,
-            commands::mcp::list_mcp_servers_with_warnings,
-            commands::mcp::toggle_mcp_server,
-            commands::mcp::add_mcp_server,
-            commands::mcp::update_mcp_server,
-            commands::mcp::remove_mcp_server,
-            commands::mcp::parse_mcp_deeplink,
-            commands::backup::list_backups,
-            commands::backup::read_backup_content,
-            commands::backup::diff_backups,
-            commands::backup::restore_backup,
-            commands::backup::backup_now,
-            commands::backup::backup_incremental,
-            // M4.6.13 — delete single backup (trash + rm, allow-list checked)
-            commands::backup::delete_backup,
-            commands::usage::get_current_usage,
-            commands::usage::refresh_usage,
-            // M3.8 — usage history (per-day per-model) for chart
-            commands::usage::get_usage_history,
-            commands::app::get_app_metadata,
-            // M3.7 — 清单 18: 关于页 command(about.rs 复用 app::AppMetadata)。
-            commands::about::get_app_info,
-            commands::optimizer::scan_optimizations,
-            commands::optimizer::apply_optimizations,
-            // M3.3 (Phase 4) — per-row Fix button backend (SC #2/#3)
-            commands::optimizer::apply_rule_fix,
-            // M2.16 — F23 优化建议导出 markdown（Rust 侧生成 + 弹保存框 + 原子写盘）
-            commands::optimizer::export_optimization_report,
-            // M2.13 — F16 资源浏览
-            commands::resource::list_resources,
-            commands::resource::reveal_in_file_manager,
-            // M2.16 — F22 资源详情(manifest 描述 + 文件列表)
-            commands::resource::get_resource_detail,
-            // M2.16 — F17 在线安装（资源市场 + git URL → clone → 扫描 → 安装）
-            commands::marketplace::list_marketplace_repos,
-            commands::marketplace::clone_and_scan,
-            commands::marketplace::install_from_marketplace,
-            // M3.4 — 三类 install 语义统一（清单 11/12/13/14）
-            commands::marketplace::install_builtin_plugin,
-            commands::marketplace::install_third_party_repo,
-            commands::marketplace::install_npx_package,
-            // M3.10 (清单 23) — 双模式 (用户/项目) 项目管理 commands
-            commands::project::list_projects,
-            commands::project::add_project,
-            commands::project::remove_project,
-            commands::project::switch_project,
-            commands::project::current_project,
-            // M3.13.4 — 新建项目 picker + 路径合法性校验（后端全权弹
-            // dialog + 校验,前端不直接调 tauri-plugin-dialog 的 JS wrapper,
-            // 见 commands::project 的注释）
-            commands::project::pick_project_root_dir,
-            commands::project::validate_project_path,
-            // M4.3 — updater commands (pubkey + endpoint config + check stub).
-            commands::updater::get_updater_pubkey,
-            commands::updater::get_updater_endpoints,
-            commands::updater::check_update,
-            // M4.6 / Phase 21 — history page commands (Plan B).
-            commands::history::get_usage_history_rows,
-            commands::history::get_daily_stats_history,
-            commands::history::get_backup_history,
-            commands::history::get_history_stats,
-            commands::history::export_history,
-            commands::history::purge_history,
-        ])
+        // Phase 42 — IPC dispatch now flows through the plugin system's
+        // inventory::submit! + DispatchTable. The 80 `#[tauri::command]`
+        // entries in `commands/*.rs` are still compiled (stubs call them
+        // and they remain for tests), but the live frontend invoke
+        // route goes through each plugin's `dispatch_*` shim registered
+        // by `inventory::submit!(CommandSpec { ... })`.
+        .invoke_handler(
+            plugins::dispatch::make_invoke_handler(
+                plugins::dispatch::DispatchTable::from_inventory(),
+            ),
+        )
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
             // macOS impls based on target_os). Must run before any
