@@ -12,7 +12,6 @@
 //! compile time. See each submodule for what the real implementation
 //! will do.
 
-pub mod app_menu;
 pub mod autostart;
 pub mod git;
 pub mod notifier;
@@ -20,7 +19,6 @@ pub mod paths;
 pub mod reveal;
 pub mod single_instance;
 
-pub use app_menu::MacAppMenu;
 pub use autostart::MacAutostart;
 pub use git::MacGitHost;
 pub use notifier::MacNotifier;

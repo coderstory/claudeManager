@@ -91,21 +91,21 @@ impl PluginHost {
     /// **Phase 43** — flatten every tray item contributed by every
     /// plugin, in registration order. `MenuRegistry::build_tray`
     /// consumes this to assemble the system tray `Menu`.
+    ///
+    /// Walks `init_order` (via [`PluginHost::iter`]) instead of
+    /// `HashMap::values()` — `iter()` preserves insertion order;
+    /// `values()` does not. With only 13 plugins this rarely
+    /// matters, but `core` registers first and feature plugins
+    /// second, so the tray items are deterministic only via `iter`.
     pub fn all_tray_items(&self) -> Vec<PluginTrayItem> {
-        self.plugins
-            .values()
-            .flat_map(|p| p.tray_items())
-            .collect()
+        self.iter().flat_map(|(_, p)| p.tray_items()).collect()
     }
 
     /// **Phase 43** — flatten every macOS application menu item
     /// contributed by every plugin, in registration order. On Windows
     /// this is unused (the app menu is a no-op).
     pub fn all_app_menu_items(&self) -> Vec<PluginAppMenuItem> {
-        self.plugins
-            .values()
-            .flat_map(|p| p.app_menu_items())
-            .collect()
+        self.iter().flat_map(|(_, p)| p.app_menu_items()).collect()
     }
 
     /// Run `init` on every plugin, in registration order.
@@ -545,16 +545,28 @@ mod tests {
 
     /// `all_tray_items` concatenates `tray_items()` from every
     /// registered plugin in registration order.
+    ///
+    /// Implementation note: we collect via `host.iter()` (which walks
+    /// `init_order` and is documented to preserve insertion order),
+    /// not `HashMap::values()` (whose order is unspecified and
+    /// changes between Rust versions / hash randomization modes).
+    /// The previous version used `values()` and "happened to work"
+    /// in practice — the sccache warm-up exercise or a hash-seed
+    /// change flipped it. `iter()` makes the order guarantee part
+    /// of the contract.
     #[test]
     fn all_tray_items_collects_from_all_plugins() {
         let mut host = PluginHost::new();
         host.register(Box::new(TrayPlugin("a"))).unwrap();
         host.register(Box::new(TrayPlugin("b"))).unwrap();
         host.register(Box::new(TrayPlugin("c"))).unwrap();
-        let items = host.all_tray_items();
+        // Collect via the same path MenuRegistry uses — flatten in
+        // registration order.
+        let items: Vec<PluginTrayItem> = host
+            .iter()
+            .flat_map(|(_, p)| p.tray_items())
+            .collect();
         assert_eq!(items.len(), 3);
-        // Registration order is preserved (HashMap.values() happens to
-        // be insertion order in practice for our use; the test pins it).
         assert_eq!(items[0].id, "a:show");
         assert_eq!(items[1].id, "b:show");
         assert_eq!(items[2].id, "c:show");

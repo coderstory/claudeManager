@@ -1,11 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    Emitter, Manager, RunEvent,
-};
+use tauri::{Emitter, Manager, RunEvent};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -229,46 +225,16 @@ pub fn run() {
                 }
             }
 
-            let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
-
-            let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Claude 配置管理器")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .build(app)?;
-
-            // M3.2 polish — left-double-click on tray icon restores
-            // the main window. We hook the icon's click handler via
-            // a TrayIconEvent listener (Tauri v2 doesn't expose
-            // `on_double_click` as a builder method; instead we
-            // listen for `DoubleClick` events on the tray).
-            let tray_handle = app.tray_by_id("main-tray");
-            if let Some(t) = tray_handle {
-                t.on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
-                        if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            let _ = window.unminimize();
-                        }
-                    }
-                });
-            }
+            // M8 (Phase 43) — system tray + macOS AppMenu 全由 `core` plugin
+            // 的 init() 接管 (调 MenuRegistry::build_tray /
+            // build_app_menu / install_tray)。core 在 plugins::init_all
+            // 里第一行注册并第一个跑 init,本 setup 块不再硬编码
+            // MenuItem::with_id / SubmenuBuilder / on_menu_event。
+            // TrayIcon 的 DoubleClick 事件也由 core plugin 处理。
+            //
+            // 旧手写块 (lib.rs:225-303, 含 tray + macOS AppMenu) 已
+            // 在本 phase 删除;详见 .planning/milestones/v3.4-phases/
+            // 43-PLAN.md §3 Task 6。
 
             // Minimize-to-tray: intercept close
             if let Some(window) = app.get_webview_window("main") {
@@ -290,24 +256,8 @@ pub fn run() {
                 //  路径移除)。)
             }
 
-            // M2.16 — macOS 标准应用菜单（App / Edit / View / Window）。
-            //
-            // macOS 应用规范要求顶部菜单栏有标准应用菜单（About / Hide /
-            // Quit Cmd+Q 等），否则用户体验残缺（P2 审查项）。通过
-            // `IPlatformAppMenu` 抽象走 Tauri v2 menu API——macOS 上自动
-            // 渲染为 NSMenu，Windows 上 `runtime::app_menu` 返回
-            // NotSupported 不走此分支（cfg 保证）。
-            //
-            // 菜单项全用 PredefinedMenuItem，macOS 自动绑定标准快捷键与
-            // 系统行为（Cmd+Q 退出 / Cmd+H 隐藏 / Cmd+M 最小化 / WKWebView
-            // 编辑操作），无需 on_menu_event handler。
-            #[cfg(target_os = "macos")]
-            {
-                let menu = platform::runtime::app_menu(app.app_handle());
-                if let Err(e) = menu.build_app_menu() {
-                    eprintln!("[M2.16] install mac app menu failed: {e}");
-                }
-            }
+            // macOS AppMenu 安装已迁移到 core plugin (Phase 43)。
+            // 见 plugins::stubs::core + plugins::menu_registry::build_app_menu。
 
             Ok(())
         })

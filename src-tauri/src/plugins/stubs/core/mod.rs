@@ -18,10 +18,10 @@
 
 use super::super::traits::*;
 use crate::plugins::menu_registry::{
-    build_app_menu, build_tray, install_tray, AppMenuRole, PluginAction, PluginAppMenuItem,
-    PluginAppMenuItemKind, PluginTrayItem,
+    build_app_menu, build_tray, install_tray, show_main_window, AppMenuRole, PluginAction,
+    PluginAppMenuItem, PluginAppMenuItemKind, PluginTrayItem,
 };
-use tauri::Manager;
+use tauri::tray::TrayIconEvent;
 
 /// Core plugin — owns the standard tray + macOS AppMenu entries.
 pub struct CorePlugin;
@@ -129,6 +129,21 @@ impl IPlugin for CorePlugin {
         install_tray(app, &menu, actions, icon, "Claude 配置管理器").map_err(|e| {
             PluginError::InitFailed(format!("core: install_tray failed: {e}"))
         })?;
+
+        // M3.2 polish — left-double-click on tray icon restores the
+        // main window. Tauri v2 doesn't expose `on_double_click` on
+        // TrayIconBuilder; instead we listen for `DoubleClick`
+        // events on the tray icon and dispatch via the same
+        // `show_main_window` helper that `PluginAction::ShowMainWindow`
+        // uses (one source of truth for "show + focus + unminimize").
+        let tray_handle = app.tray_by_id("main-tray");
+        if let Some(t) = tray_handle {
+            t.on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::DoubleClick { .. } = event {
+                    show_main_window(tray.app_handle());
+                }
+            });
+        }
 
         // ---- macOS AppMenu (no-op on Windows / Linux via cfg) ----
         build_app_menu(host, app).map_err(|e| {
