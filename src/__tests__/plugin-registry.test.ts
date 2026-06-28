@@ -5,7 +5,27 @@
  * componentEntry/sidebarTile。
  * 8 stub (Phase 46 D-44-A: mcp-management 删) 每个有完整字段。
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Phase 46 D-44-A — break the registry ↔ useViewState cycle that otherwise
+// blows up at module load (registry → stubs/usage-query → pages/usage-query
+// → hooks/useViewState → registry). This test file only inspects derived
+// registry exports; the only useViewState symbol these tests transitively
+// need (none) isn't actually called. Stub it.
+vi.mock('../hooks/useViewState', () => ({
+  useViewState: () => ({
+    view: 'home',
+    setView: () => {},
+    allViews: [],
+    migrationSearch: undefined,
+  }),
+  ViewStateProvider: ({ children }: { children: React.ReactNode }) => children,
+  HOME_VIEW: 'home',
+  STORAGE_KEY: 'ccm.lastView',
+  ALL_VIEWS: [],
+  migrateViewId: (stored: string | null) => ({ view: stored ?? 'home' }),
+}));
+
 import {
   ALL_PLUGINS,
   PAGE_META,

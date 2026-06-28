@@ -24,6 +24,25 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+// Phase 46 D-44-A — break the registry ↔ useViewState cycle that otherwise
+// blows up at module load (registry → stubs/usage-query → pages/usage-query
+// → hooks/useViewState → registry). The cycle's only side effect that
+// ResourceBrowserPage actually USES is `migrationSearch` (Phase 46 Q46-3),
+// and this test file doesn't care about it. Stub it.
+vi.mock('../../hooks/useViewState', () => ({
+  useViewState: () => ({
+    view: 'resource-browser',
+    setView: vi.fn(),
+    allViews: [],
+    migrationSearch: undefined,
+  }),
+  ViewStateProvider: ({ children }: { children: React.ReactNode }) => children,
+  HOME_VIEW: 'home',
+  STORAGE_KEY: 'ccm.lastView',
+  ALL_VIEWS: [],
+  migrateViewId: (stored: string | null) => ({ view: stored ?? 'home' }),
+}));
+
 // Mock useProjects + useScope so we can drive scope changes.
 const mockCurrentProject = vi.fn();
 const mockSyncScope = vi.fn();
