@@ -58,11 +58,13 @@ function wrap({ children }: { children: ReactNode }): ReactElement {
 }
 
 describe('useViewState', () => {
-  it('exports 9 plugin views plus 3 core views (home, history, about) — Phase 44 registry-driven', () => {
-    // Phase 44 派生收敛:ALL_VIEWS = ALL_VIEW_IDS re-exported from
-    // src/plugins/registry.ts → 3 core + 9 plugin = 12 项。
+  it('exports 8 plugin views plus 3 core views (home, history, about) — Phase 46 D-44-A', () => {
+    // Phase 46 D-44-A: mcp-management stub 删,ALL_PLUGINS = 8 plugins
+    // + 3 core = 11 项。Phase 44 派生收敛后 ALL_VIEWS = ALL_VIEW_IDS
+    // re-exported from src/plugins/registry.ts。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(12);
+    expect(ALL_VIEWS.length).toBe(11);
+    expect(ALL_VIEWS).not.toContain('mcp-management'); // D-44-A 已删
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -120,7 +122,7 @@ describe('useViewState', () => {
 
   it('exposes ALL_VIEWS so the sidebar can render the nav list', () => {
     // The sidebar imports this directly to avoid duplicating the
-    // 12-element list. This test pins the contract.
+    // 11-element list. This test pins the contract.
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.allViews).toBe(ALL_VIEWS);
   });
@@ -200,16 +202,15 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 9 plugin ids from the registry (Phase 44, D-44-A: Phase 46 → 8)', () => {
+  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (Phase 46 D-44-A)', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
-    // Phase 44 派生收敛:registry 9 个 plugin (含 mcp-management,Phase 46
-    // D-44-A 删 → 8 个),ALL_VIEWS 也 12 项 (3 core + 9 plugin)。
+    // Phase 46 D-44-A: 删 mcp-management stub → 8 plugin views in
+    // ALL_VIEW_IDS = ALL_VIEWS。
     const registryIds = [
       'provider-list',
       'import-sql',
       'json-editor',
-      'mcp-management',
       'usage-query',
       'resource-browser',
       'marketplace',
@@ -219,7 +220,7 @@ describe('useViewState', () => {
     for (const id of registryIds) {
       expect(ALL_VIEWS, `ALL_VIEWS missing plugin id ${id}`).toContain(id);
     }
-    // Phase 46 D-44-A:删 mcp-management stub → 8 plugin
+    expect(ALL_VIEWS).not.toContain('mcp-management');
   });
 
   it('ViewId type stays exhaustive against ALL_VIEWS at compile time', () => {
@@ -260,24 +261,40 @@ describe('Phase 46 — VIEW_ID_MIGRATIONS + chain migration', () => {
   });
 
   it('chain A→B→C resolves to C with first-hop appendQuery (Q46-2)', () => {
-    // chain fixture: A→B (appendQuery=x=1), B→C (appendQuery=y=2)
-    // 第一跳 A 的 appendQuery 应被保留,B / C 跳的 appendQuery 不合并
-    const fixture = new Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>([
-      ['A', { toViewId: 'B' as ViewId, appendQuery: { x: '1' } }],
-      ['B', { toViewId: 'C' as ViewId, appendQuery: { y: '2' } }],
+    // chain fixture: 'unused-1'→'provider-list' (appendQuery={x:1})
+    //              'unused-2'→'import-sql' (appendQuery={y:2})
+    // migrateViewId('unused-1') → provider-list (valid ViewId 终止)
+    // appendQuery 取第一跳 'unused-1' 的 {x:1},中间跳 'unused-2' 的 {y:2} 不合并
+    const fixture = new Map<
+      string,
+      { toViewId: ViewId; appendQuery?: Record<string, string> }
+    >([
+      [
+        'unused-1',
+        { toViewId: 'provider-list' as ViewId, appendQuery: { x: '1' } },
+      ],
+      [
+        'unused-2',
+        { toViewId: 'import-sql' as ViewId, appendQuery: { y: '2' } },
+      ],
     ]);
-    const spy = vi
-      .spyOn(
-        Object.getPrototypeOf(VIEW_ID_MIGRATIONS),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        'get' as any,
-      )
-      .mockReturnValue(fixture);
-
-    const result = migrateViewId('A');
-    expect(result.view).toBe('C');
-    expect(result.appendQuery).toEqual({ x: '1' }); // 第一跳 appendQuery
-    spy.mockRestore();
+    // 注入 fixture 到 VIEW_ID_MIGRATIONS (它是 readonly Map 但底层是普通 Map,
+    // 通过 mutate 实现 test fixture 注入;测试结束 cleanup)
+    const backup = new Map(VIEW_ID_MIGRATIONS);
+    for (const [k, v] of fixture) {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).set(k, v);
+    }
+    try {
+      const result = migrateViewId('unused-1');
+      expect(result.view).toBe('provider-list');
+      expect(result.appendQuery).toEqual({ x: '1' }); // 第一跳 appendQuery
+    } finally {
+      // cleanup: 恢复原始 entries
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).set(k, v);
+      }
+    }
   });
 
   it('chain cycle (A→B→A) → home + dev warn (Q46-1 cycle detection)', () => {
@@ -285,27 +302,27 @@ describe('Phase 46 — VIEW_ID_MIGRATIONS + chain migration', () => {
       ['A', { toViewId: 'B' as ViewId }],
       ['B', { toViewId: 'A' as ViewId }],
     ]);
-    // 通过替换 VIEW_ID_MIGRATIONS 引用 (它是 readonly Map;通过 module getter 拦截)
-    const originalMap = VIEW_ID_MIGRATIONS;
-    // 直接替换 Map 内 entries (mutation, 不替换引用)
+    const backup = new Map(VIEW_ID_MIGRATIONS);
     for (const [k, v] of fixture) {
       (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
     }
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    const result = migrateViewId('A');
-    expect(result.view).toBe(HOME_VIEW);
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining('cycle'));
-
-    // 清理 (fixture 不污染其它测试)
-    for (const k of fixture.keys()) {
-      (VIEW_ID_MIGRATIONS as Map<string, unknown>).delete(k);
+    try {
+      const result = migrateViewId('A');
+      expect(result.view).toBe(HOME_VIEW);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('cycle'));
+    } finally {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+      }
+      spy.mockRestore();
     }
-    spy.mockRestore();
-    void originalMap;
   });
 
   it('chain depth 6 (A→B→C→D→E→F) → home + dev warn (Q46-1 depth limit)', () => {
+    // depth limit = 5。start A → A→B (depth 1) → B→C (depth 2) → C→D (depth 3)
+    // → D→E (depth 4) → E→F (depth 5 命中 MAX_MIGRATION_DEPTH 上限) → home
     const fixture = new Map<string, { toViewId: ViewId }>();
     const ids = ['A', 'B', 'C', 'D', 'E', 'F'];
     ids.forEach((id, i) => {
@@ -313,21 +330,21 @@ describe('Phase 46 — VIEW_ID_MIGRATIONS + chain migration', () => {
         fixture.set(id, { toViewId: ids[i + 1] as ViewId });
       }
     });
+    const backup = new Map(VIEW_ID_MIGRATIONS);
     for (const [k, v] of fixture) {
       (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
     }
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    // 起始 F: F→E→D→C→B→A,depth 5 跳完到 A (depth=5 仍合法) → 验证 start 从 F 触发
-    // 但 plan §1 描述 "depth 6 (A→B→C→D→E→F)" 指 5 跳都走完后还没命中 → 兜底
-    // 直接 start A → A→B→C→D→E (depth 0,1,2,3,4) → 第 6 跳 depth=5 == MAX 命中兜底
-    const result = migrateViewId('A');
-    expect(result.view).toBe(HOME_VIEW);
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining('depth'));
-
-    for (const k of fixture.keys()) {
-      (VIEW_ID_MIGRATIONS as Map<string, unknown>).delete(k);
+    try {
+      const result = migrateViewId('A');
+      expect(result.view).toBe(HOME_VIEW);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('depth'));
+    } finally {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+      }
+      spy.mockRestore();
     }
-    spy.mockRestore();
   });
 });
