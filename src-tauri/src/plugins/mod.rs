@@ -58,6 +58,9 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     // Phase 21 — history page (SQLite 查询 UI, M4.6)
     host.register(Box::new(stubs::HistoryViewPlugin))?;
 
+    // M3.10 — 项目模式 (用户/项目双模式)
+    host.register(Box::new(stubs::ProjectModePlugin))?;
+
     // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
     host.register(Box::new(stubs::UpdaterPlugin))?;
 
