@@ -21,6 +21,7 @@ pub mod backup_restore;
 pub mod updater;
 pub mod history_view;
 pub mod project_mode;
+pub mod file_ops;
 
 pub use provider_list::ProviderListPlugin;
 pub use import_sql::ImportSqlPlugin;
@@ -34,3 +35,4 @@ pub use backup_restore::BackupRestorePlugin;
 pub use updater::UpdaterPlugin;
 pub use history_view::HistoryViewPlugin;
 pub use project_mode::ProjectModePlugin;
+pub use file_ops::FileOpsPlugin;

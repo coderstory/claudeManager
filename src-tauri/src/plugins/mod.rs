@@ -61,6 +61,9 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     // M3.10 — 项目模式 (用户/项目双模式)
     host.register(Box::new(stubs::ProjectModePlugin))?;
 
+    // F2/F6/F13/F18/F19 — 文件操作聚合 (read/write/list)
+    host.register(Box::new(stubs::FileOpsPlugin))?;
+
     // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
     host.register(Box::new(stubs::UpdaterPlugin))?;
 
