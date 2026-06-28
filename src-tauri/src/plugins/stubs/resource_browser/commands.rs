@@ -234,3 +234,80 @@ inventory::submit!(CommandSpec {
     plugin_id: "resource-browser",
     dispatch: dispatch_reveal_in_file_manager,
 });
+
+// ---------------------------------------------------------------------------
+// Tests — verify all 3 commands register under plugin_id="resource-browser"
+// and that the global dispatch table can route them by name (the frontend
+// `invoke("list_resources", ...)` etc. must hit the dispatch fn we wrote).
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Walk the global inventory and return every CommandSpec whose
+    /// `plugin_id` is "resource-browser". Used by the test below to
+    /// assert the stub registered exactly 3 commands (no more, no fewer).
+    fn resource_browser_specs() -> Vec<&'static CommandSpec> {
+        inventory::iter::<CommandSpec>()
+            .filter(|c| c.plugin_id == "resource-browser")
+            .collect()
+    }
+
+    /// TDD RED gate — guard the 3-command contract. If a future
+    /// refactor accidentally drops an `inventory::submit!`, or adds
+    /// a 4th one, this test fails first (before the smoke test).
+    #[test]
+    fn inventory_registers_three_resource_browser_commands() {
+        let specs = resource_browser_specs();
+        let names: Vec<&str> = specs.iter().map(|c| c.name).collect();
+        assert!(
+            names.contains(&"list_resources"),
+            "missing list_resources in inventory: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"get_resource_detail"),
+            "missing get_resource_detail in inventory: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"reveal_in_file_manager"),
+            "missing reveal_in_file_manager in inventory: {:?}",
+            names
+        );
+        assert_eq!(
+            specs.len(),
+            3,
+            "resource_browser plugin should register exactly 3 commands, got {} ({:?})",
+            specs.len(),
+            names
+        );
+    }
+
+    /// TDD GREEN gate — DispatchTable::from_inventory must surface
+    /// every `resource-browser` command under its original IPC name
+    /// (Tauri uses the `name` field as the global namespace; renaming
+    /// would silently break the frontend).
+    #[test]
+    fn dispatch_table_routes_resource_browser_commands() {
+        let table = crate::plugins::dispatch::DispatchTable::from_inventory();
+        for name in &[
+            "list_resources",
+            "get_resource_detail",
+            "reveal_in_file_manager",
+        ] {
+            let spec = table.get(name).unwrap_or_else(|| {
+                panic!(
+                    "resource_browser command `{}` must be in dispatch table",
+                    name
+                )
+            });
+            assert_eq!(
+                spec.plugin_id, "resource-browser",
+                "command `{}` should belong to resource-browser",
+                name
+            );
+        }
+    }
+}
