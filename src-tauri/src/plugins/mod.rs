@@ -57,6 +57,13 @@ pub fn init_all(
 ) -> Result<PluginHost, PluginError> {
     let mut host = PluginHost::new();
 
+    // Phase 43 (G-5 strong acceptance) — `core` must register FIRST
+    // so its `init` runs before any feature plugin and the OS menu
+    // surface is in place before plugins start emitting events.
+    // Q43-5 — id is `"core"` so `unregister_actions` can prefix-match
+    // all of its contributions.
+    host.register(Box::new(stubs::CorePlugin))?;
+
     // F1..F7 core (F4 deeplink-import removed in cleanup commit 0ff5b86;
     // F8 removed in M5 #18; F2 provider_switch merged into provider_list
     // per v3.4 SHIP-A decision)

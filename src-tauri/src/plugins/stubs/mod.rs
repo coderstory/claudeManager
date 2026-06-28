@@ -22,8 +22,14 @@ pub mod updater;
 pub mod history_view;
 pub mod project_mode;
 pub mod file_ops;
+// Phase 43 — core plugin owns the system tray + macOS application
+// menu. Registered FIRST in `plugins::mod::init_all` so its `init`
+// runs before any feature plugin and the OS menu surface is in
+// place before plugins start emitting events.
+pub mod core;
 
 pub use provider_list::ProviderListPlugin;
+pub use core::CorePlugin;
 pub use import_sql::ImportSqlPlugin;
 pub use json_editor::JsonEditorPlugin;
 pub use mcp_management::McpManagementPlugin;

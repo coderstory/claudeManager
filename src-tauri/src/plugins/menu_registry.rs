@@ -147,6 +147,12 @@ pub enum AppMenuRole {
 /// for a runtime-parameterised enum) because the only field that
 /// needs cloning is `String` (in `SwitchView`) and `Arc<dyn Fn>`
 /// (in `Custom`), both of which are `Clone` regardless of runtime.
+///
+/// `Custom`'s inner closure is `+ 'static` because Tauri's
+/// `TrayIconBuilder::on_menu_event` requires the handler closure
+/// to be `Fn(&AppHandle, MenuEvent) + Send + Sync + 'static` (the
+/// tray lives for the full app lifetime, and the closure is moved
+/// into a long-lived slot).
 #[derive(Clone)]
 pub enum PluginAction {
     /// Show + focus + unminimize the main window. Mirrors the
@@ -161,10 +167,11 @@ pub enum PluginAction {
     SwitchView(String),
     /// Escape hatch for plugins that need full control over the
     /// dispatch — e.g. opening a non-standard window, spawning a
-    /// subprocess. The closure MUST be `Send + Sync` because
+    /// subprocess. The closure MUST be `Send + Sync + 'static` because
     /// `on_menu_event` runs on whichever thread the OS event loop
-    /// uses; the `Arc` makes this cheap.
-    Custom(Arc<dyn Fn(&AppHandle) + Send + Sync>),
+    /// uses AND the tray icon lives for the full app lifetime.
+    /// The `Arc` makes this cheap.
+    Custom(Arc<dyn Fn(&AppHandle) + Send + Sync + 'static>),
 }
 
 impl PluginAction {
@@ -298,7 +305,7 @@ pub fn install_tray(
     app: &AppHandle<tauri::Wry>,
     menu: &Menu<tauri::Wry>,
     actions: Arc<HashMap<String, PluginAction>>,
-    icon: tauri::image::Image<'static>,
+    icon: tauri::image::Image<'_>,
     tooltip: &str,
 ) -> tauri::Result<()> {
     // The `on_menu_event` closure only needs `actions` (cheaply
