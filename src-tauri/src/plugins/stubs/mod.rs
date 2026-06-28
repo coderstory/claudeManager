@@ -18,6 +18,7 @@ pub mod resource_browser;
 pub mod marketplace;
 pub mod optimizer;
 pub mod backup_restore;
+pub mod updater;
 
 pub use provider_list::ProviderListPlugin;
 pub use import_sql::ImportSqlPlugin;
@@ -28,3 +29,4 @@ pub use resource_browser::ResourceBrowserPlugin;
 pub use marketplace::MarketplacePlugin;
 pub use optimizer::OptimizerPlugin;
 pub use backup_restore::BackupRestorePlugin;
+pub use updater::UpdaterPlugin;

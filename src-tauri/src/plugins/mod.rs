@@ -55,6 +55,9 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     host.register(Box::new(stubs::OptimizerPlugin))?;
     host.register(Box::new(stubs::BackupRestorePlugin))?;
 
+    // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
+    host.register(Box::new(stubs::UpdaterPlugin))?;
+
     // Run startup hooks on every plugin.
     host.init_all(ctx)?;
 
