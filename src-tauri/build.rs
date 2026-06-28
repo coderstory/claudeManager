@@ -15,6 +15,18 @@
 // we emit "unknown" rather than failing the build. The metadata
 // command will surface "unknown" as-is, and tests assert the field
 // is non-empty (not a specific value).
+//
+// v3.4.4 fix — also compute DIST_HASH = hex(max mtime of ../dist) and
+// emit as `cargo:rustc-env=DIST_HASH`. Combined with the BUILD_MARKER
+// const in lib.rs, this gives scripts/build-mac.sh a stable grep-able
+// anchor to verify the dist was actually inlined into the binary
+// (Tauri 2.x silently serves stale dist from codegen-assets cache).
+// See .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+// + docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md.
+
+use std::path::Path;
+use std::time::UNIX_EPOCH;
+use walkdir::WalkDir;
 
 fn main() {
     // ---- 1. Git commit ----
@@ -48,6 +60,11 @@ fn main() {
         .unwrap_or(0);
     println!("cargo:rustc-env=BUILD_TIMESTAMP={ts}");
 
+    // ---- 2b. v3.4.4 DIST_HASH (max mtime of ../dist, hex epoch seconds) ----
+    let dist_dir = Path::new("../dist");
+    let dist_hash = compute_dist_mtime_max(dist_dir);
+    println!("cargo:rustc-env=DIST_HASH={}", dist_hash);
+
     // ---- 3. Re-run triggers ----
     // Re-build when HEAD moves so the SHA above stays accurate.
     // The .git layout uses HEAD (a ref pointer) and refs/heads/<branch>
@@ -56,4 +73,28 @@ fn main() {
     println!("cargo:rerun-if-changed=../.git/refs/heads");
 
     tauri_build::build()
+}
+
+/// Returns the max mtime (epoch seconds, hex) across all files under `dir`.
+/// Returns "0" if dir doesn't exist or is empty. Mirrors the bash
+/// `compute_dist_hash_inline` helper in scripts/build-mac.sh so any
+/// divergence between Rust and bash sides is caught at verification time.
+fn compute_dist_mtime_max(dir: &Path) -> String {
+    let mut max_secs: u64 = 0;
+    if dir.exists() {
+        for entry in WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            if let Ok(meta) = entry.metadata() {
+                if let Ok(mtime) = meta.modified() {
+                    if let Ok(d) = mtime.duration_since(UNIX_EPOCH) {
+                        max_secs = max_secs.max(d.as_secs());
+                    }
+                }
+            }
+        }
+    }
+    format!("{:x}", max_secs)
 }

@@ -5,6 +5,20 @@ use tauri::{Emitter, Manager, RunEvent};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+/// Build marker — embedded in binary .rodata as raw text. Grepable via
+/// `strings <binary> | grep ccm-build-mtime-`. Re-computed at every
+/// build from `dist/*` max mtime (see `src-tauri/build.rs`); if dist
+/// changes, this const changes → cargo re-runs build.rs → tauri-build
+/// re-inlines fresh dist. Companion to scripts/build-mac.sh step
+/// [2.5/3] which verifies the marker in the built binary matches
+/// the current dist hash. Without this safeguard, Tauri 2.x silently
+/// serves stale dist from `target/$MODE/build/claude-config-manager-*/
+/// out/tauri-codegen-assets/` even after `cargo tauri build` succeeds.
+/// See:
+///   - .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+///   - docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md
+pub const BUILD_MARKER: &str = concat!("ccm-build-mtime-", env!("DIST_HASH"));
+
 pub mod app_state;
 pub mod commands;
 pub mod domain;
@@ -92,7 +106,14 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_log::Builder::default()
+            // Forward webview console.log/warn/error → Rust log facade
+            // so the same line ends up in stdout AND in the log file
+            // (rotates per session, no history kept).
+            .target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Webview,
+            ))
+            .build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,

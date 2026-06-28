@@ -1,6 +1,6 @@
 [package]
 name = "claude-config-manager"
-version = "0.1.5"
+version = "0.1.16"
 description = "Claude Config Manager"
 authors = ["Claude Config Manager Dev"]
 edition = "2021"
@@ -16,6 +16,11 @@ crate-type = ["staticlib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# v3.4.4 — walkdir for DIST_HASH computation in build.rs (max mtime of
+# ../dist). Version pinned to =2.5.0 (matches the transitive walkdir
+# already pulled in by tauri-build, see Cargo.lock) to avoid pulling
+# a second copy into the dep graph (CLAUDE.md §2.3 version discipline).
+walkdir = "=2.5.0"
 
 [dependencies]
 # M2.16 — tauri features:

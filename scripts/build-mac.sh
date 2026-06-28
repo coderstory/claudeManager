@@ -29,6 +29,21 @@
 #
 # This script does NOT sign or notarize the bundle. v1.1 signing lives
 # in CI (.github/workflows/release.yml). See docs/SIGNING.md.
+#
+# v3.4.4 — Auto-clear stale Tauri codegen-assets + verify dist inlined.
+#   [1.5/3] Before `cargo tauri build`: detect + clear stale
+#           `target/$MODE/build/claude-config-manager-*/out/tauri-codegen-assets/`
+#           (preserves sccache warm cache for other crates).
+#   [2.5/3] After build: grep `BUILD_MARKER` (ccm-build-mtime-<hex>) from
+#           the built binary, verify it matches current dist/ hash.
+#           Fail loudly if mismatch (Tauri cache stale despite cleanup).
+#   Implementation:
+#     - src-tauri/build.rs emits `cargo:rustc-env=DIST_HASH=<hex>`.
+#     - src-tauri/src/lib.rs `pub const BUILD_MARKER: &str =
+#         concat!("ccm-build-mtime-", env!("DIST_HASH"))`.
+#   See:
+#     - .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+#     - docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md
 
 # Note: we deliberately omit `-u` from `set -e`. macOS ships bash 3.2.57
 # by default (last GPLv2 release, 2007), where unset/empty array expansion
@@ -56,6 +71,25 @@ else
 fi
 echo ""
 
+# === Helper: compute dist hash (v3.4.4) ===
+# Returns hex of max mtime epoch seconds across all files in $1.
+# Mirrors `compute_dist_mtime_max` in src-tauri/build.rs — any
+# divergence between the Rust and bash sides is caught at [2.5/3]
+# verification. Uses macOS BSD `stat -f '%m'` (BSD mtime epoch seconds);
+# GNU `stat --format='%Y'` does not exist on macOS.
+compute_dist_hash_inline() {
+  local dir="$1"
+  [[ ! -d "$dir" ]] && { echo "0"; return; }
+  local max=0
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    local secs
+    secs=$(stat -f '%m' "$f" 2>/dev/null || echo 0)
+    (( secs > max )) && max=$secs
+  done < <(find "$dir" -type f 2>/dev/null)
+  printf '%x\n' "$max"
+}
+
 MODE="release"
 EXTRA_ARGS=()
 NO_DMG=0
@@ -64,7 +98,16 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --debug)     MODE="debug"; shift ;;
     --no-bundle) EXTRA_ARGS+=("--no-bundle"); shift ;;
-    --no-dmg)    NO_DMG=1; shift ;;
+    --no-dmg)
+      # v3.4.1 fix — `--no-dmg` previously only deleted the dmg
+      # AFTER `cargo tauri build` spent time creating it. Now we
+      # pass `--bundles app` so cargo tauri skips dmg/dmg step
+      # entirely. `--bundles app` is supported on Tauri 2.x
+      # (the "app" bundle = the .app folder; we still want that).
+      NO_DMG=1
+      EXTRA_ARGS+=("--bundles" "app")
+      shift
+      ;;
     *)           echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -76,6 +119,20 @@ echo "  extra:   ${EXTRA_ARGS[*]:-(none)}"
 echo "  root:    $PROJECT_ROOT"
 echo "============================================"
 echo ""
+
+# === Pre-flight checks (v3.4.4) ===
+# build.rs is required to embed BUILD_MARKER (DIST_HASH) into the
+# binary so [2.5/3] verification can grep it post-build.
+[[ -f "$PROJECT_ROOT/src-tauri/build.rs" ]] || {
+  echo "FAIL: src-tauri/build.rs missing."
+  echo "      v3.4.4 fix requires this file to embed BUILD_MARKER."
+  echo "      See .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md"
+  exit 1
+}
+command -v strings >/dev/null 2>&1 || {
+  echo "WARN: 'strings' not found; verification step [2.5/3] will be skipped."
+  echo "      Install Xcode CLT: xcode-select --install"
+}
 
 # === Step 1: Pre-cleanup ===
 echo "[1/3] Pre-cleanup: killing any running ClaudeManager.app..."
@@ -100,6 +157,45 @@ if command -v hdiutil >/dev/null 2>&1; then
 fi
 find "$PROJECT_ROOT/src-tauri/target" -path '*/bundle/macos/rw.*.dmg' -delete 2>/dev/null || true
 
+# === Step 1.5: Clear stale Tauri codegen-assets (v3.4.4) ===
+# Tauri 2.x embeds frontendDist ("../dist") into the binary via
+# `tauri::generate_context!()`. The codegen-assets output is cached
+# under target/$MODE/build/claude-config-manager-<hash>/out/.
+# `cargo tauri build` does NOT detect dist content changes; if you
+# edit src/ and re-run, the binary can still contain the OLD dist.
+#
+# Fix: before each build, compare the max mtime of dist/ against
+# the max mtime of each codegen-assets dir. If they differ, clear
+# that hash dir so cargo regenerates it (preserves sccache warm
+# cache for non-codegen crates). See:
+#   .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+#   docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md
+
+DIST_DIR="$PROJECT_ROOT/dist"
+BUILD_DIR="$PROJECT_ROOT/src-tauri/target/$MODE/build"
+
+if [[ -d "$DIST_DIR" && -d "$BUILD_DIR" ]]; then
+  DIST_HASH=$(compute_dist_hash_inline "$DIST_DIR")
+  if [[ "$DIST_HASH" != "0" ]]; then
+    CLEARED=0
+    while IFS= read -r hashdir; do
+      ASSETS_DIR="$hashdir/out/tauri-codegen-assets"
+      [[ ! -d "$ASSETS_DIR" ]] && continue
+      ASSETS_HASH=$(compute_dist_hash_inline "$ASSETS_DIR")
+      if [[ "$ASSETS_HASH" != "$DIST_HASH" ]]; then
+        echo "[1.5/3] Stale codegen-assets detected → rm -rf $hashdir"
+        rm -rf "$hashdir"
+        CLEARED=$((CLEARED + 1))
+      fi
+    done < <(find "$BUILD_DIR" -maxdepth 1 -type d -name 'claude-config-manager-*')
+    if [[ $CLEARED -eq 0 ]]; then
+      echo "[1.5/3] codegen-assets fresh (hash=$DIST_HASH matches)"
+    else
+      echo "[1.5/3] cleared $CLEARED stale hash dir(s)"
+    fi
+  fi
+fi
+
 # === Step 2: Build ===
 START=$(date +%s)
 
@@ -118,6 +214,50 @@ BUILD_END=$(date +%s)
 BUILD_DUR=$((BUILD_END - START))
 echo ""
 echo "    Build took ${BUILD_DUR}s"
+
+# === Step 2.5: Verify dist content actually inlined into binary (v3.4.4) ===
+# Greps for BUILD_MARKER (Rust `pub const` embedded as raw text in
+# .rodata, NOT lz4-compressed). Marker value should match the current
+# dist/ hash. If mismatch, Tauri did not re-inline. See:
+#   .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+
+APP_BIN="$PROJECT_ROOT/src-tauri/target/$MODE/bundle/macos/ClaudeManager.app/Contents/MacOS/claude-config-manager"
+
+if [[ -x "$APP_BIN" ]] && command -v strings >/dev/null 2>&1; then
+  echo "[2.5/3] Verifying BUILD_MARKER in binary..."
+
+  EXPECTED_HASH=$(compute_dist_hash_inline "$DIST_DIR")
+  EXPECTED_MARKER="ccm-build-mtime-$EXPECTED_HASH"
+
+  ACTUAL_MARKER=$(strings "$APP_BIN" 2>/dev/null | \
+    grep -oE 'ccm-build-mtime-[0-9a-f]+' | \
+    head -1 || true)
+
+  if [[ -z "$ACTUAL_MARKER" ]]; then
+    echo "FAIL: BUILD_MARKER not found in binary." >&2
+    echo "      Binary: $APP_BIN" >&2
+    echo "      This suggests build.rs didn't run or src-tauri/src/lib.rs" >&2
+    echo "      is missing the BUILD_MARKER const." >&2
+    echo "      Remediation: cd src-tauri && cargo clean -p claude-config-manager && rerun" >&2
+    exit 1
+  fi
+
+  if [[ "$ACTUAL_MARKER" != "$EXPECTED_MARKER" ]]; then
+    echo "FAIL: BUILD_MARKER mismatch — dist content NOT inlined into binary." >&2
+    echo "      Expected: $EXPECTED_MARKER" >&2
+    echo "      Got:      $ACTUAL_MARKER" >&2
+    echo "      This is the bug from .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md" >&2
+    echo "      Tauri 2.x codegen-assets cache is stale despite [1.5/3] cleanup." >&2
+    echo "      Remediation:" >&2
+    echo "        rm -rf src-tauri/target/$MODE/build/claude-config-manager-*" >&2
+    echo "        # OR:" >&2
+    echo "        cd src-tauri && cargo clean -p claude-config-manager" >&2
+    echo "        # Then rerun: $0" >&2
+    exit 1
+  fi
+
+  echo "    ✓ BUILD_MARKER matches: $ACTUAL_MARKER"
+fi
 
 # === Step 3: Report ===
 APP_PATH="$PROJECT_ROOT/src-tauri/target/$MODE/bundle/macos/ClaudeManager.app"
