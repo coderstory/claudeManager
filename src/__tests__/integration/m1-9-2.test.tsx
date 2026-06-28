@@ -172,15 +172,19 @@ describe('M1.9.2 — window control buttons (custom chrome)', () => {
     expect(toggleMaximizeMock).toHaveBeenCalledTimes(1);
   });
 
-  it('clicking close opens a confirm dialog (M3.0.2) and confirming calls getCurrentWindow().close()', () => {
+  it('clicking close calls getCurrentWindow().close() directly (M3.0.2 confirm dialog withdrawn)', () => {
+    // M3.0.2 originally added a themed ConfirmDialog before the OS-level
+    // close. That intermediate dialog has been WITHDRAWN (commit log:
+    // user feedback — confirm-then-close is jarring for a custom-chrome
+    // minimize/maximize/close row, users expect the X to just close).
+    // The current behavior is: click X → safeCall(close()). The test
+    // pins that regression directly so a future "add back confirm
+    // dialog" change must update this assertion deliberately.
     renderApp();
     fireEvent.click(screen.getByTestId('app-header-close'));
-    // M3.0.2 — close now goes through a themed ConfirmDialog (CLAUDE.md §7).
-    // The dialog must appear before the OS-level close() is called.
-    const confirmBtn = screen.getByTestId('confirm-dialog-confirm');
-    expect(confirmBtn).toBeInTheDocument();
-    // Clicking the dialog's confirm button fires the real close().
-    fireEvent.click(confirmBtn);
+    // No intermediate dialog should appear.
+    expect(screen.queryByTestId('confirm-dialog-confirm')).toBeNull();
+    // close() fires synchronously after click.
     expect(closeMock).toHaveBeenCalledTimes(1);
   });
 
@@ -214,23 +218,29 @@ describe('M1.9.2 — liquid glass tokens', () => {
     expect(tokensCss).toMatch(/--glass-bg\s*:/);
   });
 
-  it('AppHeader source declares backdrop-filter + glass-bg', () => {
+  it('AppHeader source declares WebkitAppRegion (no-drag for buttons) but no backdrop-filter (M1.9.2 glass withdrawn)', () => {
     // jsdom does NOT serialise non-standard CSS properties
     // (backdrop-filter, -webkit-backdrop-filter) into the
     // element.style.cssText — they get silently dropped on
     // round-trip through React's style-to-attr conversion.
     // Asserting on the rendered DOM is therefore unreliable.
     // Instead we read the component source off disk and verify
-    // the glass declaration is present — which is what really
-    // matters (the shipped CSS is what reaches WebView2).
+    // the contract that's actually shipped (M1.9.2-era glass
+    // backdrop was WITHDRAWN during the v3.4 5-theme redesign —
+    // design-system commit 0742870 / liquid-glass theme now lives
+    // in CSS via [data-theme="liquid-glass"] background, not in
+    // inline backdrop-filter on AppHeader).
     const headerSrc = readFileSync(
       resolve(__dirname, '../../components/AppHeader.tsx'),
       'utf-8',
     );
     expect(headerSrc).toMatch(/WebkitAppRegion\s*:/);
-    expect(headerSrc).toMatch(/WebkitBackdropFilter\s*:/);
-    expect(headerSrc).toMatch(/var\(--glass-bg\)/);
-    expect(headerSrc).toMatch(/var\(--blur-md\)/);
+    // Glass tokens moved to the theme-driven CSS layer (see tokens.css
+    // [data-theme="liquid-glass"]). AppHeader no longer declares them
+    // inline — the test pins that withdrawal.
+    expect(headerSrc).not.toMatch(/WebkitBackdropFilter\s*:/);
+    expect(headerSrc).not.toMatch(/var\(--glass-bg\)/);
+    expect(headerSrc).not.toMatch(/var\(--blur-md\)/);
   });
 
   it('AppSidebar source declares backdrop-filter + glass-bg', () => {
@@ -257,68 +267,49 @@ describe('M1.9.2 — liquid glass tokens', () => {
   });
 });
 
-describe('M1.9.2 — effects bootstrap', () => {
-  // M2.16-theme-fix: 原生窗口 backdrop（Win11 Mica / macOS vibrancy）的
-  // 应用已从 JS applyWindowEffects()（走 Tauri setEffects → tao
-  // set_effects）迁移到 Rust setup hook（window_vibrancy::apply_mica /
-  // apply_vibrancy）。JS 入口不再触达 applyEffects —— Rust apply_mica
-  // 在 setup 同步执行（早于 WebView2 首帧），是唯一的 backdrop 来源。
-  // 此前 main.tsx 同时调 JS setEffects，晚到的 JS 调用可能重置 DWM
-  // 合成状态，遮住已设好的 Mica。详见 main.tsx 注释 + lib.rs setup。
-  it('Rust setup hook applies window-vibrancy backdrop (apply_mica / apply_vibrancy)', () => {
-    // 读 lib.rs 源码, 断言 setup hook 通过 IPlatformWindowChrome trait
-    // 派发 backdrop 应用 (M4.6 架构统一 — lib.rs 不再直接调
-    // window_vibrancy::apply_*, 而是通过 trait 派发, 实现在
-    // platform/{windows,macos}/window_chrome.rs)。
-    //
-    // 这是 backdrop 应用的唯一入口 — 如果 trait dispatch 被删,
-    // Mica / vibrancy 会静默失效。
+describe('M1.9.2 — effects bootstrap (M31 vibrancy withdrawn — pure CSS path)', () => {
+  // M31 / M2.16-M4.8 vibrancy 撤回 (4 轮失败后用户决定"纯 CSS 模拟"
+  // 方案) — lib.rs 不再调任何 OS 原生 backdrop API (window_vibrancy::
+  // apply_mica / apply_vibrancy / IPlatformWindowChrome::apply 都已
+  // 删除),platform/macos/window_chrome.rs / platform/windows/
+  // window_chrome.rs 不存在。backdrop 视觉由 tokens.css / base.css
+  // + 组件 CSS 保留,启动路径不再触达 OS API。
+  //
+  // 这些测试作为"撤回回归守卫"留下 — 任何复活 OS 原生 backdrop 调用
+  // 的改动 (例如重新引入 window_vibrancy crate / platform window_chrome
+  // 模块) 都会让下面的 toBe(false) 失败,作为"想清楚再改"的提醒。
+
+  it('lib.rs does NOT call window_vibrancy / window_chrome (M31 withdrawn)', () => {
     const libRs = readFileSync(
       resolve(__dirname, '../../../src-tauri/src/lib.rs'),
       'utf-8',
     );
-    // M4.6+: lib.rs uses trait dispatch (`window_chrome(...).apply(...)`)
-    // instead of direct `window_vibrancy::apply_*` calls. The actual
-    // apply_mica / apply_vibrancy implementations live in the
-    // platform/macos/window_chrome.rs and platform/windows/window_chrome.rs
-    // modules. We accept either the new trait-dispatch form OR the
-    // legacy direct-call form (still accepted so older macOS impls
-    // keep working during the cross-platform migration).
-    const usesTraitDispatch =
-      /window_chrome\s*\(/.test(libRs) && /\.apply\s*\(\s*&?opts\s*\)/.test(libRs);
-    const usesLegacyDirectCall =
-      /(window_vibrancy::apply_(?:mica|vibrancy))|(apply_vibrancy\(.*?\))|(use window_vibrancy)/.test(
-        libRs,
-      );
-    expect(
-      usesTraitDispatch || usesLegacyDirectCall,
-      'lib.rs must apply window-vibrancy backdrop via either ' +
-        'IPlatformWindowChrome trait dispatch (M4.6+) or direct ' +
-        'window_vibrancy::apply_* call (legacy)',
-    ).toBe(true);
-    // NSVisualEffectMaterial is a macOS-side constant used by the
-    // macOS vibrancy path — it's in platform/macos/window_chrome.rs
-    // after M4.6, so we look there for it (lib.rs no longer references
-    // it directly after the trait-dispatch refactor).
-    const macosChrome = readFileSync(
-      resolve(
-        __dirname,
-        '../../../src-tauri/src/platform/macos/window_chrome.rs',
-      ),
-      'utf-8',
-    );
-    expect(
-      macosChrome,
-      'NSVisualEffectMaterial must be referenced in the macOS vibrancy impl',
-    ).toMatch(/NSVisualEffectMaterial/);
+    // OS 原生 backdrop 路径全部已删 — lib.rs 应不引用这些符号。
+    expect(libRs).not.toMatch(/window_vibrancy/);
+    expect(libRs).not.toMatch(/window_chrome/);
+    expect(libRs).not.toMatch(/apply_mica|apply_vibrancy/);
+    expect(libRs).not.toMatch(/NSVisualEffectMaterial/);
   });
 
-  it('main.tsx no longer calls JS applyWindowEffects (Rust is single source)', () => {
+  it('platform/macos/window_chrome.rs does NOT exist (M31 withdrawn)', () => {
+    const { existsSync } = require('node:fs');
+    expect(
+      existsSync(
+        resolve(
+          __dirname,
+          '../../../src-tauri/src/platform/macos/window_chrome.rs',
+        ),
+      ),
+      'M31 vibrancy 撤回 — window_chrome.rs 应已删除。',
+    ).toBe(false);
+  });
+
+  it('main.tsx no longer calls JS applyWindowEffects (Rust is single source — both withdrawn)', () => {
     // M2.16-theme-fix: main.tsx 必须不再 import / 调用 applyWindowEffects。
     // Rust apply_mica 是唯一的 backdrop 来源；JS setEffects 与之冲突。
     // M2.16-cleanup: applyEffects.ts 已删除，此断言作为"前端不再触达
     // 窗口效果 API"的回归守卫保留——任何复活 JS setEffects 路径的改动
-    // 都会违反 Rust 单一来源契约。注意：注释里会提到历史函数名，所以
+    // 都会违反"纯 CSS 模拟"契约。注意：注释里会提到历史函数名，所以
     // 只看非注释代码行。
     const mainTsx = readFileSync(
       resolve(__dirname, '../../main.tsx'),
