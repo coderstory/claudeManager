@@ -27,13 +27,12 @@ describe('registry.ts derived exports — Phase 44 派生收敛', () => {
 
   it('ALL_VIEWS_ORDERED 由 sidebarTile.order 字段驱动', () => {
     expect(ALL_VIEWS_ORDERED.length).toBe(12);
-    expect(ALL_VIEWS_ORDERED[0]).toBe('home'); // order=0
-    // Last 2 are history (order=100) and about (order=101).
+    // home (order=0) is first, plugins (1-9) follow, then history (100) and about (101).
+    expect(ALL_VIEWS_ORDERED[0]).toBe('home');
+    expect(ALL_VIEWS_ORDERED[1]).toBe('provider-list');
+    expect(ALL_VIEWS_ORDERED[9]).toBe('backup-restore');
     expect(ALL_VIEWS_ORDERED[10]).toBe('history');
     expect(ALL_VIEWS_ORDERED[11]).toBe('about');
-    // mcp-management is in plugin order, but ALL_VIEWS_ORDERED skips
-    // it because the stub has no sidebarTile; the plugin is still in
-    // ALL_PLUGINS (Phase 46 will delete the stub).
   });
 
   it('PAGE_META 全部 12 view 都有 title + description', () => {

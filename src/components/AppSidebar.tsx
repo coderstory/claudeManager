@@ -1,9 +1,9 @@
 /**
  * AppSidebar — vertical navigation rail.
  *
- * Renders one button per ViewId in ALL_VIEWS. The currently active
- * tile is highlighted with the accent-coloured left border (the
- * same 2px-blue-bar cue SPEC §5.3 uses for the active provider
+ * Renders one button per ViewId in ALL_VIEWS_ORDERED. The currently
+ * active tile is highlighted with the accent-coloured left border
+ * (the same 2px-blue-bar cue SPEC §5.3 uses for the active provider
  * card — visual consistency across the app).
  *
  * Sidebar is INTENTIONALLY not draggable (no data-tauri-drag-region
@@ -14,7 +14,8 @@
  *   - fixed-ish width (var(--sidebar-width) = 220px) so the
  *     sidebar feels like a navigation rail, not a burger menu.
  *   - one tile per ViewId, including 'home'.
- *   - icon comes from lucide-react (consistent stroke + size).
+ *   - icon comes from VIEW_META (lucide-react component, consistent
+ *     stroke + size).
  *   - the icon is a stand-in for the eventual per-plugin glyph —
  *     we don't want to invent fake icons for every plugin in M1.
  *
@@ -23,82 +24,16 @@
  * `--sidebar-width` in tokens.css (CLAUDE.md §4: token discipline).
  * <main> in App.tsx reads the same token for its `left: var(...)`
  * inset, so resizing the rail only requires editing one line.
+ *
+ * Phase 44 派生收敛:本文件不再 hardcode 12 项 VIEW_META Record,改
+ * import 自 `src/plugins/registry`;顺序走 `ALL_VIEWS_ORDERED`(字段
+ * 驱动,Q44-1)。icon 渲染:`const Icon = meta.icon; <Icon size={18} />`。
  */
 import type { ReactElement } from 'react';
-import {
-  Archive,
-  Database,
-  FileSearch,
-  Gauge,
-  History,
-  Home,
-  Info,
-  Layers,
-  Package,
-  PencilLine,
-  Store,
-  Wand2,
-} from 'lucide-react';
-import {
-  ALL_VIEWS,
-  type ViewId,
-} from '../hooks/useViewState';
+import { Package } from 'lucide-react';
+import { ALL_VIEWS_ORDERED, VIEW_META } from '../plugins/registry';
+import type { ViewId } from '../plugins/registry';
 import { SidebarProjectSwitcher } from './SidebarProjectSwitcher';
-
-/** Map each ViewId → lucide icon component + Chinese subtitle. */
-const VIEW_META: Record<
-  ViewId,
-  { icon: ReactElement; short: string }
-> = {
-  home: {
-    icon: <Home size={18} aria-hidden="true" />,
-    short: '欢迎页',
-  },
-  'provider-list': {
-    icon: <Layers size={18} aria-hidden="true" />,
-    short: 'Provider 列表',
-  },
-  'import-sql': {
-    icon: <Database size={18} aria-hidden="true" />,
-    // M3.9 — 清单 2: 菜单/页面命名 P1 修复: ".sql 导入" → "SQL导入配置"
-    short: 'SQL导入配置',
-  },
-  'json-editor': {
-    icon: <PencilLine size={18} aria-hidden="true" />,
-    short: 'JSON 编辑器',
-  },
-  'usage-query': {
-    icon: <Gauge size={18} aria-hidden="true" />,
-    short: '用量查询',
-  },
-  'resource-browser': {
-    icon: <FileSearch size={18} aria-hidden="true" />,
-    short: '资源浏览',
-  },
-  marketplace: {
-    icon: <Store size={18} aria-hidden="true" />,
-    short: '资源市场',
-  },
-  optimizer: {
-    icon: <Wand2 size={18} aria-hidden="true" />,
-    short: '配置优化',
-  },
-  'backup-restore': {
-    icon: <Archive size={18} aria-hidden="true" />,
-    short: '备份与恢复',
-  },
-  // M4.6 / Phase 21-C — F21 history query page (SQLite).
-  history: {
-    icon: <History size={18} aria-hidden="true" />,
-    short: '历史查询',
-  },
-  // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢)。
-  // 加在 ALL_VIEWS 末尾,不替换 D-槽1 sidebar 顶部 project switcher。
-  about: {
-    icon: <Info size={18} aria-hidden="true" />,
-    short: '关于',
-  },
-};
 
 export interface AppSidebarProps {
   currentView: ViewId;
@@ -131,9 +66,13 @@ export function AppSidebar({
         onSwitchNavigate={() => onNavigate('home')}
       />
       <ul>
-        {ALL_VIEWS.map((view) => {
+        {ALL_VIEWS_ORDERED.map((view) => {
           const meta = VIEW_META[view];
           const isActive = currentView === view;
+          // Phase 44: icon is a LucideIcon component (not ReactElement).
+          //   const Icon = meta.icon;
+          //   return <Icon size={18} />;
+          const Icon = meta.icon;
           return (
             <li key={view}>
               <button
@@ -149,7 +88,7 @@ export function AppSidebar({
                 } as React.CSSProperties}
               >
                 <span className="nav-item-icon">
-                  {meta.icon}
+                  <Icon size={18} aria-hidden="true" />
                 </span>
                 <span className="nav-item-label">{meta.short}</span>
               </button>

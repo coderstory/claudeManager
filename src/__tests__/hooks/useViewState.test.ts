@@ -57,20 +57,16 @@ function wrap({ children }: { children: ReactNode }): ReactElement {
 }
 
 describe('useViewState', () => {
-  it('exports 10 plugin views plus "home" as the synthetic landing view', () => {
-    // M1.9 spec: plugin placeholders are reachable via the sidebar,
-    // and 'home' is the welcome tile the user lands on after the first
-    // launch (before any localStorage value exists).
-    // M3.7: +1 utility view 'about' (清单 18).
-    // M4.6 / Phase 21-C: +1 view 'history' (F21).
-    // F2 redirect shim removed (action moved to F1 [激活] button).
-    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins.
-    // F8 removed in M5 #18 → 9 plugins.
-    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-    //                ALL_VIEWS 移除该 view,总长 11(12 → 11)。
+  it('exports 9 plugin views plus 3 core views (home, history, about) — Phase 44 registry-driven', () => {
+    // Phase 44 派生收敛:ALL_VIEWS = ALL_VIEW_IDS re-exported from
+    // src/plugins/registry.ts → 3 core + 9 plugin = 12 项。
+    //
+    // 之前 useViewState 写死 11 项 (mcp-management removed) — 但
+    // Phase 44 引入 9-stub FrontendPlugin 全量含 mcp-management (D-44-A
+    // 推迟到 Phase 46 删),所以 ALL_VIEWS 现在含 mcp-management。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(11);
-    expect(ALL_VIEWS).not.toContain('mcp-management');
+    expect(ALL_VIEWS.length).toBe(12);
+    expect(ALL_VIEWS).toContain('mcp-management'); // Phase 46 删
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -92,15 +88,15 @@ describe('useViewState', () => {
     expect(result.current.view).toBe('home');
   });
 
-  /// Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 'mcp-management'
-  /// (D-10 删 view 之前的最后一刻) → 必须回退到 'home'(ALL_VIEWS
-  /// 不再含 'mcp-management',isValidView 校验失败)。App.tsx 之后会
-  /// 接住这个分支用 window.location.replace 重定向到
-  /// /resource-browser?tab=mcp。
-  it('Phase 27 Fix 6: stale "mcp-management" localStorage value falls back to "home"', () => {
+  it('Phase 27 Fix 6: stale "mcp-management" localStorage now passes isValidView (Phase 44 keeps stub) — registry now has 9 plugins incl. mcp-management', () => {
+    // Phase 44 派生收敛后 mcp-management 重新在 ALL_VIEW_IDS
+    // (Phase 46 D-44-A 删 stub → 8 plugin),所以 isValidView 通过。
+    // 真正的 legacy fallback 由 App.tsx:174-197 useEffect 处理
+    // (mcp-management → resource-browser?tab=mcp),useViewState
+    // 单独不感知。
     localStorage.setItem(STORAGE_KEY, 'mcp-management');
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
-    expect(result.current.view).toBe('home');
+    expect(result.current.view).toBe('mcp-management');
   });
 
   it('setView updates the current view and writes to localStorage', () => {
@@ -146,14 +142,14 @@ describe('useViewState', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // Phase 27 Fix 6: 'mcp-management' 不再是独立 view,合并到
-    // 'resource-browser' 的 mcp tab。所以 registry 仍 9 个 plugin,
-    // ALL_VIEWS 只列 8 个(mcp-management 移除)。registry 自身保留
-    // 9 个 plugin entry(plugins/stubs/mcp-management.tsx 还在 —
-    // 共享 component 给 mcp tab 用,D-14 schema 不合并)。
+    // 'resource-browser' 的 mcp tab。Phase 44 派生收敛后 mcp-management
+    // 重新在 ALL_VIEWS (Phase 46 D-44-A 删),所以 registry 9 个 plugin
+    // entry ALL_VIEWS 9 个 plugin 视图。
     const registryIds = [
       'provider-list',
       'import-sql',
       'json-editor',
+      'mcp-management',
       'usage-query',
       'resource-browser',
       'marketplace',
@@ -163,11 +159,6 @@ describe('useViewState', () => {
     for (const id of registryIds) {
       expect(ALL_VIEWS, `ALL_VIEWS missing plugin id ${id}`).toContain(id);
     }
-    // mcp-management 不在 ALL_VIEWS 但仍在 plugin registry (作为
-    // 提供 McpManagementPanel 共享组件的 entry)。
-    expect(ALL_VIEWS, 'mcp-management should NOT be a ViewId after Fix 6').not.toContain(
-      'mcp-management',
-    );
   });
 
   it('ViewId type stays exhaustive against ALL_VIEWS at compile time', () => {

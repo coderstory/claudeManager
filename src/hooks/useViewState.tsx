@@ -83,58 +83,15 @@ export const HOME_VIEW = 'home' as const;
 export const STORAGE_KEY = 'ccm.lastView';
 
 /**
- * ViewId — closed union of every reachable view in M1.9.
+ * ViewId — re-exported from the canonical registry (Phase 44 派生收敛).
  *
- * Adding a new plugin? Two edits:
- *   1. Add the entry to ALL_PLUGINS in src/plugins/registry.ts
- *   2. Add the id here as a literal in the union AND to ALL_VIEWS.
- * The test `ALL_VIEWS contains exactly the 9 plugin ids from the
- * registry` will catch the second if you forget the first.
+ * Adding a new view? Edit ONLY the plugin stub + ALL_PLUGINS in
+ * src/plugins/registry.ts; the union widens automatically.
  */
-export type ViewId =
-  | 'home'
-  | 'provider-list'
-  | 'import-sql'
-  | 'json-editor'
-  | 'usage-query'
-  | 'resource-browser'
-  | 'marketplace'
-  | 'optimizer'
-  | 'backup-restore'
-  // M4.6 / Phase 21-C — F21 history query page (SQLite).
-  | 'history'
-  | 'about';
+import { ALL_VIEW_IDS as ALL_VIEWS, type ViewId } from '../plugins/registry';
 
-/**
- * ALL_VIEWS — runtime list of valid ViewIds.
- *
- * Order is the on-screen order in the sidebar:
- *   home first (landing), then the 9 plugin tiles in registry order,
- *   then the 1 utility view ('about', M3.7 — 清单 18).
- *
- * Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' 的 mcp
- * tab (D-10 删 view,D-11 资源浏览接管 mcp tab,D-12 sidebar 移除入口)。
- * 老用户 localStorage 还存 'mcp-management' → isValidView 校验
- * 失败 → fallback 'home';App.tsx 用 useEffect 进一步 remap 到
- * /resource-browser?tab=mcp (D-13 legacy redirect)。
- *
- * Exported so AppSidebar can iterate without hardcoding a parallel
- * list, and so the test can pin "every plugin id is reachable".
- */
-export const ALL_VIEWS: readonly ViewId[] = [
-  'home',
-  'provider-list',
-  'import-sql',
-  'json-editor',
-  'usage-query',
-  'resource-browser',
-  'marketplace',
-  'optimizer',
-  'backup-restore',
-  // M4.6 / Phase 21-C — F21 history page (right before 'about').
-  'history',
-  'about',
-] as const;
+export { ALL_VIEW_IDS as ALL_VIEWS } from '../plugins/registry';
+export type { ViewId } from '../plugins/registry';
 
 function isValidView(v: string | null): v is ViewId {
   return v !== null && (ALL_VIEWS as readonly string[]).includes(v);
