@@ -57,9 +57,10 @@ describe('App — view routing integration', () => {
     expect(screen.getByTestId('add-project-toggle')).toBeInTheDocument();
   });
 
-  it('renders all 13 sidebar nav items', () => {
-    // M3.7: +1 utility view 'about' (清单 18). Total now 13 sidebar items
-    // (12 plugins + about — home is excluded, it IS the landing page).
+  it('renders all 12 sidebar nav items', () => {
+    // M3.7: +1 utility view 'about' (清单 18). Total 12 sidebar items
+    // (11 ALL_VIEWS + about — home is excluded, it IS the landing page).
+    // Phase 46 D-44-A 删 mcp-management 后:3 core + 8 plugin = 11 项。
     renderApp();
     for (const view of ALL_VIEWS) {
       if (view === HOME_VIEW) continue;
@@ -70,13 +71,12 @@ describe('App — view routing integration', () => {
     }
   });
 
-  it('Phase 27 Fix 6 → Phase 44: mcp-management back in sidebar (D-44-A: Phase 46 removes it)', () => {
-    // Phase 27 Fix 6 removed mcp-management as an independent view.
-    // Phase 44 派生收敛:registry 重新含 9 plugin (含 mcp-management),
-    // so the sidebar tile is back. D-44-A schedules removal for Phase 46
-    // along with stub deletion + useEffect cleanup.
+  it('Phase 46 D-44-A: mcp-management removed from sidebar (mcp entry moved to resource-browser tab)', () => {
+    // Phase 27 Fix 6 合并 mcp → resource-browser tab。
+    // Phase 46 D-44-A 删 mcp-management stub,sidebar 不再有
+    // mcp-management entry (Q44-3 migrateFrom + Phase 46 启用)。
     renderApp();
-    expect(screen.getByTestId('sidebar-item-mcp-management')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
   });
 
   it('Phase 27 Fix 6: resource-browser renders mcp panel when kind=mcp (via setView)', () => {
@@ -355,7 +355,6 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'provider-list', realTestId: 'provider-list-page' },
     { view: 'import-sql', realTestId: 'import-sql-page' },
     { view: 'json-editor', realTestId: 'json-editor-page' },
-    { view: 'mcp-management', realTestId: 'mcp-management-page' },
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'resource-browser', realTestId: 'resource-browser-page' },
     { view: 'marketplace', realTestId: 'marketplace-page' },
@@ -381,11 +380,10 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   test.each(REAL_PAGE_VIEWS)(
     'view "$view" routes to its real page (no PluginPlaceholder fallback)',
     ({ view, realTestId }) => {
-      // Special case: 'mcp-management' 触发 App.tsx:174-197 useEffect
-      // (Phase 27 Fix 6 兜底) — setView('resource-browser') + URL ?tab=mcp。
-      // 该 useEffect 仍存在(D-44-A 推迟到 Phase 46 删),所以初始
-      // 'mcp-management' 立即被劫持到 resource-browser mcp tab。
-      // 测试验证兜底触发:resource-browser-page 出现(不是 mcp-management-page)。
+      // Phase 46 D-44-A 删 mcp-management stub 后,'mcp-management' 不再是
+      // 有效 ViewId,直接落到 'unknown stale viewId' → migrateViewId
+      // → resource-browser (via resource-browser.sidebarTile.migrateFrom)。
+      // 测试验证兜底触发:resource-browser-page 出现。
       if (view === 'mcp-management') {
         localStorage.setItem(STORAGE_KEY, view);
         render(
@@ -394,15 +392,15 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
           </ThemeProvider>,
           { wrapper: ViewStateProvider },
         );
-        // 兜底后:resource-browser page 出现(useEffect 重定向)。
+        // 兜底后:resource-browser page 出现(migrateFrom 重定向)。
         expect(
           screen.getByTestId('resource-browser-page'),
-          `Phase 27 Fix 6: mcp-management → resource-browser fallback`,
+          `Phase 46: mcp-management → resource-browser fallback (migrateFrom)`,
         ).toBeInTheDocument();
-        // mcp-management-page 不会出现(被 useEffect 劫持)。
+        // mcp-management-page 不会出现(被 migrateFrom 劫持)。
         expect(
           screen.queryByTestId('mcp-management-page'),
-          `mcp-management-page should not render due to Phase 27 Fix 6 redirect`,
+          `mcp-management-page should not render due to Phase 46 migrateFrom redirect`,
         ).toBeNull();
         return;
       }

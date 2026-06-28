@@ -113,14 +113,14 @@ describe('QuickSearchModal', () => {
     expect(screen.queryByTestId('quick-search-modal')).toBeNull();
   });
 
-  it('renders the 12 entries when opened with no query (Phase 44: 3 core + 9 plugin)', async () => {
+  it('renders the 10 entries when opened with no query (Phase 46 D-44-A: 3 core + 8 plugin - home = 10)', async () => {
     render(<QuickSearchModal isOpen={true} onClose={vi.fn()} onNavigate={vi.fn()} />);
     // home excluded from buildPluginResults → ALL_VIEWS minus 'home'.
-    // Phase 44 派生收敛:3 core + 9 plugin = 12 项,minus 'home' → 11 entries.
-    // (Phase 27 Fix 6 暂时合并 mcp 到 resource-browser;Phase 44 重新
-    // 引入 mcp-management entry,D-44-A 推迟 Phase 46 删 → 8 plugin。)
+    // Phase 46 D-44-A: mcp-management 删,3 core + 8 plugin = 11
+    // ALL_VIEWS,minus 'home' → 10 entries (Phase 27 Fix 6 期间是
+    // 11 entries,Phase 44 短暂是 12,Phase 46 D-44-A 改回 10)。
     const results = await screen.findAllByTestId(/^quick-search-result-/);
-    expect(results.length).toBe(11);
+    expect(results.length).toBe(10);
   });
 
   it('typing filters the result list', async () => {

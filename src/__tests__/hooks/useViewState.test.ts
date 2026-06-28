@@ -57,16 +57,18 @@ function wrap({ children }: { children: ReactNode }): ReactElement {
 }
 
 describe('useViewState', () => {
-  it('exports 9 plugin views plus 3 core views (home, history, about) — Phase 44 registry-driven', () => {
+  it('exports 8 plugin views plus 3 core views (home, history, about) — Phase 46 D-44-A removed mcp-management', () => {
     // Phase 44 派生收敛:ALL_VIEWS = ALL_VIEW_IDS re-exported from
-    // src/plugins/registry.ts → 3 core + 9 plugin = 12 项。
+    // src/plugins/registry.ts → 3 core + 8 plugin = 11 项。
     //
-    // 之前 useViewState 写死 11 项 (mcp-management removed) — 但
-    // Phase 44 引入 9-stub FrontendPlugin 全量含 mcp-management (D-44-A
-    // 推迟到 Phase 46 删),所以 ALL_VIEWS 现在含 mcp-management。
+    // Phase 46 D-44-A 删 mcp-management stub (mcp 入口迁到
+    // resource-browser 的 mcp tab via SidebarTile.migrateFrom),所以
+    // ALL_VIEWS 不再含 mcp-management。'mcp-management' 现在是
+    // stale viewId,经 useViewState.readInitialView → migrateViewId →
+    // resource-browser (via resource-browser.sidebarTile.migrateFrom)。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
-    expect(ALL_VIEWS.length).toBe(12);
-    expect(ALL_VIEWS).toContain('mcp-management'); // Phase 46 删
+    expect(ALL_VIEWS.length).toBe(11);
+    expect(ALL_VIEWS).not.toContain('mcp-management');
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -88,15 +90,18 @@ describe('useViewState', () => {
     expect(result.current.view).toBe('home');
   });
 
-  it('Phase 27 Fix 6: stale "mcp-management" localStorage now passes isValidView (Phase 44 keeps stub) — registry now has 9 plugins incl. mcp-management', () => {
-    // Phase 44 派生收敛后 mcp-management 重新在 ALL_VIEW_IDS
-    // (Phase 46 D-44-A 删 stub → 8 plugin),所以 isValidView 通过。
-    // 真正的 legacy fallback 由 App.tsx:174-197 useEffect 处理
-    // (mcp-management → resource-browser?tab=mcp),useViewState
-    // 单独不感知。
+  it('Phase 46: stale "mcp-management" localStorage is migrated to "resource-browser" via SidebarTile.migrateFrom', () => {
+    // Phase 46 (Q46-1) 启用 resource-browser.sidebarTile.migrateFrom =
+    // { fromViewId: 'mcp-management', appendQuery: { tab: 'mcp' } }。
+    // useViewState.readInitialView 读 localStorage 'mcp-management'
+    // → migrateViewId 反向索引 VIEW_ID_MIGRATIONS → 命中 resource-browser。
+    // view 不再是 'mcp-management' (Phase 46 已删 stub),
+    // 而是 'resource-browser' + migrationSearch = { tab: 'mcp' }
+    // (供 ResourceBrowser 双源优先级读)。
     localStorage.setItem(STORAGE_KEY, 'mcp-management');
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
-    expect(result.current.view).toBe('mcp-management');
+    expect(result.current.view).toBe('resource-browser');
+    expect(result.current.migrationSearch).toEqual({ tab: 'mcp' });
   });
 
   it('setView updates the current view and writes to localStorage', () => {
@@ -138,18 +143,16 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (post-Fix-6)', () => {
+  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (Phase 46 D-44-A)', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // Phase 27 Fix 6: 'mcp-management' 不再是独立 view,合并到
-    // 'resource-browser' 的 mcp tab。Phase 44 派生收敛后 mcp-management
-    // 重新在 ALL_VIEWS (Phase 46 D-44-A 删),所以 registry 9 个 plugin
-    // entry ALL_VIEWS 9 个 plugin 视图。
+    // 'resource-browser' 的 mcp tab。
+    // Phase 46 D-44-A: mcp-management stub 删,8 plugin ALL_VIEWS 8 项。
     const registryIds = [
       'provider-list',
       'import-sql',
       'json-editor',
-      'mcp-management',
       'usage-query',
       'resource-browser',
       'marketplace',
