@@ -1,4 +1,11 @@
-//! F16 — 资源浏览 (stub).
+//! F16 — 资源浏览 (plugin).
+//!
+//! `commands.rs` (sibling) registers 3 `inventory::submit!(CommandSpec)`
+//! entries — `list_resources`, `get_resource_detail`,
+//! `reveal_in_file_manager` — into the global dispatch table
+//! (see `crate::plugins::dispatch`).
+
+pub mod commands;
 
 use super::super::traits::*;
 
