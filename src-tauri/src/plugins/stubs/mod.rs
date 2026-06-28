@@ -22,6 +22,11 @@ pub mod updater;
 pub mod history_view;
 pub mod project_mode;
 pub mod file_ops;
+// Phase 47 fix — F8 (removed M5 #18) `get_app_metadata` was missed
+// in Phase 42 IPC dispatch migration; the About page on mount calls
+// invoke('get_app_metadata'). Without inventory registration, Tauri
+// returns "Command not found" and the About page crashes.
+pub mod app;
 // Phase 43 — core plugin owns the system tray + macOS application
 // menu. Registered FIRST in `plugins::mod::init_all` so its `init`
 // runs before any feature plugin and the OS menu surface is in
@@ -42,3 +47,4 @@ pub use updater::UpdaterPlugin;
 pub use history_view::HistoryViewPlugin;
 pub use project_mode::ProjectModePlugin;
 pub use file_ops::FileOpsPlugin;
+pub use app::AppPlugin;

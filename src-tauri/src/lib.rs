@@ -116,21 +116,6 @@ pub fn run() {
             // service / plugin that reads `IPlatformPaths` / autostart / etc.
             platform::init_for_runtime();
 
-            // Build shared app state (resolved paths + services) and
-            // register it with Tauri's state manager. All commands
-            // pull from this — see commands::providers.
-            //
-            // M2.2.3 fix: do NOT wrap `state` in `Arc::new(...)` —
-            // the 4 F1/F2/F3 commands extract `State<'_, AppState>`,
-            // and Tauri indexes managed state by `std::any::TypeId`.
-            // Wrapping in `Arc<AppState>` would store TypeId
-            // `Arc<AppState>` but the commands look up TypeId
-            // `AppState`, so every IPC call would fail with
-            // "state not managed for field '0' on command ...".
-            // The bug shipped in M2.1 + M2.2; this commit fixes it.
-            let state = AppState::build();
-            app.manage(state);
-
             // M2.17 — wire the plugin stubs into the running app.
             //
             // Phase 45 — service plugins (history / backup / provider

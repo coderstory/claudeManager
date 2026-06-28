@@ -207,6 +207,12 @@ pub fn init_all_topological(
     // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
     host.register(Box::new(stubs::UpdaterPlugin))?;
 
+    // Phase 47 fix — F8 (removed M5 #18) `get_app_metadata` was
+    // missed in Phase 42 IPC dispatch migration. About page on
+    // mount calls invoke('get_app_metadata'); without inventory
+    // registration Tauri returns "Command not found".
+    host.register(Box::new(stubs::AppPlugin))?;
+
     // -------- Build context --------
     // The registry Arc has refcount=1 (caller hasn't done
     // `app.manage(state)` yet) so `Arc::get_mut` succeeds and we
