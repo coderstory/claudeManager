@@ -16,8 +16,8 @@ pub mod traits;
 
 pub mod stubs;
 
-// Phase 42 — dispatch module will be added by the next subagent pass.
-// pub mod dispatch;
+// Phase 42 — dispatch module (Tauri command routing via inventory).
+pub mod dispatch;
 pub mod service_registry;
 
 pub use host::PluginHost;
@@ -41,9 +41,9 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     let mut host = PluginHost::new();
 
     // F1..F7 core (F4 deeplink-import removed in cleanup commit 0ff5b86;
-    // F8 removed in M5 #18)
+    // F8 removed in M5 #18; F2 provider_switch merged into provider_list
+    // per v3.4 SHIP-A decision)
     host.register(Box::new(stubs::ProviderListPlugin))?;
-    host.register(Box::new(stubs::ProviderSwitchPlugin))?;
     host.register(Box::new(stubs::ImportSqlPlugin))?;
     host.register(Box::new(stubs::JsonEditorPlugin))?;
     host.register(Box::new(stubs::McpManagementPlugin))?;
