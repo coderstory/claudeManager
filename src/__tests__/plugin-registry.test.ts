@@ -1,9 +1,9 @@
 /**
- * Frontend plugin registry — Phase 44 派生收敛重写。
+ * Frontend plugin registry — Phase 44 派生基线 + Phase 46 D-44-A 删 mcp-management。
  *
- * 旧断言只检查 id/name/routes,Phase 44 增 4 字段后必须验证每个
- * plugin 都有 viewId/pageMeta/componentEntry/sidebarTile。
- * 9 stub (含 mcp-management,Phase 47 D-44-A → 8) 每个有完整字段。
+ * Phase 44 增 4 字段后必须验证每个 plugin 都有 viewId/pageMeta/
+ * componentEntry/sidebarTile。
+ * 8 stub (Phase 46 D-44-A: mcp-management 删) 每个有完整字段。
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -15,8 +15,8 @@ import {
 import type { FrontendPlugin } from '../plugins/types';
 
 describe('Frontend plugin registry — Phase 44 派生收敛', () => {
-  it('contains 9 plugin stubs (Phase 47 → 8 after mcp-management removal)', () => {
-    expect(ALL_PLUGINS.length).toBe(9);
+  it('contains 8 plugin stubs (Phase 46 D-44-A: mcp-management deleted; F6=mcp merged into F16 resource-browser)', () => {
+    expect(ALL_PLUGINS.length).toBe(8);
   });
 
   it('every plugin has unique kebab-case id + matching viewId', () => {

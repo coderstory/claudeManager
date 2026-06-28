@@ -60,7 +60,7 @@ import { WelcomeModal } from './components/WelcomeModal';
 import { useWelcomeModal } from './hooks/useWelcomeModal';
 // Phase 44 派生收敛:9 个 page 不再 import 在 App.tsx,改走 registry
 // 查表(VIEW_COMPONENTS + propsBuilder,详见下方 MainView)。
-import { useViewState, ALL_VIEWS, STORAGE_KEY, type ViewId } from './hooks/useViewState';
+import { useViewState, ALL_VIEWS, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { VIEW_COMPONENTS, PAGE_META } from './plugins/registry';
 
@@ -130,41 +130,6 @@ export default function App(): ReactElement {
   // appears AFTER React commit + first paint, never during the
   // initial mount / loading phase.
   const welcome = useWelcomeModal();
-
-  // Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 stale
-  // 'mcp-management'(Fix 6 之前最后一次访问的值)→ useViewState 的
-  // isValidView 校验失败 → 落回 'home'。我们用 useEffect 接住这个
-  // 分支:读到 ccm.lastView === 'mcp-management' → clearStorage +
-  // window.location.replace('/resource-browser?tab=mcp')。ResourceBrowser
-  // 自身的 useSearchParams 会读 ?tab=mcp → 默认 kind='mcp',mcp tab
-  // 接管 (D-11)。
-  //
-  // 这个 effect 只在挂载时跑一次(空依赖),mount 后用户切到正常 view
-  // 不会再次触发。
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === 'mcp-management') {
-        // 清掉 stale value,再 setView('resource-browser') 走正常 React
-        // 路由(useViewState 会写 ccm.lastView = 'resource-browser')。
-        // 这样能保证 window.location 和 localStorage 同步,不会
-        // 产生 "localStorage 还是 stale 但 view 已切" 的不一致。
-        window.localStorage.removeItem(STORAGE_KEY);
-        setView('resource-browser');
-        // URL 加 ?tab=mcp 触发 ResourceBrowser 的 useSearchParams 默认
-        // kind=mcp。这里用 location.replace 不留 history entry(用户
-        // 不应该能 "back" 回到 /mcp-management 老路由 — 那个路由
-        // 已经不存在了)。
-        if (!window.location.search.includes('tab=mcp')) {
-          window.location.replace('/resource-browser?tab=mcp');
-        }
-      }
-    } catch {
-      // localStorage 在沙盒/隐私模式下可能 throw;忽略,App 仍可用。
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // F10 — 拖放遮罩可见性。当用户拖入 .sql 文件悬停在窗口上时
   // 显示"松开以导入 .sql"遮罩,drop / leave 后隐藏。

@@ -9,12 +9,12 @@
  *
  * ## Phase 44 派生导出 (44-DECISIONS §PLAN 2)
  *
- *   - ALL_VIEW_IDS    : readonly 12 项 (3 core + 9 plugin)
- *   - ALL_VIEWS_ORDERED : readonly 12 项,sidebarTile.order 字段驱动
- *   - PAGE_META       : 12 项 PageMeta (title + description)
- *   - VIEW_META       : 12 项 SidebarTile (icon + short + order + group)
- *   - VIEW_COMPONENTS : Map<12 项, ViewComponentEntry>
- *   - ALL_PLUGINS     : readonly 9 项 FrontendPlugin
+ *   - ALL_VIEW_IDS    : readonly 11 项 (3 core + 8 plugin,Phase 46 D-44-A)
+ *   - ALL_VIEWS_ORDERED : readonly 11 项,sidebarTile.order 字段驱动
+ *   - PAGE_META       : 11 项 PageMeta (title + description)
+ *   - VIEW_META       : 11 项 SidebarTile (icon + short + order + group)
+ *   - VIEW_COMPONENTS : Map<11 项, ViewComponentEntry>
+ *   - ALL_PLUGINS     : readonly 8 项 FrontendPlugin
  *   - ALL_ROUTES      : flatMap(p.routes) — 保留供未来 react-router
  *
  * Adding a new plugin:
@@ -44,7 +44,6 @@ import {
   providerListPlugin,
   importSqlPlugin,
   jsonEditorPlugin,
-  mcpManagementPlugin,
   usageQueryPlugin,
   resourceBrowserPlugin,
   marketplacePlugin,
@@ -58,16 +57,17 @@ import HistoryPage from '../pages/history';
 import AboutPage from '../pages/about';
 
 /**
- * ALL_PLUGINS — the 9 frontend plugin stubs in registry order.
+ * ALL_PLUGINS — the 8 frontend plugin stubs in registry order.
  *
- * Phase 44: 含 mcp-management (Phase 46 D-44-A 删)。Phase 47
- * 验证时改成 8 stub 断言。
+ * Phase 46 (D-44-A): mcp-management stub 删,mcp 入口迁到
+ * resource-browser 的 mcp tab (Q44-3 migrateFrom 反向索引)。
+ * 8 stub = F1/F3/F5/F7/F16/F17/F18/F19
+ * (F2 合并到 F1, F4 删, F6=mcp 合并到 F16 resource-browser, F8 删)。
  */
 export const ALL_PLUGINS: readonly FrontendPlugin[] = [
   providerListPlugin,
   importSqlPlugin,
   jsonEditorPlugin,
-  mcpManagementPlugin,
   usageQueryPlugin,
   resourceBrowserPlugin,
   marketplacePlugin,
@@ -109,7 +109,7 @@ export type PluginViewId = (typeof ALL_PLUGINS)[number]['viewId'];
 export type ViewId = CoreViewId | PluginViewId;
 
 /**
- * ALL_VIEW_IDS — readonly 12 项 (3 core + 9 plugin).
+ * ALL_VIEW_IDS — readonly 11 项 (3 core + 8 plugin,Phase 46 D-44-A).
  *
  * Useful for tests (count assertion) and runtime iteration. Not the
  * sidebar order — that's `ALL_VIEWS_ORDERED` (field-driven).
@@ -136,7 +136,7 @@ const CORE_SIDEBAR_TILE: Record<CoreViewId, SidebarTile> = {
  * ALL_VIEWS_ORDERED — sidebar order driven by `sidebarTile.order` (Q44-1).
  *
  * Sort key is `sidebarTile.order` (ASC). Combined list of plugins
- * (orders 1-9) + core views (home=0, history=100, about=101) all
+ * (orders 1-8) + core views (home=0, history=100, about=101) all
  * sorted by their `order` field. The order field makes "swap two
  * tiles" a 2-line edit instead of touching 4 files.
  */
@@ -209,7 +209,7 @@ const CORE_COMPONENT_ENTRY: Record<CoreViewId, ViewComponentEntry> = {
 };
 
 /**
- * PAGE_META — readonly 12 项 PageMeta record。
+ * PAGE_META — readonly 11 项 PageMeta record (Phase 46 D-44-A: 3 core + 8 plugin).
  *
  * Used by App.tsx `pageTitle(view)` and AppHeader breadcrumb.
  * Computed once at module load; frozen by `as const` on the literal.
@@ -220,12 +220,12 @@ export const PAGE_META: Record<ViewId, PageMeta> = {
 } as const;
 
 /**
- * VIEW_META — readonly 12 项 SidebarTile record。
+ * VIEW_META — readonly 11 项 SidebarTile record (Phase 46 D-44-A: 3 core + 8 plugin).
  *
  * SidebarTile.icon 是 LucideIcon (function),AppSidebar 渲染时
  *   const Icon = meta.icon;
  *   return <Icon size={18} />;
- * 不再 hardcode 12 个 ReactElement。
+ * 不再 hardcode 11 个 ReactElement。
  */
 export const VIEW_META: Record<ViewId, SidebarTile> = {
   ...CORE_SIDEBAR_TILE,
@@ -240,7 +240,7 @@ export const VIEW_META: Record<ViewId, SidebarTile> = {
  * VIEW_COMPONENTS — Map<ViewId, ViewComponentEntry>。
  *
  * MainView 查表:`VIEW_COMPONENTS.get(view)` → component + propsBuilder。
- * 注册 3 core views + 9 plugins = 12 项。
+ * 注册 3 core views + 8 plugins = 11 项 (Phase 46 D-44-A)。
  */
 export const VIEW_COMPONENTS = new Map<ViewId, ViewComponentEntry>([
   ...(Object.entries(CORE_COMPONENT_ENTRY) as [CoreViewId, ViewComponentEntry][]),

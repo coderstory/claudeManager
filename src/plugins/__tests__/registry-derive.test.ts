@@ -17,22 +17,23 @@ import {
 } from '../registry';
 
 describe('registry.ts derived exports — Phase 44 派生收敛', () => {
-  it('ALL_VIEW_IDS = 3 core + 9 plugin = 12', () => {
-    expect(ALL_VIEW_IDS.length).toBe(12);
+  it('ALL_VIEW_IDS = 3 core + 8 plugin = 11 (Phase 46 D-44-A: mcp-management deleted)', () => {
+    expect(ALL_VIEW_IDS.length).toBe(11);
     expect(ALL_VIEW_IDS).toContain('home');
     expect(ALL_VIEW_IDS).toContain('history');
     expect(ALL_VIEW_IDS).toContain('about');
-    expect(ALL_PLUGINS.length).toBe(9);
+    expect(ALL_PLUGINS.length).toBe(8);
   });
 
   it('ALL_VIEWS_ORDERED 由 sidebarTile.order 字段驱动', () => {
-    expect(ALL_VIEWS_ORDERED.length).toBe(12);
-    // home (order=0) is first, plugins (1-9) follow, then history (100) and about (101).
+    expect(ALL_VIEWS_ORDERED.length).toBe(11);
+    // home (order=0) is first, plugins (1-8) follow, then history (100) and about (101).
+    // Phase 46 D-44-A: mcp-management 删除后,backup-restore 从 index 9 → 8。
     expect(ALL_VIEWS_ORDERED[0]).toBe('home');
     expect(ALL_VIEWS_ORDERED[1]).toBe('provider-list');
-    expect(ALL_VIEWS_ORDERED[9]).toBe('backup-restore');
-    expect(ALL_VIEWS_ORDERED[10]).toBe('history');
-    expect(ALL_VIEWS_ORDERED[11]).toBe('about');
+    expect(ALL_VIEWS_ORDERED[8]).toBe('backup-restore');
+    expect(ALL_VIEWS_ORDERED[9]).toBe('history');
+    expect(ALL_VIEWS_ORDERED[10]).toBe('about');
   });
 
   it('PAGE_META 全部 12 view 都有 title + description', () => {
@@ -61,8 +62,8 @@ describe('registry.ts derived exports — Phase 44 派生收敛', () => {
     }
   });
 
-  it('VIEW_COMPONENTS Map 12 项 + component + propsBuilder', () => {
-    expect(VIEW_COMPONENTS.size).toBe(12);
+  it('VIEW_COMPONENTS Map 11 项 + component + propsBuilder (Phase 46: 3 core + 8 plugin)', () => {
+    expect(VIEW_COMPONENTS.size).toBe(11);
     for (const id of ALL_VIEW_IDS) {
       const entry = VIEW_COMPONENTS.get(id as ViewId);
       expect(entry, `${id} 应有 componentEntry`).toBeDefined();
