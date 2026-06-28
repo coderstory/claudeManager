@@ -46,10 +46,10 @@ describe('CSS variable aliases (backward compat — v3.0 bug fix)', () => {
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';
     expect(getComputedVar('--radius-button')).toBe('var(--button-radius)');
-    // Note: pre-existing value drift between the prior `:root` token
-    // (4px) and tokens.css L2.1 light block (6px) — out of scope here,
-    // tracked under the tokens reconciliation follow-up.
-    expect(getComputedVar('--button-radius')).toBe('4px');
+    // L2.1 light 主题源 token 是 6px (v3.0 light 主题重构后,
+    // SPEC §5.8 4px 不再适用 — liquid-glass/dark/editorial 主题各有
+    // 自己的 button-radius,light 是 6px Linear/Vercel 风)。
+    expect(getComputedVar('--button-radius')).toBe('6px');
   });
 
   it('light 主题: --radius-modal = 12px (字面量, 非 var 别名)', () => {

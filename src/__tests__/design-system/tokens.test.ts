@@ -35,10 +35,16 @@ describe('tokens.css theme switching (v3.0 Task 5)', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('默认无 data-theme 时 accent = #0969DA (light 继承自 :root)', () => {
+  it('默认无 data-theme 时 accent = 空 (v3.0 L1+L2 重构后 :where(:root) 不再含 --accent,需 data-theme 显式激活)', () => {
+    // v3.0 主题重构后 --accent / --bg-* 等主题相关 token 只在 [data-theme="..."]
+    // 块里定义,:where(:root) 只放跨主题共享的 token (--blur-*, --modal-*,
+    // --space-* 等)。无 data-theme 时 getComputedVar('--accent') 返回空,
+    // 因为没有任何 [data-theme="..."] 规则匹配 <html>。App 启动时 ThemeProvider
+    // 会注入 data-theme 属性 (默认 light) 让 accent 生效 — 这个测试只锁住
+    // L1+L2 重构后的"未注入主题时 token 不应随便回落到具体色"行为。
     injectTokensOnce();
     document.documentElement.removeAttribute('data-theme');
-    expect(getComputedVar('--accent')).toBe('#0969DA');
+    expect(getComputedVar('--accent')).toBe('');
   });
 
   it('[data-theme="light"] accent = #0969DA', () => {
@@ -47,11 +53,16 @@ describe('tokens.css theme switching (v3.0 Task 5)', () => {
     expect(getComputedVar('--accent')).toBe('#0969DA');
   });
 
-  it('light 主题圆角: 卡片 8px / 按钮 4px / 弹窗 12px (SPEC §5.8)', () => {
+  it('light 主题圆角: 卡片 8px / 按钮 6px / 弹窗 12px (v3.0 L2.1 light 主题)', () => {
+    // SPEC §5.8 旧版要求按钮 4px,v3.0 light 主题改为 6px
+    // (Linear/Vercel 风卡片 / 按钮区分更明显,见 design-system
+    // commit 0742870 5-theme 切换 + 后续 Linear/Vercel 风调整)。
+    // light / liquid-glass / dark / editorial / pixel 5 主题各有自己的
+    // --card-radius / --button-radius (tokens.css L2.1-L2.5)。
     injectTokensOnce();
     document.documentElement.dataset.theme = 'light';
     expect(getComputedVar('--card-radius')).toBe('8px');
-    expect(getComputedVar('--button-radius')).toBe('4px');
+    expect(getComputedVar('--button-radius')).toBe('6px');
     expect(getComputedVar('--radius-modal')).toBe('12px');
   });
 });
