@@ -18,7 +18,7 @@ pub mod plugins;
 pub mod services;
 
 use crate::app_state::AppState;
-use crate::plugins::{init_all, PluginContext, PluginHost};
+use crate::plugins::{init_all, PluginHost};
 
 /// F20 — 从启动 argv 中提取 `.sql` 文件绝对路径。
 ///
@@ -160,9 +160,16 @@ pub fn run() {
             // `platform::runtime::paths()` returns an owned `Box<dyn
             // IPlatformPaths>`; bind it to a let so the borrow inside
             // `PluginContext::new` outlives the call.
+            //
+            // M2.17 / Phase 43 / D-CC-A — `init_all` now builds the
+            // `PluginHost` AND the `PluginContext` internally, so
+            // `lib.rs` only needs to hand it the `AppHandle` +
+            // platform paths. Task 6 will split the registry into
+            // `register_all` + `host.init_all(ctx)` for finer-grained
+            // Phase 47 control; today this single entry point keeps
+            // the lib.rs surface small.
             let paths_impl = platform::runtime::paths();
-            let plugin_ctx = PluginContext::new(app.app_handle(), &*paths_impl);
-            let host = init_all(&plugin_ctx)
+            let host = init_all(app.app_handle(), &*paths_impl)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
             app.manage(Mutex::new(host));
 

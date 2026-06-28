@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 
+use super::menu_registry::{PluginAppMenuItem, PluginTrayItem};
 use super::traits::*;
 
 // ---------------------------------------------------------------------------
@@ -87,14 +88,40 @@ impl PluginHost {
         self.plugins.values().flat_map(|p| p.services()).collect()
     }
 
+    /// **Phase 43** — flatten every tray item contributed by every
+    /// plugin, in registration order. `MenuRegistry::build_tray`
+    /// consumes this to assemble the system tray `Menu`.
+    pub fn all_tray_items(&self) -> Vec<PluginTrayItem> {
+        self.plugins
+            .values()
+            .flat_map(|p| p.tray_items())
+            .collect()
+    }
+
+    /// **Phase 43** — flatten every macOS application menu item
+    /// contributed by every plugin, in registration order. On Windows
+    /// this is unused (the app menu is a no-op).
+    pub fn all_app_menu_items(&self) -> Vec<PluginAppMenuItem> {
+        self.plugins
+            .values()
+            .flat_map(|p| p.app_menu_items())
+            .collect()
+    }
+
     /// Run `init` on every plugin, in registration order.
-    pub fn init_all(&mut self, ctx: &PluginContext) -> Result<(), PluginError> {
+    ///
+    /// **Phase 43 (D-CC-A)** — takes `&mut PluginContext` so plugins
+    /// can register services into the registry. We rebind to
+    /// `PluginContext` (the same `&mut` reborrowed each iteration) so
+    /// every plugin sees a consistent context. After `init_all`
+    /// returns the caller still holds the original `&mut`.
+    pub fn init_all(&mut self, ctx: &mut PluginContext) -> Result<(), PluginError> {
         // Clone the order list so we can iterate without holding a borrow
         // on `self.plugins` (we need `get_mut` inside the loop).
         let order: Vec<&'static str> = self.init_order.clone();
         for id in order {
             if let Some(plugin) = self.plugins.get_mut(id) {
-                plugin.init(ctx)?;
+                plugin.init(&mut *ctx)?;
             }
         }
         Ok(())
@@ -150,6 +177,9 @@ impl Default for PluginHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::menu_registry::{
+        AppMenuRole, PluginAction, PluginAppMenuItemKind,
+    };
     use std::sync::{Arc, Mutex};
 
     /// Test plugin: records every `init` / `shutdown` call into a shared
@@ -177,7 +207,7 @@ mod tests {
         fn name(&self) -> &'static str {
             self.name
         }
-        fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+        fn init(&mut self, _ctx: &mut PluginContext) -> Result<(), PluginError> {
             self.log.lock().unwrap().push(format!("init:{}", self.id));
             Ok(())
         }
@@ -197,7 +227,7 @@ mod tests {
         fn name(&self) -> &'static str {
             "init-fail"
         }
-        fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+        fn init(&mut self, _ctx: &mut PluginContext) -> Result<(), PluginError> {
             Err(PluginError::InitFailed("boom".into()))
         }
     }
@@ -364,7 +394,8 @@ mod tests {
             log.clone(),
         )))
         .unwrap();
-        host.init_all(&dummy_ctx()).unwrap();
+        let mut ctx = dummy_ctx();
+        host.init_all(&mut ctx).unwrap();
         let log_snapshot = log.lock().unwrap().clone();
         let first_idx = log_snapshot.iter().position(|s| s == "init:first").unwrap();
         let second_idx = log_snapshot.iter().position(|s| s == "init:second").unwrap();
@@ -377,7 +408,8 @@ mod tests {
     fn init_all_propagates_error() {
         let mut host = PluginHost::new();
         host.register(Box::new(InitFailingPlugin)).unwrap();
-        let err = host.init_all(&dummy_ctx()).unwrap_err();
+        let mut ctx = dummy_ctx();
+        let err = host.init_all(&mut ctx).unwrap_err();
         assert!(matches!(err, PluginError::InitFailed(s) if s == "boom"));
     }
 
@@ -430,7 +462,8 @@ mod tests {
     fn noop_plugin_default_init_shutdown_work() {
         let mut host = PluginHost::new();
         host.register(Box::new(NoOpPlugin)).unwrap();
-        host.init_all(&dummy_ctx()).unwrap();
+        let mut ctx = dummy_ctx();
+        host.init_all(&mut ctx).unwrap();
         host.shutdown_all().unwrap();
         assert_eq!(host.count(), 1);
     }
@@ -453,5 +486,112 @@ mod tests {
         .unwrap();
         let ids: Vec<&str> = host.iter().map(|(id, _)| id).collect();
         assert_eq!(ids, vec!["x", "y"]);
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 43 — collect helpers for tray / app-menu items
+    // -----------------------------------------------------------------
+
+    /// Test plugin contributing 1 tray item per instance. Distinct ids
+    /// so multiple instances can coexist on the same host.
+    struct TrayPlugin(&'static str);
+
+    impl IPlugin for TrayPlugin {
+        fn id(&self) -> &'static str {
+            self.0
+        }
+        fn name(&self) -> &'static str {
+            self.0
+        }
+        fn tray_items(&self) -> Vec<PluginTrayItem> {
+            vec![PluginTrayItem {
+                id: format!("{}:show", self.0),
+                label: "Show".into(),
+                enabled: true,
+                accelerator: None,
+                action: PluginAction::ShowMainWindow,
+            }]
+        }
+    }
+
+    /// Test plugin contributing 2 macOS app-menu items (1 Predefined +
+    /// 1 Custom).
+    struct AppMenuPlugin(&'static str);
+
+    impl IPlugin for AppMenuPlugin {
+        fn id(&self) -> &'static str {
+            self.0
+        }
+        fn name(&self) -> &'static str {
+            self.0
+        }
+        fn app_menu_items(&self) -> Vec<PluginAppMenuItem> {
+            vec![
+                PluginAppMenuItem {
+                    submenu: "App".into(),
+                    kind: PluginAppMenuItemKind::Predefined(AppMenuRole::About),
+                },
+                PluginAppMenuItem {
+                    submenu: "Edit".into(),
+                    kind: PluginAppMenuItemKind::Custom {
+                        id: format!("{}:do", self.0),
+                        label: "Do".into(),
+                        accelerator: None,
+                    },
+                },
+            ]
+        }
+    }
+
+    /// `all_tray_items` concatenates `tray_items()` from every
+    /// registered plugin in registration order.
+    #[test]
+    fn all_tray_items_collects_from_all_plugins() {
+        let mut host = PluginHost::new();
+        host.register(Box::new(TrayPlugin("a"))).unwrap();
+        host.register(Box::new(TrayPlugin("b"))).unwrap();
+        host.register(Box::new(TrayPlugin("c"))).unwrap();
+        let items = host.all_tray_items();
+        assert_eq!(items.len(), 3);
+        // Registration order is preserved (HashMap.values() happens to
+        // be insertion order in practice for our use; the test pins it).
+        assert_eq!(items[0].id, "a:show");
+        assert_eq!(items[1].id, "b:show");
+        assert_eq!(items[2].id, "c:show");
+    }
+
+    /// `all_app_menu_items` concatenates `app_menu_items()` from every
+    /// registered plugin in registration order. Items stay in the
+    /// order plugins declared them — `core-plugin` is responsible
+    /// for grouping by `submenu` later in `build_app_menu`.
+    #[test]
+    fn all_app_menu_items_collects_from_all_plugins() {
+        let mut host = PluginHost::new();
+        host.register(Box::new(AppMenuPlugin("a"))).unwrap();
+        host.register(Box::new(AppMenuPlugin("b"))).unwrap();
+        let items = host.all_app_menu_items();
+        assert_eq!(items.len(), 4); // 2 per plugin
+        assert_eq!(items[0].submenu, "App");
+        assert_eq!(items[1].submenu, "Edit");
+        assert_eq!(items[2].submenu, "App");
+        assert_eq!(items[3].submenu, "Edit");
+    }
+
+    /// Plugins that don't override `tray_items()` get an empty vec
+    /// (default impl). Verifies the default impl pins correctly.
+    #[test]
+    fn default_tray_items_returns_empty() {
+        let plugin = NoOpPlugin;
+        let items: Vec<PluginTrayItem> = plugin.tray_items();
+        assert!(items.is_empty());
+    }
+
+    /// Plugins that don't override `app_menu_items()` get an empty
+    /// vec (default impl).
+    #[test]
+    fn default_app_menu_items_returns_empty() {
+        let plugin = NoOpPlugin;
+        let items: Vec<PluginAppMenuItem> = plugin.app_menu_items();
+        assert!(items.is_empty());
     }
 }

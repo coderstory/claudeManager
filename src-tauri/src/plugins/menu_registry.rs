@@ -25,10 +25,14 @@
 //! layer is for OS-call abstractions — it has no business knowing what
 //! menu items the application chose to expose.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+use tauri::menu::{AboutMetadata, Menu, MenuBuilder, MenuItem, Submenu, SubmenuBuilder};
+use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::plugins::host::PluginHost;
 
 // ---------------------------------------------------------------------------
 // PluginTrayItem
@@ -41,6 +45,10 @@ use tauri::{AppHandle, Emitter, Manager};
 /// helpers don't enforce this; `unregister_actions` relies on the
 /// `<plugin_id>:` prefix to filter a plugin's contributions out of a
 /// dispatch map.
+///
+/// `PluginAction` defaults to `PluginAction<tauri::Wry>` so the common
+/// case (desktop app on the default Tauri stack) doesn't need a type
+/// parameter at the use site. Tests / non-Wry runtimes can override.
 #[derive(Debug, Clone)]
 pub struct PluginTrayItem {
     /// Unique menu id (used as `MenuItem::with_id` arg + dispatch key).
@@ -125,6 +133,20 @@ pub enum AppMenuRole {
 /// `Arc<HashMap<_, _>>` and individual actions get cloned into
 /// `on_menu_event` closures. `Custom` carries an `Arc<dyn Fn>` which
 /// is itself cheaply cloneable, so the derive works.
+///
+/// Phase 43 pins `PluginAction` to the default Tauri runtime
+/// (`tauri::Wry`). All four variants use Wry-aware APIs
+/// (`app.exit`, `app.get_webview_window`, `Emitter::emit`), but the
+/// Wry-ness is encapsulated here so callers don't have to thread a
+/// runtime type parameter through. If we ever ship a non-Wry
+/// runtime (e.g. `tauri::test::MockRuntime` for in-memory tests) this
+/// becomes `PluginAction<R: Runtime>` — the cost will be visible in
+/// every plugin stub.
+///
+/// `Clone` is derive-able here (vs. the generic version we'd need
+/// for a runtime-parameterised enum) because the only field that
+/// needs cloning is `String` (in `SwitchView`) and `Arc<dyn Fn>`
+/// (in `Custom`), both of which are `Clone` regardless of runtime.
 #[derive(Clone)]
 pub enum PluginAction {
     /// Show + focus + unminimize the main window. Mirrors the
@@ -207,6 +229,212 @@ pub fn show_main_window(app: &AppHandle) {
 pub fn unregister_actions(actions: &mut HashMap<String, PluginAction>, plugin_id: &str) {
     let prefix = format!("{plugin_id}:");
     actions.retain(|k, _| !k.starts_with(&prefix));
+}
+
+// ---------------------------------------------------------------------------
+// Tray assembly (cross-platform — Windows + macOS)
+// ---------------------------------------------------------------------------
+
+/// Build the system tray menu from every registered plugin's
+/// `tray_items()` and pair each item with its [`PluginAction`] in a
+/// dispatch map.
+///
+/// Returns `(Menu, dispatch_map)` so the caller can:
+/// - attach the `Menu` to a `TrayIconBuilder`
+/// - install the dispatch map inside the `on_menu_event` closure
+///
+/// The `Menu<R>` is generic over the Tauri runtime; callers on the
+/// default Tauri stack use `tauri::Wry` (re-exported as
+/// `tauri::Wry` here via the `Runtime` trait bound).
+///
+/// The dispatch map is shared via `Arc` so `on_menu_event` closures
+/// can capture it cheaply and stay `Send + Sync`.
+pub fn build_tray(
+    host: &PluginHost,
+    app: &AppHandle<tauri::Wry>,
+) -> tauri::Result<(Menu<tauri::Wry>, Arc<HashMap<String, PluginAction>>)> {
+    let mut items: Vec<MenuItem<tauri::Wry>> = Vec::new();
+    let mut actions: HashMap<String, PluginAction> = HashMap::new();
+
+    // Walk plugins in registration order so the tray menu's first item
+    // is the first plugin's first item (deterministic + matches
+    // `all_tray_items` order on the host).
+    for (_id, plugin) in host.iter() {
+        for item in plugin.tray_items() {
+            let mi = MenuItem::with_id(
+                app,
+                &item.id,
+                &item.label,
+                item.enabled,
+                item.accelerator.as_deref(),
+            )?;
+            items.push(mi);
+            actions.insert(item.id.clone(), item.action);
+        }
+    }
+
+    // Convert Vec<MenuItem<Wry>> to a slice of trait objects. After
+    // `Menu::with_items` returns, the Menu owns its copies — the local
+    // Vec is dropped at the end of this fn and lifetime ties are gone.
+    let item_refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = items
+        .iter()
+        .map(|i| i as &dyn tauri::menu::IsMenuItem<tauri::Wry>)
+        .collect();
+    let menu = Menu::with_items(app, &item_refs)?;
+    Ok((menu, Arc::new(actions)))
+}
+
+/// Install a `TrayIcon` (id = `"main-tray"`) with the given menu +
+/// dispatch map. The `on_menu_event` closure looks the clicked id up
+/// in `actions` and dispatches the bound [`PluginAction`] against the
+/// live [`AppHandle`].
+///
+/// `icon` is the application icon (caller resolves
+/// `app.default_window_icon().cloned()`). `tooltip` shows on hover.
+///
+/// Pinned to the `tauri::Wry` runtime — lib.rs always uses Wry
+/// (desktop), so the concrete type matches `PluginAction`'s default.
+pub fn install_tray(
+    app: &AppHandle<tauri::Wry>,
+    menu: &Menu<tauri::Wry>,
+    actions: Arc<HashMap<String, PluginAction>>,
+    icon: tauri::image::Image<'static>,
+    tooltip: &str,
+) -> tauri::Result<()> {
+    // The `on_menu_event` closure only needs `actions` (cheaply
+    // cloneable via Arc). The `app: &AppHandle<R>` parameter to the
+    // closure is supplied by Tauri at click-time — we don't capture
+    // the outer `app` here so the outer `app` is still available
+    // for `TrayIconBuilder::build(app)` below.
+    TrayIconBuilder::with_id("main-tray")
+        .icon(icon)
+        .tooltip(tooltip)
+        .menu(menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(move |app, event| {
+            let id = event.id.as_ref();
+            if let Some(action) = actions.get(id) {
+                action.dispatch(app);
+            } else {
+                log::warn!("[menu] no action for id={id}");
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// macOS application menu (no-op on Windows / Linux)
+// ---------------------------------------------------------------------------
+
+/// Build and install the macOS application menu (NSMenu in the system
+/// menu bar) from every registered plugin's `app_menu_items()`. On
+/// non-mac targets this is a no-op — `core-plugin::init` calls it
+/// unconditionally and the cfg guards Windows / Linux from accidentally
+/// walking the macOS branch.
+///
+/// Items are grouped by their `submenu` field ("App" / "Edit" / "View"
+/// / "Window") with a `BTreeMap` so the menu order is deterministic
+/// across runs (alphabetical by submenu label). The first submenu
+/// rendered becomes the application menu (its label is replaced by
+/// the app name on macOS — this is how the OS works).
+#[cfg(target_os = "macos")]
+pub fn build_app_menu(
+    host: &PluginHost,
+    app: &AppHandle<tauri::Wry>,
+) -> tauri::Result<()> {
+    let mut groups: BTreeMap<String, Vec<PluginAppMenuItem>> = BTreeMap::new();
+    for (_id, plugin) in host.iter() {
+        for item in plugin.app_menu_items() {
+            groups.entry(item.submenu.clone()).or_default().push(item);
+        }
+    }
+
+    let mut root = MenuBuilder::new(app);
+    for (submenu_label, items) in groups {
+        let sb = SubmenuBuilder::new(app, &submenu_label);
+        let submenu = build_submenu_from_items(app, sb, items)?;
+        root = root.item(&submenu);
+    }
+
+    let menu = root.build()?;
+    app.set_menu(menu)?;
+    Ok(())
+}
+
+/// Non-macOS stub: the macOS App menu is a no-op everywhere else so
+/// `core-plugin::init` can call this unconditionally. The cfg on
+/// `build_app_menu` already filters macOS-vs-rest at compile time —
+/// this stub just keeps the symbol available so `core.rs` compiles
+/// on all targets.
+#[cfg(not(target_os = "macos"))]
+pub fn build_app_menu(
+    _host: &PluginHost,
+    _app: &AppHandle<tauri::Wry>,
+) -> tauri::Result<()> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn build_submenu_from_items<'a>(
+    app: &AppHandle<tauri::Wry>,
+    mut sb: SubmenuBuilder<'a, tauri::Wry, AppHandle<tauri::Wry>>,
+    items: Vec<PluginAppMenuItem>,
+) -> tauri::Result<Submenu<tauri::Wry>> {
+    // Chain the builder instead of passing it through helpers — keeps
+    // the `'m` lifetime short and avoids tying builder types across
+    // function boundaries.
+    for item in items {
+        sb = match item.kind {
+            PluginAppMenuItemKind::Predefined(role) => apply_predefined_role(app, sb, role)?,
+            PluginAppMenuItemKind::Separator => sb.separator(),
+            PluginAppMenuItemKind::Custom {
+                id,
+                label,
+                accelerator,
+            } => {
+                let mi = MenuItem::with_id(app, &id, &label, true, accelerator.as_deref())?;
+                sb.item(&mi)
+            }
+        };
+    }
+    sb.build().map_err(Into::into)
+}
+
+#[cfg(target_os = "macos")]
+fn apply_predefined_role<'a>(
+    app: &AppHandle<tauri::Wry>,
+    sb: SubmenuBuilder<'a, tauri::Wry, AppHandle<tauri::Wry>>,
+    role: AppMenuRole,
+) -> tauri::Result<SubmenuBuilder<'a, tauri::Wry, AppHandle<tauri::Wry>>> {
+    let pkg = app.package_info();
+    let bundle = &app.config().bundle;
+    Ok(match role {
+        AppMenuRole::About => {
+            let meta = AboutMetadata {
+                name: Some(pkg.name.clone()),
+                version: Some(pkg.version.to_string()),
+                copyright: bundle.copyright.clone(),
+                authors: bundle.publisher.clone().map(|p| vec![p]),
+                ..Default::default()
+            };
+            sb.about(Some(meta))
+        }
+        AppMenuRole::Hide => sb.hide(),
+        AppMenuRole::HideOthers => sb.hide_others(),
+        AppMenuRole::ShowAll => sb.show_all(),
+        AppMenuRole::Quit => sb.quit(),
+        AppMenuRole::Undo => sb.undo(),
+        AppMenuRole::Redo => sb.redo(),
+        AppMenuRole::Cut => sb.cut(),
+        AppMenuRole::Copy => sb.copy(),
+        AppMenuRole::Paste => sb.paste(),
+        AppMenuRole::SelectAll => sb.select_all(),
+        AppMenuRole::Minimize => sb.minimize(),
+        AppMenuRole::Maximize => sb.maximize(),
+        AppMenuRole::Fullscreen => sb.fullscreen(),
+        AppMenuRole::CloseWindow => sb.close_window(),
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -37,14 +37,24 @@ pub use traits::{
 // init_all
 // ---------------------------------------------------------------------------
 
-/// Build a [`PluginHost`] pre-populated with all 10 stub plugins, and run
-/// `init_all` on it against `ctx`.
+/// Build a [`PluginHost`] pre-populated with all stub plugins, run
+/// `init_all` on it, and return the wired host.
 ///
 /// `init_all` is the **single** entry point that `lib.rs` should call.
 /// Adding a new plugin = (1) write the stub under `stubs/`, (2) register
 /// it here, (3) register the corresponding frontend stub in
 /// `src/plugins/registry.ts`. No other call site needs to change.
-pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
+///
+/// Takes `&AppHandle` + `&dyn IPlatformPaths` and constructs the
+/// `PluginContext` internally — the caller doesn't see ctx. This
+/// sidesteps the borrow checker conflict between `&mut host` (needed
+/// by `init_all`) and `&host` (held inside `PluginContext`); the host
+/// exists before the context so we can take `&host` (the NonNull
+/// pointer) without conflicting with `&mut host` on a subsequent line.
+pub fn init_all(
+    app: &tauri::AppHandle,
+    paths: &dyn crate::platform::IPlatformPaths,
+) -> Result<PluginHost, PluginError> {
     let mut host = PluginHost::new();
 
     // F1..F7 core (F4 deeplink-import removed in cleanup commit 0ff5b86;
@@ -74,8 +84,20 @@ pub fn init_all(ctx: &PluginContext) -> Result<PluginHost, PluginError> {
     // F15 — 错误反馈 / 自动更新 (M4.3, Phase 42 Task 3).
     host.register(Box::new(stubs::UpdaterPlugin))?;
 
+    // Build the context now that the host exists. The host pointer is
+    // stashed inside the context as a NonNull so plugins can read
+    // peers (e.g. `core` walks tray items) without `&mut host` /
+    // `&host` borrow-checker conflicts. `services` stays `None`
+    // until Phase 45 populates it (the registry will then be
+    // constructed here and passed via `Some(&mut reg)`).
+    //
+    // `&host as *const _` — the cast to raw pointer happens BEFORE
+    // any NLL borrow is established, so `host.init_all(&mut ctx)`
+    // below can take `&mut host` cleanly.
+    let mut plugin_ctx = PluginContext::new(app, paths, &host as *const _, None);
+
     // Run startup hooks on every plugin.
-    host.init_all(ctx)?;
+    host.init_all(&mut plugin_ctx)?;
 
     // M2.17 — observability for the wiring step. tauri-plugin-log
     // captures this via the `log` facade and writes to a per-app log
