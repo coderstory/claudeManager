@@ -1,4 +1,10 @@
-//! F19 — 备份与恢复 (stub).
+//! F19 — 备份与恢复 (plugin).
+//!
+//! See [`commands`] for the dispatch fns and `inventory::submit!`
+//! registrations. The plugin's own lifecycle (init / shutdown / routes)
+//! is owned by this module.
+
+pub mod commands;
 
 use super::super::traits::*;
 
