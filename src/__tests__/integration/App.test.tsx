@@ -70,10 +70,13 @@ describe('App — view routing integration', () => {
     }
   });
 
-  it('Phase 27 Fix 6: clicking "MCP 管理" sidebar entry is gone — merged into resource-browser', () => {
+  it('Phase 27 Fix 6 → Phase 44: mcp-management back in sidebar (D-44-A: Phase 46 removes it)', () => {
+    // Phase 27 Fix 6 removed mcp-management as an independent view.
+    // Phase 44 派生收敛:registry 重新含 9 plugin (含 mcp-management),
+    // so the sidebar tile is back. D-44-A schedules removal for Phase 46
+    // along with stub deletion + useEffect cleanup.
     renderApp();
-    // D-10/D-12: 'mcp-management' 不再是独立 sidebar 入口。
-    expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
+    expect(screen.getByTestId('sidebar-item-mcp-management')).toBeInTheDocument();
   });
 
   it('Phase 27 Fix 6: resource-browser renders mcp panel when kind=mcp (via setView)', () => {
@@ -340,8 +343,11 @@ describe('App — view routing integration', () => {
 describe('all plugin views route to their real page (M2.8.1 structural regression)', () => {
   // Views whose real page has shipped. Body MUST NOT contain the
   // PluginPlaceholder marker `plugin: <id>` once mounted.
-  // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-  // 所以这个列表少了它;resource-browser 现在承载 mcp + 4 个文件 kind。
+  // Phase 44: 9 plugin 全部含 viewId / pageMeta / componentEntry,
+  // 所以 REAL_PAGE_VIEWS 现在 9 项。Phase 27 Fix 6 把 mcp 入口迁到
+  // resource-browser mcp tab,但 registry 仍保留 mcp-management entry
+  // (D-14 schema 不合并) — Phase 44 派生收敛把 mcp-management 重新
+  // 列在 ALL_VIEW_IDS,D-44-A 推迟到 Phase 46 删。
   const REAL_PAGE_VIEWS: ReadonlyArray<{
     view: ViewId;
     realTestId: string;
@@ -349,6 +355,7 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
     { view: 'provider-list', realTestId: 'provider-list-page' },
     { view: 'import-sql', realTestId: 'import-sql-page' },
     { view: 'json-editor', realTestId: 'json-editor-page' },
+    { view: 'mcp-management', realTestId: 'mcp-management-page' },
     { view: 'usage-query', realTestId: 'usage-query-page' },
     { view: 'resource-browser', realTestId: 'resource-browser-page' },
     { view: 'marketplace', realTestId: 'marketplace-page' },
@@ -374,6 +381,31 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   test.each(REAL_PAGE_VIEWS)(
     'view "$view" routes to its real page (no PluginPlaceholder fallback)',
     ({ view, realTestId }) => {
+      // Special case: 'mcp-management' 触发 App.tsx:174-197 useEffect
+      // (Phase 27 Fix 6 兜底) — setView('resource-browser') + URL ?tab=mcp。
+      // 该 useEffect 仍存在(D-44-A 推迟到 Phase 46 删),所以初始
+      // 'mcp-management' 立即被劫持到 resource-browser mcp tab。
+      // 测试验证兜底触发:resource-browser-page 出现(不是 mcp-management-page)。
+      if (view === 'mcp-management') {
+        localStorage.setItem(STORAGE_KEY, view);
+        render(
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>,
+          { wrapper: ViewStateProvider },
+        );
+        // 兜底后:resource-browser page 出现(useEffect 重定向)。
+        expect(
+          screen.getByTestId('resource-browser-page'),
+          `Phase 27 Fix 6: mcp-management → resource-browser fallback`,
+        ).toBeInTheDocument();
+        // mcp-management-page 不会出现(被 useEffect 劫持)。
+        expect(
+          screen.queryByTestId('mcp-management-page'),
+          `mcp-management-page should not render due to Phase 27 Fix 6 redirect`,
+        ).toBeNull();
+        return;
+      }
       // Persist the target view so App's initial render lands there
       // directly (avoids depending on sidebar layout for this guard).
       localStorage.setItem(STORAGE_KEY, view);

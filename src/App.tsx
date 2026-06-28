@@ -58,94 +58,64 @@ import { QuickSearchModal } from './components/QuickSearchModal';
 // never pops up during the initial mount / loading phase).
 import { WelcomeModal } from './components/WelcomeModal';
 import { useWelcomeModal } from './hooks/useWelcomeModal';
-import { HomeView } from './pages/home';
-import { ProviderListPage } from './pages/provider-list';
-import { ImportSqlPage } from './pages/import-sql';
-import JsonEditorPage from './pages/json-editor';
-// Phase 27 Fix 6: 'mcp-management' 不再是独立路由。mcp 入口迁到
-// /resource-browser 的 mcp tab,共享 McpManagementPanel 组件 (D-10)。
-// 旧 McpManagementPage 保留 import 在 1 个里程碑后清理(D-13)。
-import OptimizerPage from './pages/optimizer';
-import UsageQueryPage from './pages/usage-query';
-import ResourceBrowserPage from './pages/resource-browser';
-import MarketplacePage from './pages/marketplace';
-import BackupRestorePage from './pages/backup-restore';
-// M4.6 / Phase 21-C — F21 history query page (SQLite-backed).
-import HistoryPage from './pages/history';
-import AboutPage from './pages/about';
+// Phase 44 派生收敛:9 个 page 不再 import 在 App.tsx,改走 registry
+// 查表(VIEW_COMPONENTS + propsBuilder,详见下方 MainView)。
 import { useViewState, ALL_VIEWS, STORAGE_KEY, type ViewId } from './hooks/useViewState';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { VIEW_COMPONENTS, PAGE_META } from './plugins/registry';
 
 /**
- * pageTitle + pageDescription — the single source of truth for
- * Chinese display strings per ViewId.
+ * pageTitle + pageDescription — read PAGE_META[view] (Phase 44 派生收敛)。
  *
- * Lives in App.tsx (not in each page file) because:
- *   - The header needs the title for any view (incl. unknown ones
- *     that fall back via isValidView — see useViewState.ts).
- *   - HomeView needs the title to label each card.
- *   - The PluginPlaceholder page itself reads `title` and
- *     `description` from props (a real M2+ page may override them).
- *   - Keeping one map means "rename 'Provider 列表' to '提供商'"
- *     is one edit, not twelve.
+ * 之前 App.tsx 自己定义 11 项 PAGE_META Record;现在 PAGE_META 从
+ * src/plugins/registry.ts 派生(3 core + 9 plugin = 12 项,plugin 的
+ * pageMeta 来自 stub)。改 view 显示文案 → 改 stub.pageMeta 1 行。
  */
-const PAGE_META: Record<ViewId, { title: string; description: string }> = {
-  home: {
-    title: 'Claude 配置管理器',
-    description: '选择一个功能开始',
-  },
-  'provider-list': {
-    title: 'Provider 列表',
-    description: '管理所有 Claude Code provider 配置：列表、搜索、激活标记、1 键切换。',
-  },
-  'import-sql': {
-    // M3.9 — 清单 2: 页面标题 P1 修复: "导入 .sql" → "SQL导入配置"
-    title: 'SQL导入配置',
-    // M3.9 — 清单 21: 描述补 "schema 校验" 环节
-    description: '校验 .sql(SQLite dump) schema → 预览将导入的 provider/MCP → 批量导入。',
-  },
-  'json-editor': {
-    title: 'JSON 编辑器',
-    description: '可视化 JSON 编辑器：语法高亮 + 校验 + 格式化 + token 遮罩。',
-  },
-  'usage-query': {
-    title: '用量查询',
-    description: '按 provider 类型查询 token 用量(5h / 1w / 1m 或余额),5 分钟内存缓存。',
-  },
-  'resource-browser': {
-    title: '资源浏览',
-    description: '按 Plugins / Skills / Commands / LSP / MCP 分类查看当前启用的资源。',
-  },
-  marketplace: {
-    title: '资源市场',
-    description: '内置推荐仓库 + 自定义 git URL → 克隆 → 扫描 → 勾选安装。',
-  },
-  optimizer: {
-    title: '配置优化',
-    description: '扫描 settings.json 的 13 项优化清单,一键应用 + 自动备份。',
-  },
-  'backup-restore': {
-    title: '备份与恢复',
-    description: '最近 N 个 settings.json 版本时间线 + 字段级 diff + 一键回滚。',
-  },
-  // M4.6 / Phase 21-C — F21 history query page.
-  history: {
-    title: '历史查询',
-    description: '按时间 / 项目 / 类型筛选 F7 用量 + F13 备份的历史记录,支持导出 JSON / CSV。',
-  },
-  // M3.7 — 清单 18: 关于页(版本 / build hash / 许可证 / 致谢 / 技术栈)。
-  about: {
-    title: '关于',
-    description: '查看应用版本、build hash、许可证、致谢与技术栈。',
-  },
-};
-
 function pageTitle(view: ViewId): string {
   return PAGE_META[view].title;
 }
 
 function pageDescription(view: ViewId): string {
   return PAGE_META[view].description;
+}
+
+/**
+ * MainView — Phase 44 派生收敛:取代 12 项 `view === 'x' ? <X /> : ...`
+ * 三元链,改用 `VIEW_COMPONENTS.get(view)` 查表 + `propsBuilder` 构造
+ * props (per 44-DECISIONS §PLAN 4)。
+ *
+ * 失败回退:未知 viewId → PluginPlaceholder 用 PAGE_META[view] 渲染
+ * 中文标题/描述(不抛错)。这与原三元链末尾的 `: <PluginPlaceholder ... />`
+ * 分支语义一致。
+ */
+function MainView({
+  view,
+  pendingSqlFile,
+  onNavigate,
+  pageTitleFn,
+}: {
+  view: ViewId;
+  pendingSqlFile: string | null;
+  onNavigate: (v: ViewId, query?: Record<string, string>) => void;
+  pageTitleFn: (v: ViewId) => string;
+}): ReactElement {
+  const entry = VIEW_COMPONENTS.get(view);
+  if (!entry) {
+    return (
+      <PluginPlaceholder
+        pluginId={view}
+        title={pageTitle(view)}
+        description={pageDescription(view)}
+      />
+    );
+  }
+  const Comp = entry.component;
+  const props = entry.propsBuilder({
+    pendingSqlFile,
+    onNavigate,
+    pageTitleFn,
+  });
+  return <Comp {...props} />;
 }
 
 export default function App(): ReactElement {
@@ -440,7 +410,11 @@ export default function App(): ReactElement {
   const pageTitleFn = useMemo(() => pageTitle, []);
 
   const handleNavigate = useCallback(
-    (next: ViewId) => {
+    (next: ViewId, _query?: Record<string, string>): void => {
+      // Phase 44:onNavigate 接受可选 query 参数(per ViewContext)。
+      // 本阶段不消费 query 字段(留 Phase 46 启用),只需把 setView
+      // 逻辑保留 — 现有 121 处 setView(view) 调用全部走 useViewState
+      // 直接传 view,不受签名变化影响。
       setView(next);
     },
     [setView],
@@ -605,39 +579,12 @@ export default function App(): ReactElement {
             data-testid="app-view"
             className="view-transition"
           >
-            {view === 'home' ? (
-              <HomeView
-                onNavigate={handleNavigate}
-                pageTitle={pageTitleFn}
-              />
-            ) : view === 'provider-list' ? (
-              <ProviderListPage />
-            ) : view === 'import-sql' ? (
-              <ImportSqlPage initialFilePath={pendingSqlFile} />
-            ) : view === 'json-editor' ? (
-              <JsonEditorPage />
-            ) : view === 'usage-query' ? (
-              <UsageQueryPage />
-            ) : view === 'resource-browser' ? (
-              <ResourceBrowserPage />
-            ) : view === 'marketplace' ? (
-              <MarketplacePage />
-            ) : view === 'optimizer' ? (
-              <OptimizerPage />
-            ) : view === 'backup-restore' ? (
-              <BackupRestorePage />
-            ) : view === 'history' ? (
-              // M4.6 / Phase 21-C — F21 history query page.
-              <HistoryPage />
-            ) : view === 'about' ? (
-              <AboutPage />
-            ) : (
-              <PluginPlaceholder
-                pluginId={view}
-                title={pageTitle(view)}
-                description={pageDescription(view)}
-              />
-            )}
+            <MainView
+              view={view}
+              pendingSqlFile={pendingSqlFile}
+              onNavigate={handleNavigate}
+              pageTitleFn={pageTitleFn}
+            />
           </div>
         </main>
       </div>
