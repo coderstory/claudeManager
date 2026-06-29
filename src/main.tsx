@@ -6,6 +6,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "./design-system/ThemeProvider";
+// v3.4 — ErrorBoundary catches render-time errors and shows a
+// toast with a Copy button instead of letting React 18 unmount
+// the whole tree (which previously caused the "white screen of
+// death" on e.g. field-name mismatches between Rust stubs and
+// the TS frontend). See src/components/ErrorBoundary.tsx.
+import { ErrorBoundary } from "./components/ErrorBoundary";
 // M4.6-fix — useViewState now reads from a React Context, so it
 // must be mounted once above <App /> (the consumer) in the tree.
 // See src/hooks/useViewState.tsx for the full rationale (pre-M4.6
@@ -94,10 +100,12 @@ if (typeof window !== "undefined") {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <ViewStateProvider>
-        <App />
-      </ViewStateProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ViewStateProvider>
+          <App />
+        </ViewStateProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
