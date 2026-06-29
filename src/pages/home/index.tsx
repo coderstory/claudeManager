@@ -172,9 +172,20 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
   // approval. Instead, the user pastes / types the root_dir path
   // into the input. Future M3.11+ polish can add a native picker
   // once the dep is approved.
+  // A3 真因修复 (CLAUDE.md §16): commit db74286 修了 picker
+  // 拿到绝对路径 + 调 validateProjectPath 显示红字 hint, 但 handleAdd
+  // 没检查 pathValidation.valid, 用户可绕过前端验证点 [添加] → Rust
+  // 抛 "must be an absolute path"。修复: 提交前显式拦截 pathValidation
+  // 状态 (注意: pathValidation === null 表示用户从未 blur 过 input, 此时
+  // 走乐观放行 + addProject 由 Rust 端 validate 兜底路径, 避免一个
+  // 用户什么都没输就阻止提交的死锁)。
   const handleAdd = async (): Promise<void> => {
     if (!newName.trim() || !newRoot.trim()) {
       setActionError('项目名和根目录不能为空');
+      return;
+    }
+    if (pathValidation && !pathValidation.valid) {
+      setActionError(pathValidation.reason ?? '路径无效');
       return;
     }
     setBusy(true);
@@ -620,16 +631,25 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 type="button"
                 data-testid="confirm-add-project"
                 onClick={() => void handleAdd()}
-                disabled={busy || !newName.trim() || !newRoot.trim()}
+                disabled={
+                  busy ||
+                  !newName.trim() ||
+                  !newRoot.trim() ||
+                  (pathValidation !== null && !pathValidation.valid)
+                }
                 style={{
                   padding: '6px 14px',
                   background: 'var(--accent)',
                   color: '#FFFFFF',
                   border: 'none',
                   borderRadius: 'var(--radius-button)',
-                  cursor: busy || !newName.trim() || !newRoot.trim()
-                    ? 'not-allowed'
-                    : 'pointer',
+                  cursor:
+                    busy ||
+                    !newName.trim() ||
+                    !newRoot.trim() ||
+                    (pathValidation !== null && !pathValidation.valid)
+                      ? 'not-allowed'
+                      : 'pointer',
                   fontFamily: 'inherit',
                 }}
               >
