@@ -255,7 +255,7 @@ export default function JsonEditorPage(): ReactElement {
         const raw = err instanceof Error ? err.message : String(err);
         setState((prev) => ({
           ...prev,
-          message: { kind: 'error', text: `读取失败: ${mapBackendError(raw)}` },
+          message: { kind: 'error', text: mapBackendError(raw) },
         }));
       }
     },
