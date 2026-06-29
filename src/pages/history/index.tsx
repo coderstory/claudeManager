@@ -200,6 +200,15 @@ export default function HistoryPage(): ReactElement {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
 
   const projectOptions = useProjectOptions();
+  // A8 fix — pass the full project list (id/name/root_dir) to
+  // UsageHistoryTable so it can resolve `active_root` (filesystem
+  // path) → project name. Reuse the localStorage-backed list that
+  // the filter dropdown already uses; the labels and the resolution
+  // set share the same source.
+  const projectList = useMemo(
+    () => projectOptions.map((p) => ({ id: p.id, name: p.label, root_dir: p.id })),
+    [projectOptions],
+  );
 
   /** Provider options — derived from already-loaded usage rows. */
   const providerOptions = useMemo(() => {
@@ -471,7 +480,11 @@ export default function HistoryPage(): ReactElement {
 
       {/* Active tab table — [B1] backup tab 已移除,合并到「备份与恢复」页。 */}
       {tab === 'usage' ? (
-        <UsageHistoryTable rows={usageRows} loading={loading} />
+        <UsageHistoryTable
+          rows={usageRows}
+          loading={loading}
+          projects={projectList}
+        />
       ) : (
         <DailyStatsTable rows={dailyRows} loading={loading} />
       )}

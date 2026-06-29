@@ -21,6 +21,13 @@ import { formatDateTime } from '../../lib/formatTime';
 export interface UsageHistoryTableProps {
   rows: UsageHistoryRow[];
   loading?: boolean;
+  /**
+   * Project list — `[{id, name, root_dir}]`. Used to resolve
+   * `row.active_root` (raw filesystem path) into a human-readable
+   * project name. Optional: when omitted the table falls back to
+   * showing the raw path (legacy behavior).
+   */
+  projects?: ReadonlyArray<{ id: string; name: string; root_dir: string }>;
 }
 
 function formatTs(ts: number): string {
@@ -31,6 +38,31 @@ function formatTs(ts: number): string {
 
 function formatPct(pct: number): string {
   return `${pct.toFixed(1)}%`;
+}
+
+/**
+ * resolveProjectLabel — A8 fix.
+ *
+ * Maps a row's `active_root` (raw filesystem path) to the project
+ * name from the supplied `projects` list. Resolution order:
+ *   1. If `active_root` is null/empty → "—" (no project recorded)
+ *   2. Look up `projects.find(p => p.root_dir === active_root)` →
+ *      return that project's `name`
+ *   3. If active_root is set but no project matches → "全部"
+ *      (user-level snapshot: the path may have been a project dir
+ *      that was since removed; treat as the global row)
+ *   4. If no `projects` list provided → fall back to showing the
+ *      raw `active_root` path (legacy display)
+ */
+function resolveProjectLabel(
+  activeRoot: string | null,
+  projects?: ReadonlyArray<{ id: string; name: string; root_dir: string }>,
+): string {
+  if (!activeRoot) return '—';
+  if (!projects || projects.length === 0) return activeRoot;
+  const match = projects.find((p) => p.root_dir === activeRoot);
+  if (match) return match.name;
+  return '全部';
 }
 
 const cellStyle: React.CSSProperties = {
@@ -56,6 +88,7 @@ const headerStyle: React.CSSProperties = {
 export function UsageHistoryTable({
   rows,
   loading,
+  projects,
 }: UsageHistoryTableProps): ReactElement {
   // M5 #31 — pagination state for the rendered slice. Reset to 0
   // when the row set changes (filter applied / new fetch).
@@ -163,7 +196,7 @@ export function UsageHistoryTable({
             <th style={headerStyle}>时间</th>
             <th style={headerStyle}>Provider</th>
             <th style={headerStyle}>窗口</th>
-            <th style={{ ...headerStyle, textAlign: 'right' }}>使用率</th>
+            <th style={{ ...headerStyle, textAlign: 'right' }}>token 消耗量</th>
             <th style={headerStyle}>项目</th>
             <th style={headerStyle}>snapshot_id</th>
           </tr>
@@ -183,7 +216,7 @@ export function UsageHistoryTable({
                 {formatPct(row.used_pct)}
               </td>
               <td style={{ ...cellStyle, color: 'var(--text-muted)' }}>
-                {row.active_root ?? '—'}
+                {resolveProjectLabel(row.active_root, projects)}
               </td>
               <td
                 style={{
