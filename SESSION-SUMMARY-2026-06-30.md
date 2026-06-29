@@ -172,7 +172,7 @@
 |---|---|
 | `npm run build` | ✅ 1755 modules transformed / 660ms / 7.98 kB index.html + 452 kB JS |
 | `cargo check` | ✅ dev profile target in 3.85s |
-| `cargo test --lib optimizer` | ⏳ 后台跑 (cold compile 慢,~5 min),通知后报告 |
+| `cargo test --lib optimizer` | ⚠️ **deferred** cold cargo compile 卡 13 min,killed;A4 subagent 自家 worktree 跑过 9/9 PASS 可信;主 session 全 `cargo test --lib` 待 user 在线时再确认 |
 | `cargo build --release --features tauri/custom-protocol` | **deferred** 太重 (~2-3 min),留作下次 ship 时 main session 跑 |
 | `tauri build --no-bundle` | **deferred** 需 scripts/build-and-ship.sh (Windows-targeted);macOS 等效 build-mac.sh 跑 |
 | smoke test 10/10 | **deferred** — Windows-only per CLAUDE.md §13.1,macOS D6 待 M4 (telemetry + WKWebView child 枚举) |
@@ -223,7 +223,7 @@
 
 ## 下次会话起点 (user 在线时)
 
-1. **`cargo test --lib optimizer`** 跑完结果 (本 session 后台,通知应在 user 回来时已送达)
+1. **`cargo test --lib optimizer`** 跑完结果 (本 session 后台,通知应在 user 回来时已送达) — **更新**:cold cargo compile 卡 13 min,killed;A4 subagent 独立验证 9/9 PASS 可信;user 在线时用 `RUSTC_WRAPPER="" cargo test --lib optimizer` 单 crate 重跑确认
 2. **可选手动跑** `cargo build --release --features tauri/custom-protocol` (2-3 min) + `tauri build --no-bundle` (5+ min first time)
 3. **AppHeader 视觉 verify** — 启动 tauri dev + 截图 home/provider-list/about 三个页面,确认 "ClaudeManager" 文本可见 (CSS 字节级测试已绿,视觉留主 session 真截图)
 4. **决断 Round 4 阻塞项** (按需询问 user):
