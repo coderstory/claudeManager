@@ -600,6 +600,66 @@ describe('ProviderListPage — M2.17 F15 batch3 InfoBars → ErrorBanner', () =>
     });
   });
 
+  // A2 regression (CLAUDE.md §16 验证) — add_provider invoke payload must include `input.id`.
+  //
+  // 历史 bug: ProviderFormModal.handleSubmit 把 `id` 漏掉,Rust serde
+  // 拒绝 "missing field `id`" → IPC 100% 失败。修复在
+  // src/pages/provider-list/index.tsx 的 ProviderFormModal.handleSubmit
+  // (通过 generateIdFromName(name) 派生 id)。
+  //
+  // 与 M5 bug #6 (update_provider) 平行 — 同样需要断言 payload 含 id,
+  // 否则未来重构 ProviderFormModal 时 id 可能再次丢失。
+  it('[Add] invoke payload must include input.id (A2 regression)', async () => {
+    mockInvoke.mockResolvedValueOnce([]);  // initial list (empty)
+    render(<ProviderListPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list-empty')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('provider-list-add'));
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-form-modal')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId('provider-form-name'), { target: { value: 'GLM Add' } });
+    fireEvent.change(screen.getByTestId('provider-form-base-url'), { target: { value: 'https://api.add2.example' } });
+    fireEvent.change(screen.getByTestId('provider-form-api-key'), { target: { value: 'sk-add-67890' } });
+    fireEvent.change(screen.getByTestId('provider-form-model-default'), { target: { value: 'glm-4-6' } });
+
+    // mock add_provider 成功 + reload
+    mockInvoke.mockResolvedValueOnce({
+      id: 'glm-add', name: 'GLM Add', provider_type: 'anthropic',
+      api_base: 'https://api.add2.example', api_key: 'sk-add-67890',
+      models: { default: 'glm-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
+      is_active: false, created_at: 1_700_000_000, last_used_at: null, notes: null,
+    });
+    mockInvoke.mockResolvedValueOnce([{
+      id: 'glm-add', name: 'GLM Add', provider_type: 'anthropic',
+      api_base: 'https://api.add2.example', api_key: 'sk-add-67890',
+      models: { default: 'glm-4-6', haiku: null, sonnet: null, opus: null, by_tier: {} },
+      is_active: false, created_at: 1_700_000_000, last_used_at: null, notes: null,
+    }]);
+
+    fireEvent.click(screen.getByTestId('provider-form-save'));
+
+    // 核心断言: add_provider 必须被调, 且 payload.input.id 必须存在。
+    // generateIdFromName("GLM Add") = "glm-add" (lowercase + 非 a-z0-9-_ 转 '-')。
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(([cmd]) => cmd === 'add_provider');
+      expect(calls.length).toBe(1);
+      const args = calls[0][1] as { input: Record<string, unknown> };
+      expect(args.input).toBeDefined();
+      expect(args.input.id).toBe('glm-add');
+      // 业务字段全在
+      expect(args.input.name).toBe('GLM Add');
+      expect(args.input.base_url).toBe('https://api.add2.example');
+      expect(args.input.api_key).toBe('sk-add-67890');
+      expect(args.input.models).toEqual({
+        default: 'glm-4-6', haiku: null, sonnet: null, opus: null, by_tier: {},
+      });
+    });
+  });
+
   it('[View] 按钮 → 打开 details modal → 显示完整字段 (含 api_key)', async () => {
     const target = {
       id: 'glm', name: 'GLM-4.6', provider_type: 'custom',
