@@ -134,9 +134,15 @@ pub fn dispatch_list_editable_jsons(invoke: Invoke<tauri::Wry>) -> bool {
                         let p = ent.path();
                         if p.is_file() && p.extension().map(|e| e == "json").unwrap_or(false) {
                             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                            // v3.4 fix — field name is `relative_path` (matches
+                            // src/types/json.ts::JsonFileEntry). The pre-fix
+                            // name `path` caused a TypeError in the
+                            // frontend (JsonFileTree.tsx:141 reads
+                            // `entry.relative_path.split('/')` on a
+                            // payload that only had `path`).
                             out.push(serde_json::json!({
                                 "scope": scope,
-                                "path": name,
+                                "relative_path": name,
                             }));
                         }
                     }

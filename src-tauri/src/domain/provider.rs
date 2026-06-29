@@ -479,15 +479,25 @@ mod tests {
 
     #[test]
     fn new_provider_populates_created_at_and_default_flags() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let before: i64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         let p = Provider::new("new-id", "name", "anthropic", "https://x", "k");
         assert_eq!(p.id, "new-id");
         assert_eq!(p.is_active, false);
         assert_eq!(p.last_used_at, None);
         assert_eq!(p.notes, None);
         assert_eq!(p.models, ProviderModels::default());
-        // created_at must be > 2020-01-01 (1700000000) and within the next minute.
-        assert!(p.created_at > 1_700_000_000);
-        assert!(p.created_at < 1_700_000_000 + 3_600);
+        // created_at must be (a) at or after `before`,
+        // (b) within a few seconds of `before` (call latency).
+        let after: i64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        assert!(p.created_at >= before);
+        assert!(p.created_at <= after + 5);
     }
 
     #[test]

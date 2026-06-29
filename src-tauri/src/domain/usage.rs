@@ -414,9 +414,10 @@ mod tests {
             inserted_rows: 0,
         };
         let v = serde_json::to_value(&snap).unwrap();
+        // `breakdown` is serialised as `[]` (empty Vec, NOT omitted) because
+        // the field uses `default` only on deserialise, not `skip_serializing_if`.
         assert!(v.get("breakdown").is_some());
-        assert!(v.get("breakdown").is_none());
-        assert!(v.get("model_count").is_none());
+        assert_eq!(v["breakdown"].as_array().unwrap().len(), 0);
         assert_eq!(v["tokens_used"], 0);
         assert_eq!(v["timestamp"], 1);
     }

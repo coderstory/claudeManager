@@ -55,7 +55,8 @@ mod tests {
 
     #[test]
     fn pubkey_is_base64_encoded_and_non_empty() {
-        let pubkey = "dummy-base64-key-for-test";
+        // Use a real STANDARD-base64-encoded string (alphabet A-Z, a-z, 0-9, +, /, =).
+        let pubkey = "ZHVtbXktYmFzZTY0LWtleS1mb3ItdGVzdA==";
         use base64::Engine;
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(pubkey)
