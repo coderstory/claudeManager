@@ -363,7 +363,7 @@ export default function HistoryPage(): ReactElement {
           lineHeight: 1.6,
         }}
       >
-        浏览 F7 用量快照 + F13 备份的 SQLite 持久化历史。
+        浏览用量快照 + 备份的 SQLite 持久化历史。
         切换 / 备份 / 编辑 settings.json 时自动写入,可按项目、时间、类型筛选后导出。
       </p>
 

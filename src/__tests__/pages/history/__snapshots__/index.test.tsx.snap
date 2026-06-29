@@ -39,7 +39,7 @@ exports[`HistoryPage — F21 (M4.6 / Phase 21-C) > matches snapshot of the empty
   <p
     style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.6;"
   >
-    浏览 F7 用量快照 + F13 备份的 SQLite 持久化历史。 切换 / 备份 / 编辑 settings.json 时自动写入,可按项目、时间、类型筛选后导出。
+    浏览用量快照 + 备份的 SQLite 持久化历史。 切换 / 备份 / 编辑 settings.json 时自动写入,可按项目、时间、类型筛选后导出。
   </p>
   <div
     aria-label="历史类型"

@@ -489,7 +489,7 @@ export default function BackupRestorePage(): ReactElement {
           aria-pressed={state.detailFullscreen}
           disabled={!state.detail && !state.diff}
           title={
-            state.detailFullscreen ? '退出全屏 (F19)' : '全屏查看 (F19)'
+            state.detailFullscreen ? '退出全屏' : '全屏查看'
           }
           style={{
             ...toolbarBtn(),
@@ -1029,7 +1029,7 @@ export default function BackupRestorePage(): ReactElement {
                 color: 'var(--text-muted)',
               }}
             >
-              此操作会从 F13 时间线移除该备份。文件本身可在 .trash/
+              此操作会从备份时间线移除该备份。文件本身可在 .trash/
               目录手动恢复 (30 天内)。
             </p>
           </div>

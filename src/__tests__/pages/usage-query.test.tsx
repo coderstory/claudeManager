@@ -266,10 +266,10 @@ describe('UsageQueryPage — F7 (M2.7)', () => {
     );
   });
 
-  it('renders the sparkline svg', async () => {
+  it('renders the trend chart svg', async () => {
     render(<UsageQueryPage />, { wrapper: wrap });
     await waitFor(() => {
-      expect(screen.getByTestId('usage-history-chart')).toBeInTheDocument();
+      expect(screen.getByTestId('usage-trend-chart')).toBeInTheDocument();
     });
   });
 

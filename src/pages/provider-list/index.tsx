@@ -1257,7 +1257,7 @@ function DeleteConfirmDialog({ deleteState, onConfirm, onCancel }: DeleteConfirm
           open
           danger
           title="删除 Provider"
-          message={`确认删除 provider "${provider?.name}" (${provider?.id})? 此操作不可撤销 (service 会先做 F13 备份).`}
+          message={`确认删除 provider "${provider?.name}" (${provider?.id})? 此操作不可撤销 (系统会先做备份).`}
           confirmLabel="删除"
           cancelLabel="取消"
           onConfirm={onConfirm}

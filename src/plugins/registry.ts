@@ -176,7 +176,7 @@ const CORE_PAGE_META: Record<CoreViewId, PageMeta> = {
   },
   history: {
     title: '历史查询',
-    description: '按时间 / 项目 / 类型筛选 F7 用量 + F13 备份的历史记录。',
+    description: '按时间 / 项目 / 类型筛选用量 + 备份的历史记录。',
   },
   about: {
     title: '关于',
