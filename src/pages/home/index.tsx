@@ -181,6 +181,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
 
   return (
     <div
+      data-testid="home-page"
       style={{
         height: '100%',
         overflow: 'auto',
