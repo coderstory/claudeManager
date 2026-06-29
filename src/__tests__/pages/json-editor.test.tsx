@@ -329,7 +329,7 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     expect(screen.queryByTestId('json-editor-message')).toBeNull();
   });
 
-  it('清单 20 scenario 2: 不存在 → InfoBar 显示"文件不存在"', async () => {
+  it('清单 20 scenario 2: 不存在 → InfoBar 显示"文件不存在" (无双层"读取失败"前缀)', async () => {
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'read_file') throw new Error('文件不存在 /home/u/.claude/nope.json: No such file or directory (os error 2)');
       if (cmd === 'write_file_atomic') return null;
@@ -346,8 +346,12 @@ describe('JsonEditorPage — F5 (M2.4)', () => {
     await waitFor(() => {
       const msg = screen.getByTestId('json-editor-message');
       expect(msg.getAttribute('data-message-kind')).toBe('error');
-      expect(msg.textContent).toContain('读取失败');
+      // A1 fix (ffb00cd + 303b4d3): 前端不再 pre-pend "读取失败:",
+      // 否则会与后端 class 字 (或潜在后端 "读取失败" 前缀) 形成双层包装。
+      expect(msg.textContent).not.toContain('读取失败');
       expect(msg.textContent).toContain('文件不存在');
+      // OS-level 错误细节保留,供截图 / bug report 定位
+      expect(msg.textContent).toContain('No such file or directory');
     });
   });
 
