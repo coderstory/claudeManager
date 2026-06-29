@@ -1,28 +1,28 @@
 # Phase 42 PLAN — Plugin 系统持有 commands + services
 
 **Phase:** 42
-**Goal:** 把 69 个 `#[tauri::command]` 从 `commands/` 物理迁移到 13 个 plugin stub,走 `inventory::submit!` + `DispatchTable` 自定义 invoke_handler 派发,使"加 1 plugin 改 1 文件"强验收达成,同时冻结 PluginContext 4 字段 + ServiceRegistry Arc 路径 API 为 Phase 43/45 公共契约。
+**Goal:** 把 80 个 `#[tauri::command]` 从 `commands/` 物理迁移到 13 个 plugin stub,走 `inventory::submit!` + `DispatchTable` 自定义 invoke_handler 派发,使"加 1 plugin 改 1 文件"强验收达成,同时冻结 PluginContext 4 字段 + ServiceRegistry Arc 路径 API 为 Phase 43/45 公共契约。
 
 ---
 
 ## 0. 来源与依据 (input provenance)
 
 - **输入 1** `.planning/milestones/v3.4-DECISIONS.md` — 5 BLOCKING 已关闭 (D-42-A inventory §2.3 白名单, SHIP-A provider_switch 合并 provider_list, D-45-A ServiceRegistry Arc 路径, D-CC-A PluginContext 4 字段 + init &mut 签名)
-- **输入 2** `.planning/milestones/v3.4-phases/00-VERIFY-FIRST-DRIFT-REPORT.md` — 实测基线:69 commands / 23 invoke / 10 stub plugin / 11 service
+- **输入 2** `.planning/milestones/v3.4-phases/00-VERIFY-FIRST-DRIFT-REPORT.md` — 实测基线:80 commands / 23 invoke / 10 stub plugin / 11 service
 - **输入 3** `.planning/milestones/v3.4-phases/42-RESEARCH.md` — Phase 42 研究产物 (Tauri 2.11.3 源码验证, inventory 0.3.24 选型, 6 个 pitfall)
 - **输入 4** `.planning/milestones/v3.4-phases/42-DECISIONS.md` — Phase 42 discuss 5 OQ 关闭 (Q42-1 file_ops, Q42-2 history_view, Q42-3 provider 拆 2, Q42-4 IPlugin::commands debug only, Q42-5 新 stub id 命名)
 - **项目实测 (基线日 2026-06-27)**:
-  - `src-tauri/src/commands/*.rs` 14 文件 69 命令 (drift 报告 §0.1)
+  - `src-tauri/src/commands/*.rs` 14 文件 80 命令 (drift 报告 §0.1)
   - `src-tauri/src/plugins/{traits,host,mod}.rs` 现有 2 字段 PluginContext + 10 stub
-  - `src-tauri/src/lib.rs:106-199` 硬编码 80 命令 enumerate (实际 grep 仅 69 引用,余 11 个是同命令多行)
+  - `src-tauri/src/lib.rs:106-199` 硬编码 80 命令 enumerate (与 grep 80 一致)
 
 ---
 
 ## 1. Goal (强验收 = phase 完成标准)
 
 > **核心强验收 (42-DECISIONS §强验收 + overview §3 Phase 42)**:
-> 1. **13 stub 全部迁移**: `commands/*.rs` (14 文件 69 命令) → `plugins/stubs/<id>/commands.rs` (13 stub, `provider_switch` 合并 `provider_list` per SHIP-A)
-> 2. **`inventory::submit!` 注册 69 次 + DispatchTable 收集 69 项** (数字重测订正后,非 80)
+> 1. **13 stub 全部迁移**: `commands/*.rs` (14 文件 80 命令) → `plugins/stubs/<id>/commands.rs` (13 stub, `provider_switch` 合并 `provider_list` per SHIP-A)
+> 2. **`inventory::submit!` 注册 80 次 + DispatchTable 收集 80 项** (重测订正:与 lib.rs 80 enumerate 一致)
 > 3. **`cargo test plugins::dispatch::tests::dispatch_routes_correctly` PASS** (新单测)
 > 4. **删 1 plugin 命令 → lib.rs / commands/ 0 改动** (强验收验证: 砍掉 provider_switch stub + commands/providers.rs 部分命令, lib.rs 不变)
 > 5. **smoke test 10/10 PASS** (CLAUDE.md §13.1 全项)
@@ -41,7 +41,7 @@
 | 删除文件 | ~3 (commands/providers.rs 全删, commands/{fs,mcp,backup,history,project,marketplace,optimizer,usage,updater,resource,autostart,app,about}.rs 内容迁完后续删, provider_switch stub 删) | 漂移报告 §0.1 |
 | 修改文件 | ~18 (lib.rs:106-199 + lib.rs:247, plugins/{traits,host,mod}.rs, plugins/stubs/{mod,provider_list,provider_switch,import_sql,mcp_management,usage_query,resource_browser,marketplace,optimizer,backup_restore}.rs, Cargo.toml) | D-CC-A + SHIP-A + 主改造 |
 | 新增测试 | ~12 (dispatch 5 + host collect 1 + integration 1 + 每个 stub commands smoke 5) | 42-RESEARCH §Validation |
-| 工作量估时 | **5-7 天** (1 天发现 + 1 天核心机制 + 1 天命令迁移 + 1 天 stub 升级 + 0.5 天测试 + 1 天 smoke + 0.5 天收尾) | sccache 已启用 |
+| 工作量估时 | **6-8 天** (1 天发现 + 1 天核心机制 + 1 天命令迁移 + 1 天 stub 升级 + 0.5 天测试 + 1 天 smoke + 0.5 天收尾) | sccache 已启用 |
 
 ---
 
@@ -402,14 +402,14 @@ ls /Users/coderstory/CodeSource/winui3/src-tauri/src/plugins/stubs/ | grep provi
 cd /Users/coderstory/CodeSource/winui3/src-tauri && cargo build --release
 cd /Users/coderstory/CodeSource/winui3/src-tauri && cargo test plugins:: -- --nocapture
 ls /Users/coderstory/CodeSource/winui3/src-tauri/src/plugins/stubs/ | wc -l  # 期望 12 stub .rs + mod.rs = 13
-grep -rE "inventory::submit!" /Users/coderstory/CodeSource/winui3/src-tauri/src/plugins/stubs/ | wc -l  # 期望 69
+grep -rE "inventory::submit!" /Users/coderstory/CodeSource/winui3/src-tauri/src/plugins/stubs/ | wc -l  # 期望 80
 ls /Users/coderstory/CodeSource/winui3/src-tauri/src/commands/  # 期望仅剩 mod.rs (空或带注释)
 ```
 
 **Done 标准**:
 - 13 stub 全部 migrate 完毕 (12 业务 + 1 core)
 - commands/ 目录基本清空 (mod.rs 保留作历史注释)
-- 69 个 `inventory::submit!` 全在 plugins/stubs/ 下
+- 80 个 `inventory::submit!` 全在 plugins/stubs/ 下
 - lib.rs:106-199 invoke_handler 改造完成
 - `cargo test plugins::` 全 PASS
 
@@ -439,7 +439,7 @@ cd /Users/coderstory/CodeSource/winui3 && grep -rE "commands::" src-tauri/src/li
 ```
 
 **Done 标准** (Phase 47 视觉回归前):
-- smoke test 10/10 PASS (含新增 "DispatchTable 收集 69 项" 验证项)
+- smoke test 10/10 PASS (含新增 "DispatchTable 收集 80 项" 验证项)
 - git diff src/ 为空 (前端 0 改动)
 - git diff src-tauri/src/lib.rs 仅 setup() 4 字段 ctx 段变化 (不增不改 invoke_handler 的命令列表)
 - `grep "commands::" src-tauri/src/lib.rs` 0 命中 (lib.rs 不再直接引用 commands/)
@@ -453,7 +453,7 @@ cd /Users/coderstory/CodeSource/winui3 && grep -rE "commands::" src-tauri/src/li
 
 | # | 风险 | 影响 | 缓解 |
 |---|---|---|---|
-| **R1** | **inventory 跨 crate 边界**: inventory::submit! 依赖编译器生成 `__inventory_<type>` 自定义 section (ELF/PE/Mach-O),跨 .o 文件聚合。如果 `RUSTFLAGS` 设置不当 (e.g. `-C link-arg=-s` 删 dead-code) 可能丢失 section | **致命**: commands 全部 "command not found",前端全黑 | 1. 验证: 跑 `cargo build --release` + `nm src-tauri/target/release/claude-config-manager \| grep inventory` 应有 `__inventory_*` 符号<br>2. 备选: 用 `inventory = "=0.3.24"` 内置的 `inventory::collect!` 宏 (启动期显式 collect, 不依赖链接器 section)<br>3. CI 增强: smoke test 加 "DispatchTable len == 69" 验证 |
+| **R1** | **inventory 跨 crate 边界**: inventory::submit! 依赖编译器生成 `__inventory_<type>` 自定义 section (ELF/PE/Mach-O),跨 .o 文件聚合。如果 `RUSTFLAGS` 设置不当 (e.g. `-C link-arg=-s` 删 dead-code) 可能丢失 section | **致命**: commands 全部 "command not found",前端全黑 | 1. 验证: 跑 `cargo build --release` + `nm src-tauri/target/release/claude-config-manager \| grep inventory` 应有 `__inventory_*` 符号<br>2. 备选: 用 `inventory = "=0.3.24"` 内置的 `inventory::collect!` 宏 (启动期显式 collect, 不依赖链接器 section)<br>3. CI 增强: smoke test 加 "DispatchTable len == 80" 验证 |
 | **R2** | **`generate_handler!` 与 `inventory::iter` 嵌套 compile error** (Pitfall 1): 有人可能写出 `tauri::generate_handler![plugins::stubs::a::commands::list_a()]` 这种"宏嵌套" — `generate_handler!` 是 proc_macro, 不能运行期拼接 (tauri-macros 2.6.3/src/command/handler.rs:144-185 源码验证) | **致命**: 全命令失效 | 1. PR review checklist: lib.rs invoke_handler 必须是 `make_invoke_handler(...)`, 不允许任何 `generate_handler!` 残留<br>2. lint: `grep -n "generate_handler" src-tauri/src/lib.rs` 应 0 命中<br>3. 写 integration test `tests/dispatch_invoke.rs` 跑 Tauri runtime 验证 dispatch 路径 |
 | **R3** | **前端 23 处 invoke 名字错位**: 迁移命令函数时, 改了 Tauri 命令名 (e.g. `list_providers` → `provider_list::list_providers` 加前缀),前端 invoke 调用全失效,UI 全黑 | **致命**: smoke test 不检测 UI 文本, build 过但 UI 实际全错位 (CLAUDE.md §6.4 反事故: 5 文案同步灾难) | 1. Pitfall 3 严禁清单: commands/*.rs → plugins/stubs/<id>/commands.rs 迁完后, 函数名不变, 命令名 (CommandSpec.name) 不变<br>2. 自动 grep gate: `grep -E "CommandSpec { name:" src-tauri/src/plugins/stubs/ -h \| awk -F'"' '{print $2}' \| sort > /tmp/expected.txt && grep -rE "invoke\(\"" src/lib/api/ -h \| awk -F'"' '{print $2}' \| sort > /tmp/actual.txt && diff /tmp/expected.txt /tmp/actual.txt` 应为空<br>3. 强验收 "前端 0 改动": `git diff src/` 应为空 |
 | **R4** | **Phase 45 接口契约漂移**: Phase 42 写出 `register<T>(T)` 而非 `register_arc<T>(Arc<T>)`, Phase 45 必须用 Arc 路径 (9 service 拓扑互注入), Phase 42 ship 后改 API 破坏 BC | **高**: Phase 45 必须协商改 API, 增加 Phase 45 工作量 | 1. **D-45-A 已锁**: register_arc<T>(Arc<T>) + get<T>() -> Option<Arc<T>> 字节级固定<br>2. Phase 45-01 PLAN 第一步必须 read 42-PLAN.md §"决策锁定点" 段 + `diff plugins/service_registry.rs` 字节验证<br>3. 不一致走 CLAUDE.md §2.5 协商加 5 行 API (Phase 42 ServiceRegistry +5 行兼容层) |
@@ -537,7 +537,7 @@ diff <(grep -E "pub fn (new|register_arc|get|contains|count)" /Users/coderstory/
 | lib.rs invoke_handler 改造 | `grep -E "generate_handler" src-tauri/src/lib.rs` | 0 命中 |
 | lib.rs 不再直接引 commands | `grep -E "commands::" src-tauri/src/lib.rs` | 0 命中 |
 | 13 stub 计数 | `ls src-tauri/src/plugins/stubs/*.rs \| wc -l` | 12 (excl. mod.rs) |
-| 69 submit! 计数 | `grep -rE "inventory::submit!" src-tauri/src/plugins/stubs/ \| wc -l` | 69 |
+| 80 submit! 计数 | `grep -rE "inventory::submit!" src-tauri/src/plugins/stubs/ \| wc -l` | 80 |
 | provider_switch stub 删 | `ls src-tauri/src/plugins/stubs/provider_switch* 2>/dev/null` | 0 命中 |
 | ServiceRegistry Arc API 锁定 | `diff <(grep "pub fn" plugins/service_registry.rs) <(D-45-A 标准签名)` | 空 (字节级一致) |
 | Phase 45 接口契约 | `cat plugins/service_registry.rs \| grep -E "register_arc\|get<T>"` | 见 D-45-A 字节级 |
@@ -547,12 +547,12 @@ diff <(grep -E "pub fn (new|register_arc|get|contains|count)" /Users/coderstory/
 ## 8. success_criteria (phase 完成定义)
 
 - [ ] Wave 0 (Task 1-3) 全部单测 PASS, DispatchTable + ServiceRegistry + PluginContext 4 字段基线就位
-- [ ] Wave 1 (Task 4-5) 69 命令全迁移, 13 stub 全升级, lib.rs invoke_handler 改造完成
+- [ ] Wave 1 (Task 4-5) 80 命令全迁移, 13 stub 全升级, lib.rs invoke_handler 改造完成
 - [ ] Task 6 smoke test 10/10 PASS, 前端 0 改动, 强验收 "加 1 plugin 改 1 文件" 验证通过
 - [ ] D-42-A / D-CC-A / D-45-A / SHIP-A 4 项决策全部兑现 (字节级 diff 验证)
 - [ ] Phase 45 接口契约锁定 (ServiceRegistry Arc 路径, PluginContext 4 字段, init &mut 签名)
 - [ ] commands/ 目录清空 (仅留 mod.rs 注释)
-- [ ] git commit: `feat(v3.4 phase-42): migrate 69 commands to 13 plugin stubs via inventory::submit!`
+- [ ] git commit: `feat(v3.4 phase-42): migrate 80 commands to 13 plugin stubs via inventory::submit!`
 - [ ] 单 PR ship, smoke test 10/10 + 前端 0 改动
 
 ---
