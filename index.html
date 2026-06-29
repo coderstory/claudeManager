@@ -208,20 +208,10 @@
     </script>
     <div id="root"></div>
     <!--
-      v3.4 error overlay — populated by main.tsx when an unhandled
-      error / promise rejection escapes React. Renders inline so the
-      user can see the actual failure text instead of a blank
-      webview (which is what happens today when React's tree
-      unmounts on a render-time exception, since no ErrorBoundary
-      catches it).
+      A5-fix: 原 #ccm-error-overlay 已删除。详见 src/components/ErrorBoundary.tsx 顶部 doc-comment。
+      唯一错误显示 = ErrorBoundary 的右下 toast(z-index 100001)。
+      错误 stack 走 console.error → tauri-plugin-log → Rust 日志。
     -->
-    <div
-      id="ccm-error-overlay"
-      style="display:none; position:fixed; inset:0; z-index:100000; background:rgba(211,47,47,0.95); color:#fff; padding:24px; font-family:var(--font-mono,monospace); font-size:13px; overflow:auto;"
-    >
-      <h2 style="margin:0 0 12px 0; font-size:16px;">渲染错误 — 请截图发给开发</h2>
-      <pre id="ccm-error-overlay-text" style="white-space:pre-wrap; word-break:break-word; margin:0;"></pre>
-    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

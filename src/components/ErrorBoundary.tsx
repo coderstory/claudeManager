@@ -20,9 +20,12 @@
 //!   子树但 main chrome 可见)
 //! - **复制按钮**:用 `navigator.clipboard.writeText`(secure context),
 //!   fallback `document.execCommand('copy')`(Tauri webview dev mode)
-//! - **componentDidCatch 双重 sink**:
-//!   1. console.error(走 tauri-plugin-log webview target → Rust log)
-//!   2. `#ccm-error-overlay` in-page overlay(在 index.html,完整 stack)
+//! - **A5-fix (单 sink)**:A5 报告用户看到两个异常窗口(全屏 overlay +
+//!   右下 toast)。原实现 `componentDidCatch` 同时写到
+//!   `#ccm-error-overlay`(index.html) + toast(render) → 同一错误显示
+//!   两次。修复:移除 overlay 写入路径,只保留右下 toast 作为唯一
+//!   错误显示。Stack 完整信息走 console.error → tauri-plugin-log
+//!   → Rust 日志。
 //!
 //! ## 位置
 //!
@@ -58,21 +61,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // eslint-disable-next-line no-console
     console.error("[ErrorBoundary]", error, info.componentStack);
 
-    // 同步写一份到 in-page overlay(red banner),即便 toast 因为
-    // 某些原因没挂载,用户也能看到全 stack。
-    try {
-      const overlay = document.getElementById("ccm-error-overlay");
-      const text = document.getElementById("ccm-error-overlay-text");
-      if (overlay && text) {
-        text.textContent =
-          `[ErrorBoundary] ${error.name}: ${error.message}\n\n` +
-          `Stack:\n${error.stack ?? "(no stack)"}\n\n` +
-          `Component stack:\n${info.componentStack ?? "(none)"}`;
-        overlay.style.display = "block";
-      }
-    } catch {
-      // best-effort
-    }
+    // A5-fix: 不再写入 #ccm-error-overlay(它和 render() 的 toast
+    // 显示同一错误 → 两个窗口)。错误显示统一收敛到右下 toast,
+    // 完整 stack 通过 console.error 走 tauri-plugin-log → Rust 日志。
 
     this.setState({ info: info.componentStack ?? null });
   }
