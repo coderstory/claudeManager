@@ -133,7 +133,9 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     render(<HistoryPage />);
     expect(screen.getByTestId('history-page')).toBeInTheDocument();
     expect(screen.getByTestId('tab-usage')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-backup')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-daily')).toBeInTheDocument();
+    // [B1] — backup tab 已合并到「备份与恢复」页 (审计 tab)。
+    expect(screen.queryByTestId('tab-backup')).not.toBeInTheDocument();
     expect(screen.getByTestId('history-filter-bar')).toBeInTheDocument();
     expect(screen.getByTestId('export-btn')).toBeInTheDocument();
   });
@@ -158,7 +160,7 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     render(<HistoryPage />);
     await waitFor(() => {
       expect(screen.getByTestId('tab-usage').textContent).toContain('3');
-      expect(screen.getByTestId('tab-backup').textContent).toContain('5');
+      // [B1] — backup tab 已移除,改为「备份与恢复」页的审计 tab。
     });
   });
 
@@ -189,34 +191,30 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
   });
 
   it('switches tabs and fetches backup rows', async () => {
+    // [B1] — backup tab 已合并到「备份与恢复」页 (审计 tab)。
+    // history 页不再有 backup tab;测试覆盖改为验证 daily tab 切换行为。
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'get_history_stats') return sampleStats;
-      if (cmd === 'get_backup_history') {
-        return [
-          sampleBackupRow(1, { file_name: 'a.bak', scope: 'user' }),
-          sampleBackupRow(2, { file_name: 'b.bak', scope: 'project' }),
-        ];
+      if (cmd === 'get_daily_stats_history') {
+        return [sampleDailyRow(0), sampleDailyRow(1)];
       }
+      if (cmd === 'get_usage_history_rows') return [];
       return [];
     });
     render(<HistoryPage />);
     await waitFor(() => {
-      expect(screen.getByTestId('tab-backup')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-daily')).toBeInTheDocument();
     });
     await act(async () => {
-      fireEvent.click(screen.getByTestId('tab-backup'));
+      fireEvent.click(screen.getByTestId('tab-daily'));
     });
     await waitFor(() => {
-      const backupCalls = mockInvoke.mock.calls.filter(
-        (c) => c[0] === 'get_backup_history',
+      const dailyCalls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'get_daily_stats_history',
       );
-      expect(backupCalls.length).toBeGreaterThanOrEqual(1);
+      expect(dailyCalls.length).toBeGreaterThanOrEqual(1);
     });
-    await waitFor(() => {
-      const rows = screen.getAllByTestId('backup-history-row');
-      expect(rows.length).toBe(2);
-    });
-    expect(screen.getByTestId('tab-backup').getAttribute('aria-selected')).toBe(
+    expect(screen.getByTestId('tab-daily').getAttribute('aria-selected')).toBe(
       'true',
     );
   });
@@ -450,8 +448,9 @@ describe('HistoryPage — F21 (M4.6 / Phase 21-C)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('history-error')).toBeInTheDocument();
     });
+    // [B1] — backup tab 已移除,改用 daily tab 验证切 tab 清错行为。
     await act(async () => {
-      fireEvent.click(screen.getByTestId('tab-backup'));
+      fireEvent.click(screen.getByTestId('tab-daily'));
     });
     // Switching tabs clears the error in the page state, so the
     // error banner is gone (a fresh fetch may show a new one).

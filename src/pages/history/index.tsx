@@ -42,20 +42,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import {
   exportHistory,
-  getBackupHistory,
   getDailyStatsHistory,
   getHistoryStats,
   getUsageHistory,
 } from '../../lib/api/history';
 import type {
-  BackupHistoryRow,
   DailyStatRow,
   ExportFormat,
   HistoryStats,
   UsageHistoryRow,
 } from '../../types/history';
 
-import { BackupHistoryTable } from './BackupHistoryTable';
 import {
   FilterBar,
   type HistoryFilter,
@@ -131,7 +128,7 @@ export default function HistoryPage(): ReactElement {
   const [filter, setFilter] = useState<HistoryFilter>({});
   const [usageRows, setUsageRows] = useState<UsageHistoryRow[]>([]);
   const [dailyRows, setDailyRows] = useState<DailyStatRow[]>([]);
-  const [backupRows, setBackupRows] = useState<BackupHistoryRow[]>([]);
+  // [B1] — backupRows 状态已移除 (合并到「备份与恢复」页审计 tab)。
   const [stats, setStats] = useState<HistoryStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -151,10 +148,9 @@ export default function HistoryPage(): ReactElement {
   const [pageSize] = useState<number>(50);
   const [usageCursor, setUsageCursor] = useState<number | null>(null);
   const [dailyCursor, setDailyCursor] = useState<number | null>(null);
-  const [backupCursor, setBackupCursor] = useState<number | null>(null);
+  // [B1] — backup cursor / hasMoreBackup 已移除 (合并到「备份与恢复」页)。
   const [hasMoreUsage, setHasMoreUsage] = useState<boolean>(false);
   const [hasMoreDaily, setHasMoreDaily] = useState<boolean>(false);
-  const [hasMoreBackup, setHasMoreBackup] = useState<boolean>(false);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
 
   const projectOptions = useProjectOptions();
@@ -203,15 +199,8 @@ export default function HistoryPage(): ReactElement {
         setDailyRows(rows);
         setDailyCursor(rows.length > 0 ? rows[rows.length - 1].last_aggregated_recorded_at : null);
         setHasMoreDaily(rows.length === pageSize);
-      } else {
-        const rows = await getBackupHistory({
-          ...(filter as Parameters<typeof getBackupHistory>[0]),
-          limit: pageSize,
-        });
-        setBackupRows(rows);
-        setBackupCursor(rows.length > 0 ? rows[rows.length - 1].created_at : null);
-        setHasMoreBackup(rows.length === pageSize);
       }
+      // [B1] — backup tab 已移除,刷新仅处理 usage / daily。
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -251,16 +240,8 @@ export default function HistoryPage(): ReactElement {
           rows.length > 0 ? rows[rows.length - 1].last_aggregated_recorded_at : null,
         );
         setHasMoreDaily(rows.length === pageSize);
-      } else if (tab === 'backup' && backupCursor !== null) {
-        const rows = await getBackupHistory({
-          ...(filter as Parameters<typeof getBackupHistory>[0]),
-          limit: pageSize,
-          from_ts: backupCursor,
-        });
-        setBackupRows((prev) => [...prev, ...rows]);
-        setBackupCursor(rows.length > 0 ? rows[rows.length - 1].created_at : null);
-        setHasMoreBackup(rows.length === pageSize);
       }
+      // [B1] — backup tab 已移除 (合并到「备份与恢复」页),无需分支。
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -274,7 +255,6 @@ export default function HistoryPage(): ReactElement {
     loadingMore,
     usageCursor,
     dailyCursor,
-    backupCursor,
   ]);
 
   useEffect(() => {
@@ -399,16 +379,9 @@ export default function HistoryPage(): ReactElement {
         >
           按天汇总
         </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'backup'}
-          onClick={() => handleTabChange('backup')}
-          data-testid="tab-backup"
-          style={tabButtonStyle(tab === 'backup')}
-        >
-          备份历史 ({stats?.backup_rows ?? 0})
-        </button>
+        {/* [B1] — 备份历史 tab 已合并到「备份与恢复」页 (审计 tab)。
+            数据源虽不同 (audit log vs 磁盘文件) 但展示重叠,合并后
+            UX 更清晰,sidebar 单入口。 */}
       </div>
 
       {/* Errors / success */}
@@ -444,13 +417,11 @@ export default function HistoryPage(): ReactElement {
         triggerKinds={TRIGGER_KINDS}
       />
 
-      {/* Active tab table */}
+      {/* Active tab table — [B1] backup tab 已移除,合并到「备份与恢复」页。 */}
       {tab === 'usage' ? (
         <UsageHistoryTable rows={usageRows} loading={loading} />
-      ) : tab === 'daily' ? (
-        <DailyStatsTable rows={dailyRows} loading={loading} />
       ) : (
-        <BackupHistoryTable rows={backupRows} loading={loading} />
+        <DailyStatsTable rows={dailyRows} loading={loading} />
       )}
 
       {/* BUG-RF-08 — cursor-based pagination: "Load more" button.
@@ -459,8 +430,7 @@ export default function HistoryPage(): ReactElement {
         result size < pageSize (i.e. the last page had fewer than
         `pageSize` rows, no more data). */}
       {((tab === 'usage' && hasMoreUsage) ||
-        (tab === 'daily' && hasMoreDaily) ||
-        (tab === 'backup' && hasMoreBackup)) && (
+        (tab === 'daily' && hasMoreDaily)) && (
         <div
           style={{
             display: 'flex',

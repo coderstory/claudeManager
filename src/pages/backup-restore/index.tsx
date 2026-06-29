@@ -51,6 +51,7 @@ import type {
   DiffEntry,
   ManualBackupResult,
 } from '../../types/backup';
+import type { BackupHistoryRow } from '../../types/history';
 import {
   backupNow,
   deleteBackup,
@@ -59,6 +60,7 @@ import {
   readBackupContent,
   restoreBackup,
 } from '../../lib/api/backup';
+import { getBackupHistory } from '../../lib/api/history';
 import {
   formatBackupTimestamp,
   formatSize,
@@ -68,6 +70,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { useViewState } from '../../hooks/useViewState';
 import { Pagination } from '../../components/Pagination';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { BackupHistoryTable } from '../history/BackupHistoryTable';
 
 // ---------------------------------------------------------------------------
 // Page state
@@ -87,7 +90,12 @@ interface PageState {
   detailFullscreen: boolean;
   /** M5 #29 — pagination state for the timeline. */
   page: number;
+  /** [B1] 当前 tab: 'list' | 'diff' | 'restore' | 'audit'。审计 tab 用 SQLite
+   *  backup_history,其他 tab 用磁盘 listBackups(共享 selected state)。 */
+  tab: BackupTab;
 }
+
+type BackupTab = 'list' | 'diff' | 'restore' | 'audit';
 
 const INITIAL_STATE: PageState = {
   loading: true,
@@ -99,6 +107,7 @@ const INITIAL_STATE: PageState = {
   message: null,
   detailFullscreen: false,
   page: 0,
+  tab: 'list',
 };
 
 // ---------------------------------------------------------------------------
@@ -110,6 +119,13 @@ export default function BackupRestorePage(): ReactElement {
   // M4.6 / Phase 21-C — F21 history link-out.
   const { setView } = useViewState();
 
+  // [B1] — audit tab data (SQLite backup_history rows).
+  // 独立于 state.entries (磁盘扫描),按需懒加载。
+  const [auditRows, setAuditRows] = useState<BackupHistoryRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState<boolean>(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [auditLoaded, setAuditLoaded] = useState<boolean>(false);
+
   // BUG-RF-07 — 二次确认 modal 状态。`pendingDeletePaths` 是待删除的
   // path 列表,null = modal 未显示。点 [删除选中] 按钮 → 设置
   // pendingDeletePaths → modal 出现 → 用户确认 → 实际调
@@ -117,6 +133,34 @@ export default function BackupRestorePage(): ReactElement {
   const [pendingDeletePaths, setPendingDeletePaths] = useState<
     string[] | null
   >(null);
+
+  // [B1] — lazy-load 审计 tab 数据,首次切到 audit 才发 IPC。
+  // 后续切回 tab 不重拉(避免重复 IPC)。
+  const loadAudit = useCallback(async (): Promise<void> => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const rows = await getBackupHistory({ limit: 500 });
+      setAuditRows(rows);
+      setAuditLoaded(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAuditError(msg);
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
+
+  // [B1] — tab 切换 handler。audit tab 首次切到时 lazy-load。
+  const handleTabChange = useCallback(
+    (next: BackupTab): void => {
+      setState((prev) => ({ ...prev, tab: next }));
+      if (next === 'audit' && !auditLoaded && !auditLoading) {
+        void loadAudit();
+      }
+    },
+    [auditLoaded, auditLoading, loadAudit],
+  );
 
   // Initial load.
   const refresh = useCallback(async (): Promise<void> => {
@@ -458,7 +502,79 @@ export default function BackupRestorePage(): ReactElement {
         备份时间线。可查看内容、比对两版差异,或一键回滚。
       </p>
 
-      {/* Toolbar */}
+      {/* [B1] — 4 tabs: 列表 / Diff / Restore / 审计。
+          设计依据:用户已批准合并方案 — 把「查询历史 - 备份历史」
+          (SQLite audit) 合并到本页面,审计 tab 显示只读审计日志。
+          共享 selected state(审计 tab 不需要,但切换不重置其他 tab)。 */}
+      <div
+        role="tablist"
+        aria-label="备份视图"
+        data-testid="backup-tabs"
+        style={{
+          display: 'flex',
+          gap: 0,
+          marginBottom: 16,
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        {(
+          [
+            { key: 'list', label: '列表', testId: 'tab-list' },
+            { key: 'diff', label: 'Diff', testId: 'tab-diff' },
+            { key: 'restore', label: 'Restore', testId: 'tab-restore' },
+            { key: 'audit', label: '审计', testId: 'tab-audit' },
+          ] as Array<{ key: BackupTab; label: string; testId: string }>
+        ).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={state.tab === t.key}
+            onClick={() => {
+              handleTabChange(t.key);
+            }}
+            data-testid={t.testId}
+            style={tabButtonStyle(state.tab === t.key)}
+          >
+            {t.label}
+            {t.key === 'diff' && state.selected.length > 0 && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                ({state.selected.length})
+              </span>
+            )}
+            {t.key === 'restore' && state.selected.length > 0 && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                ({state.selected.length})
+              </span>
+            )}
+            {t.key === 'audit' && auditLoaded && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                ({auditRows.length})
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Toolbar — only show on list tab (other tabs have their own action sets) */}
       <div
         style={{
           display: 'flex',
@@ -630,9 +746,7 @@ export default function BackupRestorePage(): ReactElement {
         </span>
       </div>
 
-      {/* InfoBar — M2.16 改造 (F15): 内部用共享 ErrorBanner。
-          保留对外 testid `backup-message` (测试 + e2e 依赖)。
-          不传 onDismiss (原实现也是持久化,直到下次操作覆盖); ErrorBanner 的 ✕ 按钮因此不渲染。 */}
+      {/* InfoBar — ErrorBanner M2.16 */}
       {state.message && (
         <ErrorBanner
           kind={state.message.kind}
@@ -897,6 +1011,244 @@ export default function BackupRestorePage(): ReactElement {
           )}
         </div>
       </div>
+
+      {/* [B1] — Diff tab: 选中 2 个备份 + 点 [比对] 显示 diff 结果。
+          共享 state.selected / state.diff。复用现有 DiffView 子组件。 */}
+      {state.tab === 'diff' && (
+        <div data-testid="backup-tab-diff" style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginBottom: 16,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              onClick={() => {
+                void handleCompare();
+              }}
+              disabled={state.selected.length !== 2 || state.diffing}
+              data-testid="backup-tab-diff-compare-btn"
+              style={{
+                ...primaryBtn(),
+                opacity: state.selected.length === 2 ? 1 : 0.5,
+                cursor: state.selected.length === 2 ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <ArrowLeftRight size={14} />
+              {state.diffing ? '比对中…' : '比对选中的 2 个'}
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              当前已选 {state.selected.length} / 2 个备份。需切回 [列表] tab 选择。
+            </span>
+          </div>
+          {state.message && (
+            <ErrorBanner
+              kind={state.message.kind}
+              message={state.message.text}
+              testId="backup-message"
+              style={{ marginBottom: 12 }}
+            />
+          )}
+          <div
+            data-testid="backup-diff-panel"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card)',
+              background: 'var(--bg-elevated)',
+              minHeight: 200,
+              maxHeight: '70vh',
+              overflow: 'auto',
+              padding: state.diff ? 16 : 0,
+            }}
+          >
+            {state.diff && state.diff.length > 0 ? (
+              <DiffView entries={state.diff} />
+            ) : state.diff && state.diff.length === 0 ? (
+              <div
+                data-testid="backup-diff-empty"
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: 13,
+                  textAlign: 'center',
+                  padding: 32,
+                }}
+              >
+                <Archive size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
+                <div>两个备份完全相同,无差异</div>
+              </div>
+            ) : (
+              <div
+                data-testid="backup-diff-placeholder"
+                style={{
+                  padding: 32,
+                  color: 'var(--text-muted)',
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}
+              >
+                <ArrowLeftRight size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
+                <div>选 2 个备份(列表 tab) → 回到 Diff tab → 点 [比对]</div>
+                <div style={{ marginTop: 6 }}>
+                  比对结果将以字段级 diff 形式显示。
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* [B1] — Restore tab: 列出当前选中备份 + [回滚] 按钮。
+          单备份回滚 UX:切到列表 → 选中 1 个 → 切到 Restore → 点 [回滚此版本]。 */}
+      {state.tab === 'restore' && (
+        <div data-testid="backup-tab-restore" style={{ marginBottom: 16 }}>
+          {state.message && (
+            <ErrorBanner
+              kind={state.message.kind}
+              message={state.message.text}
+              testId="backup-message"
+              style={{ marginBottom: 12 }}
+            />
+          )}
+          <div
+            data-testid="backup-restore-panel"
+            style={{
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-card)',
+              background: 'var(--bg-elevated)',
+              padding: 16,
+              minHeight: 200,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                marginBottom: 12,
+                lineHeight: 1.6,
+              }}
+            >
+              回滚将覆盖当前文件。先会备份当前文件 (
+              <code style={{
+                background: 'var(--bg-primary)',
+                padding: '1px 6px',
+                borderRadius: 'var(--radius-button)',
+                fontSize: 11,
+              }}>
+                .bak.pre-restore.&lt;ts&gt;
+              </code>
+              ),然后原子写入备份内容。
+            </div>
+            {state.selected.length === 0 ? (
+              <div
+                data-testid="backup-restore-placeholder"
+                style={{
+                  padding: 32,
+                  color: 'var(--text-muted)',
+                  fontSize: 13,
+                  textAlign: 'center',
+                }}
+              >
+                <RotateCcw size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
+                <div>在 [列表] tab 选中 ≥1 个备份,然后回到 Restore tab。</div>
+                <div style={{ marginTop: 6 }}>单选 1 个 → [回滚此版本]。</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {state.selected.map((p) => {
+                  const entry = dedupedEntries.find((e) => e.path === p);
+                  if (!entry) return null;
+                  return (
+                    <div
+                      key={p}
+                      data-testid="backup-restore-row"
+                      data-backup-path={p}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px 14px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-button)',
+                        background: 'var(--bg-primary)',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: 'var(--text-primary)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={formatBackupTimestamp(entry.timestamp_unix)}
+                        >
+                          {formatBackupTimestamp(entry.timestamp_unix)}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--text-secondary)',
+                            marginTop: 2,
+                          }}
+                        >
+                          {sourceLabel(entry.source)} · {formatSize(entry.size_bytes)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          void handleRestore(entry.path);
+                        }}
+                        data-testid="backup-restore-btn"
+                        data-backup-path={entry.path}
+                        style={{
+                          ...primaryBtn(),
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                        回滚此版本
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* [B1] — Audit tab: SQLite backup_history 只读审计日志。
+          数据源 getBackupHistory (src/lib/api/history.ts),首次切到
+          lazy-load,后续切回不重拉。复用 BackupHistoryTable。 */}
+      {state.tab === 'audit' && (
+        <div data-testid="backup-tab-audit" style={{ marginBottom: 16 }}>
+          {auditError && (
+            <div style={{ marginBottom: 12 }}>
+              <ErrorBanner
+                kind="error"
+                message={`加载失败: ${auditError}`}
+                onDismiss={() => setAuditError(null)}
+                testId="audit-error"
+              />
+            </div>
+          )}
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              marginBottom: 12,
+            }}
+          >
+            SQLite <code>backup_history</code> 表 — 每次切换 provider / 编辑
+            settings.json / 手动备份时自动写入。仅审计日志,不参与恢复流程。
+          </div>
+          <BackupHistoryTable rows={auditRows} loading={auditLoading} />
+        </div>
+      )}
 
       {/* M3.2 polish — F19 fullscreen toggle overlay. Renders
           only when `detailFullscreen` is on; covers the entire
@@ -1213,5 +1565,24 @@ function iconBtn(): React.CSSProperties {
     background: 'var(--bg-elevated)',
     color: 'var(--text-secondary)',
     cursor: 'pointer',
+  };
+}
+
+/**
+ * [B1] — Tab 按钮样式。active = accent 底部边框 + accent 文本 + 600 字重;
+ * inactive = 透明边框 + 灰色文本 + 400 字重。统一 history 页 tab 样式。
+ */
+function tabButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: '10px 16px',
+    border: 'none',
+    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+    marginBottom: '-1px',
+    background: 'transparent',
+    color: active ? 'var(--accent)' : 'var(--text-secondary)',
+    fontSize: 14,
+    fontWeight: active ? 600 : 400,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
   };
 }
