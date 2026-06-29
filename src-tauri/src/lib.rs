@@ -305,6 +305,35 @@ pub fn run() {
                     }
                 }
             }
+
+            // B5 fix — macOS dock click 重新打开窗口
+            //
+            // Tauri v2 在 macOS 上默认不处理 dock click。`RunEvent::Reopen`
+            // 是 macOS-only 事件,用户:
+            //   1) 关闭最后一个窗口(cmd+W 或点红点,app 进程仍跑)
+            //   2) 点击 dock 上的应用图标
+            // 触发此事件。`has_visible_windows=false` 表示当前没有可见
+            // 窗口,需要手动调 show + unminimize + set_focus 把 "main"
+            // 窗口拉回来并聚焦。Window label "main" 来自 tauri.conf.json
+            // `windows[0].label`。
+            //
+            // Windows / Linux 不发此事件,cfg 隔离即可。
+            #[cfg(target_os = "macos")]
+            {
+                if let tauri::RunEvent::Reopen {
+                    has_visible_windows,
+                    ..
+                } = &event
+                {
+                    if !has_visible_windows {
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                }
+            }
         });
 }
 
