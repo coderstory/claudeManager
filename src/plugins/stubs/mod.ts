@@ -9,7 +9,6 @@
 export { providerListPlugin } from './provider-list';
 export { importSqlPlugin } from './import-sql';
 export { jsonEditorPlugin } from './json-editor';
-export { mcpManagementPlugin } from './mcp-management';
 export { usageQueryPlugin } from './usage-query';
 export { resourceBrowserPlugin } from './resource-browser';
 export { marketplacePlugin } from './marketplace';
