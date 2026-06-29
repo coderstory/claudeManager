@@ -45,5 +45,9 @@ test-results/
 updater-private.key
 src/design-system/*.bak
 
+# CodeGraph local knowledge-graph cache (regenerated per machine by
+# `codegraph init -i`; not safe to commit — contains machine-local paths).
+.codegraph/
+
 # Subagent-Driven Development ledger (session scratch)
 .superpowers/
