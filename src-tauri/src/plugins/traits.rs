@@ -13,11 +13,14 @@
 //! [`CLAUDE.md` §3.3`]: ../../../../../CLAUDE.md
 
 use std::fmt;
+use std::ptr::NonNull;
 use thiserror::Error;
 
 use tauri::AppHandle;
 
 use crate::platform::{IPlatformPaths, PlatformError};
+use crate::plugins::menu_registry::{PluginAppMenuItem, PluginTrayItem};
+use crate::plugins::service_registry::ServiceRegistry;
 
 // ---------------------------------------------------------------------------
 // PluginRoute
@@ -58,11 +61,15 @@ pub trait PluginService: Send + Sync {
 
 /// Context provided to each plugin during [`IPlugin::init`].
 ///
-/// Carries references to the Tauri [`AppHandle`] and to the platform
-/// abstraction layer. Plugins MUST go through [`IPlatformPaths`] for any
-/// file path resolution (per [`CLAUDE.md` §3.2`]).
+/// **Phase 43 / D-CC-A** — this struct is now 4-field and final. The
+/// decision lives in `.planning/milestones/v3.4-DECISIONS.md`
+/// (D-CC-A block). Adding/removing fields here is a breaking change
+/// and must go through the CLAUDE.md §2.5 negotiation process.
 ///
-/// Future: services registry, event bus, etc.
+/// Carries references to the Tauri [`AppHandle`], the platform
+/// abstraction layer, the plugin host (so a plugin can look up its
+/// peers — used by the `core` plugin to wire the tray / AppMenu),
+/// and the [`ServiceRegistry`] for DI (Phase 45 fills it).
 ///
 /// [`CLAUDE.md` §3.2`]: ../../../../../CLAUDE.md
 pub struct PluginContext<'a> {
@@ -71,19 +78,91 @@ pub struct PluginContext<'a> {
     /// always populate it via [`PluginContext::new`].
     pub app: Option<&'a AppHandle>,
     pub paths: &'a dyn IPlatformPaths,
+    /// The plugin host (Phase 43, D-CC-A 4th field). Lets a plugin's
+    /// `init` look up other plugins — e.g. the `core` plugin walks
+    /// `host.iter()` to collect tray / AppMenu contributions.
+    ///
+    /// Stored as a `NonNull<PluginHost>` (raw pointer + niche) instead
+    /// of a `&PluginHost` because `PluginHost::init_all` needs
+    /// `&mut self` on the host while the context holds a reference
+    /// to it. The borrow checker rejects `&mut host` + `&host` held
+    /// simultaneously; a raw pointer sidesteps that without forcing
+    /// the entire host through `Arc<Mutex<…>>`. The contract is that
+    /// the host outlives the context — Tauri holds the host for the
+    /// lifetime of the app, and init runs before any plugin drops
+    /// the context, so this is upheld trivially in practice.
+    ///
+    /// Access via [`PluginContext::host`].
+    host: Option<NonNull<crate::plugins::host::PluginHost>>,
+    /// The service registry (Phase 42 / D-45-A). Phase 45 plugins
+    /// call `ctx.services.register_arc::<T>(svc)` from `init`; today
+    /// it stays empty.
+    pub services: Option<&'a mut ServiceRegistry>,
 }
 
 impl<'a> PluginContext<'a> {
-    /// Production constructor — pass the live [`AppHandle`].
-    pub fn new(app: &'a AppHandle, paths: &'a dyn IPlatformPaths) -> Self {
-        Self { app: Some(app), paths }
+    /// Production constructor — pass the live [`AppHandle`], paths,
+    /// host, and (when needed) the mutable [`ServiceRegistry`].
+    ///
+    /// `services` is optional so legacy callers that haven't yet
+    /// built a registry (or test code) can pass `None`. `host` is
+    /// required because the `core` plugin's `init` depends on it.
+    ///
+    /// `host` is taken as `*const PluginHost` (raw pointer) so the
+    /// caller can keep `&mut host` for `PluginHost::init_all` after
+    /// constructing the context — a normal `&PluginHost` parameter
+    /// would create a shared borrow that NLL extends across the
+    /// `init_all` call and reject it.
+    ///
+    /// # Safety contract
+    ///
+    /// Caller must guarantee that the host outlives the context.
+    /// In production this is upheld because `init_all` constructs
+    /// both the host and the context together, and the host lives
+    /// in `app.manage(Mutex::new(host))` for the rest of the app.
+    pub fn new(
+        app: &'a AppHandle,
+        paths: &'a dyn IPlatformPaths,
+        host: *const crate::plugins::host::PluginHost,
+        services: Option<&'a mut ServiceRegistry>,
+    ) -> Self {
+        Self {
+            app: Some(app),
+            paths,
+            host: NonNull::new(host as *mut _),
+            services,
+        }
     }
 
-    /// Test-only constructor — builds a context with no Tauri handle.
-    /// Real plugins must not be initialised through this in production.
+    /// Test-only constructor — builds a context with no Tauri handle,
+    /// no host, and no registry. Real plugins must not be initialised
+    /// through this in production.
     #[cfg(test)]
     pub fn for_tests(paths: &'a dyn IPlatformPaths) -> Self {
-        Self { app: None, paths }
+        Self {
+            app: None,
+            paths,
+            host: None,
+            services: None,
+        }
+    }
+
+    /// Borrow the plugin host immutably. `None` in test contexts that
+    /// didn't wire a host. The returned reference is tied to
+    /// `&self` (not `'a`) — that's fine because `PluginHost::init_all`
+    /// only borrows the host mutably while the iteration runs, not
+    /// for the whole lifetime of the context.
+    ///
+    /// # Safety contract
+    ///
+    /// Caller must guarantee that the host outlives the borrow. In
+    /// production this is upheld because:
+    /// 1. The host is built in `lib.rs::setup` and stored via
+    ///    `app.manage(Mutex::new(host))` for the lifetime of the app.
+    /// 2. `PluginContext` is only constructed inside `setup` and
+    ///    dropped before `setup` returns.
+    pub fn host(&self) -> Option<&crate::plugins::host::PluginHost> {
+        self.host.map(|p| unsafe { p.as_ref() })
     }
 }
 
@@ -117,9 +196,51 @@ pub trait IPlugin: Send + Sync {
         Vec::new()
     }
 
+    /// **Phase 43 (D-CC-A / Q43-1..3)** — system tray menu entries this
+    /// plugin contributes. Empty by default (the 13 feature stubs in
+    /// M1.x don't touch the tray). The `core` plugin owns the standard
+    /// "show / quit" entries.
+    ///
+    /// `MenuRegistry::build_tray` walks the plugin host in registration
+    /// order and concatenates every plugin's `tray_items()` into one
+    /// `Menu`. Action ids should follow the `"<plugin_id>:<action>"`
+    /// convention so `unregister_actions` can clean them up by prefix.
+    fn tray_items(&self) -> Vec<PluginTrayItem> {
+        Vec::new()
+    }
+
+    /// **Phase 43 (D-CC-A / Q43-1..3)** — macOS application menu
+    /// entries this plugin contributes. Empty on Windows (the `core`
+    /// plugin owns the standard App / Edit / View / Window submenus).
+    /// On macOS, `MenuRegistry::build_app_menu` groups items by the
+    /// `submenu` field.
+    fn app_menu_items(&self) -> Vec<PluginAppMenuItem> {
+        Vec::new()
+    }
+
+    /// **Phase 45 (G7)** — plugin ids this plugin depends on.
+    /// `PluginHost::init_all_topological` walks `depends_on` for every
+    /// plugin, topologically sorts the resulting DAG, and runs `init`
+    /// in dependency-first order. A plugin whose `depends_on()` is
+    /// missing a required service would otherwise panic at runtime
+    /// when its `init` looks up the service via [`ServiceRegistry`].
+    ///
+    /// Defaults to empty vec (no deps). **Service plugins (Phase 45)**
+    /// must override this to declare their inter-service wiring; for
+    /// example, `provider-service` depends on
+    /// `["backup-service", "history-service"]` so it can call
+    /// `.with_backup_service(...)` + `.with_history(...)` during init.
+    fn depends_on(&self) -> Vec<&'static str> {
+        Vec::new()
+    }
+
     /// Called once at app startup. Use to register Tauri commands,
     /// IPC handlers, etc. Default = no-op.
-    fn init(&mut self, _ctx: &PluginContext) -> Result<(), PluginError> {
+    ///
+    /// **Phase 43 (D-CC-A)** — `ctx` is `&mut PluginContext` so plugins
+    /// can register services into [`ServiceRegistry`]. Plugins that
+    /// don't need to mutate the context can ignore it.
+    fn init(&mut self, _ctx: &mut PluginContext) -> Result<(), PluginError> {
         Ok(())
     }
 
@@ -146,6 +267,19 @@ pub enum PluginError {
     /// `unregister` was called with an id that isn't in the registry.
     #[error("plugin not found: {0}")]
     NotFound(String),
+
+    /// **Phase 45** — dependency cycle detected during
+    /// `init_all_topological`. `path` is the offending edge chain
+    /// (e.g. `["A", "B", "A"]`) — surfaces from
+    /// [`TopologicalError::Cycle`].
+    #[error("plugin dependency cycle: {}", path.join(" -> "))]
+    CycleDetected { path: Vec<String> },
+
+    /// **Phase 45** — a plugin's `depends_on()` references an id
+    /// that was never registered. Surfaces from
+    /// [`TopologicalError::MissingDependency`].
+    #[error("plugin '{plugin}' depends on '{missing}' which is not registered")]
+    MissingDependency { plugin: String, missing: String },
 
     /// Platform-layer error (file I/O, registry, etc.) bubbled up through
     /// a plugin's `init` / `shutdown`.
