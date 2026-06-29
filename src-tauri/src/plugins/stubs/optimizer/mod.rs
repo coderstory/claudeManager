@@ -1,4 +1,10 @@
-//! F18 — 配置优化 (stub).
+//! F18 — 配置优化 (plugin).
+//!
+//! See [`commands`] for the dispatch fns and `inventory::submit!`
+//! registrations. The plugin's own lifecycle (init / shutdown / routes)
+//! is owned by this module.
+
+pub mod commands;
 
 use super::super::traits::*;
 
@@ -10,6 +16,10 @@ impl IPlugin for OptimizerPlugin {
     }
     fn name(&self) -> &'static str {
         "配置优化"
+    }
+    /// Phase 45 — `optimizer-service` (13 rules + scan/apply).
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["optimizer-service"]
     }
     fn routes(&self) -> Vec<PluginRoute> {
         vec![PluginRoute {
