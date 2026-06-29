@@ -150,10 +150,13 @@ say_ok "  ✓ version: $OLD_VER → $NEW_VER"
 echo ""
 
 # === Step 2: Build (delegated to build-mac.sh) ===
-echo "[2/7] Build: scripts/build-mac.sh --$BUILD_MODE"
+# v3.4.1 fix — always pass `--no-dmg` to skip the dmg step (we cp
+# .app to /Applications directly, no distribution .dmg needed for
+# dev iteration). Saves ~30s on every build.
+echo "[2/7] Build: scripts/build-mac.sh --$BUILD_MODE --no-dmg"
 BUILD_START=$(date +%s)
 
-if ! "$SCRIPT_DIR/build-mac.sh" "--$BUILD_MODE"; then
+if ! "$SCRIPT_DIR/build-mac.sh" $( [[ "$BUILD_MODE" == "debug" ]] && echo "--debug" || echo "" ) --no-dmg; then
   say_err "FAIL: build-mac.sh exited non-zero. Tail: src-tauri/target/$BUILD_MODE/build.log"
   exit 1
 fi
