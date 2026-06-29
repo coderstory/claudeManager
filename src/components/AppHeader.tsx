@@ -159,7 +159,7 @@ export function AppHeader({
         )}
         <span
           data-testid="app-header-title"
-          title="Claude 配置管理器"
+          title={pageTitle(currentView)}
           style={{
             fontSize: 13,
             fontWeight: 600,
@@ -169,7 +169,7 @@ export function AppHeader({
             textOverflow: 'ellipsis',
           }}
         >
-          Claude 配置管理器
+          {pageTitle(currentView)}
         </span>
       </div>
       </div>
