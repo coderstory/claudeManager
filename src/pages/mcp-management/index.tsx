@@ -108,9 +108,19 @@ export default function McpManagementPage(): ReactElement {
 
   // Sync scope from currentProject after render (not during render
   // to avoid React "setState while rendering a different component" warning).
+  //
+  // B8 fix: depend on the stable project id, not the `currentProject`
+  // object. `currentProject` is derived via `projects.find(...)` so its
+  // reference can change across renders (e.g. when `useProjects` reloads
+  // the list after a switch). Depending on the object would re-fire this
+  // effect on every render, which calls `syncScopeFromProject` → mutates
+  // the scope store → `useScope` notifies → component re-renders → loop
+  // (CPU 100%, "加载中" never resolves). The id is the only stable signal
+  // for "which project is active".
   useEffect(() => {
     syncScopeFromProject(currentProject);
-  }, [currentProject]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id]);
 
   // Initial load.
   useEffect(() => {
