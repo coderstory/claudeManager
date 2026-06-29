@@ -1,13 +1,26 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    Emitter, Manager, RunEvent,
-};
+use tauri::{Emitter, Manager, RunEvent};
 use std::path::PathBuf;
 use std::sync::Mutex;
+
+/// Build marker — embedded in binary .rodata as raw text. Grepable via
+/// `strings <binary> | grep ccm-build-mtime-`. Declared as `static` (not
+/// `const`) because `#[used]` cannot be applied to consts; static gives us
+/// the same .rodata embedding + the `#[used]` attribute prevents dead-code
+/// elimination. Re-computed at every build from `dist/*` max mtime (see
+/// `src-tauri/build.rs`); if dist changes, this static changes → cargo
+/// re-runs build.rs → tauri-build re-inlines fresh dist. Companion to
+/// scripts/build-mac.sh step [2.5/3] which verifies the marker in the
+/// built binary matches the current dist hash. Without this safeguard,
+/// Tauri 2.x silently serves stale dist from
+/// `target/$MODE/build/claude-config-manager-*/out/tauri-codegen-assets/`
+/// even after `cargo tauri build` succeeds. See:
+///   - .planning/milestones/v3.4-phases/bug-appheader-cache-stale.md
+///   - docs/superpowers/specs/2026-06-29-fix-appheader-cache-stale-design.md
+#[used]
+pub static BUILD_MARKER: &str = concat!("ccm-build-mtime-", env!("DIST_HASH"));
 
 pub mod app_state;
 pub mod commands;
@@ -18,7 +31,7 @@ pub mod plugins;
 pub mod services;
 
 use crate::app_state::AppState;
-use crate::plugins::{init_all, PluginContext, PluginHost};
+use crate::plugins::{init_all_topological, PluginHost};
 
 /// F20 — 从启动 argv 中提取 `.sql` 文件绝对路径。
 ///
@@ -96,138 +109,45 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_log::Builder::default()
+            // Forward webview console.log/warn/error → Rust log facade
+            // so the same line ends up in stdout AND in the log file
+            // (rotates per session, no history kept).
+            .target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Webview,
+            ))
+            .build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![
-            commands::autostart::get_autostart_status,
-            commands::autostart::set_autostart_enabled,
-            commands::providers::list_providers,
-            commands::providers::list_providers_with_warnings,
-            commands::providers::switch_provider,
-            commands::providers::parse_sql_preview,
-            commands::providers::import_providers_from_sql,
-            commands::providers::parse_deeplink_url,
-            commands::providers::import_single_provider,
-            // M2.16 — F14 导出单 provider（Rust 侧弹保存框 + 原子写盘）
-            commands::providers::export_provider,
-            // 2026-06-24 — Provider 列表"从当前配置生成"按钮 (b6aa402)
-            commands::providers::read_current_claude_config,
-            commands::providers::generate_from_current_config,
-            // 2026-06-25 — Provider 列表 CRUD IPC (清单 22: add/update/delete/get_details)
-            commands::providers::get_provider_details,
-            commands::providers::add_provider,
-            commands::providers::update_provider,
-            commands::providers::delete_provider,
-            commands::fs::read_file,
-            commands::fs::write_file_atomic,
-            // F20 — 读取任意路径 .sql 文件(文件关联双击导入用)
-            commands::fs::read_sql_file,
-            // M2.16 — F20 冷启动 .sql 路径取走(setup 阶段 webview 未挂,
-            // emit 会丢,改用 state 缓存 + 前端 mount 后主动拉取)。
-            commands::fs::take_pending_sql_file,
-            // M3.11 (A4#12) — F5 JSON 编辑器文件目录树(白名单扫描
-            // ~/.claude/ + active project 的 .claude/)。
-            commands::fs::list_editable_jsons,
-            commands::mcp::list_mcp_servers,
-            commands::mcp::list_mcp_servers_with_warnings,
-            commands::mcp::toggle_mcp_server,
-            commands::mcp::add_mcp_server,
-            commands::mcp::update_mcp_server,
-            commands::mcp::remove_mcp_server,
-            commands::mcp::parse_mcp_deeplink,
-            commands::backup::list_backups,
-            commands::backup::read_backup_content,
-            commands::backup::diff_backups,
-            commands::backup::restore_backup,
-            commands::backup::backup_now,
-            commands::backup::backup_incremental,
-            // M4.6.13 — delete single backup (trash + rm, allow-list checked)
-            commands::backup::delete_backup,
-            commands::usage::get_current_usage,
-            commands::usage::refresh_usage,
-            // M3.8 — usage history (per-day per-model) for chart
-            commands::usage::get_usage_history,
-            commands::app::get_app_metadata,
-            // M3.7 — 清单 18: 关于页 command(about.rs 复用 app::AppMetadata)。
-            commands::about::get_app_info,
-            commands::optimizer::scan_optimizations,
-            commands::optimizer::apply_optimizations,
-            // M3.3 (Phase 4) — per-row Fix button backend (SC #2/#3)
-            commands::optimizer::apply_rule_fix,
-            // M2.16 — F23 优化建议导出 markdown（Rust 侧生成 + 弹保存框 + 原子写盘）
-            commands::optimizer::export_optimization_report,
-            // M2.13 — F16 资源浏览
-            commands::resource::list_resources,
-            commands::resource::reveal_in_file_manager,
-            // M2.16 — F22 资源详情(manifest 描述 + 文件列表)
-            commands::resource::get_resource_detail,
-            // M2.16 — F17 在线安装（资源市场 + git URL → clone → 扫描 → 安装）
-            commands::marketplace::list_marketplace_repos,
-            commands::marketplace::clone_and_scan,
-            commands::marketplace::install_from_marketplace,
-            // M3.4 — 三类 install 语义统一（清单 11/12/13/14）
-            commands::marketplace::install_builtin_plugin,
-            commands::marketplace::install_third_party_repo,
-            commands::marketplace::install_npx_package,
-            // M3.10 (清单 23) — 双模式 (用户/项目) 项目管理 commands
-            commands::project::list_projects,
-            commands::project::add_project,
-            commands::project::remove_project,
-            commands::project::switch_project,
-            commands::project::current_project,
-            // M3.13.4 — 新建项目 picker + 路径合法性校验（后端全权弹
-            // dialog + 校验,前端不直接调 tauri-plugin-dialog 的 JS wrapper,
-            // 见 commands::project 的注释）
-            commands::project::pick_project_root_dir,
-            commands::project::validate_project_path,
-            // M4.3 — updater commands (pubkey + endpoint config + check stub).
-            commands::updater::get_updater_pubkey,
-            commands::updater::get_updater_endpoints,
-            commands::updater::check_update,
-            // M4.6 / Phase 21 — history page commands (Plan B).
-            commands::history::get_usage_history_rows,
-            commands::history::get_daily_stats_history,
-            commands::history::get_backup_history,
-            commands::history::get_history_stats,
-            commands::history::export_history,
-            commands::history::purge_history,
-        ])
+        // Phase 42 — IPC dispatch now flows through the plugin system's
+        // inventory::submit! + DispatchTable. The 80 `#[tauri::command]`
+        // entries in `commands/*.rs` are still compiled (stubs call them
+        // and they remain for tests), but the live frontend invoke
+        // route goes through each plugin's `dispatch_*` shim registered
+        // by `inventory::submit!(CommandSpec { ... })`.
+        .invoke_handler(
+            plugins::dispatch::make_invoke_handler(
+                plugins::dispatch::DispatchTable::from_inventory(),
+            ),
+        )
         .setup(|app| {
             // Initialise the platform abstraction layer (picks Windows or
             // macOS impls based on target_os). Must run before any
             // service / plugin that reads `IPlatformPaths` / autostart / etc.
             platform::init_for_runtime();
 
-            // Build shared app state (resolved paths + services) and
-            // register it with Tauri's state manager. All commands
-            // pull from this — see commands::providers.
+            // M2.17 — wire the plugin stubs into the running app.
             //
-            // M2.2.3 fix: do NOT wrap `state` in `Arc::new(...)` —
-            // the 4 F1/F2/F3 commands extract `State<'_, AppState>`,
-            // and Tauri indexes managed state by `std::any::TypeId`.
-            // Wrapping in `Arc<AppState>` would store TypeId
-            // `Arc<AppState>` but the commands look up TypeId
-            // `AppState`, so every IPC call would fail with
-            // "state not managed for field '0' on command ...".
-            // The bug shipped in M2.1 + M2.2; this commit fixes it.
-            let state = AppState::build();
-            app.manage(state);
-
-            // M2.17 — wire the 11 plugin stubs into the running app.
-            //
-            // M1.3 created `plugins::init_all` (registers the 11 stubs and
-            // runs their `init`) but never wired it from `lib.rs::run`. As
-            // a result the PluginHost existed only on paper: it was never
-            // constructed at runtime, the `init` hooks never fired, and
-            // `shutdown_all` was never reachable. M2.x business logic
-            // (F1~F24) lives in `services/` + `commands/`, not in plugin
-            // `init` hooks, so this is purely the "let the architecture
-            // match the spec" step — no business behaviour changes.
+            // Phase 45 — service plugins (history / backup / provider
+            // / usage / mcp / optimizer / resource / marketplace /
+            // project) participate in topological init via
+            // `depends_on()`. The 9 service plugins run first so the
+            // `Arc<ServiceRegistry>` is fully populated before any
+            // business plugin's `init` (which may pull a service).
             //
             // Why `Mutex<PluginHost>` (vs. plain `PluginHost`):
             // - Tauri's `State<T>` derefs to `&T`; we cannot `&mut` a
@@ -243,10 +163,31 @@ pub fn run() {
             // `platform::runtime::paths()` returns an owned `Box<dyn
             // IPlatformPaths>`; bind it to a let so the borrow inside
             // `PluginContext::new` outlives the call.
+            //
+            // Phase 45 startup order (D-45-DECISIONS §6, 45-PLAN.md
+            // §5.5):
+            //
+            // 1. `AppState::build()` constructs an empty
+            //    `Arc<ServiceRegistry>` (refcount=1).
+            // 2. Register 9 service plugins + 13 business plugins on
+            //    the host (no init yet — just id bookkeeping).
+            // 3. Build the `PluginContext` with a `&mut ServiceRegistry`
+            //    tied to `state.service_registry`. Since refcount=1,
+            //    `&mut` is uncontested.
+            // 4. `init_all_topological` walks the dependency DAG,
+            //    resolves init order, and runs each plugin's `init`.
+            //    Service plugins `register_arc` themselves; business
+            //    plugins may `get_service!(ctx.services, SvcType)` if
+            //    they need a service at init time (none today).
+            // 5. AFTER init completes, `app.manage(state)` bumps
+            //    refcount to 2 (Tauri also holds). From this point
+            //    commands can pull `State<'_, AppState>` and look
+            //    services up via `crate::get_service!`.
             let paths_impl = platform::runtime::paths();
-            let plugin_ctx = PluginContext::new(app.app_handle(), &*paths_impl);
-            let host = init_all(&plugin_ctx)
+            let mut state = AppState::build();
+            let host = init_all_topological(app.app_handle(), &*paths_impl, &mut state)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            app.manage(state);
             app.manage(Mutex::new(host));
 
             // M2.3 — F4 deeplink plugin 事件桥接
@@ -305,46 +246,16 @@ pub fn run() {
                 }
             }
 
-            let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
-
-            let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Claude 配置管理器")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .build(app)?;
-
-            // M3.2 polish — left-double-click on tray icon restores
-            // the main window. We hook the icon's click handler via
-            // a TrayIconEvent listener (Tauri v2 doesn't expose
-            // `on_double_click` as a builder method; instead we
-            // listen for `DoubleClick` events on the tray).
-            let tray_handle = app.tray_by_id("main-tray");
-            if let Some(t) = tray_handle {
-                t.on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::DoubleClick { .. } = event {
-                        if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                            let _ = window.unminimize();
-                        }
-                    }
-                });
-            }
+            // M8 (Phase 43) — system tray + macOS AppMenu 全由 `core` plugin
+            // 的 init() 接管 (调 MenuRegistry::build_tray /
+            // build_app_menu / install_tray)。core 在 plugins::init_all
+            // 里第一行注册并第一个跑 init,本 setup 块不再硬编码
+            // MenuItem::with_id / SubmenuBuilder / on_menu_event。
+            // TrayIcon 的 DoubleClick 事件也由 core plugin 处理。
+            //
+            // 旧手写块 (lib.rs:225-303, 含 tray + macOS AppMenu) 已
+            // 在本 phase 删除;详见 .planning/milestones/v3.4-phases/
+            // 43-PLAN.md §3 Task 6。
 
             // Minimize-to-tray: intercept close
             if let Some(window) = app.get_webview_window("main") {
@@ -366,24 +277,8 @@ pub fn run() {
                 //  路径移除)。)
             }
 
-            // M2.16 — macOS 标准应用菜单（App / Edit / View / Window）。
-            //
-            // macOS 应用规范要求顶部菜单栏有标准应用菜单（About / Hide /
-            // Quit Cmd+Q 等），否则用户体验残缺（P2 审查项）。通过
-            // `IPlatformAppMenu` 抽象走 Tauri v2 menu API——macOS 上自动
-            // 渲染为 NSMenu，Windows 上 `runtime::app_menu` 返回
-            // NotSupported 不走此分支（cfg 保证）。
-            //
-            // 菜单项全用 PredefinedMenuItem，macOS 自动绑定标准快捷键与
-            // 系统行为（Cmd+Q 退出 / Cmd+H 隐藏 / Cmd+M 最小化 / WKWebView
-            // 编辑操作），无需 on_menu_event handler。
-            #[cfg(target_os = "macos")]
-            {
-                let menu = platform::runtime::app_menu(app.app_handle());
-                if let Err(e) = menu.build_app_menu() {
-                    eprintln!("[M2.16] install mac app menu failed: {e}");
-                }
-            }
+            // macOS AppMenu 安装已迁移到 core plugin (Phase 43)。
+            // 见 plugins::stubs::core + plugins::menu_registry::build_app_menu。
 
             Ok(())
         })
