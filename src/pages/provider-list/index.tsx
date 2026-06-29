@@ -643,6 +643,7 @@ function GeneratePreviewModal({
   if (generateState.kind !== 'preview') return null;
   const { result } = generateState;
   const { provider, is_new } = result;
+  if (!provider) return null;
 
   return (
     <div
