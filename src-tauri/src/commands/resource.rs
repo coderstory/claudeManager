@@ -20,6 +20,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::domain::{ResourceDetail, ResourceItem, ResourceKind};
+use crate::get_service;
 use crate::services::resource_service::RevealFailure;
 
 /// Tauri-friendly error type.
@@ -55,8 +56,7 @@ pub async fn list_resources(
     // M3.12 (A1#11) — read live active root via the platform shim
     // (state.paths is a one-shot startup snapshot).
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .resource_service
+    get_service!(state, crate::services::resource_service::ResourceService)
         .list_with_active_root(parsed, active_root.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -82,8 +82,7 @@ pub async fn get_resource_detail(
             "未知资源类型: '{kind}'(允许: plugin, skill, command, lsp, mcp)"
         )
     })?;
-    state
-        .resource_service
+    get_service!(state, crate::services::resource_service::ResourceService)
         .detail(&PathBuf::from(&path), parsed)
         .map_err(|e| e.to_string())
 }
@@ -112,8 +111,7 @@ pub async fn reveal_in_file_manager(
             path: String::new(),
         });
     }
-    state
-        .resource_service
+    get_service!(state, crate::services::resource_service::ResourceService)
         .reveal(&PathBuf::from(&path))
         .map_err(|e| match e {
             crate::services::resource_service::ResourceServiceError::Reveal {

@@ -32,3 +32,11 @@ pub mod about;
 pub mod updater;
 // M4.6 / Phase 21 — history page commands (query / stats / export / purge).
 pub mod history;
+
+// Phase 45 — `get_service!` / `try_get_service!` macros for looking
+// up services from `AppState::service_registry` by type. The macros
+// are `#[macro_export]`-ed from `commands/macros.rs`, so they're
+// available crate-wide via `crate::get_service!` / `crate::try_get_service!`.
+// We re-export here so command modules can call them unqualified.
+pub mod macros;
+pub use crate::{get_service, try_get_service};

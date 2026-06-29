@@ -39,6 +39,7 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::domain::McpServer;
+use crate::get_service;
 use crate::infrastructure::deeplink_parser::{parse_deeplink_url as parse_dl, ParsedDeeplink};
 
 /// `Result<T, String>` — Tauri IPC's preferred error type. The `String`
@@ -56,7 +57,9 @@ type CmdResult<T> = Result<T, String>;
 #[tauri::command]
 pub async fn list_mcp_servers(state: State<'_, AppState>) -> CmdResult<Vec<McpServer>> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    Ok(state.mcp_service.with_root(active_root.as_deref()).list())
+    Ok(get_service!(state, crate::services::mcp_service::McpService)
+        .with_root(active_root.as_deref())
+        .list())
 }
 
 /// F6+ — same as `list_mcp_servers` but also returns a parse
@@ -66,8 +69,7 @@ pub async fn list_mcp_servers_with_warnings(
     state: State<'_, AppState>,
 ) -> CmdResult<ListMcpServersResult> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    let (servers, warning) = state
-        .mcp_service
+    let (servers, warning) = get_service!(state, crate::services::mcp_service::McpService)
         .with_root(active_root.as_deref())
         .list_with_warnings();
     Ok(ListMcpServersResult { servers, warning })
@@ -88,8 +90,7 @@ pub async fn toggle_mcp_server(
     enabled: bool,
 ) -> CmdResult<McpServer> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .mcp_service
+    get_service!(state, crate::services::mcp_service::McpService)
         .with_root(active_root.as_deref())
         .toggle(&id, enabled)
         .map_err(|e| e.to_string())
@@ -100,8 +101,7 @@ pub async fn toggle_mcp_server(
 #[tauri::command]
 pub async fn add_mcp_server(state: State<'_, AppState>, server: McpServer) -> CmdResult<()> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .mcp_service
+    get_service!(state, crate::services::mcp_service::McpService)
         .with_root(active_root.as_deref())
         .add(server)
         .map_err(|e| e.to_string())
@@ -116,8 +116,7 @@ pub async fn update_mcp_server(
     server: McpServer,
 ) -> CmdResult<McpServer> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .mcp_service
+    get_service!(state, crate::services::mcp_service::McpService)
         .with_root(active_root.as_deref())
         .update(&id, server)
         .map_err(|e| e.to_string())
@@ -127,8 +126,7 @@ pub async fn update_mcp_server(
 #[tauri::command]
 pub async fn remove_mcp_server(state: State<'_, AppState>, id: String) -> CmdResult<()> {
     let active_root = crate::platform::runtime::paths().active_root_dir();
-    state
-        .mcp_service
+    get_service!(state, crate::services::mcp_service::McpService)
         .with_root(active_root.as_deref())
         .remove(&id)
         .map_err(|e| e.to_string())
