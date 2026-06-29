@@ -376,6 +376,55 @@ RUSTC_WRAPPER="" cargo build --release
 
 > 已迁移到 [CLAUDE-MACOS.md](./CLAUDE-MACOS.md).
 
+## 16. Bug Fix Protocol (2026-06-29 写入)
+
+> **任何问题修复都必须按下列顺序执行,严禁跳步。**
+
+### 16.1 五步流程 (顺序不可颠倒)
+
+1. **了解问题详情** — 用户报的 bug 描述完整读,补充必要上下文(截图/操作步骤/期望行为/实际行为/触发条件/出现频率/影响范围)。
+2. **明确问题原因** — 找到 root cause(file:line 证据),区分"症状"和"原因"。**禁止把症状当原因**(例:白屏 = 症状,不是原因)。
+3. **明确问题边界** — 这个 bug 影响哪些模块/文件/路径?不影响哪些?是否有 platform / OS / 数据依赖?是否会触及 CLAUDE.md §2.4"超 2 个文件改动"白名单?
+4. **分析技术方案** — 列出 ≥2 个可行方案 + 各自优缺点 + 推荐方案 + 风险评估。**不得直接改代码修复**。
+5. **修复后实际验证** — 跑测试/启动 app/实际点击按钮,看真实行为符合预期。**不得推断臆想修复结果**。
+
+### 16.2 验证必须用证据
+
+**不算验证**(常见误区):
+- ❌ "build 通过" / "smoke test PASS" / "启动没崩" / "subagent 报告 verified"
+- ❌ "我猜修了" / "应该是好了" / "逻辑上看没问题"
+- ❌ 加 null guard / try-catch 兜底(这是 defense-in-depth,不等于修了 root cause)
+- ❌ 改完没复现 = 改对了(没复现可能是触发条件没满足,不是修了)
+
+**才算验证**(硬证据):
+- ✅ 可测试 bug:写 vitest / Playwright 测试,改前 FAIL → 改后 PASS,测试留 codebase 做回归
+- ✅ UI bug:实际点击按钮,截图 before/after,断言 UI 行为符合预期
+- ✅ 不可测试 bug(视觉/平台/时序/主观):录屏 + DevTools log + 用户亲眼确认
+- ✅ 跨进程 bug:真实 OS 上手动复现,留操作步骤 + 输出
+
+### 16.3 反事故案例 (X1 commit b16b979)
+
+**错误示范**:
+- 用户报"从当前配置生成 按钮无反应"
+- subagent 加 `if (!provider) return null;` 防御性 guard
+- subagent 自己报告"defense-in-depth,actual bug-trigger path doesn't fire"
+- 主 session 没质疑就 trust → commit → 用户还是看到"无反应"
+
+**正确做法**:
+1. 了解:用户报按钮无反应,补充操作步骤(从哪个页面/前置状态/期望行为)
+2. 真因:用 vi.spyOn(invoke) + console.log 链定位是 onClick 没绑 / invoke 没被调 / invoke 错了 / setState 没触发 / modal 没渲染 中的哪一步
+3. 边界:这个 bug 是仅 provider-list 页有,还是影响所有 modal?是否触及 IPC 协议?
+4. 方案:列 ≥2 个修法,选 root cause 真因那个,不是"加 guard 让 UI 不崩"那个
+5. 验证:写 vitest 测试改前 FAIL → 修 → 改后 PASS,跑 + 留 codebase
+
+### 16.4 与既有纪律的关系
+
+- §2.2 TDD 强制:§16 是其升级版,聚焦 bug fix 场景
+- §2.4 谨慎修改文件:§16 第 3 步"明确边界"是其前置
+- §5.2 TDD 流程:§16 第 5 步"实际验证"是其强化版(不只测试 PASS,还要看到真实行为)
+- §13 build regression:§16 区分了"process OK"(smoke test)和"UI 行为对"(实际验证)
+- §6.4/6.5 显示文案改动:§16 第 3 步"边界"覆盖此场景
+
 ---
 
 *本文件由 Claude Code 在 M1 启动时自动写入。修改需要明确理由并记录在 commit message。*
