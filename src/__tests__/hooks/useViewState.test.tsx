@@ -12,6 +12,9 @@
  *     relaunching the app reopens where the user was.
  *   - Treats an unknown / corrupt localStorage value as "fall back to
  *     home" rather than crashing the app.
+ *   - Phase 46: stale viewId (e.g. 'mcp-management' from v3.2 user)
+ *     链式迁移到 SidebarTile.migrateFrom 派生的新 viewId + 暴露
+ *     migrationSearch 给消费者 (ResourceBrowser 双源优先级用)。
  *
  * Why this hook exists at all:
  *   - Localised state + 1 helper (`setView`) keeps App.tsx declarative.
@@ -22,21 +25,25 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, renderHook, screen } from '@testing-library/react';
+import type { ReactNode, ReactElement } from 'react';
 import {
   useViewState,
   ViewStateProvider,
   ALL_VIEWS,
   STORAGE_KEY,
   HOME_VIEW,
+  VIEW_ID_MIGRATIONS,
+  migrateViewId,
   type ViewId,
 } from '../../hooks/useViewState.tsx';
-import type { ReactNode, ReactElement } from 'react';
 
 beforeEach(() => {
   // jsdom's localStorage persists across tests in the same file.
   // Wipe between cases so the "no persisted value" branch is real,
   // not a fluke from a leftover key.
   localStorage.clear();
+  // Reset URL (Phase 46 useLayoutEffect may have appended ?tab=mcp etc.)
+  window.history.replaceState({}, '', '/');
 });
 
 /**
@@ -51,19 +58,13 @@ function wrap({ children }: { children: ReactNode }): ReactElement {
 }
 
 describe('useViewState', () => {
-  it('exports 10 plugin views plus "home" as the synthetic landing view', () => {
-    // M1.9 spec: plugin placeholders are reachable via the sidebar,
-    // and 'home' is the welcome tile the user lands on after the first
-    // launch (before any localStorage value exists).
-    // M3.7: +1 utility view 'about' (清单 18).
-    // M4.6 / Phase 21-C: +1 view 'history' (F21).
-    // F2 redirect shim removed (action moved to F1 [激活] button).
-    // F4 deeplink-import removed → 10 plugins.
-    // F8 removed in M5 #18 → 9 plugins.
-    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-    //                ALL_VIEWS 移除该 view,12 → 11。
+  it('exports 8 plugin views plus 3 core views (home, history, about) — Phase 46 D-44-A', () => {
+    // Phase 46 D-44-A: mcp-management stub 删,ALL_PLUGINS = 8 plugins
+    // + 3 core = 11 项。Phase 44 派生收敛后 ALL_VIEWS = ALL_VIEW_IDS
+    // re-exported from src/plugins/registry.ts。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
     expect(ALL_VIEWS.length).toBe(11);
+    expect(ALL_VIEWS).not.toContain('mcp-management'); // D-44-A 已删
   });
 
   it('defaults to "home" when localStorage is empty', () => {
@@ -85,13 +86,15 @@ describe('useViewState', () => {
     expect(result.current.view).toBe('home');
   });
 
-  /// Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 'mcp-management'
-  /// (D-10 删 view 之前) → 回退到 'home'。App.tsx 之后会接住这个
-  /// 分支用 window.location.replace 重定向到 /resource-browser?tab=mcp。
-  it('Phase 27 Fix 6: stale "mcp-management" localStorage falls back to "home"', () => {
+  /// Phase 46 — 老用户 localStorage 还存 'mcp-management' (D-44-A 删) →
+  /// SidebarTile.migrateFrom 反向索引 (resource-browser.tsx:31-34) →
+  /// fallback 到 'resource-browser' + 暴露 migrationSearch = { tab: 'mcp' }。
+  it('Phase 46: stale "mcp-management" → resource-browser via VIEW_ID_MIGRATIONS', () => {
     localStorage.setItem(STORAGE_KEY, 'mcp-management');
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
-    expect(result.current.view).toBe('home');
+    expect(result.current.view).toBe('resource-browser');
+    // mount-time useEffect 同步覆盖 stale 值
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('resource-browser');
   });
 
   it('setView updates the current view and writes to localStorage', () => {
@@ -119,7 +122,7 @@ describe('useViewState', () => {
 
   it('exposes ALL_VIEWS so the sidebar can render the nav list', () => {
     // The sidebar imports this directly to avoid duplicating the
-    // 12-element list. This test pins the contract.
+    // 11-element list. This test pins the contract.
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
     expect(result.current.allViews).toBe(ALL_VIEWS);
   });
@@ -199,13 +202,11 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (post-Fix-6)', () => {
+  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (Phase 46 D-44-A)', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
-    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-    // ALL_VIEWS 不再列它。registry 仍 9 plugin(mcp-management entry
-    // 仍存在,只是不再作为独立 view 暴露 — 提供 McpManagementPanel
-    // 共享组件给 mcp tab 用)。
+    // Phase 46 D-44-A: 删 mcp-management stub → 8 plugin views in
+    // ALL_VIEW_IDS = ALL_VIEWS。
     const registryIds = [
       'provider-list',
       'import-sql',
@@ -219,9 +220,7 @@ describe('useViewState', () => {
     for (const id of registryIds) {
       expect(ALL_VIEWS, `ALL_VIEWS missing plugin id ${id}`).toContain(id);
     }
-    expect(ALL_VIEWS, 'mcp-management should NOT be a ViewId after Fix 6').not.toContain(
-      'mcp-management',
-    );
+    expect(ALL_VIEWS).not.toContain('mcp-management');
   });
 
   it('ViewId type stays exhaustive against ALL_VIEWS at compile time', () => {
@@ -230,5 +229,122 @@ describe('useViewState', () => {
     // type-asserting — runtime value is irrelevant.
     const exhaustive: ViewId = 'home';
     void exhaustive;
+  });
+});
+
+/* ──────────── Phase 46 — VIEW_ID_MIGRATIONS + 链式迁移 (5 单测) ──────────── */
+
+describe('Phase 46 — VIEW_ID_MIGRATIONS + chain migration', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('stale "mcp-management" → resource-browser + migrationSearch.tab=mcp (Q46-2 first-hop appendQuery)', () => {
+    // 验证 resource-browser stub 的 migrateFrom.fromViewId='mcp-management' + appendQuery
+    localStorage.setItem(STORAGE_KEY, 'mcp-management');
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
+    expect(result.current.view).toBe('resource-browser');
+    expect(result.current.migrationSearch).toEqual({ tab: 'mcp' });
+  });
+
+  it('unknown stale viewId → home + dev warn (Q46-1 / Q46-5)', () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem(STORAGE_KEY, 'totally-unknown-plugin');
+    const { result } = renderHook(() => useViewState(), { wrapper: wrap });
+    expect(result.current.view).toBe(HOME_VIEW);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('totally-unknown-plugin'),
+    );
+    expect(result.current.migrationSearch).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it('chain A→B→C resolves to C with first-hop appendQuery (Q46-2)', () => {
+    // chain fixture: 'unused-1'→'provider-list' (appendQuery={x:1})
+    //              'unused-2'→'import-sql' (appendQuery={y:2})
+    // migrateViewId('unused-1') → provider-list (valid ViewId 终止)
+    // appendQuery 取第一跳 'unused-1' 的 {x:1},中间跳 'unused-2' 的 {y:2} 不合并
+    const fixture = new Map<
+      string,
+      { toViewId: ViewId; appendQuery?: Record<string, string> }
+    >([
+      [
+        'unused-1',
+        { toViewId: 'provider-list' as ViewId, appendQuery: { x: '1' } },
+      ],
+      [
+        'unused-2',
+        { toViewId: 'import-sql' as ViewId, appendQuery: { y: '2' } },
+      ],
+    ]);
+    // 注入 fixture 到 VIEW_ID_MIGRATIONS (它是 readonly Map 但底层是普通 Map,
+    // 通过 mutate 实现 test fixture 注入;测试结束 cleanup)
+    const backup = new Map(VIEW_ID_MIGRATIONS);
+    for (const [k, v] of fixture) {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).set(k, v);
+    }
+    try {
+      const result = migrateViewId('unused-1');
+      expect(result.view).toBe('provider-list');
+      expect(result.appendQuery).toEqual({ x: '1' }); // 第一跳 appendQuery
+    } finally {
+      // cleanup: 恢复原始 entries
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId; appendQuery?: Record<string, string> }>).set(k, v);
+      }
+    }
+  });
+
+  it('chain cycle (A→B→A) → home + dev warn (Q46-1 cycle detection)', () => {
+    const fixture = new Map<string, { toViewId: ViewId }>([
+      ['A', { toViewId: 'B' as ViewId }],
+      ['B', { toViewId: 'A' as ViewId }],
+    ]);
+    const backup = new Map(VIEW_ID_MIGRATIONS);
+    for (const [k, v] of fixture) {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+    }
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = migrateViewId('A');
+      expect(result.view).toBe(HOME_VIEW);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('cycle'));
+    } finally {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+      }
+      spy.mockRestore();
+    }
+  });
+
+  it('chain depth 6 (A→B→C→D→E→F) → home + dev warn (Q46-1 depth limit)', () => {
+    // depth limit = 5。start A → A→B (depth 1) → B→C (depth 2) → C→D (depth 3)
+    // → D→E (depth 4) → E→F (depth 5 命中 MAX_MIGRATION_DEPTH 上限) → home
+    const fixture = new Map<string, { toViewId: ViewId }>();
+    const ids = ['A', 'B', 'C', 'D', 'E', 'F'];
+    ids.forEach((id, i) => {
+      if (i < ids.length - 1) {
+        fixture.set(id, { toViewId: ids[i + 1] as ViewId });
+      }
+    });
+    const backup = new Map(VIEW_ID_MIGRATIONS);
+    for (const [k, v] of fixture) {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+    }
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = migrateViewId('A');
+      expect(result.view).toBe(HOME_VIEW);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('depth'));
+    } finally {
+      (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).clear();
+      for (const [k, v] of backup) {
+        (VIEW_ID_MIGRATIONS as Map<string, { toViewId: ViewId }>).set(k, v);
+      }
+      spy.mockRestore();
+    }
   });
 });

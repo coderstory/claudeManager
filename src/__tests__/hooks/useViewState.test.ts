@@ -57,17 +57,15 @@ function wrap({ children }: { children: ReactNode }): ReactElement {
 }
 
 describe('useViewState', () => {
-  it('exports 10 plugin views plus "home" as the synthetic landing view', () => {
-    // M1.9 spec: plugin placeholders are reachable via the sidebar,
-    // and 'home' is the welcome tile the user lands on after the first
-    // launch (before any localStorage value exists).
-    // M3.7: +1 utility view 'about' (清单 18).
-    // M4.6 / Phase 21-C: +1 view 'history' (F21).
-    // F2 redirect shim removed (action moved to F1 [激活] button).
-    // F4 deeplink-import removed in cleanup commit 0ff5b86 → 10 plugins.
-    // F8 removed in M5 #18 → 9 plugins.
-    // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-    //                ALL_VIEWS 移除该 view,总长 11(12 → 11)。
+  it('exports 8 plugin views plus 3 core views (home, history, about) — Phase 46 D-44-A removed mcp-management', () => {
+    // Phase 44 派生收敛:ALL_VIEWS = ALL_VIEW_IDS re-exported from
+    // src/plugins/registry.ts → 3 core + 8 plugin = 11 项。
+    //
+    // Phase 46 D-44-A 删 mcp-management stub (mcp 入口迁到
+    // resource-browser 的 mcp tab via SidebarTile.migrateFrom),所以
+    // ALL_VIEWS 不再含 mcp-management。'mcp-management' 现在是
+    // stale viewId,经 useViewState.readInitialView → migrateViewId →
+    // resource-browser (via resource-browser.sidebarTile.migrateFrom)。
     expect(ALL_VIEWS).toContain(HOME_VIEW);
     expect(ALL_VIEWS.length).toBe(11);
     expect(ALL_VIEWS).not.toContain('mcp-management');
@@ -92,15 +90,18 @@ describe('useViewState', () => {
     expect(result.current.view).toBe('home');
   });
 
-  /// Phase 27 Fix 6 (D-13) — 老用户 localStorage 还存 'mcp-management'
-  /// (D-10 删 view 之前的最后一刻) → 必须回退到 'home'(ALL_VIEWS
-  /// 不再含 'mcp-management',isValidView 校验失败)。App.tsx 之后会
-  /// 接住这个分支用 window.location.replace 重定向到
-  /// /resource-browser?tab=mcp。
-  it('Phase 27 Fix 6: stale "mcp-management" localStorage value falls back to "home"', () => {
+  it('Phase 46: stale "mcp-management" localStorage is migrated to "resource-browser" via SidebarTile.migrateFrom', () => {
+    // Phase 46 (Q46-1) 启用 resource-browser.sidebarTile.migrateFrom =
+    // { fromViewId: 'mcp-management', appendQuery: { tab: 'mcp' } }。
+    // useViewState.readInitialView 读 localStorage 'mcp-management'
+    // → migrateViewId 反向索引 VIEW_ID_MIGRATIONS → 命中 resource-browser。
+    // view 不再是 'mcp-management' (Phase 46 已删 stub),
+    // 而是 'resource-browser' + migrationSearch = { tab: 'mcp' }
+    // (供 ResourceBrowser 双源优先级读)。
     localStorage.setItem(STORAGE_KEY, 'mcp-management');
     const { result } = renderHook(() => useViewState(), { wrapper: wrap });
-    expect(result.current.view).toBe('home');
+    expect(result.current.view).toBe('resource-browser');
+    expect(result.current.migrationSearch).toEqual({ tab: 'mcp' });
   });
 
   it('setView updates the current view and writes to localStorage', () => {
@@ -142,14 +143,12 @@ describe('useViewState', () => {
     }
   });
 
-  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (post-Fix-6)', () => {
+  it('ALL_VIEWS contains exactly the 8 plugin ids from the registry (Phase 46 D-44-A)', () => {
     // Pin the contract: every plugin id in src/plugins/registry.ts
     // must appear in ALL_VIEWS, otherwise its nav tile is missing.
     // Phase 27 Fix 6: 'mcp-management' 不再是独立 view,合并到
-    // 'resource-browser' 的 mcp tab。所以 registry 仍 9 个 plugin,
-    // ALL_VIEWS 只列 8 个(mcp-management 移除)。registry 自身保留
-    // 9 个 plugin entry(plugins/stubs/mcp-management.tsx 还在 —
-    // 共享 component 给 mcp tab 用,D-14 schema 不合并)。
+    // 'resource-browser' 的 mcp tab。
+    // Phase 46 D-44-A: mcp-management stub 删,8 plugin ALL_VIEWS 8 项。
     const registryIds = [
       'provider-list',
       'import-sql',
@@ -163,11 +162,6 @@ describe('useViewState', () => {
     for (const id of registryIds) {
       expect(ALL_VIEWS, `ALL_VIEWS missing plugin id ${id}`).toContain(id);
     }
-    // mcp-management 不在 ALL_VIEWS 但仍在 plugin registry (作为
-    // 提供 McpManagementPanel 共享组件的 entry)。
-    expect(ALL_VIEWS, 'mcp-management should NOT be a ViewId after Fix 6').not.toContain(
-      'mcp-management',
-    );
   });
 
   it('ViewId type stays exhaustive against ALL_VIEWS at compile time', () => {
