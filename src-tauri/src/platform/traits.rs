@@ -346,12 +346,6 @@ pub trait IPlatformNotifier: Send + Sync {
     fn notify(&self, title: &str, body: &str) -> Result<(), PlatformError>;
 }
 
-/// macOS-only: install the application menu in the system menu bar using
-/// `NSMenu`. On non-mac platforms this returns [`PlatformError::NotSupported`].
-pub trait IPlatformAppMenu: Send + Sync {
-    fn build_app_menu(&self) -> Result<(), PlatformError>;
-}
-
 /// Wrapper around the `git` CLI. We delegate to git rather than linking
 /// libgit2 — keeps the binary small and we only need a handful of operations.
 pub trait IGitHost: Send + Sync {
@@ -411,13 +405,6 @@ mod tests {
         pub NotifierShim {}
         impl IPlatformNotifier for NotifierShim {
             fn notify(&self, title: &str, body: &str) -> Result<(), PlatformError>;
-        }
-    }
-
-    mock! {
-        pub AppMenuShim {}
-        impl IPlatformAppMenu for AppMenuShim {
-            fn build_app_menu(&self) -> Result<(), PlatformError>;
         }
     }
 
@@ -597,16 +584,6 @@ mod tests {
             .returning(|_, _| Ok(()));
         let n: Box<dyn IPlatformNotifier> = Box::new(m);
         n.notify("T", "B").unwrap();
-    }
-
-    #[test]
-    fn app_menu_build_dispatch() {
-        let mut m = MockAppMenuShim::new();
-        m.expect_build_app_menu()
-            .times(1)
-            .returning(|| Err(PlatformError::NotSupported));
-        let am: Box<dyn IPlatformAppMenu> = Box::new(m);
-        assert!(matches!(am.build_app_menu(), Err(PlatformError::NotSupported)));
     }
 
     #[test]

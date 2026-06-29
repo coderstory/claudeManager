@@ -29,7 +29,7 @@ pub mod windows;
 pub mod macos;
 
 pub use traits::{
-    AppPaths, IGitHost, IPlatformAppMenu, IPlatformAutostart, IPlatformNotifier,
+    AppPaths, IGitHost, IPlatformAutostart, IPlatformNotifier,
     IPlatformPaths, IPlatformReveal, IPlatformSingleInstance, PlatformError, RevealError,
     SingleInstanceGuard,
 };
@@ -119,23 +119,11 @@ pub mod runtime {
         }
     }
 
-    /// App menu (macOS-only concept; Windows returns NotSupported).
+    /// App menu (macOS-only concept) is built by the `core` plugin
+    /// via `plugins::menu_registry::build_app_menu`. Removed from the
+    /// platform runtime factory in Phase 43 (Task 6) — the OS menu
+    /// surface is plugin-declared, not platform-abstracted.
     ///
-    /// M2.16 — macOS 实现需要 live [`AppHandle`] 来构建 `NSMenu` 并
-    /// `set_menu`（与 [`autostart`] / [`notifier`] 对称）。Windows 分支
-    /// 忽略该参数。
-    pub fn app_menu(app: &AppHandle) -> Box<dyn IPlatformAppMenu> {
-        #[cfg(windows)]
-        {
-            let _ = app;
-            Box::new(windows::WindowsAppMenu)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            Box::new(macos::MacAppMenu::new(app))
-        }
-    }
-
     /// Git operations (CLI shim) for the host OS.
     pub fn git_host() -> Box<dyn IGitHost> {
         #[cfg(windows)]
