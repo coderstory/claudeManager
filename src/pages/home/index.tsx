@@ -22,12 +22,13 @@
  *     `/components` — those don't exist yet (the project's M2.x
  *     pages all inline their markup).
  */
-import type { ReactElement, ChangeEvent } from 'react';
-import { useCallback, useState, useRef } from 'react';
+import type { ReactElement } from 'react';
+import { useCallback, useState } from 'react';
 import { useProjects } from '../../hooks/useProjects';
 import type { ProjectSummary } from '../../types/project';
 import type { ViewId } from '../../hooks/useViewState';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { pickProjectRoot, validateProjectPath } from '../../lib/api/projects';
 
 /** M3.13.4 — pure-frontend path validation result. */
 interface PathValidation {
@@ -73,30 +74,37 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
   // "delete project" action. Stores the full row so the dialog title
   // can show the project name without a second fetch.
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
-  // M3.13.4 — project picker (HTML5 file input) + frontend path validation.
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // M3.13.4 — project picker uses native Tauri dialog (pickProjectRoot)
+  // to get an ABSOLUTE path. The previous webkitRelativePath-based HTML5
+  // picker returned only the basename (e.g. "Documents"), which failed
+  // Rust's `validate_root` (NotAbsolute). See A3 fix below.
   const [pathValidation, setPathValidation] = useState<PathValidation | null>(null);
 
-  const handlePickRoot = (e: ChangeEvent<HTMLInputElement>): void => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const firstFile = files[0] as File & { webkitRelativePath?: string };
-      // webkitRelativePath looks like "projects/foo" — the first segment is the
-      // picked directory name. Frontend-only picker (no Rust side change needed).
-      const dirName = firstFile.webkitRelativePath?.split('/')[0] ?? '';
-      setNewRoot(dirName);
-      setNewName(dirName);
-      handleValidateRoot();
+  const handlePickRoot = async (): Promise<void> => {
+    // Native folder picker — wraps `tauri-plugin-dialog::pick_folder` on
+    // the Rust side (see `commands::project::pick_project_root_dir`).
+    // Returns the absolute path (e.g. `/Users/foo/projects`) or null
+    // if the user cancelled.
+    const picked = await pickProjectRoot();
+    if (!picked) return; // user cancelled — leave form unchanged
+    setNewRoot(picked);
+    // Auto-fill name from the last path segment if user hasn't typed one
+    // yet (matches A7 fix from the previous round).
+    if (!newName.trim()) {
+      const segments = picked.split(/[\\/]/).filter(Boolean);
+      const last = segments[segments.length - 1] ?? '';
+      if (last) setNewName(last);
     }
+    handleValidateRoot();
   };
 
-  const handleValidateRoot = (): void => {
+  const handleValidateRoot = async (): Promise<void> => {
     const trimmed = newRoot.trim();
     if (!trimmed) {
       setPathValidation(null);
       return;
     }
-    // Pure-frontend validation — avoid new Rust command (CLAUDE.md §2.3 dep lock).
+    // Cheap frontend pre-check first (absolute path / ".." / length).
     if (trimmed.includes('..')) {
       setPathValidation({ valid: false, reason: '路径不能包含 ..' });
       return;
@@ -112,7 +120,19 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       });
       return;
     }
-    setPathValidation({ valid: true, reason: null });
+    // Rust-side deep validation — checks path exists + contains .claude/.
+    // Returns PathValidation with reason_code + reason (Chinese).
+    try {
+      const result = await validateProjectPath(trimmed);
+      setPathValidation({
+        valid: result.valid,
+        reason: result.valid ? null : result.reason,
+      });
+    } catch {
+      // If the IPC call itself fails, fall back to the frontend check
+      // passing — Rust will still re-validate at `add_project` time.
+      setPathValidation({ valid: true, reason: null });
+    }
   };
 
   const handleSwitch = async (id: string): Promise<void> => {
@@ -549,7 +569,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 <button
                   type="button"
                   data-testid="pick-root-button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => void handlePickRoot()}
                   style={{
                     padding: '8px 12px',
                     background: 'var(--bg-overlay)',
@@ -562,16 +582,6 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
                 >
                   浏览…
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  data-testid="pick-root-input"
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  {...({ webkitdirectory: '', directory: '' } as any)}
-                  multiple
-                  style={{ display: 'none' }}
-                  onChange={handlePickRoot}
-                />
               </div>
               {pathValidation && (
                 <div

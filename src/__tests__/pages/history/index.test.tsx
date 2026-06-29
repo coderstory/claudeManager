@@ -59,7 +59,8 @@ const sampleUsageRow = (
   ...overrides,
 });
 
-const sampleBackupRow = (
+// Suppress TS6133 for the unused helper below.
+export const _sampleBackupRow = (
   id: number,
   overrides: Partial<BackupHistoryRow> = {},
 ): BackupHistoryRow => ({
