@@ -200,11 +200,31 @@
   font-family: inherit;
   color: var(--text-primary);
 }
-/* back button + h1 容器需要 nowrap 防止标题溢出 */
+/* B6-P2 fix (2026-06-30): removed `min-width: 0` AND
+   `max-width: calc(100% - 200px)` from this rule.
+   Both together collapsed the inner flex item to 0 width when the
+   parent `.titlebar-title-wrap` (content-sized ~100px for
+   'ClaudeManager') was smaller than the max-width subtraction
+   budget (100 - 200 = 0). Result: the <span> inside (overflow:
+   hidden + text-overflow: ellipsis) painted nothing → APP_NAME
+   invisible in the rendered webview (DOM had it, AXStaticText
+   reported it, but visual layer was blank).
+
+   The outer `.titlebar-title-wrap` in AppHeader.tsx already caps the
+   left zone at `calc(100% - 320px)`, so the inner element doesn't
+   need its own max-width. Removing `min-width: 0` lets the flex
+   item respect its intrinsic content min-width (~100px for
+   'ClaudeManager'), so the span now paints with real width.
+
+   Regression guard: src/__tests__/components/
+   app-header-text-visibility.spec.tsx (B6-P2) parses base.css as
+   raw text and fails if any `.titlebar-title` rule has both
+   `min-width: 0` AND `max-width: calc(100% - Npx)` together.
+
+   See: VERIFICATION-B6.md §5.A + VERIFICATION-APPHEADER-VISUAL.md
+   (B6-P2 report) for full root-cause analysis. */
 .titlebar .titlebar-title {
-  min-width: 0;
   flex: 1 1 auto;
-  max-width: calc(100% - 200px);
   display: flex;
   align-items: center;
   gap: 8px;
