@@ -163,7 +163,21 @@ pub fn dispatch_apply_optimizations(invoke: Invoke<tauri::Wry>) -> bool {
 /// so the UI can surface "未知规则" to the user (vs a silent
 /// empty-vector success).
 pub fn dispatch_apply_rule_fix(invoke: Invoke<tauri::Wry>) -> bool {
-    let rule_id = payload_str(&invoke, "rule_id");
+    // M5 (A4 fix) — frontend `applyRuleFix(ruleId)` sends camelCase
+    // `{ ruleId: "..." }` (matching Tauri's default IPC convention
+    // where the parameter name is the JSON key). The dispatch layer
+    // must read from that exact key — a literal `"rule_id"` lookup
+    // would return empty string and produce the user-facing
+    // "未知规则: " error. Fall back to `"rule_id"` for older bundles
+    // that predate the rename.
+    let rule_id = {
+        let v = payload_str(&invoke, "ruleId");
+        if v.is_empty() {
+            payload_str(&invoke, "rule_id")
+        } else {
+            v
+        }
+    };
     let webview = invoke.message.webview();
     let state = webview.state::<AppState>();
     let result: Result<Vec<ApplyResult>, String> = tauri::async_runtime::block_on(async move {
