@@ -1,15 +1,23 @@
 ---
 name: render-url
-description: "用 msedge headless 模式渲染任意动态网页(SPA / 异步加载 / JS 重定向后),支持输出 PNG 截图 / 纯文本 / 渲染后 HTML。适配 macOS / Windows / Linux。Use when user wants to see the final rendered state of a URL — not just HTML source — e.g. '看看这个页面长什么样', '截图这个 URL', '提取这个 URL 的文本', 'render this URL', '把网页渲染出来看'."
+description: "用 msedge headless 模式渲染任意 URL(http(s) 公网 + 本地 dev server + file:// + Tauri 自定义协议),等 JS / 字体 / 异步数据跑完。支持截图 / 纯文本 / 渲染后 HTML。Use when user wants to see the final rendered state of any URL — e.g. '查百度/谷歌' '看看这个页面长什么样' '截图这个 URL' '把网页渲染出来看' 'render this URL'."
 ---
 
-# render-url — 用 msedge headless 渲染动态网页并产出结果
+# render-url — 用 msedge headless 渲染任意 URL(公网 + 本地)
 
-把任意 URL 喂给本机的 Microsoft Edge headless 模式,等 JS / 字体 / 异步数据跑完,产出最终结果。这样能直接看到 SPA、客户端渲染、JS 重定向后真正"用户看到的页面",而不是 `<script>` 还是空字符串的 HTML 源码。
+把**任意 URL** 喂给本机的 Microsoft Edge headless 模式,等 JS / 字体 / 异步数据跑完,产出最终结果。这样能直接看到 SPA、客户端渲染、JS 重定向后真正"用户看到的页面",而不是 `<script>` 还是空字符串的 HTML 源码。
+
+**URL 类型**:
+- ✅ **公网 https/http** (百度 / 谷歌 / 文档站 / 竞品 / 任何 SPA)
+- ✅ **本地 dev server** (Vite `http://localhost:1420` / Next.js / Webpack dev)
+- ✅ **file://** (本地 HTML 调试)
+- ✅ **Tauri 自定义协议** (`tauri://localhost/...` 需 release build + 装入 Tauri app 后)
 
 ## 何时调用
 
-- 用户给你一个 URL 想"看看是什么样" → `--mode screenshot` 出图
+- **联网检索 / 大模型补盲**:用本技能查百度/谷歌/官方文档站/Stack Overflow/Reddit/HackerNews,弥补大模型知识库截止后产生的数据盲点(最新 API 变更 / 最新版本号 / 真实用户反馈 / 最新 bug 报告 / 实时股票/新闻)。**当用户问题超出大模型训练数据时**,用本技能查实时网络。
+- **SPA 抓取**:用户想"查百度/谷歌" / 看竞品 / 读文档站 → `--mode text` 抓 SPA 渲染后正文(不用 WebFetch,因为 WebFetch 抓的是 `<script>` 还没跑的空 HTML)
+- **用户给你一个 URL 想"看看是什么样"** → `--mode screenshot` 出图
 - 用户想提取页面文本内容(SPA 渲染后) → `--mode text` 出纯文本
 - 用户想拿渲染后的 DOM(JS 跑完后的 HTML) → `--mode html`
 - 调试 SPA / Next.js / Vite dev server / 任何 client-rendered 页面
@@ -17,8 +25,14 @@ description: "用 msedge headless 模式渲染任意动态网页(SPA / 异步加
 - 验证自己写的页面在真实浏览器里的渲染结果(配合 dev server 用)
 
 **不要**用于:
-- 只是要读 HTML 文本 / 抓链接 / 抓 markdown → 用 `WebFetch`(更轻量)
+- 只是要读 HTML 文本 / 抓链接 / 抓 markdown → 用 `WebFetch`(更轻量,但拿不到 SPA 渲染结果)
 - 需要点击 / 表单提交 / 多页导航 → 这个 skill 只支持单页操作;多步交互用 Playwright
+
+**优先顺序** (CLAUDE.md §8):
+1. **`cs-web-fetch`** (项目内 Windows 路径,优先)
+2. **`WebFetch` / `WebSearch`** (快速路径,静态文档/找入口)
+3. **`render-url` (本技能)** (SPA / 动态内容 / 实时数据)
+4. **全部失败** → 标记 `RESOURCE_UNAVAILABLE`,继续推进不依赖该资源的部分
 
 ## 脚本位置
 
