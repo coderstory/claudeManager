@@ -71,11 +71,34 @@ fn payload_string_vec(invoke: &Invoke<tauri::Wry>, key: &str) -> Vec<String> {
     }
 }
 
-/// Extract `String` from the JSON args. Missing / wrong type →
-/// empty String (matches the original `String` parameter default).
-fn payload_str(invoke: &Invoke<tauri::Wry>, key: &str) -> String {
-    json_args(invoke)
-        .get(key)
+/// Extract the `ruleId` (or legacy `rule_id`) from the JSON args of
+/// the `apply_rule_fix` invoke.
+///
+/// M5 (A4) — the frontend `applyRuleFix(ruleId)` wrapper sends
+/// camelCase `{ ruleId: "..." }` because Tauri's default IPC convention
+/// uses the parameter name verbatim as the JSON key. The dispatch
+/// layer MUST read from that exact key — a literal `"rule_id"` lookup
+/// would return empty string and produce the user-facing
+/// "未知规则: " error reported in A4.
+///
+/// Older bundles (predating the rename) sent `{ rule_id: "..." }`;
+/// fall back to that key for backward compatibility.
+///
+/// Pure helper — operates on `serde_json::Value` so we can unit-test
+/// the camelCase/snake_case resolution without needing a real
+/// `Invoke<tauri::Wry>` (which requires the Tauri runtime + Webview state).
+fn extract_rule_id_from_payload(args: &serde_json::Value) -> String {
+    // Prefer camelCase (current frontend convention).
+    let v = args
+        .get("ruleId")
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    if !v.is_empty() {
+        return v;
+    }
+    // Fall back to snake_case for legacy bundles.
+    args.get("rule_id")
         .and_then(|x| x.as_str())
         .map(|s| s.to_string())
         .unwrap_or_default()
@@ -170,14 +193,7 @@ pub fn dispatch_apply_rule_fix(invoke: Invoke<tauri::Wry>) -> bool {
     // would return empty string and produce the user-facing
     // "未知规则: " error. Fall back to `"rule_id"` for older bundles
     // that predate the rename.
-    let rule_id = {
-        let v = payload_str(&invoke, "ruleId");
-        if v.is_empty() {
-            payload_str(&invoke, "rule_id")
-        } else {
-            v
-        }
-    };
+    let rule_id = extract_rule_id_from_payload(&json_args(&invoke));
     let webview = invoke.message.webview();
     let state = webview.state::<AppState>();
     let result: Result<Vec<ApplyResult>, String> = tauri::async_runtime::block_on(async move {
@@ -665,5 +681,87 @@ mod tests {
         fn assert_send<T: Send>() {}
         assert_send::<OptimizationFinding>();
         assert_send::<ApplyResult>();
+    }
+
+    // -----------------------------------------------------------------------
+    // A4 regression tests — extract_rule_id_from_payload
+    // -----------------------------------------------------------------------
+    //
+    // M5 (A4 bug) — the dispatch layer must read `ruleId` (camelCase,
+    // Tauri's default IPC key naming) — a literal `"rule_id"` lookup
+    // would return empty string and produce the user-facing
+    // "未知规则: " error. These tests pin the contract:
+    //
+    //   1. camelCase `ruleId` (current frontend) — wins.
+    //   2. snake_case `rule_id` (legacy bundles) — fallback only.
+    //   3. both present — camelCase wins.
+    //   4. neither — empty (caller sees this as unknown rule).
+    //   5. wrong type — empty (defensive, no panic).
+
+    #[test]
+    fn extract_rule_id_camel_case_wins() {
+        // 当前前端 `applyRuleFix(ruleId)` 走这条路径 (Tauri 默认 IPC 约定).
+        let args = serde_json::json!({ "ruleId": "ENV001" });
+        assert_eq!(extract_rule_id_from_payload(&args), "ENV001");
+    }
+
+    #[test]
+    fn extract_rule_id_snake_case_legacy_fallback() {
+        // 旧 bundle (a6cfb3b 之前的版本) 用 snake_case; 我们要保留兼容.
+        let args = serde_json::json!({ "rule_id": "DEPRECATED_FIELD" });
+        assert_eq!(
+            extract_rule_id_from_payload(&args),
+            "DEPRECATED_FIELD",
+            "snake_case `rule_id` is the legacy fallback — must still resolve"
+        );
+    }
+
+    #[test]
+    fn extract_rule_id_prefers_camel_case_over_snake_case() {
+        // 两个都在 → camelCase 胜出 (current frontend wins).
+        let args = serde_json::json!({
+            "ruleId": "ENV002",
+            "rule_id": "DEPRECATED_FIELD"
+        });
+        assert_eq!(extract_rule_id_from_payload(&args), "ENV002");
+    }
+
+    #[test]
+    fn extract_rule_id_missing_keys_returns_empty() {
+        // 都没传 → empty string (caller 走 `未知规则: ` 路径).
+        let args = serde_json::json!({});
+        assert_eq!(extract_rule_id_from_payload(&args), "");
+    }
+
+    #[test]
+    fn extract_rule_id_empty_string_is_not_a_hit() {
+        // 前端传了空字符串 — 应 fallback 到 snake_case (而不是返回空).
+        let args = serde_json::json!({
+            "ruleId": "",
+            "rule_id": "DEPRECATED_FIELD"
+        });
+        assert_eq!(extract_rule_id_from_payload(&args), "DEPRECATED_FIELD");
+    }
+
+    #[test]
+    fn extract_rule_id_wrong_type_falls_through() {
+        // ruleId 不是 string (e.g. number, object) — 不能 panic,
+        // 必须 silently fallback 到 snake_case, 再 fallback 到 empty.
+        let args_num = serde_json::json!({ "ruleId": 42 });
+        assert_eq!(extract_rule_id_from_payload(&args_num), "");
+
+        let args_obj = serde_json::json!({ "ruleId": { "x": 1 } });
+        assert_eq!(extract_rule_id_from_payload(&args_obj), "");
+
+        // snake_case 是合法 string — 即使 ruleId 类型错也 fallback 到它.
+        let args_legacy = serde_json::json!({
+            "ruleId": null,
+            "rule_id": "DEPRECATED_FIELD"
+        });
+        assert_eq!(
+            extract_rule_id_from_payload(&args_legacy),
+            "DEPRECATED_FIELD",
+            "null `ruleId` must fall back to snake_case `rule_id`"
+        );
     }
 }

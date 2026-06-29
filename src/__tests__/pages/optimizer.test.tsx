@@ -176,6 +176,45 @@ describe('OptimizerPage — F18 (M2.9)', () => {
     });
   });
 
+  // A4 regression — when backend returns `未知规则: <id>` error
+  // (the bug from a6cfb3b era), the UI must:
+  //   1. Not silently swallow the rejection.
+  //   2. Show the fix-error InfoBanner so the user sees the actual message.
+  //   3. Keep the Fix button enabled (so user can retry / investigate).
+  //
+  // a6cfb3b fixed the root cause (camelCase `ruleId` in dispatch layer),
+  // so this test verifies the UI's error-handling contract: if the
+  // backend ever rejects apply_rule_fix, the error must surface.
+  it('A4: apply_rule_fix rejection surfaces the fix-error banner (no silent swallow)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'scan_optimizations') {
+        return [finding('id-A', 'DEPRECATED_FIELD', 'info', true)];
+      }
+      if (cmd === 'apply_rule_fix') {
+        // Backend says "unknown rule" — the symptom of the A4 bug
+        // (dispatch layer was reading `rule_id` instead of `ruleId`).
+        throw new Error('未知规则: DEPRECATED_FIELD');
+      }
+      return null;
+    });
+    render(<OptimizerPage />, { wrapper: wrap });
+    const fixBtn = await screen.findByTestId('optimizer-fix-btn-id-A');
+    await act(async () => {
+      fireEvent.click(fixBtn);
+    });
+    // 必须显示 fix-error 横幅,内容含 backend 抛的错误消息。
+    await waitFor(() => {
+      const banner = screen.getByTestId('optimizer-fix-error');
+      expect(banner).toBeInTheDocument();
+      expect(banner.textContent).toContain('未知规则: DEPRECATED_FIELD');
+    });
+    // 按钮必须仍 enabled(用户没成功 → 应能重试)。
+    await waitFor(() => {
+      const btn = screen.getByTestId('optimizer-fix-btn-id-A') as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+    });
+  });
+
   // 旧 M2.9 行为 — 验证 batch "Apply All Auto-Fix" 按钮的"显示文案 + 数量"。
   it('renders "Apply All Auto-Fix" batch button with auto-fix count', async () => {
     mockInvoke.mockResolvedValue([
