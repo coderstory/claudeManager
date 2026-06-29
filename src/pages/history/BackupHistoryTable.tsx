@@ -12,6 +12,7 @@ import { useState } from 'react';
 import type { ReactElement } from 'react';
 import type { BackupHistoryRow } from '../../types/history';
 import { Pagination } from '../../components/Pagination';
+import { formatDateTime } from '../../lib/formatTime';
 
 export interface BackupHistoryTableProps {
   rows: BackupHistoryRow[];
@@ -21,7 +22,7 @@ export interface BackupHistoryTableProps {
 function formatTs(ts: number): string {
   const d = new Date(ts * 1000);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString();
+  return formatDateTime(ts);
 }
 
 function formatSize(bytes: number): string {

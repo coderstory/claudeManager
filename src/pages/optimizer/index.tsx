@@ -68,6 +68,7 @@ import {
   severityColour,
   severityLabel,
 } from '../../types/optimizer';
+import { formatTimeFromDate } from '../../lib/formatTime';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -398,7 +399,7 @@ export default function OptimizerPage(): ReactElement {
             扫描 ~/.claude/ 下的 settings.json + providers/ + mcp.json,识别 16 类常见问题。
             {state.lastScanAt && (
               <span style={{ marginLeft: 8 }}>
-                · 上次扫描: {new Date(state.lastScanAt).toLocaleTimeString()}
+                · 上次扫描: {formatTimeFromDate(new Date(state.lastScanAt))}
               </span>
             )}
           </p>

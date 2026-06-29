@@ -28,6 +28,7 @@ import { getAppMetadata } from '../../lib/api/app';
 import type { AppMetadata } from '../../types/app';
 import { AboutCard } from '../../components/AboutCard';
 import { InfoSection, type InfoItem } from '../../components/InfoSection';
+import { formatDateTime } from '../../lib/formatTime';
 
 // ---------------------------------------------------------------------------
 // State
@@ -95,7 +96,7 @@ function formatTimestamp(epochSec: number): string {
   if (!epochSec || epochSec <= 0) return '未知';
   const d = new Date(epochSec * 1000);
   if (Number.isNaN(d.getTime())) return '未知';
-  return d.toLocaleString();
+  return formatDateTime(epochSec);
 }
 
 // ---------------------------------------------------------------------------

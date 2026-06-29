@@ -10,6 +10,7 @@
  * (BackupEntry) and `src-tauri/src/infrastructure/json_diff.rs`
  * (DiffEntry).
  */
+import { formatDateTime } from '../lib/formatTime';
 
 export type BackupSource = 'settings' | 'claude' | 'provider' | 'manual' | 'unknown';
 
@@ -41,15 +42,14 @@ export interface ManualBackupResult {
   source: BackupSource;
 }
 
-/** Format unix seconds as `YYYY-MM-DD HH:MM:SS` in local time. */
+/**
+ * Format unix seconds as `YYYY/MM/DD HH:MM:SS` in fixed UTC+8
+ * (Asia/Shanghai). Delegates to `formatDateTime` for consistency
+ * with the rest of the UI.
+ */
 export function formatBackupTimestamp(unix: number | null): string {
   if (unix == null) return '未知时间';
-  const d = new Date(unix * 1000);
-  const pad = (n: number): string => n.toString().padStart(2, '0');
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
+  return formatDateTime(unix);
 }
 
 /** Human-readable size in B / KB / MB. */

@@ -49,6 +49,7 @@ import type {
 import { WINDOW_LABELS } from '../../types/usage';
 import { useViewState } from '../../hooks/useViewState';
 import { formatChineseTokenCount } from '../../lib/format';
+import { formatTimeFromDate } from '../../lib/formatTime';
 
 // ---------------------------------------------------------------------------
 // Page-level state
@@ -139,7 +140,7 @@ export default function UsageQueryPage(): ReactElement {
     if (!state.snapshot) return null;
     const d = new Date(state.snapshot.timestamp * 1000);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleTimeString();
+    return formatTimeFromDate(d);
   }, [state.snapshot]);
 
   const tokensLabel = useMemo(() => {

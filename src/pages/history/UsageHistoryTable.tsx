@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { UsageHistoryRow } from '../../types/history';
 import { Pagination } from '../../components/Pagination';
+import { formatDateTime } from '../../lib/formatTime';
 
 export interface UsageHistoryTableProps {
   rows: UsageHistoryRow[];
@@ -25,7 +26,7 @@ export interface UsageHistoryTableProps {
 function formatTs(ts: number): string {
   const d = new Date(ts * 1000);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString();
+  return formatDateTime(ts);
 }
 
 function formatPct(pct: number): string {
