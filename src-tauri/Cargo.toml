@@ -1,6 +1,6 @@
 [package]
 name = "claude-config-manager"
-version = "0.1.17"
+version = "0.1.18"
 description = "Claude Config Manager"
 authors = ["Claude Config Manager Dev"]
 edition = "2021"
