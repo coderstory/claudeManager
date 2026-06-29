@@ -467,13 +467,24 @@ table.dense tr.active td { background: var(--accent-soft); }
   background: var(--modal-cancel-bg);
   color: var(--text-primary);
 }
-/* Close hover: 红色背景 (Windows 约定, 警告用户关 app) */
+/* Close hover: 红色背景 + 白色 X (Windows 约定, 警告用户关 app)
+   B4 fix — explicitly set both color + fill on the button AND
+   child svg/lucide paths so the X cannot be hidden by an
+   inherited light color or an overriding fill rule. The legacy
+   `.titlebar .chrome-btn:hover` rule above (line ~191) has the
+   same specificity and wins by source order against the old
+   `.chrome-btn-close:hover` — to bulletproof the override we
+   raise specificity by repeating the class. */
+.chrome-btn-hover.chrome-btn-close:hover,
 .chrome-btn-close:hover {
   background: var(--danger);
-  color: var(--accent-fg-on);
+  color: #ffffff;
 }
+.chrome-btn-hover.chrome-btn-close:hover svg,
 .chrome-btn-close:hover svg {
-  color: var(--accent-fg-on);
+  color: #ffffff;
+  fill: #ffffff;
+  stroke: #ffffff;
 }
 
 .titlebar { position: relative; }
