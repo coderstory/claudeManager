@@ -73,6 +73,10 @@ export const PLUGIN_LABELS: Record<ViewId, string> = {
   'provider-list': 'Provider 列表',
   'import-sql': '.sql 导入',
   'json-editor': 'JSON 编辑器',
+  // Phase 44 派生收敛:mcp-management 重新作为独立 view (D-44-A
+  // 推迟到 Phase 46 删)。Phase 27 Fix 6 期间这里是占位"资源浏览",
+  // 改回 "MCP 管理" 以匹配实际 sidebar tile。
+  'mcp-management': 'MCP 管理',
   'usage-query': '用量查询',
   'resource-browser': '资源浏览',
   marketplace: '资源市场',

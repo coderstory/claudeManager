@@ -7,6 +7,25 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+// Phase 46 D-44-A — break the registry ↔ useViewState cycle that otherwise
+// blows up at module load (registry → stubs/usage-query → pages/usage-query
+// → hooks/useViewState → registry). AppSidebar consumes registry directly;
+// useViewState is never called in this test file. Stub it.
+vi.mock('../../hooks/useViewState', () => ({
+  useViewState: () => ({
+    view: 'home',
+    setView: () => {},
+    allViews: [],
+    migrationSearch: undefined,
+  }),
+  ViewStateProvider: ({ children }: { children: React.ReactNode }) => children,
+  HOME_VIEW: 'home',
+  STORAGE_KEY: 'ccm.lastView',
+  ALL_VIEWS: [],
+  migrateViewId: (stored: string | null) => ({ view: stored ?? 'home' }),
+}));
+
 import { AppSidebar } from '../../components/AppSidebar';
 
 const mockInvoke = vi.fn();
@@ -94,12 +113,14 @@ describe('AppSidebar — Phase 11 SC #7', () => {
 // ALL_VIEWS + VIEW_META)。mcp tab 现在挂在 /resource-browser 下。
 // D-13: 老用户 localStorage 还存 'mcp-management' → App.tsx redirect。
 
-describe('AppSidebar — Phase 27 Fix 6: MCP merged into ResourceBrowser', () => {
-  it('does NOT render a sidebar-item-mcp-management tile (D-10/D-12)', async () => {
+describe('AppSidebar — Phase 46 D-44-A: mcp-management stub deleted', () => {
+  // Phase 27 Fix 6 merged mcp → resource-browser tab.
+  // Phase 44 派生收敛 re-introduced mcp-management sidebar tile.
+  // Phase 46 D-44-A: mcp-management stub 删,sidebar tile 不再有
+  // mcp-management entry (Q44-3 migrateFrom + Phase 46 启用)。
+  it('Phase 46 D-44-A: mcp-management sidebar tile removed (mcp entry merged into resource-browser)', async () => {
     render(<AppSidebar currentView="home" onNavigate={vi.fn()} />);
     await screen.findByTestId('sidebar-project-switcher');
-    // 旧 MCP 管理入口已被合并到 resource-browser mcp tab,不再单独
-    // 出现在侧边栏。
     expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
   });
 

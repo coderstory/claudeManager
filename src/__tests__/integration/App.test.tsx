@@ -57,9 +57,10 @@ describe('App — view routing integration', () => {
     expect(screen.getByTestId('add-project-toggle')).toBeInTheDocument();
   });
 
-  it('renders all 13 sidebar nav items', () => {
-    // M3.7: +1 utility view 'about' (清单 18). Total now 13 sidebar items
-    // (12 plugins + about — home is excluded, it IS the landing page).
+  it('renders all 12 sidebar nav items', () => {
+    // M3.7: +1 utility view 'about' (清单 18). Total 12 sidebar items
+    // (11 ALL_VIEWS + about — home is excluded, it IS the landing page).
+    // Phase 46 D-44-A 删 mcp-management 后:3 core + 8 plugin = 11 项。
     renderApp();
     for (const view of ALL_VIEWS) {
       if (view === HOME_VIEW) continue;
@@ -70,9 +71,11 @@ describe('App — view routing integration', () => {
     }
   });
 
-  it('Phase 27 Fix 6: clicking "MCP 管理" sidebar entry is gone — merged into resource-browser', () => {
+  it('Phase 46 D-44-A: mcp-management removed from sidebar (mcp entry moved to resource-browser tab)', () => {
+    // Phase 27 Fix 6 合并 mcp → resource-browser tab。
+    // Phase 46 D-44-A 删 mcp-management stub,sidebar 不再有
+    // mcp-management entry (Q44-3 migrateFrom + Phase 46 启用)。
     renderApp();
-    // D-10/D-12: 'mcp-management' 不再是独立 sidebar 入口。
     expect(screen.queryByTestId('sidebar-item-mcp-management')).toBeNull();
   });
 
@@ -340,8 +343,11 @@ describe('App — view routing integration', () => {
 describe('all plugin views route to their real page (M2.8.1 structural regression)', () => {
   // Views whose real page has shipped. Body MUST NOT contain the
   // PluginPlaceholder marker `plugin: <id>` once mounted.
-  // Phase 27 Fix 6: 'mcp-management' 合并到 'resource-browser' mcp tab,
-  // 所以这个列表少了它;resource-browser 现在承载 mcp + 4 个文件 kind。
+  // Phase 44: 9 plugin 全部含 viewId / pageMeta / componentEntry,
+  // 所以 REAL_PAGE_VIEWS 现在 9 项。Phase 27 Fix 6 把 mcp 入口迁到
+  // resource-browser mcp tab,但 registry 仍保留 mcp-management entry
+  // (D-14 schema 不合并) — Phase 44 派生收敛把 mcp-management 重新
+  // 列在 ALL_VIEW_IDS,D-44-A 推迟到 Phase 46 删。
   const REAL_PAGE_VIEWS: ReadonlyArray<{
     view: ViewId;
     realTestId: string;
@@ -374,6 +380,30 @@ describe('all plugin views route to their real page (M2.8.1 structural regressio
   test.each(REAL_PAGE_VIEWS)(
     'view "$view" routes to its real page (no PluginPlaceholder fallback)',
     ({ view, realTestId }) => {
+      // Phase 46 D-44-A 删 mcp-management stub 后,'mcp-management' 不再是
+      // 有效 ViewId,直接落到 'unknown stale viewId' → migrateViewId
+      // → resource-browser (via resource-browser.sidebarTile.migrateFrom)。
+      // 测试验证兜底触发:resource-browser-page 出现。
+      if (view === 'mcp-management') {
+        localStorage.setItem(STORAGE_KEY, view);
+        render(
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>,
+          { wrapper: ViewStateProvider },
+        );
+        // 兜底后:resource-browser page 出现(migrateFrom 重定向)。
+        expect(
+          screen.getByTestId('resource-browser-page'),
+          `Phase 46: mcp-management → resource-browser fallback (migrateFrom)`,
+        ).toBeInTheDocument();
+        // mcp-management-page 不会出现(被 migrateFrom 劫持)。
+        expect(
+          screen.queryByTestId('mcp-management-page'),
+          `mcp-management-page should not render due to Phase 46 migrateFrom redirect`,
+        ).toBeNull();
+        return;
+      }
       // Persist the target view so App's initial render lands there
       // directly (avoids depending on sidebar layout for this guard).
       localStorage.setItem(STORAGE_KEY, view);
