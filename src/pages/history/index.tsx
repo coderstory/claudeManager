@@ -120,6 +120,52 @@ function useProjectOptions(): Array<{ id: string; label: string }> {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a unix-seconds number to a `'YYYY-MM-DD'` UTC string.
+ * Returns `null` for nullish / non-finite input. Mirrors the
+ * inverse of `FilterBar::dateToTs` so the date filter round-trips
+ * correctly when the user picks the same day in the date picker.
+ */
+function tsToIsoDate(ts: number | null | undefined): string | null {
+  if (ts == null) return null;
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return null;
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * B2 fix — the HistoryFilter shared with FilterBar uses
+ * `from_ts` / `to_ts` (unix seconds, fits usage_history & backup
+ * tables), but `DailyStatsFilter` expects `from_date` / `to_date`
+ * (`'YYYY-MM-DD'` strings, since usage_daily_stats.stat_date is
+ * a TEXT column). Spread + remap so the daily tab actually
+ * receives the picked date range; without this conversion the
+ * backend silently drops the unknown fields and returns the
+ * unfiltered daily table, making "选日期后不刷新" a no-op.
+ *
+ * Also strips `after_id` / `active_root` / `scope` / `trigger_kind`
+ * (those don't exist on DailyStatsFilter) so the IPC payload is
+ * clean and any future serde `deny_unknown_fields` won't reject it.
+ */
+function toDailyFilter(
+  filter: HistoryFilter,
+): Parameters<typeof getDailyStatsHistory>[0] {
+  const out: Parameters<typeof getDailyStatsHistory>[0] = {};
+  if (filter.provider_id) out.provider_id = filter.provider_id;
+  const fromDate = tsToIsoDate(filter.from_ts);
+  if (fromDate) out.from_date = fromDate;
+  const toDate = tsToIsoDate(filter.to_ts);
+  if (toDate) out.to_date = toDate;
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -193,7 +239,7 @@ export default function HistoryPage(): ReactElement {
         setHasMoreUsage(rows.length === pageSize);
       } else if (tab === 'daily') {
         const rows = await getDailyStatsHistory({
-          ...(filter as Parameters<typeof getDailyStatsHistory>[0]),
+          ...toDailyFilter(filter),
           limit: pageSize,
         });
         setDailyRows(rows);
@@ -230,10 +276,16 @@ export default function HistoryPage(): ReactElement {
         );
         setHasMoreUsage(rows.length === pageSize);
       } else if (tab === 'daily' && dailyCursor !== null) {
+        // B2 — merge toDailyFilter with cursor. toDailyFilter only
+        // emits from_date/to_date when explicitly set in the UI;
+        // the load-more cursor lives in dailyCursor so we always
+        // need to emit a from_date here for the WHERE clause.
+        const cursorDate = tsToIsoDate(dailyCursor);
+        const base = toDailyFilter(filter);
         const rows = await getDailyStatsHistory({
-          ...(filter as Parameters<typeof getDailyStatsHistory>[0]),
+          ...base,
+          ...(cursorDate ? { from_date: cursorDate } : {}),
           limit: pageSize,
-          from_date: new Date(dailyCursor).toISOString().slice(0, 10),
         });
         setDailyRows((prev) => [...prev, ...rows]);
         setDailyCursor(
