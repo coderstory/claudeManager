@@ -207,11 +207,27 @@ export function ProviderListPage(): ReactElement {
    * 从当前 Claude 配置生成 provider 候选。
    * 后端读 settings.json 的 env,生成或匹配现有 provider。
    * 进入 preview 状态等待用户确认。
+   *
+   * X1 真因修复 (CLAUDE.md §16): 后端在异常边界可能返回
+   * `{provider: null, is_new: false}` (例如 settings.json 缺 env 字段
+   * 或 IO 错误被吃掉)。原代码 setGenerateState({kind:'preview', result})
+   * → GeneratePreviewModal 解构 provider.name 渲染期崩,后 b16b979
+   * 加 null guard 静默 return null → 用户体验 = "按钮无反应"。
+   *
+   * 修复:调用层提前拦截 null,把状态机切到 failure 并显示明确错误
+   * (用户能看懂的诊断),不依赖 modal 内部 guard。
    */
   const handleGenerateFromCurrentConfig = useCallback(async () => {
     setGenerateState({ kind: 'generating' });
     try {
       const result = await generateFromCurrentConfig();
+      if (!result || !result.provider) {
+        setGenerateState({
+          kind: 'failure',
+          message: '当前 Claude 配置不完整,无法生成 provider。请检查 ~/.claude/settings.json 的 env 字段(ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY 或 ANTHROPIC_AUTH_TOKEN)。',
+        });
+        return;
+      }
       setGenerateState({ kind: 'preview', result });
     } catch (e) {
       setGenerateState({ kind: 'failure', message: stringifyError(e) });
