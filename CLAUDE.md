@@ -216,6 +216,7 @@ trait IPlugin {
   3. **`render-url` skill**（联网搜索失败时的 fallback;用 msedge headless 渲染动态网页/SPA/JS 重定向,支持 text/png/html 输出;适配 macOS / Windows / Linux）
   4. 全部失败 → 标记 `RESOURCE_UNAVAILABLE`,继续推进不依赖该资源的部分
 - 禁止 subagent 用 `curl` / `wget` 直接抓网页（绕过审计）
+- 并行 dispatch 多个 subagent **必须**遵守 §17 (Concurrent Subagent Compounding Failure Prevention):隔离 / 文件级依赖图 / verify 收窄到单元测试
 
 ## 9. 迭代交付纪律
 
@@ -424,6 +425,133 @@ RUSTC_WRAPPER="" cargo build --release
 - §5.2 TDD 流程:§16 第 5 步"实际验证"是其强化版(不只测试 PASS,还要看到真实行为)
 - §13 build regression:§16 区分了"process OK"(smoke test)和"UI 行为对"(实际验证)
 - §6.4/6.5 显示文案改动:§16 第 3 步"边界"覆盖此场景
+- §17 并发 subagent:§16 第 5 步"实际验证"由**主 session exclusive** 跑(详 §17.4)
+
+---
+
+## 17. Concurrent Subagent Compounding Failure Prevention (2026-06-29 写入)
+
+> **多 subagent 并发修改同一 worktree → 高概率一个的半成品代码让另一个的 build/check 失败 → phantom bug 误诊。**
+> 这是 2026-06-29 Round 0 dispatch 时**观测到的实际风险**;两条兄弟 subagent 在 Round 0 中途已被发调令要求遵守本节。
+
+### 17.1 问题描述
+
+CLAUDE.md §11 / D11 允许 ≤4 subagent 并行。问题链:
+- Subagent A 正在改 `Provider` struct,加了新 field,callsite 还没同步
+- Subagent B 跑 `cargo check` 验证自己的 fix → 看到字段不一致 → build 报错
+- Subagent B 报"field X 缺失" → 误以为是 Y bug → 浪费时间 debug
+
+§12.4 末条"不要并行跑 cargo build"(webview2-com 静态链接 mutex)是**一个症状**;本节覆盖**通用 root cause** —— 并发修改共享 worktree 时 mid-edit 状态彼此不可见。
+
+### 17.2 四条规则 (强制)
+
+#### Rule 1: 同文件 / 同模块 → 严格串行
+
+- 派 subagent 前,**先 `mcp__codegraph__codegraph_explore` 找 blast radius** (CLAUDE.md §8)
+- 用 `git diff --name-only <base> HEAD` 比较候选 bug 计划改的文件集
+- **任何两个 subagent 改的文件集合有交集 → 串行 dispatch** (沿用清单 §3.3)
+- 例:
+  - A1 JSON 编辑器 (src/pages/json-editor/* + JSON mapBackendError util) + B7 UTC+8 (≥6 文件涉及 type/util) — 若 A1 也改 util → 串行;否则可并行
+  - X1 GeneratePreviewModal + B6 AppHeader — 不同模块,可并行(2026-06-29 实测)
+
+#### Rule 2: 跨模块并行 → 必用 `isolation: "worktree"`
+
+- Agent 工具的参数 `isolation: "worktree"` 给 subagent 一份独立 git worktree
+- 公共开销: ~200-500ms setup + 4x 额外磁盘 (4 subagent 并行)
+- 收益: **零 cross-contamination**,subagent 可以自由跑 build/check
+- Worktree 完成后需 main session cherry-pick/merge commit 回来(详 §17.4)
+- 当 isolation 不可用(windows 上某些 git 版本问题 or 平台限制)时,fallback 到 Rule 4
+
+#### Rule 3: Subagent 验证策略 (无论是否 worktree 隔离)
+
+- ✅ **允许** (单 subagent 域内):
+  - `cargo check` (Rust 增量检查,秒级)
+  - `vitest --run <single-test-file>` (TS 单元测试,秒级)
+  - `tsc --noEmit` / 单文件 ESLint / 单文件 type check
+- ❌ **禁止 mid-task**: `cargo build --release` / `npm run build` / smoke test / tauri build / e2e 启动 app
+- **完整 build + smoke test 由主 session 在所有 Round subagent commit 完成后做一次**(详 §17.4)
+- 原因:
+  1. 即便 worktree 隔离,每个 subagent 跑完整 build 浪费 2-3 分钟 × 4 = 8-12 分钟,主 session 统一跑 2-3 分钟
+  2. smoke test 启动 tauri app 占用端口/锁,跨 worktree 在 macOS D7 mutex 类似 §12.4 也有风险
+  3. UI 验证(录屏/截图)需要 human-in-loop 或 Playwright,不是 subagent 自检可达的
+
+#### Rule 4 (Fallback when no isolation): Commit-early pattern
+
+- isolation 不可用时(代价高 or 平台限制),subagent 每个 milestone commit 一次:
+  - 例 X1 任务: `wip(x1): 真因定位` → `wip(x1): 修法 A 实施` → `fix(x1): 真因修复`
+- 下个 subagent 起跑时从 main 分支 sync,确保拉到的是 **committed HEAD** 而不是兄弟的 mid-edit 状态
+- wip commits 在最后由 main session 用 `git rebase -i` squash 成一个正式 commit
+- 这是 **isolation 不可用时的兜底**,Rule 2 是首选
+
+### 17.3 Phantom 报错识别 (subagent 自检 + 主 session 审核)
+
+Subagent 报告的常见 phantom 报错模式:
+- "field X 缺失" / "type Y 不存在" / "import Z 找不到" / "trait X 未实现 for type Y"
+- "cannot find macro `xxx` in this scope" / "expected `;`, found `}`"
+
+而那段代码你根本没改 → **大概率是兄弟 subagent 的 mid-edit 状态**。处理:
+
+1. **不要**先花时间 debug phantom
+2. `git log -p HEAD~3..HEAD -- <file>` 看谁在动这段
+3. `git show main:<file>` 或 `git show $(git merge-base main HEAD):<file>` 确认主分支确实有 X
+4. 如果主分支有 X 而你工作区没 X → **等兄弟 commit,然后 sync/rebase**,不要硬改自己的代码
+5. 如果主分支也没有 X → **才是真 bug**,按 §16 五步走
+
+主 session 收到 subagent 报"missing field"类错误时,**先问 subagent**:
+- "这个 field 你没改,grep 主分支确认了吗?"
+- "git log 最近 3 个 commit 动过这个文件吗?"
+- 如果 subagent 答"主分支也没" + 解释清楚 → 真 bug,进 §16
+- 如果答"我等等再看" / "可能是编译缓存" → 让他先 sync 一次再回
+
+### 17.4 主 session exclusive: 完整 build + smoke test
+
+所有 Round 的 subagent 都 commit 完成后,主 session **只跑一次**完整 verification:
+
+```bash
+# 前端
+npm run build
+
+# Rust 快速通过 → 完整 build
+cd src-tauri && cargo check
+cd src-tauri && cargo build --release --features tauri/custom-protocol
+
+# 完整 ship 路径(含 tauri build --no-bundle + smoke test 10/10)
+./scripts/build-and-ship.sh   # CLAUDE.md §12 + §13 全套
+```
+
+如果失败:
+1. `git log --oneline main..HEAD` 看最近谁 commit 了哪些文件
+2. 用 `git bisect` 或逐 commit 排查
+3. 找到出问题的 subagent → 用 SendMessage 派回去修
+4. **不要在主 session 亲自修 subagent 的活**(违反 CLAUDE.md §11 主 session 工作流约束)
+
+如果成功:
+- 最终 smoke test 10/10 PASS
+- VERIFICATION.md 汇总每个 bug 的 fix evidence
+- 主 session 写 SESSION-SUMMARY.md 覆盖本次修复范围
+
+### 17.5 与其他章节的关系
+
+- **§12.4** 已有"不要并行跑 cargo build"(webview2-com mutex) — 这是**一个症状**,本节覆盖**通用 root cause** (mid-edit 状态互不可见)
+- **§16.2** "实际验证"(硬证据)在 §17 框架下**主 session exclusive** 跑完整 build + UI 验证;subagent 收窄到**单测/单元测试**层级
+- **§8** Subagent 派遣纪律 — 本节是它在 **并行场景** 的具体化和强制规则
+- **§11**(已迁移到 CLAUDE-WORKFLOW.md) D11 4 槽上限 — 本节是它在**跨 subagent 协调**层面的细化
+
+### 17.6 反事故:2026-06-29 Round 0 X1 教训
+
+**观察到的具体风险**:
+- X1 subagent 在写 vitest 测试,引用 `GeneratePreviewModal` 组件
+- 同时 B6 subagent 在修 AppHeader.tsx,改了 `src/components/AppHeader.tsx`
+- 假如 X1 mid-edit 动了 imports(如 `import { Provider } from './types'`)且 export 新增 → B6 的 `cargo check`(如果跑)或 `npm run build` 会看到半个 export
+- 若 B6 真去 debug "Provider 不能 import" → 误诊为 B6 的问题,实际是 X1 半成品
+
+**2026-06-29 应对**: 已在 Round 0 中途 (派发后约 10 分钟) 用 SendMessage 同时给两条 subagent 发"中途调令":
+1. 中途 verify 只用 `cargo check` + `vitest --run`,不允许 mid-task `cargo build` / `npm run build` / smoke test
+2. 每个 milestone commit 一次 (wip-* pattern)
+3. 报错先 grep 主分支,再决定是不是 phantom
+4. 完整 build + smoke test 主 session 统一跑
+
+**教训汇总**: 写规则前已经踩过坑。后续 session 派并行 subagent **必须**从本节开始读,不要重蹈覆辙。
 
 ---
 
