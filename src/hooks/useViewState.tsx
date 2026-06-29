@@ -89,8 +89,9 @@ import {
 } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
-import { VIEW_META, type SidebarTile } from '../plugins/registry';
+import { VIEW_META } from '../plugins/registry';
 import { ALL_VIEW_IDS as ALL_VIEWS, type ViewId } from '../plugins/registry';
+import type { SidebarTile } from '../plugins/types';
 
 /**
  * The synthetic landing view — what the user sees when there is no

@@ -103,6 +103,11 @@ function formatTimestamp(epochSec: number): string {
 // ---------------------------------------------------------------------------
 
 export default function AboutPage(): ReactElement {
+  // v3.4.1 TEMP — synthetic error to validate the ErrorBoundary
+  // toast. Revert this line to ship.
+  if (typeof window !== 'undefined' && window.location.hash === '#__test_throw') {
+    throw new Error("AboutPage synthetic error: this is a test exception for the ErrorBoundary toast (v3.4.1)");
+  }
   const [state, setState] = useState<PageState>(INITIAL_STATE);
 
   useEffect(() => {

@@ -157,6 +157,20 @@ export function AppHeader({
             <ArrowLeft size={16} />
           </button>
         )}
+        <span
+          data-testid="app-header-title"
+          title="Claude 配置管理器"
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          Claude 配置管理器
+        </span>
       </div>
       </div>
 
