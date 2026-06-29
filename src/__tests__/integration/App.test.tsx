@@ -111,28 +111,28 @@ describe('App — view routing integration', () => {
     expect(screen.getByTestId('resource-browser-page')).toBeInTheDocument();
   });
 
-  it('header back button returns from any non-home view to home', () => {
+  it('header shows APP_NAME on every view (B6 — back button removed)', () => {
+    // B6 (2026-06-29): back button is gone for good; left zone shows
+    // APP_NAME constant regardless of current view. The test
+    // asserts: (a) APP_NAME renders on home, (b) navigating to a
+    // plugin view keeps APP_NAME visible, (c) no back button
+    // reappears in the DOM.
     renderApp();
-    // Navigate away from home first.
+
+    // (a) APP_NAME renders on home.
+    const name = screen.getByTestId('app-header-app-name');
+    expect(name).toBeInTheDocument();
+    expect(name.textContent).toBe('ClaudeManager');
+    expect(screen.queryByTestId('app-header-back')).toBeNull();
+
+    // (b) Navigate away from home — APP_NAME stays visible, back
+    // button never reappears.
     act(() => {
       screen.getByTestId('sidebar-item-marketplace').click();
     });
-    // F17 shipped a real MarketplacePage (M2.16) — assert on its
-    // data-testid instead of the old PluginPlaceholder marker.
     expect(screen.getByTestId('marketplace-page')).toBeInTheDocument();
-
-    // Now hit "back" — should bring the home tile grid back.
-    const backBtn = screen.getByTestId('app-header-back');
-    act(() => {
-      backBtn.click();
-    });
-    // Home tile for marketplace no longer exists as a page, but the
-    // home tile for marketplace DOES exist as a button on home — so
-    // we assert by looking for the heading "欢迎使用 Claude 配置管理器"
-    // which only renders in HomeView.
-    expect(
-      screen.getByText('欢迎使用 Claude 配置管理器'),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('app-header-app-name').textContent).toBe('ClaudeManager');
+    expect(screen.queryByTestId('app-header-back')).toBeNull();
   });
 
   it('persists the last view to localStorage across mounts', () => {

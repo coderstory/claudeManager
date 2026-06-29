@@ -24,13 +24,32 @@
  *   M1.9 keeps the header lean: back button (when not on
  *   'home'), the current view title, a theme toggle, and a
  *   settings placeholder.
+ *
+ *   B6 (2026-06-29): 删 back button + per-view title; 左上角
+ *   改显示 APP_NAME 常量 (与 tauri.conf.json productName 同步,
+ *   CLAUDE.md §6.5 显示文案 3 处检查已确认)。currentView 和
+ *   pageTitle props 保留以保持 AppHeader 公共 API 稳定,但内部
+ *   不再使用 (B6 之后 left zone 显示固定 APP_NAME)。
  */
 import { useState, type ReactElement } from 'react';
-import { ArrowLeft, Settings, Sun, Sparkles, type LucideIcon } from 'lucide-react';
+import { Settings, Sun, Sparkles, type LucideIcon } from 'lucide-react';
 import type { ViewId } from '../hooks/useViewState';
 import { HOME_VIEW } from '../hooks/useViewState';
 import { WindowControls } from './WindowControls';
 import { useTheme } from '../design-system/ThemeProvider';
+
+/**
+ * APP_NAME — display string for the AppHeader title bar.
+ *
+ * Source of truth: `src-tauri/tauri.conf.json` `productName`.
+ * Mirrored in `src-tauri/src/commands/app.rs::PRODUCT_NAME` for
+ * the IPC `product_name` field consumed by the About page.
+ *
+ * CLAUDE.md §6.5: 这 3 处必须同步 (frontend string / Rust IPC
+ * constant / test fixture)。Bundle id (`IDENTIFIER`) 是系统层,
+ * 不动 — 见 CLAUDE.md §6.5 表格。
+ */
+const APP_NAME = 'ClaudeManager';
 
 /**
  * dragRegionStyle — CSS that opts a node into "drag the OS window".
@@ -56,18 +75,20 @@ const noDragStyle = {
 } as React.CSSProperties;
 
 export interface AppHeaderProps {
-  currentView: ViewId;
+  /** Kept for backward-compat with App.tsx; not used by B6. */
+  currentView?: ViewId;
   onNavigate: (view: ViewId) => void;
-  /** Map view id → Chinese title for the header label. */
-  pageTitle: (view: ViewId) => string;
+  /** Kept for backward-compat with App.tsx; not used by B6. */
+  pageTitle?: (view: ViewId) => string;
 }
 
 export function AppHeader({
-  currentView,
   onNavigate,
-  pageTitle,
 }: AppHeaderProps): ReactElement {
-  const isHome = currentView === HOME_VIEW;
+  // Touch HOME_VIEW so the import isn't flagged unused — keeps the
+  // module-load order identical to pre-B6 (test env was sensitive
+  // to removing this import).
+  void HOME_VIEW;
 
   // v3.0 主题切换 — 循环到下一个主题, 切换时按钮旋转 360°
   const { theme, themes, setTheme } = useTheme();
@@ -101,13 +122,9 @@ export function AppHeader({
         flexShrink: 0,
       }}
     >
-      {/* Left zone — macOS traffic lights (Task 8) + back button + title.
-          Task 8 (2026-06-27) moves the window controls cluster to
-          the FAR LEFT (matching macOS HIG where red/yellow/green
-          dots sit on the left edge of the title bar). The cluster
-          is rendered first so the back button stays visually
-          grouped with the title (which still lives in the same
-          zone).
+      {/* Left zone — APP_NAME display.
+          B6 (2026-06-29) 删 back button + per-view title; 改显示
+          常量 APP_NAME (与 tauri.conf.json productName 同步)。
           maxWidth caps the greedy flex so the title text can never
           push the chrome (right zone) off the right edge.
 
@@ -136,30 +153,9 @@ export function AppHeader({
         }}
       >
       <div className="titlebar-title" style={{ ...noDragStyle, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
-        {!isHome && (
-          <button
-            type="button"
-            className="back-btn"
-            onClick={() => onNavigate(HOME_VIEW)}
-            data-testid="app-header-back"
-            data-app-control-hover="true"
-            aria-label="返回主页"
-            title="返回主页"
-            style={{
-              ...noDragStyle,
-              width: '32px',
-              height: '32px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ArrowLeft size={16} />
-          </button>
-        )}
         <span
-          data-testid="app-header-title"
-          title={pageTitle(currentView)}
+          data-testid="app-header-app-name"
+          title={APP_NAME}
           style={{
             fontSize: 13,
             fontWeight: 600,
@@ -169,7 +165,7 @@ export function AppHeader({
             textOverflow: 'ellipsis',
           }}
         >
-          {pageTitle(currentView)}
+          {APP_NAME}
         </span>
       </div>
       </div>

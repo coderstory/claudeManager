@@ -138,15 +138,15 @@ describe('M2.15 — AppHeader layout contract (chrome + back button visible)', (
     expect(screen.getByTestId('app-header-close')).toBeInTheDocument();
   });
 
-  it('AppHeader back button renders on non-home views', () => {
+  it('AppHeader does NOT render a back button (B6 — back button removed)', () => {
+    // B6 (2026-06-29): back button removed permanently. Left zone
+    // shows APP_NAME constant instead. Verify DOM no longer
+    // contains `app-header-back` and APP_NAME element renders.
     renderAppWithView('provider-list');
-    const back = screen.getByTestId('app-header-back');
-    expect(back).toBeInTheDocument();
-    // Bug #2 symptom: back button had width:0 or was occluded.
-    // We assert its rendered inline width matches the design token
-    // (32px — same as the chrome cluster buttons).
-    expect(back.style.width).toBe('32px');
-    expect(back.style.height).toBe('32px');
+    expect(screen.queryByTestId('app-header-back')).toBeNull();
+    const name = screen.getByTestId('app-header-app-name');
+    expect(name).toBeInTheDocument();
+    expect(name.textContent).toBe('ClaudeManager');
   });
 
   it('AppHeader source declares left-zone maxWidth cap (chrome squeeze fix)', () => {

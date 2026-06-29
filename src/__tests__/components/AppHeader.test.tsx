@@ -12,11 +12,15 @@
  *
  *   1. `<header>` carries `data-tauri-drag-region=""` AND inline
  *      `WebkitAppRegion: 'drag'` (the two attributes Tauri reads).
- *   2. Every interactive control inside the header (back button,
- *      theme toggle, settings button, window controls cluster) has
- *      `WebkitAppRegion: 'no-drag'` — child override wins over the
- *      parent drag region so a click on a button never gets
- *      swallowed as a drag gesture.
+ *   2. Every interactive control inside the header (APP_NAME
+ *      container, theme toggle, settings button, window controls
+ *      cluster) has `WebkitAppRegion: 'no-drag'` — child override
+ *      wins over the parent drag region so a click on a button
+ *      never gets swallowed as a drag gesture.
+ *
+ *   3. B6 (2026-06-29): back button removed; APP_NAME constant
+ *      shown in left zone. Verifies `data-testid="app-header-app-name"`
+ *      renders the productName string.
  *
  * If any of these ever regress, this test fails. The contract is
  * documented in `docs/design/M2.9-...` and Phase 27 UI-SPEC
@@ -47,7 +51,6 @@ vi.mock('../../design-system/ThemeRegistry', () => ({
 }));
 
 const noop = (): void => undefined;
-const pageTitle = (_v: string): string => 'Test Page';
 
 function wrap(ui: React.ReactElement): React.ReactElement {
   return <ThemeProvider>{ui}</ThemeProvider>;
@@ -58,9 +61,7 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -73,9 +74,7 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -85,30 +84,44 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
     expect(style.WebkitAppRegion ?? style['-webkit-app-region']).toBe('drag');
   });
 
-  it('back button has WebkitAppRegion: no-drag (click must not start drag)', () => {
+  it('APP_NAME container has WebkitAppRegion: no-drag (B6 — title area must not start drag)', () => {
+    // B6 contract: APP_NAME replaces the back button in the left
+    // zone. The container wrapping it (.titlebar-title) must keep
+    // the no-drag contract so any future click on the title area
+    // never gets swallowed as a drag gesture.
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
-    const back = screen.getByTestId('app-header-back') as HTMLElement;
-    const style = (back.style as unknown as Record<string, string>);
+    const name = screen.getByTestId('app-header-app-name');
+    const container = name.parentElement as HTMLElement;
+    const style = (container.style as unknown as Record<string, string>);
     expect(style.WebkitAppRegion ?? style['-webkit-app-region']).toBe(
       'no-drag',
     );
+  });
+
+  it('APP_NAME element renders the productName string (B6 contract)', () => {
+    // Source of truth: tauri.conf.json productName + src-tauri/src/commands/app.rs::PRODUCT_NAME
+    render(
+      wrap(
+        <AppHeader
+          onNavigate={noop}
+        />,
+      ),
+    );
+    const name = screen.getByTestId('app-header-app-name');
+    expect(name.textContent).toBe('ClaudeManager');
   });
 
   it('theme toggle button has WebkitAppRegion: no-drag', () => {
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -123,9 +136,7 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -136,13 +147,13 @@ describe('AppHeader — Fix 1: drag-region contract (Phase 27 BUG-CR-01)', () =>
     );
   });
 
-  it('does NOT render a back button on the home view (singular drag-region contract)', () => {
+  it('does NOT render a back button anywhere (B6 — back button removed permanently)', () => {
+    // B6: back button is gone for good — no need to test
+    // home-vs-non-home distinction anymore.
     render(
       wrap(
         <AppHeader
-          currentView="home"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -176,9 +187,7 @@ describe('AppHeader — header layout (5 主题统一 split / space-between)', (
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -194,9 +203,7 @@ describe('AppHeader — header layout (5 主题统一 split / space-between)', (
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
@@ -212,9 +219,7 @@ describe('AppHeader — header layout (5 主题统一 split / space-between)', (
     render(
       wrap(
         <AppHeader
-          currentView="optimizer"
           onNavigate={noop}
-          pageTitle={pageTitle}
         />,
       ),
     );
