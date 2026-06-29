@@ -73,11 +73,9 @@ import { render, act } from '@testing-library/react';
 // ---------------------------------------------------------------------------
 
 let syncScopeCallCount = 0;
-let lastSyncProjectArg: unknown = null;
 
-const mockSyncScopeFromProject = vi.fn((currentProject: unknown) => {
+const mockSyncScopeFromProject = vi.fn((_currentProject: unknown) => {
   syncScopeCallCount += 1;
-  lastSyncProjectArg = currentProject;
 });
 
 // ---------------------------------------------------------------------------
@@ -202,7 +200,7 @@ vi.mock('../../components/ErrorBanner', () => ({
 
 beforeEach(() => {
   syncScopeCallCount = 0;
-  lastSyncProjectArg = null;
+  // syncScopeCallCount reset happens before each test via beforeEach
   mockSyncScopeFromProject.mockClear();
 });
 
