@@ -61,6 +61,10 @@ export interface ConfirmDialogProps {
   dismissable?: boolean;
   /** When true, confirm button is disabled and Enter does not fire onConfirm. */
   confirmDisabled?: boolean;
+  /** When true, hide the cancel button. ESC and overlay click still trigger
+   *  onCancel (unless dismissable=false). Use for acknowledgement-only dialogs
+   *  (e.g. first-time user welcome) where a destructive cancel is meaningless. */
+  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -87,6 +91,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement | null {
     danger = false,
     dismissable = true,
     confirmDisabled = false,
+    hideCancel = false,
     onConfirm,
     onCancel,
   } = props;
@@ -187,14 +192,16 @@ export function ConfirmDialog(props: ConfirmDialogProps): ReactElement | null {
           {typeof message === 'string' ? <p style={{ margin: 0 }}>{message}</p> : message}
         </div>
         <div className="modal-footer">
-          <button
-            type="button"
-            className={cancelClass}
-            data-testid="confirm-dialog-cancel"
-            onClick={onCancel}
-          >
-            {cancelLabel}
-          </button>
+          {!hideCancel && (
+            <button
+              type="button"
+              className={cancelClass}
+              data-testid="confirm-dialog-cancel"
+              onClick={onCancel}
+            >
+              {cancelLabel}
+            </button>
+          )}
           <button
             ref={confirmRef}
             type="button"

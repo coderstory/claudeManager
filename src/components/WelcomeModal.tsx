@@ -102,9 +102,10 @@ export function WelcomeModal({
         </div>
       }
       confirmLabel="开始使用"
-      cancelLabel=""
-      // No cancel button — only the primary "开始使用" acknowledgement
-      // button. The overlay click / Esc also close (dismissable).
+      // Hide the cancel button — only the primary "开始使用" acknowledgement
+      // button is shown. ESC and overlay click still close the modal
+      // (dismissable={true}).
+      hideCancel
       dismissable={true}
       onConfirm={onClose}
       onCancel={onClose}
