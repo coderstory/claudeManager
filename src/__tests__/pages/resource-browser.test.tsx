@@ -25,6 +25,27 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
+// Phase 46 (Q46-3) — useViewState 默认 mock 返回 undefined migrationSearch,
+// 单测 base 行为 (URL ?tab= 走优先级 2,无 ?tab= 走默认 'plugin')。
+// 单独测优先级 1 (migrationSearch > URL) 在 describe 块里临时覆盖 vi.mocked。
+//
+// 为什么 mock 而不是用 ViewStateProvider wrapper:
+//   1. 子页面里 50+ 个 render(<ResourceBrowserPage />) 都得改,
+//      useViewState 字段未来还会扩,每加一个字段都要回填。
+//   2. mock 后所有测试只看 ResourceBrowser 内部逻辑,不需要迁就
+//      Provider 的全局状态(migrationSearch 在 Provider 内部 useMemo
+//      mount-time 锁死,jsdom 下没法直接 override)。
+//   3. 真正的 migrationSearch 行为 (Phase 46 Q46-3) 在 useViewState
+//      单测 (src/__tests__/hooks/useViewState.test.tsx) 已覆盖。
+vi.mock('../../hooks/useViewState', () => ({
+  useViewState: vi.fn(() => ({
+    view: 'resource-browser',
+    setView: vi.fn(),
+    allViews: [],
+    migrationSearch: undefined,
+  })),
+}));
+
 // Phase 27 Fix 4: ResourceBrowserPage now calls useProjects().
 // Provide a default list_projects response so the hook doesn't crash.
 vi.mock('../../hooks/useProjects', () => ({
@@ -1524,5 +1545,61 @@ describe('ResourceBrowserPage — Phase 30 UI-A-04 重新扫描按钮位置', ()
       expect(calls.length).toBe(1);
       expect((calls[0][1] as { kind: string }).kind).toBe('plugin');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 46 (Q46-3) — migrationSearch 双源优先级
+// ---------------------------------------------------------------------------
+//
+// resolveInitialKind(migrationSearch) 优先级:
+//   1. migrationSearch?.tab (mount-time 锁死的 stale viewId 迁移结果)
+//   2. URL ?tab=
+//   3. 默认 'plugin'
+//
+// 单测场景:
+//   - URL ?tab=plugin + migrationSearch={tab:'mcp'} → 期望 mcp
+//     (migration 覆盖 URL)。这是老用户从 v3.2 升级的核心路径
+//     (Phase 27 ?tab=mcp URL 被 Phase 46 QuickSearchModal 写过的
+//     ?tab=plugin 覆盖 → migrateFrom 必须胜出)。
+//
+// mock 策略:
+//   顶层 vi.mock 已把 useViewState mock 成 migrationSearch=undefined;
+//   这个 describe 临时 vi.mocked(...).mockReturnValueOnce 覆盖默认,
+//   只对本次 render 生效。
+describe('ResourceBrowserPage — Phase 46: migrationSearch 双源优先级', () => {
+  it('migrateFrom overrides URL default kind = mcp (优先级 1 > 优先级 2)', async () => {
+    // 模拟 stale localStorage='mcp-management' 走完 migrateViewId
+    // 后 ViewStateProvider 暴露的 migrationSearch。
+    const useViewState = (
+      await import('../../hooks/useViewState')
+    ).useViewState as unknown as ReturnType<typeof vi.fn>;
+    useViewState.mockReturnValueOnce({
+      view: 'resource-browser',
+      setView: vi.fn(),
+      allViews: [],
+      migrationSearch: { tab: 'mcp' },
+    });
+
+    // URL 同时被 Phase 27 老行为写过 ?tab=plugin,模拟"老插件
+    // QuickSearchModal 残留 URL"的场景。期望 migrationSearch 胜出。
+    window.history.replaceState({}, '', '/?tab=plugin');
+
+    mockInvoke.mockResolvedValue([]);
+    render(<ResourceBrowserPage />);
+
+    await waitFor(() => {
+      const calls = mockInvoke.mock.calls.filter(
+        (c) => c[0] === 'list_resources',
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    const firstCall = mockInvoke.mock.calls.find(
+      (c) => c[0] === 'list_resources',
+    );
+    expect(firstCall).toBeDefined();
+    // 优先级 1 (migration) 覆盖优先级 2 (URL ?tab=plugin) → kind='mcp'。
+    expect((firstCall![1] as { kind: string }).kind).toBe('mcp');
   });
 });

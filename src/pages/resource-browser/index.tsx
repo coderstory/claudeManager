@@ -39,7 +39,7 @@
  *   best-effort(缺失 → "暂无描述")。不改 F16 的 ResourceItem 模型
  *   (detail 用独立 ResourceDetail 结构)—— anti-事故。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   ChevronDown,
@@ -71,6 +71,7 @@ import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
 import type { RevealFailure } from '../../components/ErrorBanner';
 import { useScope, syncScopeFromProject } from '../../hooks/useScope';
 import { useProjects } from '../../hooks/useProjects';
+import { useViewState } from '../../hooks/useViewState';
 // Phase 27 Fix 6 (D-11) — mcp tab 直接渲染 McpManagementPage(沿用
 // 27-01 fix 4 的 useScope + key remount,scope 切换也重 mount)。
 // 共享 McpManagementPanel 的提取推迟到后续 milestone — 本 plan
@@ -96,9 +97,9 @@ interface PageState {
   revealErrorItemName: string | null;
 }
 
-function makeInitialState(): PageState {
+function makeInitialState(initialKind: ResourceKind): PageState {
   return {
-    kind: readInitialKindFromUrl(),
+    kind: initialKind,
     items: [],
     loading: true,
     listError: null,
@@ -121,26 +122,39 @@ function makeInitialState(): PageState {
 const NONE_SOURCE_LABEL = '(无来源)';
 
 /**
- * Phase 27 Fix 6 (D-11) — 读 URL `?tab=<kind>` 决定初始 tab。
- * 老用户从 /mcp-management 重定向后(App.tsx D-13)落到这里,
- * `?tab=mcp` → 默认 mcp tab。非法 kind 退回到 'plugin'(防滥用)。
+ * Phase 46 (Q46-3) — 双源优先级解析 initial kind:
+ *   优先级 1: migration context (mount-time,来自 stale viewId 迁移)
+ *   优先级 2: URL search params (会话期,QuickSearchModal 写)
+ *   优先级 3: 默认 'plugin'
  *
- * 项目不用 react-router(沿用 useViewState 自己路由,见 App.tsx
- * rationale 注释),所以这里直接 parse window.location.search 而不是
- * 用 useSearchParams。
+ * 老版本 (Phase 27 Fix 6, D-11) 只读 URL `?tab=`;Phase 46 启用
+ * migrateFrom (Q44-3) 后,老用户 localStorage 存 'mcp-management'
+ * 会被 useViewState 重定向到 'resource-browser' + migrationSearch
+ * { tab: 'mcp' },必须在 mount 时把 'mcp' 灌进 initial kind,
+ * 否则会被 URL `?tab=plugin`(老插件 QuickSearchModal 残留)覆盖。
  */
-function readInitialKindFromUrl(): ResourceKind {
-  if (typeof window === 'undefined') return 'plugin';
-  const search = window.location.search.replace(/^\?/, '');
-  if (search === '') return 'plugin';
-  const params = new URLSearchParams(search);
-  const tab = params.get('tab');
-  if (!tab) return 'plugin';
-  // ALL_RESOURCE_KINDS 是 readonly 数组,作为白名单验证。非法值
-  // (拼写错 / 已删除 kind)退回到 'plugin',不抛。
-  return (ALL_RESOURCE_KINDS as readonly string[]).includes(tab)
-    ? (tab as ResourceKind)
-    : 'plugin';
+function resolveInitialKind(
+  migrationSearch?: Record<string, string>,
+): ResourceKind {
+  // 优先级 1: migrationSearch
+  if (
+    migrationSearch?.tab &&
+    (ALL_RESOURCE_KINDS as readonly string[]).includes(migrationSearch.tab)
+  ) {
+    return migrationSearch.tab as ResourceKind;
+  }
+  // 优先级 2: URL ?tab=
+  if (typeof window !== 'undefined') {
+    const search = window.location.search.replace(/^\?/, '');
+    if (search !== '') {
+      const tab = new URLSearchParams(search).get('tab');
+      if (tab && (ALL_RESOURCE_KINDS as readonly string[]).includes(tab)) {
+        return tab as ResourceKind;
+      }
+    }
+  }
+  // 优先级 3: 默认
+  return 'plugin';
 }
 
 /**
@@ -215,9 +229,19 @@ function describeSourceField(kind: ResourceKind): string {
 // ---------------------------------------------------------------------------
 
 export default function ResourceBrowserPage(): ReactElement {
-  // Phase 27 Fix 6 (D-11) — initial kind 从 URL `?tab=` 读,默认 'plugin'。
-  // useState 的 lazy init(fn)只在 mount 时跑一次,后续 render 不会重读 URL。
-  const [state, setState] = useState<PageState>(makeInitialState);
+  // Phase 46 (Q46-3) — 双源优先级读 migrationSearch (来自 useViewState context)。
+  // migrationSearch mount-time 锁死(在 ViewStateProvider 内部 useMemo([])),
+  // 后续 setView 不会重新计算,因此这里读到的就是 stale viewId 迁移结果。
+  // 例如老用户 localStorage='mcp-management' → migrateViewId 把 view 改
+  // 'resource-browser' + migrationSearch={tab:'mcp'} → 此处 initial kind='mcp'。
+  const { migrationSearch } = useViewState();
+
+  // Phase 27 Fix 6 (D-11) + Phase 46 (Q46-3) — initial kind 通过双源解析
+  // (migration > URL > default)。useState 的 lazy init(fn)只在 mount 时
+  // 跑一次,后续 render 不会重算。
+  const [state, setState] = useState<PageState>(() =>
+    makeInitialState(resolveInitialKind(migrationSearch)),
+  );
   // F21 — search box query. Kept separate from PageState so re-typing
   // does NOT clobber the loaded items / loading flag. Switching tabs
   // (runList) clears the query so the new kind starts unfiltered.
@@ -283,12 +307,15 @@ export default function ResourceBrowserPage(): ReactElement {
     }
   }, []);
 
-  // Initial fetch on mount — uses URL `?tab=` (D-11) or defaults to
-  // 'plugin'. We need to read the same initial kind that makeInitialState
-  // picked, so we re-call readInitialKindFromUrl() here. (Mount-time
-  // only — switching tabs is handled by handleTabClick.)
+  // Initial fetch on mount — uses the resolved initial kind (双源:
+  // migration > URL > default) that makeInitialState stored into state.kind.
+  // We capture the mount-time kind via useRef so the effect dep is stable
+  // (re-running with `state.kind` would loop, since runList setStates on
+  // every kind and React re-renders even on identical-kind updates because
+  // of the new object reference).
+  const initialKindRef = useRef<ResourceKind>(state.kind);
   useEffect(() => {
-    void runList(readInitialKindFromUrl());
+    void runList(initialKindRef.current);
   }, [runList]);
 
   const handleTabClick = useCallback(
