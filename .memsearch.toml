@@ -1,0 +1,112 @@
+[milvus]
+uri = "~/.memsearch/milvus.db"
+token = ""
+collection = "memsearch_chunks"
+
+[embedding]
+provider = "onnx"
+model = "text-embedding-3-small"
+base_url = ""
+api_key = ""
+
+[chunking]
+max_chunk_size = 1500
+overlap_lines = 2
+
+[watch]
+debounce_ms = 1500
+
+[llm]
+model = ""
+base_url = ""
+api_key = ""
+
+[plugins.claude-code.summarize]
+enabled = true
+provider = ""
+model = ""
+
+[plugins.claude-code.project_review]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/PROJECT.md"
+
+[plugins.claude-code.user_profile]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/USER.md"
+
+[plugins.codex.summarize]
+enabled = false
+provider = ""
+model = ""
+
+[plugins.codex.project_review]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/PROJECT.md"
+
+[plugins.codex.user_profile]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/USER.md"
+
+[plugins.opencode.summarize]
+enabled = false
+provider = ""
+model = ""
+
+[plugins.opencode.project_review]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/PROJECT.md"
+
+[plugins.opencode.user_profile]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/USER.md"
+
+[plugins.openclaw.summarize]
+enabled = true
+provider = ""
+model = ""
+
+[plugins.openclaw.project_review]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/PROJECT.md"
+
+[plugins.openclaw.user_profile]
+enabled = false
+provider = "native"
+model = ""
+min_interval_hours = 24
+input_dir = ".memsearch/memory"
+output_file = ".memsearch/USER.md"
+
+[prompts]
+compact = ""
+summarize = ""
+project_review = ""
+user_profile = ""

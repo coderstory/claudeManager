@@ -3,7 +3,33 @@
     "allow": [
       "Bash(chmod +x /Users/coderstory/CodeSource/winui3/scripts/lint-plugin-coupling.sh)",
       "Bash(bash /Users/coderstory/CodeSource/winui3/scripts/lint-plugin-coupling.sh)",
-      "Bash(sccache --version)"
+      "Bash(sccache --version)",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.0 --release)",
+      "Bash(log show *)",
+      "Bash(/usr/bin/log show *)",
+      "Bash(timeout 25 ./scripts/debug-mac.sh)",
+      "Bash(xargs kill -9)",
+      "WebFetch(domain:docs.rs)",
+      "WebSearch",
+      "Bash(.claude/skills/render-url/scripts/render-url.sh \"https://docs.rs/tauri/2.11.3/tauri/trait.Manager.html#method.manage\" /tmp/tauri-manage.html --mode html --wait 3000)",
+      "Bash(.claude/skills/render-url/scripts/render-url.sh \"https://docs.rs/tauri/2.11.3/tauri/trait.Manager.html#method.manage\" /tmp/tauri-manage.txt --mode text --wait 3000 --text-max-chars 3000)",
+      "Bash(pkill -f \"target/debug/claude-config-manager\")",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.1 --release)",
+      "Bash(.claude/skills/render-url/scripts/render-url.sh \"http://localhost:1420/\" /tmp/ccm-vite-dev.html --mode html --wait 5000)",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.2 --release)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(pkill -f \"ClaudeManager\")",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.3 --release)",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.4 --release)",
+      "Bash(./scripts/install-to-applications-mac.sh --milestone M4 --task 0.0 --slug v3.4.5 --release)",
+      "Bash(./scripts/build-mac.sh --release --no-dmg)",
+      "Bash(./scripts/build-mac.sh --no-dmg)",
+      "Bash(rm -rf /Applications/ClaudeManager.app)",
+      "Bash(cp -R src-tauri/target/release/bundle/macos/ClaudeManager.app /Applications/ClaudeManager.app)",
+      "Bash(sccache --show-stats)",
+      "Bash(open /Applications/ClaudeManager.app)",
+      "Bash(pkill -9 -f \"ClaudeManager\")",
+      "Bash(xxd /Applications/ClaudeManager.app/Contents/MacOS/claude-config-manager)"
     ]
   }
 }

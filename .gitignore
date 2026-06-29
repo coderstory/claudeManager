@@ -51,3 +51,6 @@ src/design-system/*.bak
 
 # Subagent-Driven Development ledger (session scratch)
 .superpowers/
+
+# memsearch hook auto-generated journal (machine-local)
+.memsearch/memory/
