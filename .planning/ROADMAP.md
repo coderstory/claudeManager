@@ -14,6 +14,7 @@
 - ✅ **v3.0.1 M5 用户 bug 修复 (33 bug)** — Phases 23-26 (shipped 2026-06-26, tag v3.0.1; 33/33 bug 修完, ClaudeManager.app 14M rebuild + 1 窗口 OK, 详见 [v3.0.1-ROADMAP.md](milestones/v3.0.1-ROADMAP.md))
 - ✅ **v3.2 M6 用户实测反馈修复** — Phases 27-31 (shipped 2026-06-27, tag v3.2; critical 5 + 业务 7 真修/6 留空 + 重构 9 + A 类 5 + 整合验证 INT-01~06; test-all 6 stages + M4 e2e 15/15 + ClaudeManager.app rebuild 14M)
 - 🚧 **v3.3 M7 代码审计修复** — Phases 32-36 (planning 2026-06-27; opencode M6 audit 37 issue: P0 release 3 + P1 runtime 5 + P2 CI 4 + P3 arch 6 + P4 quality 12 + P5 nice 7 + INT-01~06; ⚠️ VERIFY-FIRST 纪律; tag v3.3 待打; 详见 [v3.3-ROADMAP.md](milestones/v3.3-ROADMAP.md))
+- 🚧 **v3.4 M8 plugin system 重构** — Phases 42-47 (PLAN ship 2026-06-27; execute 待启动; 6 phase 共 5387 行 PLAN: 42 IPC dispatch 567 / 43 MenuRegistry 781 / 44 route 派生 1063 / 45 AppState plugin 化 1089 / 46 stale-route 1201 / 47 整合+tag 686; 5 BLOCKING 漂移决策已用户白名单; 强验收 = "加 1 plugin 改 1 文件" + "删 1 plugin 改 1 文件" 双向闭环; tag v3.4.0 待打; 详见 [v3.4-DECISIONS.md](milestones/v3.4-DECISIONS.md))
 - ❌ ~~**v3.0 round 3 (M4.3 updater UI + A3 云备份 + M4.6 长尾)**~~ — **2026-06-26 用户拍板废弃**;原 Phase 19/20/21 标记弃用,不进新 milestone
 
 ## Phases
@@ -407,6 +408,7 @@ Phase 22 ✅ (v3.0-M4: e2e framework 14/14 PASS, tag v3.0-M4)
 Phase 23 → 24 → 25 → 26 ✅ (v3.0.1 M5: 33/33 bug 修完, tag v3.0.1)
 ~~Round 3 pending: Phase 19 (云备份) → 20 (updater UI) → 21 长尾项~~ ❌ **2026-06-26 用户拍板废弃**
 Phase 27 → 28 → 29 → 30 → 31 ✅ (v3.2 M6: critical 5 → 业务 13 → 重构 9 → A 类 5+整合; tag v3.2, shipped 2026-06-27)
+Phase 32 → 33 → 34 → 35 → 36 → 37 🚧 (v3.4 M8 plugin system 重构: 6 PLAN ship 2026-06-27; execute 待启动; Phase 42-46 4 槽并行 + Phase 47 独占整合; tag v3.4.0 待打)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -441,6 +443,12 @@ Phase 27 → 28 → 29 → 30 → 31 ✅ (v3.2 M6: critical 5 → 业务 13 → 
 | 29. v3.2 M6 重构 9 bug 修复 (BUG-RF-01~09) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 30. v3.2 M6 A 类 5 bug 修复 (UI-A-01~05) | v3.2 | 1/1 | Complete    | 2026-06-27 |
 | 31. v3.2 M6 整合验证 + tag v3.2 (INT-01~06) | v3.2 | 1/1 | Complete    | 2026-06-27 |
+| 32. v3.4 M8-Phase 42 IPC dispatch (commands → plugin, 69 命令) | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
+| 33. v3.4 M8-Phase 43 MenuRegistry (tray/AppMenu 中心化, 删 IPlatformAppMenu) | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
+| 34. v3.4 M8-Phase 44 前端 route 派生 (registry → ALL_VIEWS + 三元链收敛) | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
+| 35. v3.4 M8-Phase 45 ServicePlugin 拓扑序 + AppState 收缩 | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
+| 36. v3.4 M8-Phase 46 stale-route 清理 (VIEW_ID_MIGRATIONS + 删 mcp stub) | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
+| 37. v3.4 M8-Phase 47 整合 + macOS 真机 + 视觉回归 + tag v3.4.0 | v3.4 | 0/1 (PLAN ship) | Pending (execute 待启动) | - |
 </invoke>
 
 ### Phase 23: M5 critical 5 bug 修复 (Phase 1: #2 #4 #6 #19 #27)
@@ -619,5 +627,175 @@ Plans:
   4. ClaudeManager.app 重新 build (`scripts/build-and-ship.sh`) + 装到 `~/Applications/` + 双击启动 → 看到主窗口,标题"Claude 配置管理器",WebView2 子窗口 1 个,tray icon 显示
   5. STATE.md 顶部 Current Position 段写 "M6 完成 (2026-06-26)" + Recent Work 加 Phase 27-31 各行 + Decisions 加 D17 (v3.2 拍板) + Known Issues 加 v3.2 已知限制
   6. `git tag -l v3.2` 输出 `v3.2` + `git push origin v3.2` 成功
+
+### 🚧 v3.4 M8 plugin system 重构 (In Progress — PLAN ship 2026-06-27, execute 待启动)
+
+**Milestone Goal**: 把 plugin 系统从"骨架 + stub"提升为"plugin 真正持有 commands / services / tray / menu / routes / 拓扑序"——让 5 类可扩展单元 (plugin / service / route / tray item / menu item) 全部走 IPlugin trait 声明,加 1 plugin 改 1 文件 + 删 1 plugin 改 1 文件双向闭环,彻底消除 lib.rs / commands/ / platform/ 的散落硬编码。
+
+> **Status**: 6 份 PLAN.md 全部 ship (commit `fbd09fc` 等; 5387 行); 5 BLOCKING 漂移决策 (D-42-A / SHIP-A / D-44-A / D-45-A / D-CC-A) 已用户白名单; 详见 [v3.4-DECISIONS.md](milestones/v3.4-DECISIONS.md)。**execute 阶段待启动**,Phase 47 整合期 = single-thread 串行 (D11 4 槽并发仅适用 42-46,Phase 47 独占); 整合期跑 5 phase 强验收 (10/10 smoke + 5/5 grep lint + 3/3 lifecycle + 60/60 visual 回归 + macOS AppMenu 4 submenu 真机验证) + `git tag v3.4.0`。
+>
+> **沿用 v3.2/v3.3 工程模式**: 每个 phase 1-3 subagent 派工 + 1 commit 1 fix + 强验收 grep lint + smoke test 10/10 + Phase 47 整合 ship gate。
+>
+> **依赖图** (5 phase 严格拓扑):
+> ```
+> Phase 42 (IPC dispatch) ─┬─→ Phase 43 (MenuRegistry)
+>                         ├─→ Phase 44 (route 派生) ─→ Phase 46 (stale-route)
+>                         └─→ Phase 45 (ServicePlugin 拓扑序) ─→ Phase 46
+>                                                                       │
+>                                                                       ↓
+>                                                               Phase 47 (整合 + tag)
+> ```
+> 4 个并行槽 (42-46) 可同时启动 (D11 4 槽),共享 D-CC-A 4 字段 PluginContext + D-45-A Arc ServiceRegistry + D-42-A inventory::submit! 注册契约。
+>
+> **数字基线 (verify-first 实测, 2026-06-27)**: view=11 / commands=69 / 前端 invoke=23 (api/=14) / useViewState 引用=121 (排 test/setup) / 后端 stub=10 → 9 (Phase 42 SHIP-A 合并 provider_switch) → 8 (Phase 46 删 mcp_management) / 前端 stub=9 → 8 (Phase 46 删 mcp-management) / service=11 (10 主 + 1 helper) / AppState `Arc<crate::services::>` 字段=9 / `state.<svc>_service.` 直访=12 (重测订正 research 估 28 误)。
+
+### 5 BLOCKING 决策 (v3.4 顶部 highlight,用户已白名单)
+
+| # | 决策 ID | 一句话 | 影响 phase |
+|---|---|---|---|
+| 1 | **D-42-A** | 新增依赖 `inventory = "=0.3.24"` (CLAUDE.md §2.3 "必要功能" 例外) | 42 |
+| 2 | **SHIP-A** | 删后端 `provider_switch` stub (24 行空), 合并到 `provider_list` (前后端对齐 9 stub) | 42 |
+| 3 | **D-44-A** | `mcp-management` stub 删除由 Phase 46 负责 (后端 + 前端 + useEffect + 44 处测试命中) | 46 |
+| 4 | **D-45-A** | `ServiceRegistry` 锁 Arc 路径 API: `register_arc<T>(&self, Arc<T>)` + `get<T>() -> Option<Arc<T>>` (9 service 拓扑互注入需要共享所有权) | 42 + 45 |
+| 5 | **D-CC-A** | `PluginContext` 冻结 4 字段 (`app / paths / services(&mut) / host(&)`) + `IPlugin::init` 接 `&mut PluginContext` (一次性付清避免 Phase 45 BC 损失) | 42 + 43 + 45 |
+
+### Phase 32: v3.4 M8-Phase 42 — IPC dispatch (commands 真正属于 plugin)
+
+**Goal**: 把 69 个 `#[tauri::command]` 从 `commands/*.rs` (14 文件) 物理迁移到 13 个 plugin stub,走 `inventory::submit!` + `DispatchTable` 自定义 invoke_handler 派发; 使 "加 1 plugin 改 1 文件" 强验收达成; 冻结 PluginContext 4 字段 + ServiceRegistry Arc 路径 API 为 Phase 43/45 公共契约。
+**Depends on**: 无 (Phase 42 是 v3.4 起点)
+**Requirements**: D-42-A (inventory) + SHIP-A (provider_switch 合并) + D-CC-A (PluginContext 冻结) + D-45-A (ServiceRegistry Arc)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动
+**Estimates**: 1-1.5 天 (567 行 PLAN; 6 task / 2 wave: Wave 0 基础机制 inventory + ServiceRegistry + PluginContext 4 字段 + DispatchTable; Wave 1 主工作量 provider_switch 删 + 13 stub 全迁移 + lib.rs 改造)
+**Strong Acceptance (Phase 47 整合期验证)**:
+  1. 13 stub 全部迁移 commands (含 `file_ops` / `history_view` / `project_mode` / `updater` 4 个新 stub; `provider_switch` 合并 `provider_list`)
+  2. `inventory::submit!` 注册 69 次 + `DispatchTable` 收集 69 项
+  3. `cargo test plugins::dispatch::tests::dispatch_routes_correctly` PASS
+  4. 强验收: 砍掉 1 plugin 命令 → lib.rs / commands/ 0 改动 (grep lint 验证)
+  5. `scripts/smoke-test.sh` 10/10 PASS (含 dist 指纹 + WebView2 child + title)
+  6. 前端 0 改动 — 23 处 `invoke("xxx", ...)` 不变
+
+**Plans**: 42-PLAN.md (567 行, 6 task / 2 wave)
+
+### Phase 33: v3.4 M8-Phase 43 — MenuRegistry (tray / AppMenu 中心化)
+
+**Goal**: 把 tray (lib.rs:308-329) + macOS AppMenu (lib.rs:380-386 + platform/{macos,windows}/app_menu.rs) **完全收编**到 plugin 系统; 扩 IPlugin 加 `tray_items() / app_menu_items()` 默认空 vec; 新增 `core` plugin 接管两套菜单声明; 删 `IPlatformAppMenu` trait + `MacAppMenu/WindowsAppMenu`; lib.rs::setup 改造为 0 行 `MenuItem::with_id / on_menu_event`。
+**Depends on**: Phase 42 (D-CC-A 已冻结 PluginContext 含 `host` 字段)
+**Requirements**: D-CC-A (PluginContext `host` 字段就位)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动
+**Estimates**: 1-1.5 天 (781 行 PLAN; 5 task)
+**Strong Acceptance (Phase 47 整合期验证)**:
+  1. `lib.rs` 0 行 `MenuItem::with_id` / `on_menu_event` (grep lint)
+  2. `src-tauri/src/platform/macos/app_menu.rs` + `src-tauri/src/platform/windows/app_menu.rs` 文件不存在
+  3. `IPlatformAppMenu` trait + `MacAppMenu` / `WindowsAppMenu` impl + `platform::runtime::app_menu()` factory 全部删除
+  4. 9 业务 stub `tray_items() / app_menu_items()` 默认空 vec, 0 改动 (git diff 仅 `core.rs` 新增)
+  5. `core` plugin id = "core" 注册在 plugins/mod.rs 第一行
+  6. `cargo test plugins::menu_registry::tests::*` 4 项 PASS + `cargo test plugins::traits::tests::default_tray_items_empty` PASS + `cargo test --lib --all` PASS
+  7. `scripts/smoke-test.sh` 10/10 PASS
+  8. macOS 真机 AppMenu 4 submenu 可见 (Phase 47 整合期验证)
+
+**Plans**: 43-PLAN.md (781 行, 5 task)
+
+### Phase 34: v3.4 M8-Phase 44 — 前端 route 派生化 (registry 派生 ALL_VIEWS + 三元链收敛)
+
+**Goal**: 把 9 个前端 plugin stub + 3 个 core view (home / history / about) 全部走 `src/plugins/registry.ts` 派生; `SidebarTile.migrateFrom` 字段就位 + `FrontendPlugin` 扩 viewId / pageMeta / componentEntry + `useViewState.tsx` 删 12 项硬编码 re-export 自 registry + `App.tsx` 三元链 12 分支 → 查表 + `AppSidebar.tsx` 删 12 项手写 Record 改 import VIEW_META + 12 page 加 data-testid + 9 stub 改造 (含 mcp-management) + 60 张 5 主题 × 12 view 视觉矩阵 baseline。
+**Depends on**: Phase 42 (IPlugin::routes 已就位)
+**Requirements**: D-44-A (mcp stub 由 Phase 46 删, Phase 44 保留)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动
+**Estimates**: 1.5-2 天 (1063 行 PLAN; 7 task / 3 wave: Wave 0 类型扩展 + Wave 1 registry 派生 + Wave 2 视觉矩阵)
+**Strong Acceptance (Phase 47 整合期验证)**:
+  1. `SidebarTile.migrateFrom` 字段类型就位 (`resource-browser.tsx` 填 `{ fromViewId: 'mcp-management', appendQuery: { tab: 'mcp' } }`)
+  2. `FrontendPlugin` 扩 4 字段: `viewId / pageMeta / componentEntry.component / componentEntry.propsBuilder`
+  3. `registry.ts` 派生 5 导出: `ALL_VIEW_IDS / ALL_VIEWS_ORDERED / PAGE_META / VIEW_META / VIEW_COMPONENTS: Map<ViewId, ViewComponentEntry>`
+  4. `useViewState.tsx` 删 12 项硬编码 ALL_VIEWS, 改 re-export 自 registry (grep lint: 0 行手写 ALL_VIEWS)
+  5. `App.tsx` 三元链 12 分支 → 查表 (grep lint: 0 行 `view === 'x' ?`)
+  6. `AppSidebar.tsx` 删 12 项手写 VIEW_META, import 自 registry (grep lint: 0 行手写 VIEW_META Record)
+  7. 12 page 加 `data-testid` (Playwright e2e 用)
+  8. 强验收: 加 1 stub `stubs/_test_strong.tsx` (临时) + `registry.ts` 1 行 import + 1 行 push → git diff 仅 2 文件 + 不动 App.tsx / AppSidebar / useViewState
+  9. 视觉矩阵 60 张 baseline (12 view × 5 主题, Playwright `--update-snapshots` 生成) → 落盘 `tests/e2e/visual-baselines/<theme>-<view>.png`
+  10. M31 vibrancy 撤回后视觉等价 (新 AppHeader layout, 无 `.topbar-center` 居中 + WindowControls 回到 topbar-right)
+
+**Plans**: 44-PLAN.md (1063 行, 7 task / 3 wave)
+
+### Phase 35: v3.4 M8-Phase 45 — ServicePlugin 拓扑序 + AppState 收缩
+
+**Goal**: 把 9 个 `Arc<crate::services::xxx>` 字段从 AppState 抽出 → 9 个 service plugin (history / backup / provider / usage / mcp / optimizer / resource / marketplace / project), 通过 `ServiceRegistry` Arc 路径分发; `init_all_topological` 拓扑序 init (DFS 3-color); 真实 12 处 `state.<svc>_service.xxx` 改 `get_service!` macro; 达成 "加 1 service 只动 1 文件" 强验收。
+**Depends on**: Phase 42 (ServiceRegistry Arc 路径 API 已 ship)
+**Requirements**: D-45-A (Arc ServiceRegistry 终态) + D-CC-A (PluginContext `services(&mut)` 字段已 ship)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动
+**Estimates**: 1.5-2 天 (1089 行 PLAN; 6 task / 3 wave: Wave 0 拓扑模块 + Wave 1 service plugin 化 + Wave 2 commands 改 macro)
+**Strong Acceptance (Phase 47 整合期验证)**:
+  1. ServiceRegistry Arc 终态 API 字节级匹配 D-45-A
+  2. `IPlugin::depends_on()` 默认空 vec; 9 service plugin 各声明自身依赖
+  3. 9 service plugin 全部新建, `services() = vec![]` (G2 全动态)
+  4. `topological.rs` (NEW) + 4 单测 PASS (DFS 3-color + DAG / cycle / missing dep / multi-deps)
+  5. `PluginHost::init_all_topological` + 4 单测 PASS (refcount=1 时 Arc::get_mut OK, init 后再 `app.manage`)
+  6. AppState 缩到 < 50 行, 0 个 `Arc<crate::services>` 字段 (grep `^    pub [a-z_]+_service: Arc<crate::services::` 0 命中)
+  7. 12 处 `state.<svc>_service.` 直访全部改 `get_service!` macro (grep `state\.[a-z_]+_service\.` 在 `commands/*.rs` 0 命中)
+  8. `cargo test --lib --all` PASS + `scripts/smoke-test.sh` 10/10 PASS
+  9. 强验收: 加 1 service plugin stub → topological init + commands dispatch PASS (不改 lib.rs setup)
+
+**Plans**: 45-PLAN.md (1089 行, 6 task / 3 wave)
+
+### Phase 36: v3.4 M8-Phase 46 — stale-route 清理 (VIEW_ID_MIGRATIONS + 删 mcp-management stub)
+
+**Goal**: 把 `App.tsx:174-197` 兜底 useEffect 替换为 useViewState 内部派生的 `VIEW_ID_MIGRATIONS` 索引 + `migrateViewId` 递归解析, 使 v3.2 user 从 `localStorage='mcp-management'` 升级到 v3.4 启动后自动跳转到 `view=resource-browser` + URL `?tab=mcp`; 同时一次性删 `mcp-management` stub (后端 + 前端 + 注释 + App.tsx useEffect) 实现 "删 view 改 1 文件" 强验收。
+**Depends on**: Phase 44 (SidebarTile.migrateFrom 字段就位) + Phase 45 (AppState 收缩完成)
+**Requirements**: D-44-A (mcp stub 由 Phase 46 删, 11 处改动已规划)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动
+**Estimates**: 1-1.5 天 (1201 行 PLAN; 5 task / 3 wave: Wave 0 VIEW_ID_MIGRATIONS + Wave 1 mcp stub 全删 + Wave 2 端到端验证)
+**Strong Acceptance (Phase 47 整合期验证)**:
+  1. `useViewState.tsx` 加 `VIEW_ID_MIGRATIONS: Record<string, string>` 常量 (硬编码, 不依赖 Phase 44 派生 — 强验收 1 项)
+  2. `readInitialView` 改返回 `{ view, search? }` + `migrateViewId` 递归解析
+  3. `App.tsx:174-197` 兜底 useEffect 删 (grep lint: 0 命中)
+  4. `src/plugins/stubs/mcp-management.tsx` 23 行删 (后端 `mcp_management.rs` 21 行 + `stubs/mod.rs:6` + `plugins/mod.rs:18-20` "F1..F7" 注释 + `plugins/registry.ts:23,40` + `App.tsx:65-67` 注释 + `useViewState.tsx:115-119` 注释 + `App.tsx:174-197` useEffect 11 处全清)
+  5. `resource-browser.tsx` 填 `migrateFrom: { fromViewId: 'mcp-management', appendQuery: { tab: 'mcp' } }`
+  6. `__tests__/plugin-registry.test.ts:10` `toBe(9)` → `toBe(8)`
+  7. `__tests__/hooks/useViewState.test.tsx` stale 'mcp-management' 测试改测 `migrateFrom → resource-browser`
+  8. 端到端 e2e: 手动 `localStorage.setItem('cc-view', 'mcp-management')` → 启动 v3.4 → URL `?tab=mcp` + view `resource-browser`
+  9. `cargo test --lib --all` PASS + `vitest run` 全 PASS + `scripts/smoke-test.sh` 10/10 PASS
+
+**Plans**: 46-PLAN.md (1201 行, 5 task / 3 wave)
+
+### Phase 37: v3.4 M8-Phase 47 — 整合 + macOS 真机验证 + 视觉回归 + tag v3.4.0
+
+**Goal**: 把 Phase 42 (IPC dispatch) / 43 (MenuRegistry) / 44 (route 派生) / 45 (ServicePlugin 拓扑序) / 46 (stale-route) 5 phase 全部 ship 后的产物**端到端跑通**; 跑强验收 (10/10 smoke + 5 phase grep lint + 3 端到端 lifecycle); 做视觉回归 (60 张 12 view × 5 主题 Playwright e2e); 跑 macOS 真机验证 (AppMenu 4 submenu / tray / window chrome); 最后 `git tag v3.4.0` + 更新 PROJECT/ROADMAP/MILESTONES。
+**Depends on**: Phase 42-46 全部 ship + 各自单测 PASS + 各自强验收内部已通过
+**Requirements**: 5 phase DECISIONS §强验收 全部 (5/5 phase lint + 10/10 smoke + 60/60 visual + 3/3 lifecycle + macOS 4 submenu 可见)
+**Status**: 🚧 PLAN ship 2026-06-27; execute 待启动 (Phase 47 必须独占, 严禁与 42-46 并行)
+**Estimates**: 1 天 (686 行 PLAN; 4 task: 整合 smoke + macOS 真机 + 视觉回归 + tag)
+**Strong Acceptance**:
+  1. `cargo build --release --features tauri/custom-protocol` + `scripts/smoke-test.sh` 10/10 PASS (CLAUDE.md §13)
+  2. macOS 真机 (CLAUDE.md §15, D6 真机验证): AppMenu 4 submenu 可见 / tray icon / window chrome 正常 / dist 嵌入 `.app/Contents/Resources/`
+  3. 60 张视觉回归: 12 view × 5 主题 Playwright e2e 0 diff (Phase 44 baseline 对比)
+  4. 3 端到端 lifecycle:
+     - Phase 42: 加 1 plugin stub + registry.ts 1 行 → smoke + visual PASS (不改 lib.rs / commands/)
+     - Phase 45: 加 1 service plugin stub → topological init + commands dispatch PASS (不改 lib.rs setup)
+     - Phase 46: v3.2 user `localStorage='mcp-management'` → v3.4 启动 → URL `?tab=mcp` + view=`resource-browser`
+  5. 5 phase grep lint 全 PASS:
+     - Phase 42: `src-tauri/src/lib.rs` 0 `generate_handler!` + 0 `tauri::command` 嵌套
+     - Phase 43: `src-tauri/src/lib.rs` 0 `MenuItem::with_id` + 0 `on_menu_event` + `app_menu.rs` 不存在
+     - Phase 44: `useViewState.tsx` 0 手写 ALL_VIEWS / `App.tsx` 0 `view ===` 三元链 / `AppSidebar.tsx` 0 手写 VIEW_META
+     - Phase 45: `commands/*.rs` 0 `state.<svc>_service.` / `app_state.rs` 0 `Arc<crate::services>` / 9 service 拓扑序单测 PASS
+     - Phase 46: `App.tsx` 0 stale-route 兜底 / `mcp-management.tsx` 不存在 / `plugin-registry.test.ts` 8 stub
+  6. `git tag v3.4.0` 含 release notes: 5 phase 主要改动 + 5 BLOCKING 决策 + 验证证据 (smoke 10/10 + lint 5/5 + visual 60/60 + lifecycle 3/3)
+  7. PROJECT.md / ROADMAP.md / MILESTONES.md 更新 + STATE.md / Lessons learned (续 M3.0.3 + 写 v3.4 lessons: 5 BLOCKING 漂移修正经验)
+
+**Plans**: 47-PLAN.md (686 行, 4 task)
+
+### 延后到 Phase 47 整合期后 (v3.4 内推迟项)
+
+> v3.4 范围内识别但推到 v3.4.1+ follow-up 的项 (不在 42-47 强验收内,需用户拍板重启):
+
+| # | 推迟项 | 原本应在哪 phase | 推迟原因 | 后续建议 phase |
+|---|---|---|---|---|
+| 1 | `appendQueryMerge` 多源合并策略 | Phase 44 RESEARCH §OpenQ | 现状 `appendQuery` 简单 key-value 覆盖; 多源迁移链 (A → B → C, B 也带 appendQuery) 合并策略未定 | v3.4.1 (Phase 44 derive 1 行 helper 即可) |
+| 2 | ESLint 规则 9 (no-dynamic-import / no-restricted-syntax for plugin registry mutation) | Phase 44 lint 强化 | registry `ALL_PLUGINS.push` 强验收 1 处临时 stub 改, 长期需 lint 防回归 | v3.4.1 (新增 `.eslintrc.yml` rule) |
+| 3 | react-router 替换 (current: 手写 `view === 'x' ?` 查表 → 用 `react-router-dom` v6 nested routes) | Phase 44 RESEARCH §G3 | 当前查表模式满足 "加 1 plugin 改 1 文件"; react-router 引入 = 大改造, 需独立评估 | v3.5+ (需用户拍板) |
+| 4 | plugin hot-reload (dev 模式 plugin 改动 → 自动重载) | Phase 43 RESEARCH §G4 | dev 体验改善项, v3.4 主线 plugin 系统稳定后才考虑 | v3.5+ (需用户拍板) |
+| 5 | `core` plugin 拆分 (home / history / about 各 1 plugin) | Phase 43 RESEARCH §G5 | 现状 1 个 `core` plugin 持 3 view; 拆分 = 3 个独立 plugin stub + 各自 routes | v3.4.1 (Phase 44 派生已有基础, 30 分钟改完) |
+| 6 | IPlugin::commands() 返回 Vec<CommandSpec> 改宏派生 (auto-derive 从函数签名) | Phase 42 RESEARCH §G2 | 现状手写 CommandSpec 14 处; 派生宏 = proc-macro crate = 引入新依赖 (D-42-A 之外) | v3.4.1+ (需新增依赖 + 评估) |
+| 7 | AppState 彻底删 (Phase 45 缩到 < 50 行, 但不删 AppState struct) | Phase 45 RESEARCH §G7 | 9 service 已抽 plugin, 但 AppState struct 自身保留 (state 管理 / event 转发); 删 = 拆 Tauri state pattern | v3.4.1+ (需用户拍板) |
+| 8 | macOS plugin 隔离 (sandbox 化 plugin 加载, 防 panic 拖死 app) | Phase 47 macOS 真机验证 | v3.4 macOS 真机仅验证可见性; 沙盒化 = 进程级隔离 = 大架构 | v3.5+ (需用户拍板 + 安全评审) |
+| 9 | plugin 依赖版本锁 (plugin manifest 声明 required inventory version) | Phase 42 RESEARCH §G6 | v3.4 单 binary 部署, plugin 全静态注册; 动态 plugin 加载 = v3.5 主题 | v3.5+ (plugin 动态加载专题) |
 
 ---
