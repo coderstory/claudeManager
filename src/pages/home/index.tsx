@@ -85,6 +85,7 @@ export function HomeView(_props: HomeViewProps = {}): ReactElement {
       // picked directory name. Frontend-only picker (no Rust side change needed).
       const dirName = firstFile.webkitRelativePath?.split('/')[0] ?? '';
       setNewRoot(dirName);
+      setNewName(dirName);
       handleValidateRoot();
     }
   };
