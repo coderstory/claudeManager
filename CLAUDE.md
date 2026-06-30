@@ -555,139 +555,64 @@ cd src-tauri && cargo build --release --features tauri/custom-protocol
 
 ---
 
-## 20. Bug Fix Methodology Hard Rules (2026-06-30 写入 — 用户强约束)
+## 20. Bug Fix Methodology Hard Rules (2026-06-30 — 用户强约束)
 
-> **触发**: 2026-06-29-30 一夜, 主 session + 4 subagent 把 21 个 bug 重 verify 跑成 **9.9/10 user-visible broken**。
-> 根因:mock IPC 测试假绿 + subagent self-report bias + cargo 并发 race + macOS file-replace 不更新 in-memory + commit msg ≠ diff reality + 反复依赖 user 手动确认。
-> 用户原话: "流程必须严格", "问题太大严重影响开发进度", "子任务也必须遵守", "不要一直让 user 手工确认"。
->
-> **配套详细 methodology**: `BUG-FIX-PROCESS.md`(项目根)— 9 节,本节是必读摘要 + 必执行 hard rules。
+> **触发**: 2026-06-29-30 一夜 9.9/10 user-visible broken。根因:mock-test 假绿 + subagent self-report bias + cargo 并发 race + macOS file-replace + commit msg ≠ diff。
+> 详细 methodology + 反事故案例 + 9 节实践指引 全部在 **`BUG-FIX-PROCESS.md`**(项目根,250+ 行,9 节)。**本节是 CLAUDE.md 内 必读摘要 + 必执行 hard rules**。
 
-### 20.1 必读(memory + 配套 doc + 主 session CLAUDE.md)
+### 20.1 5 条 Hard NO(违反任一 = 流程失败)
 
-任何 session(主 session + subagent)启动后第一件事:
-1. 读 CLAUDE.md §16 (Bug Fix Protocol)
-2. 读 CLAUDE.md §17 (Concurrent Subagent Compounding Failure Prevention)
-3. 读 CLAUDE.md §19 (Bug Verify Strict Process — 三条 hard NO)
-4. 读 CLAUDE.md §20 (本节)
-5. 读 `BUG-FIX-PROCESS.md` §1-§5(整体 methodology,本节是摘要)
-6. 读 `memory/feedback-fix-success-rate.md`(具体反事故 checklist)
+1. ❌ **Mock IPC vitest 不能算 UI bug verify** — `vi.mocked(tauri.invoke).mockResolvedValue(...)` 屏蔽 native dialog / Rust handler / OS file picker / IPC marshal / React reconciler;**真启 binary 验证是唯一合法 UI verify**
+2. ❌ **Subagent self-report 不能算 "fix 完成"** — subagent 是利益相关方,bias 倾向"完成";**真因已知 fix 路径 = 改源码 → build → 真启 → screencap + sample <pid> → 主 session 信任 screencap 才 commit**(不走 user OK 链路)
+3. ❌ **Cargo / rustc / sccache 并发跑**(必须串行) — 派 subagent 时 prompt header **必含** "编译走 `scripts/build-locked.sh`(内部 `flock /tmp/cargo-build.lock`),禁止直接 `cargo build`"
+4. ❌ **Commit message claim 不等于 evidence** — db74286 写"集成 A7 auto-fill"但 diff 删 setNewName。**主 session 收到 subagent "fix" claim 后必须 `git show <sha> -- <file>` diff 自查**
+5. ❌ **macOS file-replace 不刷新运行中进程** — 任何 build 完**先 `pkill -9 -f claude-config-manager` 再 build/launch**;用户测试前必须先退 app 重开
 
-### 20.2 5 条 Hard NO(违反任何一条 = 流程失败)
-
-1. ❌ **Mock IPC 的 vitest 不能算 UI bug verify**
-   - `vi.mocked(tauri.invoke).mockResolvedValue(...)` 完全屏蔽 native dialog / Rust handler / OS file picker / IPC marshal / React reconciler
-   - A7 Round 3 8/8 PASS 但用户实际操作 broken = 假绿典型案例
-   - 真启 binary 验证是**唯一合法 UI verify**
-
-2. ❌ **Subagent self-report 不能算 "fix 完成"**
-   - subagent 自身 bias 倾向 "完成" 报告;是利益相关方
-   - "subagent 报告 PASS + 时间紧 = 直接 commit" 是本 session 17 次犯同样错的根因
-   - 真因已知 fix 路径:**改源码 → build → 真启 → screencapture + sample <pid> → 主 session 信任 screencap 才 commit**(§20.3 七步)
-
-3. ❌ **Cargo / rustc / sccache 并发跑**(必须串行)
-   - 4 subagent + 主 session + 之前 session 残留 = 5 个 cargo build 同时改 `target/release/<binary>` = race
-   - 锁:**所有 build 走 `./scripts/build-locked.sh`**(内部用 `flock /tmp/cargo-build.lock`)
-   - 派 subagent 时 prompt header 必含: "编译走 scripts/build-locked.sh,禁止直接 cargo build"
-   - 主 session build 也走同一个 wrapper
-
-4. ❌ **Commit message claim 不等于 evidence**(必须 diff 自查)
-   - db74286 commit msg 写 "集成 A7 auto-fill" 但 diff 删了 setNewName = claim 与 diff 不符
-   - 任何 "fix X" / "集成 X" / "verifies Y" claim,**主 session 收到后必须** `git show <sha> -- <file>` 看 diff
-   - diff 与 claim 不一致 → 标 FAKE_FIX,真重 fix
-
-5. ❌ **macOS file-replace 不刷新运行中进程**
-   - `cargo build` 重写 `target/release/<binary>`,但 macOS 上运行中 PID 的 in-memory 代码不变(旧 inode 保留)
-   - 任何 build 完**先 `pkill -9 -f claude-config-manager` 再 build 或再 launch**
-   - 用户测试前必须先退 app 重开
-
-### 20.3 真启 Binary Verify 七步 Pipeline(任何 UI bug fix 必走)
+### 20.2 真启 Binary Verify 七步 Pipeline
 
 ```
 Step 1: cargo check (~2s)
-Step 2: vitest run --reporter=dot (~5s,unit/integration)
-Step 3: npm run build (~5s,tsc + vite)
-Step 4: scripts/build-locked.sh (~30-90s,带 flock 串行)
-Step 5: bundle 一致性检查
-        BUNDLE=$(strings ...ClaudeManager.app/Contents/MacOS/claude-config-manager | grep ccm-build-mtime)
-        BIN=$(strings target/release/claude-config-manager | grep ccm-build-mtime)
-        [ "$BUNDLE" = "$BIN" ] || 重新 tauri build --no-bundle
-Step 6: 真启 + screencapture
-        pkill -9 -f claude-config-manager
-        sleep 1
-        nohup target/release/claude-config-manager &  # 或 open .app
-        sleep 4
-        screencapture -x /tmp/X.png
-Step 7: 视 bug 类型验证
-        loop → sample <pid> 1 (CPU 应 0.0%)
-        UI 错位 → screencapture 关键按钮 hover/click 前后对比
-        console error → tail -50 /tmp/app.log
-        NSOpenPanel 等无法 driver → 用户手动试一次
+Step 2: vitest run (~5s)
+Step 3: npm run build (~5s)
+Step 4: scripts/build-locked.sh (~30-90s,flock 串行)
+Step 5: bundle 一致性 — BUNDLE=$(strings target/release/bundle/macos/ClaudeManager.app/Contents/MacOS/claude-config-manager | grep ccm-build-mtime) ; BIN=$(strings target/release/claude-config-manager | grep ccm-build-mtime) ; [ "$BUNDLE" = "$BIN" ]
+Step 6: 真启 + screencapture (pkill → open / cargo binary 直接 launch → screencapture)
+Step 7: 视 bug 类型验证 (loop → sample <pid> 1 / UI → screencap 对比 / modal → 用户手动试一次)
 ```
 
-**只有 7 步全过** → 才 cherry-pick + commit + claim "fix 完成"。
+**七步全过 → cherry-pick + commit + claim "fix 完成"**。
 
-### 20.4 派 Subagent 上限
+### 20.3 Subagent Fan-out 上限
 
-- 同模块 / 同文件 / 有 blast radius 重叠 → **严格串行**,即使 worktree 隔离(merge 成本高)
+- 同模块 / 同文件 / blast radius 重叠 → **严格串行**(即使 worktree 隔离,merge 成本高)
 - 跨模块 / 0 文件级冲突 → 可并行,**最多 2 个同时**(CLAUDE.md §11 D11 4 是上限,实战 2 是 sweet spot)
-- 大 fan-out (4+ subagent) → **禁止**(本 session 17 verify commits = 9.9 broken 的根因)
-- 任何 subagent 退出前:`git worktree remove --force <path>`(不遗留 worktree)
+- 大 fan-out (4+ subagent) → **禁止**(本 session 17 verify = 9.9 broken 根因)
+- 任何 subagent 退出前:`git worktree remove --force <path>`
 
-### 20.5 User 确认频率(自动化目标)
+### 20.4 User 确认频率目标(自动化 ≠ 反复问)
 
-**目标**:user OK 不是 "fix 完成" 的判定,**七步全过 + screencap 证据 即是判定**。
+**目标**: user OK 不是"fix 完成"判定,**七步全过 + screencap 证据 即是判定**。
+- 子任务自动 verify(七步 + screencap) → **用户不需要 OK**,自动 commit
+- User 只在两种情况被 ping:
+  1. 七步里有步骤失败(主 session 报错 + 用户看 screencap)
+  2. NSOpenPanel 类无法 driver 的 modal 子任务(必须用户手动点)
 
-- 子任务自动 verify (七步 + screencap) → 用户**不需要 OK**,可自动 commit
-- 用户只在两种情况被 ping:
-  - 七步里有步骤失败(主 session 报错 + 用户看 screencap)
-  - NSOpenPanel 类无法 driver 的 modal 子任务(必须用户手动点)
+**反模式**(本 session 犯):"subagent PASS → 主 session 报 fix → user 试 → user 报 broken → 再 subagent → 30-60 min/cycle 循环 17 次"。
 
-**反模式**(本 session 犯的):"subagent PASS → 主 session 报 fix → user 试 → user 报 broken → 再 subagent → 30-60 min/cycle,循环 17 次"。
+### 20.5 必读配套
 
-### 20.6 协调机制(详细见 BUG-FIX-PROCESS.md §6)
+| 文档 | 位置 | 内容 |
+|---|---|---|
+| `BUG-FIX-PROCESS.md` | 项目根 | 9 节完整 methodology(问题 / 规避 / Pipeline / 协调 / 反事故案例 / 改进目标) |
+| CLAUDE.md §16 | 本文件 | Bug Fix Protocol 5-step 流程(了解 / 真因 / 边界 / 方案 / 验证) |
+| CLAUDE.md §17 | 本文件 | Concurrent Subagent Compounding Failure Prevention(4 规则) |
+| `memory/feedback-fix-success-rate.md` | memory | 6 件必做 checklist |
 
-- **编译锁**: `scripts/build-locked.sh`(已建) → `flock /tmp/cargo-build.lock`
-- **Subagent fan-out**: max 2 并行,blast radius 检查用 `grep -rn <pattern> src/`
-- **Build artifact 一致**: `.app bundle` 和 `cargo binary` BUILD_HASH 必须相等(§20.3 step 5)
-- **macOS / Tauri-specific**: `pgrep -f claude-config-manager` 而不是 `osascript process "ClaudeManager"`(binary 名 ≠ bundle 名)
+### 20.6 删除 trigger(此节何时移除)
 
-### 20.7 反事故案例索引(必读)
+**删除 trigger**: `Never (invariant)` — 用户强约束写入。
 
-| # | Bug | Subagent 报告 | 用户实际 | 错在哪 |
-|---|---|---|---|---|
-| A7 | 选目录 auto-fill | 8/8 vitest PASS | 仍 broken | mock IPC 屏蔽 native dialog |
-| B8 | MCP 死循环 | "fix sync 几次" | 真 app 100% CPU | 测函数调用 ≠ IPC 计数 ≠ CPU |
-| A8 / B1 / B2 / B4 | (similar) | 8/8 PASS | 9.9/10 broken | 全程 jsdom 假绿 |
-| 21-bug 总 | 17 verify commits | "全完成" | 9.9/10 user-visible broken | mock-test 假绿 + cargo race + subagent self-report |
-
-### 20.8 反 prompt(任何 subagent 必含)
-
-```
-## 必读
-- CLAUDE.md §17 §19 §20
-- BUG-FIX-PROCESS.md §1-§5
-
-## 编译
-走 ./scripts/build-locked.sh(flock 串行)
-禁止直接 cargo build
-
-## Verify 七步
-cargo check → vitest → npm build → build-locked → bundle 检查 → screencapture → 验证具体 UI
-
-## 报告五要素
-1. 真因 file:line (≥2 候选,排除法)
-2. 修改 src diff
-3. BUILD_HASH + screenshot path
-4. Branch + commit SHA list
-5. 七步结果
-```
-
-### 20.9 删除 trigger(此节何时从 CLAUDE.md 移除)
-
-**删除 trigger**: `Never (invariant)` — 本节是 2026-06-30 用户强约束写入,除非用户显式撤销。
-
-如要临时绕过某条 hard NO,主 session 必须在 commit message / SESSION-SUMMARY 内显式说明 why,然后 user 单独 OK。**禁止** subagent 自行绕过。
+如要临时绕过某条 hard NO,主 session **必须**在 commit message / SESSION-SUMMARY 显式说明 why,user 单独 OK。**禁止** subagent 自行绕过。
 
 ---
 
