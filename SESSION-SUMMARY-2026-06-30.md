@@ -2,6 +2,8 @@
 
 > **会话背景**: 用户早上下令按 `.planning/milestones/v3.4-phases/reverify-bugs-2026-06-29.md` 走,21 个 bug 重验证。明确授权"跳过阻塞性,修复全部问题,user 将不在线" → 全程 autonomous mode。
 >
+> **夜间 user-triggered 真因 fix (eod)**: 用户实际回到 session,报"资源管理-mcp 依旧在加载中死循环"。Subagent 真启 app 复现 + 找真因 → 修了 2 个 latent bugs(resource-browser + json-editor),同 B8 `[currentProject]` raw ref 模式。详见 §8。
+>
 > **Scope**: Round 0 (X1+B6) + Round 1 (A1+A3+A4+B7) + Round 2 (B8+A5) + Round 3 (A7+A8+B1+B2+B4) + Round 5 (A9+A10+A2+AppHeader visual)。**Round 4 跳过** (A6/B3 plugin install 路径 / A11 backup 备注 / A12 settings.json 移动 / B5 macOS dock reopen,均阻塞澄清)。
 
 ---
@@ -10,7 +12,45 @@
 
 | 项 | 数 | 备注 |
 |---|---|---|
-| **Bugs 已 verify (合并到 master)** | **17** | Round 0+1+2+3+5 全部 Round 4 跳过 |
+| Bugs verified or 真因修 across session | 19 (17 round + 2 user-triggered) |
+
+---
+
+## §8 用户-triggered 真因 fix (eod — user 回 session 后)
+
+用户实际回到 session 报 "资源管理-mcp 加载中死循环"。
+
+### 调查
+- subagent aed6148f40d2d344b 在 jsdom 复现不出 loop(Tauri webview IPC round-trip 时序 jsdom 模拟不了)
+- subagent a8d9eb08f2b4dfb05 **真启 tauri app** 复现成功 — CPU 100% 渲染 `资源浏览 → mcp tab`
+
+### 真因 (file:line)
+3 个 production 页都有 `useEffect(..., [currentProject])` 用 raw unstable ref 模式(`projects.find(...) ?? null` 每次 render 返回新对象)。
+- mcp-management ✅ B8 (commit 7cee365, `[currentProject?.id]`)
+- **resource-browser ❌ Phase 46 D-44-A 迁移漏套同 fix** ← user 见到的真因
+- **json-editor ❌ 同 latent bug,本次一并修**
+
+### Fix
+- `4d8dd87 fix(rb-mcp-loop): use [currentProject?.id] in resource-browser scope sync effect`
+- `d41f124 verify(rb-mcp-loop): regression test + real-app screenshot` (12 张 PNG + launch.log,CPU 0.0%,5 MCP servers 1-2s 渲染完)
+- `3983410 fix(json-editor): use [currentProject?.id]` (同 latent bug)
+- `dc55b9b verify(json-editor-loop): regression + real-app screenshot` (9 张 PNG + launch-sample.txt,5×1s CPU 采样 0.0%)
+- `27f7ce2 docs(verification): VERIFICATION-JSON-EDITOR-LOOP.md`
+- `d171a50 fix(tests): TS errors in resource-browser-mcp-loop.test.tsx` (subagent aed6148 引入 `waitFor` unused + arrow-fn `arguments` undefined)
+- `cc4dd0b fix(tests): TS6133 'React' unused import in json-editor-loading-loop.spec.tsx`
+
+### 教训 (CLAUDE.md §16.3 反事故 X1 commit b16b979 + B8 subagent 反测)
+1. **B8 subagent 测得太浅**:用 mock useScope 后断言 syncScopeFromProject 调用次数 — syncScopeFromProject 短路了,**测的是函数调用计数 ≠ IPC 计数 ≠ CPU 状态**
+2. **jsdom 跑不出真 loop**:Tauri WebView2 / WKWebView 的 IPC round-trip + React useSyncExternalStore 真时序,jsdom 不模拟
+3. **真因 fix 必须真启 app 验证**:盘 22.10 §17.4 是主 session exclusive 范畴,subagent 也能做(在 worktree 真启 app PID + screenshot + console log + `sample <PID> 2` 看 main thread 是否 idle)
+4. **Phase 46 迁移漏套 fix 是同类风险**:任何 architecture-level 迁移都要 grep 同一模式的所有页
+
+### Future governance (deferred)
+- 抽 `useScopeSyncFromProject()` utility hook,所有 page 统一调用,从 hook 层杜绝重复犯
+- 或 `useProjects` 内部 `useMemo` 稳定 `currentProject` ref
+- `grep "useEffect.*currentProject.*\]" src/` 枚举任何剩余 candidates
+
+
 | **Bug 真因修 commits** | 2 | X1 (`e3f2396` `fix(x1)`) + AppHeader visual (`0205011` `fix(b6-p2)`) |
 | **Verified via regression tests added** | 14 | 仅加测试 (commit `verify(...)`),不动 src |
 | **New tests added (vitest + Rust)** | 14 spec files | 全 PASS (除 2 pre-existing stale testid) |
