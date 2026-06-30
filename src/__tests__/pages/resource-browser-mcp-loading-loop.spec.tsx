@@ -145,7 +145,13 @@ describe('ResourceBrowser (mcp tab) — currentProject ref loop regression', () 
     // → 死循环。
     //
     // 真因 fix 后 ([currentProject?.id] / 不可变值),ref 变化不会
-    // 触发 effect,IPC 只调一次。
+    // 触发 effect,IPC count 稳定。
+    //
+    // 注:mount 时可能有 1-2 次合法 IPC — 1 次来自 McpManagementPage mount,
+    // 如果初始 scope 与 project 状态不匹配(典型: scope singleton
+    // 起始 'user', useProjects 异步加载后变为 'project'),key 变 → 1 次
+    // remount → 第 2 次 IPC。这是 Phase 27 Fix 4 key-driven remount 的设计,
+    // 不是 bug。
     mockInvoke.mockImplementation(async (cmd: string) => {
       if (cmd === 'list_mcp_servers') return [];
       if (cmd === 'list_resources') return [];
@@ -178,9 +184,12 @@ describe('ResourceBrowser (mcp tab) — currentProject ref loop regression', () 
       await new Promise((res) => setTimeout(res, 50));
     });
 
-    expect(
-      mockInvoke.mock.calls.filter((c) => c[0] === 'list_mcp_servers').length,
-    ).toBe(1);
+    const initialCount = mockInvoke.mock.calls.filter(
+      (c) => c[0] === 'list_mcp_servers',
+    ).length;
+    // 允许 1-2 次(初始 mount + scope-driven remount);不允许 >2 (那是 loop)
+    expect(initialCount).toBeLessThanOrEqual(2);
+    expect(initialCount).toBeGreaterThanOrEqual(1);
 
     // 模拟 useProjects re-render 多次:currentProject ref 变,但值不变。
     for (let i = 0; i < 5; i++) {
@@ -201,11 +210,17 @@ describe('ResourceBrowser (mcp tab) — currentProject ref loop regression', () 
     }
 
     // 不应有 IPC loop: ref 变化不应触发额外 mount effect 或 IPC。
+    // count 必须与初始 mount 后相同(无增长)。
     const finalCount = mockInvoke.mock.calls.filter(
       (c) => c[0] === 'list_mcp_servers',
     ).length;
-    console.log('list_mcp_servers after 5 rerenders:', finalCount);
-    expect(finalCount).toBe(1);
+    console.log(
+      'list_mcp_servers initial:',
+      initialCount,
+      'final:',
+      finalCount,
+    );
+    expect(finalCount).toBe(initialCount);
   });
 
   it('does NOT loop when scope value stays the same across project ref changes', async () => {

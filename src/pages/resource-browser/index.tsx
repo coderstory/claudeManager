@@ -267,9 +267,23 @@ export default function ResourceBrowserPage(): ReactElement {
   const [scope, , projectRoot] = useScope();
 
   // Sync scope from currentProject after render.
+  //
+  // D-44-A followup fix: depend on the stable project id, not the
+  // `currentProject` object. `currentProject` is derived via
+  // `projects.find(...)` so its reference can change across renders.
+  // Depending on the object would re-fire this effect on every render,
+  // which calls `syncScopeFromProject` → mutates the scope store →
+  // `useScope` notifies → component re-renders → loop (CPU 100%,
+  // "加载中" never resolves on the mcp tab). The id is the only
+  // stable signal for "which project is active".
+  //
+  // Mirror of B8 fix on src/pages/mcp-management/index.tsx:120-123
+  // (commit cb3ea09). Phase 46 D-44-A moved MCP into resource-browser
+  // mcp tab but missed applying the same fix here.
   useEffect(() => {
     syncScopeFromProject(currentProject);
-  }, [currentProject]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id]);
 
   const runList = useCallback(async (kind: ResourceKind) => {
     // F21 — reset the query whenever we re-scan / switch kind, so
