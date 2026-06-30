@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import type { McpServer, McpTransport } from '../../types/mcp';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 import { useProjects } from '../../hooks/useProjects';
 import { useScope, syncScopeFromProject } from '../../hooks/useScope';
 import {
@@ -99,6 +100,9 @@ const INITIAL_STATE: PageState = {
 
 export default function McpManagementPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M5 #31 — pagination state for the rendered slice. Reset to 0
+  // when the row set changes (filter applied / new fetch).
+  const [page, setPage] = useState(0);
 
   // Phase 27 Fix 4 (BUG-CR-04): scope state via useScope singleton.
   // Read currentProject from useProjects and sync to the scope store,
@@ -372,6 +376,11 @@ export default function McpManagementPage(): ReactElement {
   // ---- render ----
 
   const isEmpty = !state.loading && state.servers.length === 0;
+
+  // M5 #31 — slice the sorted list to the current page.
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageServers = state.servers.slice(pageStart, pageStart + PAGE_SIZE);
   // M5 bug #11 — 当用户切换到项目级时,文案必须显示对应的路径
   // (项目级: `<root>/.claude/mcp.json`;用户级: `~/.claude/mcp.json`),
   // 不能两个状态都用同一个 `~/.claude/mcp.json`,否则用户切了项目
@@ -533,7 +542,7 @@ export default function McpManagementPage(): ReactElement {
               </tr>
             </thead>
             <tbody>
-              {state.servers.map((s) => (
+              {pageServers.map((s) => (
                 <tr
                   key={s.id}
                   data-testid="mcp-row"
@@ -619,6 +628,13 @@ export default function McpManagementPage(): ReactElement {
               ))}
             </tbody>
           </table>
+          <Pagination
+            total={state.servers.length}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+            testIdPrefix="mcp-management-pagination"
+          />
         </div>
       )}
 

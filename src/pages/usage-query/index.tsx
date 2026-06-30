@@ -49,6 +49,7 @@ import type {
 import { WINDOW_LABELS } from '../../types/usage';
 import { useViewState } from '../../hooks/useViewState';
 import { formatChineseTokenCount } from '../../lib/format';
+import { Pagination } from '../../components/Pagination';
 import { formatTimeFromDate } from '../../lib/formatTime';
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,12 @@ export default function UsageQueryPage(): ReactElement {
   }, [state.snapshot]);
 
   const breakdown: UsageBreakdownEntry[] = state.snapshot?.breakdown ?? [];
+  // Pagination state for breakdown rows — resets to 0 on remount via
+  // useState's default. Mirrors M5 #31 / UsageHistoryTable pattern.
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageBreakdown = breakdown.slice(pageStart, pageStart + PAGE_SIZE);
   const isEmpty =
     !!state.snapshot && state.snapshot.tokens_used === 0 && !state.error;
 
@@ -437,48 +444,57 @@ export default function UsageQueryPage(): ReactElement {
             暂无数据
           </p>
         ) : (
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: 13,
-              fontFamily: 'var(--font-mono)',
-            }}
-            data-testid="usage-breakdown-table"
-          >
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <Th>Model</Th>
-                <Th align="right">Input</Th>
-                <Th align="right">Output</Th>
-                <Th align="right">Cache Read</Th>
-                <Th align="right">Total</Th>
-                <Th align="right"># Msgs</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {breakdown.map((row) => (
-                <tr
-                  key={row.model}
-                  style={{ borderBottom: '1px solid var(--border)' }}
-                  data-testid={`usage-breakdown-row-${row.model}`}
-                >
-                  <Td>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>
-                      {row.model}
-                    </span>
-                  </Td>
-                  <Td align="right">{row.input_tokens.toLocaleString()}</Td>
-                  <Td align="right">{row.output_tokens.toLocaleString()}</Td>
-                  <Td align="right">{row.cache_read_tokens.toLocaleString()}</Td>
-                  <Td align="right">
-                    <strong>{row.total_tokens.toLocaleString()}</strong>
-                  </Td>
-                  <Td align="right">{row.message_count}</Td>
+          <>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: 13,
+                fontFamily: 'var(--font-mono)',
+              }}
+              data-testid="usage-breakdown-table"
+            >
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <Th>Model</Th>
+                  <Th align="right">Input</Th>
+                  <Th align="right">Output</Th>
+                  <Th align="right">Cache Read</Th>
+                  <Th align="right">Total</Th>
+                  <Th align="right"># Msgs</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageBreakdown.map((row) => (
+                  <tr
+                    key={row.model}
+                    style={{ borderBottom: '1px solid var(--border)' }}
+                    data-testid={`usage-breakdown-row-${row.model}`}
+                  >
+                    <Td>
+                      <span style={{ fontFamily: 'var(--font-mono)' }}>
+                        {row.model}
+                      </span>
+                    </Td>
+                    <Td align="right">{row.input_tokens.toLocaleString()}</Td>
+                    <Td align="right">{row.output_tokens.toLocaleString()}</Td>
+                    <Td align="right">{row.cache_read_tokens.toLocaleString()}</Td>
+                    <Td align="right">
+                      <strong>{row.total_tokens.toLocaleString()}</strong>
+                    </Td>
+                    <Td align="right">{row.message_count}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              total={breakdown.length}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              testIdPrefix="usage-query-pagination"
+            />
+          </>
         )}
       </section>
 

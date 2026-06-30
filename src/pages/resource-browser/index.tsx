@@ -69,6 +69,7 @@ import {
 } from '../../types/resource';
 import { ErrorBanner, formatRevealError } from '../../components/ErrorBanner';
 import type { RevealFailure } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 import { useScope, syncScopeFromProject } from '../../hooks/useScope';
 import { useProjects } from '../../hooks/useProjects';
 import { useViewState } from '../../hooks/useViewState';
@@ -260,6 +261,10 @@ export default function ResourceBrowserPage(): ReactElement {
   // 残留展开态。
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // M5 #31 — paginate the filtered items list. Reset to 0 when the
+  // filtered set changes (filter applied / new fetch / tab switch).
+  const [page, setPage] = useState(0);
+
   // Phase 27 Fix 4 (BUG-CR-04): scope state via useScope singleton.
   // Read currentProject from useProjects and sync to the scope store,
   // then subscribe to scope changes for key-driven remount.
@@ -412,6 +417,20 @@ export default function ResourceBrowserPage(): ReactElement {
         : i.source_repo === sourceFilter,
     );
   }, [state.items, searchQuery, sourceFilter]);
+
+  // M5 #31 — pagination. Reset to 0 whenever the filtered set changes
+  // (new tab / search / source filter applied). Without this, the user
+  // could be sitting on page 3 of an old filter and see an empty list
+  // after a re-filter.
+  useEffect(() => {
+    setPage(0);
+  }, [filteredItems]);
+
+  // M5 #31 — slice filteredItems to the current page. PAGE_SIZE matches
+  // the history tables + backup-restore so the UX is consistent.
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageItems = filteredItems.slice(pageStart, pageStart + PAGE_SIZE);
 
   // F21 (M2.16) — 来源下拉的选项列表。
   //
@@ -956,7 +975,7 @@ export default function ResourceBrowserPage(): ReactElement {
             <div style={{ textAlign: 'center' }}>状态</div>
             <div style={{ textAlign: 'right' }}>操作</div>
           </div>
-          {filteredItems.map((item) => (
+          {pageItems.map((item) => (
             <ResourceRow
               key={item.id}
               item={item}
@@ -965,6 +984,14 @@ export default function ResourceBrowserPage(): ReactElement {
               onToggleExpand={handleToggleExpand}
             />
           ))}
+          {/* M5 #31 — pagination control for the items list. */}
+          <Pagination
+            total={filteredItems.length}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+            testIdPrefix="resource-browser-pagination"
+          />
         </div>
       )}
     </div>

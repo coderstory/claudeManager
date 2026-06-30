@@ -964,3 +964,58 @@ describe('ProviderListPage — M3.0.4 defensive handling of missing models.by_ti
     expect(defaultModelInput.placeholder).toBe('claude-sonnet-4-6');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M5 #31 — pagination correctness on a 100-item fixture.
+// ---------------------------------------------------------------------------
+
+describe('ProviderListPage — pagination (M5 #31)', () => {
+  it('100 providers: page 1 shows rows 1-20; next; page 2 shows 21-40', async () => {
+    const items = Array.from({ length: 100 }, (_, i) =>
+      p(`p${String(i).padStart(3, '0')}`, `Provider ${i}`),
+    );
+    mockInvoke.mockResolvedValueOnce(items);
+
+    render(<ProviderListPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    // 100 items / page size 20 = 5 pages. Pagination chrome must show.
+    expect(screen.getByTestId('provider-list-pagination')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('provider-list-pagination-indicator').textContent,
+    ).toContain('第 1 / 5 页');
+
+    // Page 1: first 20 rows visible, row 21+ not yet.
+    expect(screen.getByTestId('provider-row-p000')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-row-p019')).toBeInTheDocument();
+    expect(screen.queryByTestId('provider-row-p020')).toBeNull();
+
+    // Click next → page 2 shows rows 21-40.
+    fireEvent.click(screen.getByTestId('provider-list-pagination-next'));
+    expect(
+      screen.getByTestId('provider-list-pagination-indicator').textContent,
+    ).toContain('第 2 / 5 页');
+    expect(screen.queryByTestId('provider-row-p000')).toBeNull();
+    expect(screen.getByTestId('provider-row-p020')).toBeInTheDocument();
+    expect(screen.getByTestId('provider-row-p039')).toBeInTheDocument();
+    expect(screen.queryByTestId('provider-row-p040')).toBeNull();
+  });
+
+  it('hides pagination when total is below page size', async () => {
+    mockInvoke.mockResolvedValueOnce([p('a', 'A'), p('b', 'B'), p('c', 'C')]);
+
+    render(<ProviderListPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+
+    // Pagination self-hides on single-page lists.
+    expect(
+      screen.queryByTestId('provider-list-pagination'),
+    ).not.toBeInTheDocument();
+  });
+});

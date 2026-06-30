@@ -28,6 +28,7 @@ import { getAppMetadata } from '../../lib/api/app';
 import type { AppMetadata } from '../../types/app';
 import { AboutCard } from '../../components/AboutCard';
 import { InfoSection, type InfoItem } from '../../components/InfoSection';
+import { Pagination } from '../../components/Pagination';
 import { formatDateTime } from '../../lib/formatTime';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,9 @@ const STACK: ReadonlyArray<{ label: string; value: string }> = [
   },
 ];
 
+// 致谢列表分页大小 — 沿用 history 表 (#31) 的 20 条 / 页, UX 一致。
+const CREDITS_PAGE_SIZE = 20;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -110,6 +114,8 @@ export default function AboutPage(): ReactElement {
     throw new Error("AboutPage synthetic error: this is a test exception for the ErrorBoundary toast (v3.4.1)");
   }
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // 致谢列表分页状态 (0-indexed), 默认第 1 页。
+  const [creditsPage, setCreditsPage] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +135,13 @@ export default function AboutPage(): ReactElement {
   }, []);
 
   const m = state.metadata;
+
+  // 致谢列表当前页切片。Pattern 与 UsageHistoryTable (#31) 一致。
+  const creditsPageStart = creditsPage * CREDITS_PAGE_SIZE;
+  const pageCredits = CREDITS.slice(
+    creditsPageStart,
+    creditsPageStart + CREDITS_PAGE_SIZE,
+  );
 
   // 版本信息 key-value 列表(IPC 失败时仍渲染,值降级为"加载中..."/"未知")
   const versionItems: ReadonlyArray<InfoItem> = useMemo(
@@ -322,7 +335,7 @@ export default function AboutPage(): ReactElement {
             margin: 0,
           }}
         >
-          {CREDITS.map((c) => (
+          {pageCredits.map((c) => (
             <li
               key={c.label}
               style={{ marginBottom: 8, fontSize: 14, color: 'var(--text-primary)' }}
@@ -332,6 +345,13 @@ export default function AboutPage(): ReactElement {
             </li>
           ))}
         </ul>
+        <Pagination
+          total={CREDITS.length}
+          page={creditsPage}
+          pageSize={CREDITS_PAGE_SIZE}
+          onPageChange={setCreditsPage}
+          testIdPrefix="about-credits-pagination"
+        />
       </AboutCard>
 
       {/* 【4】技术栈 */}

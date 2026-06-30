@@ -43,6 +43,7 @@ import {
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 import {
   cloneAndScan,
   installBuiltinPlugin,
@@ -144,6 +145,13 @@ export default function MarketplacePage(): ReactElement {
   const [installStates, setInstallStates] = useState<
     Record<string, RowInstallState>
   >({});
+
+  // M5 #31 — pagination state for the rendered slice. Reset to 0
+  // when the row set changes (filter applied / new fetch).
+  const [repoPage, setRepoPage] = useState(0);
+  const [resourcePage, setResourcePage] = useState(0);
+  const REPO_PAGE_SIZE = 20;
+  const RESOURCE_PAGE_SIZE = 20;
 
   // ---- 推荐列表 mount 拉取 ----
   const loadRepos = useCallback(async () => {
@@ -296,6 +304,12 @@ export default function MarketplacePage(): ReactElement {
     });
   }, []);
 
+  // M5 #31 — slice the repos list to the current page.
+  const pageRepos = repos.slice(
+    repoPage * REPO_PAGE_SIZE,
+    (repoPage + 1) * REPO_PAGE_SIZE,
+  );
+
   // ---- render ----
   return (
     <div
@@ -388,7 +402,7 @@ export default function MarketplacePage(): ReactElement {
           </div>
         )}
 
-        {repos.map((repo) => (
+        {pageRepos.map((repo) => (
           <RepoCard
             key={repo.id}
             repo={repo}
@@ -398,6 +412,13 @@ export default function MarketplacePage(): ReactElement {
             installState={installStates[`builtin:${repo.id}`]}
           />
         ))}
+        <Pagination
+          total={repos.length}
+          page={repoPage}
+          pageSize={REPO_PAGE_SIZE}
+          onPageChange={setRepoPage}
+          testIdPrefix="marketplace-repos-pagination"
+        />
       </section>
 
       {/* 第三方 git URL */}
@@ -667,20 +688,32 @@ export default function MarketplacePage(): ReactElement {
                 <div style={{ textAlign: 'right' }}>大小</div>
                 <div style={{ textAlign: 'right' }}>操作</div>
               </div>
-              {scanResult.resources.map((resource) => {
-                const category = detectCategoryBadge(resource.name);
-                return (
-                  <ResourceInstallRow
-                    key={resource.id}
-                    resource={resource}
-                    state={installStates[resource.id]}
-                    onInstall={handleInstall}
-                    selected={selectedResourceIds.has(resource.id)}
-                    onToggleSelect={toggleResourceSelection}
-                    category={category}
-                  />
-                );
-              })}
+              {scanResult.resources
+                .slice(
+                  resourcePage * RESOURCE_PAGE_SIZE,
+                  (resourcePage + 1) * RESOURCE_PAGE_SIZE,
+                )
+                .map((resource) => {
+                  const category = detectCategoryBadge(resource.name);
+                  return (
+                    <ResourceInstallRow
+                      key={resource.id}
+                      resource={resource}
+                      state={installStates[resource.id]}
+                      onInstall={handleInstall}
+                      selected={selectedResourceIds.has(resource.id)}
+                      onToggleSelect={toggleResourceSelection}
+                      category={category}
+                    />
+                  );
+                })}
+              <Pagination
+                total={scanResult.resources.length}
+                page={resourcePage}
+                pageSize={RESOURCE_PAGE_SIZE}
+                onPageChange={setResourcePage}
+                testIdPrefix="marketplace-resources-pagination"
+              />
               {/* M3.4 — 批量 install 按钮行 */}
               <div
                 style={{

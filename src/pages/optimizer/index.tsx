@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 import {
   applyOptimizations,
   applyRuleFix,
@@ -127,12 +128,19 @@ const SEVERITY_ICONS: Record<Severity, typeof Info> = {
   error: AlertCircle,
 };
 
+const PAGE_SIZE = 20;
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function OptimizerPage(): ReactElement {
   const [state, setState] = useState<PageState>(INITIAL_STATE);
+  // M5 #31 — pagination state for the findings list. Reset to 0
+  // implicitly when a new scan lands (component state is preserved
+  // across re-renders, so the user stays on the same page index
+  // unless they navigate).
+  const [page, setPage] = useState(0);
   // M5 #28 — manual-handling findings navigate to json-editor with
   // the affected file pre-loaded. We pass the path through
   // sessionStorage (key `ccm.openFilePath`) so the editor's loadFileByPath
@@ -334,19 +342,27 @@ export default function OptimizerPage(): ReactElement {
     }
   }, [state.findings, state.applyAllResults]);
 
+  // M5 #31 — slice the current page out of the full findings list,
+  // then group by severity. The grouping logic is unchanged; only the
+  // input set is the visible page (not the entire scan).
+  const pageStart = page * PAGE_SIZE;
+  const pageFindings = state.findings.slice(pageStart, pageStart + PAGE_SIZE);
+
   const grouped = useMemo(() => {
     const m: Record<Severity, OptimizationFinding[]> = {
       error: [],
       warning: [],
       info: [],
     };
-    for (const f of state.findings) {
+    for (const f of pageFindings) {
       m[f.severity].push(f);
     }
     return m;
-  }, [state.findings]);
+  }, [pageFindings]);
 
   // auto-apply finding 数(M3.3 batch 按钮 "Apply All Auto-Fix" 用)
+  // Counts the full findings set, not the page slice — the button
+  // mirrors the underlying total, not what happens to be on screen.
   const autoFixCount = useMemo(
     () => state.findings.filter((f) => f.auto_apply).length,
     [state.findings],
@@ -601,6 +617,17 @@ export default function OptimizerPage(): ReactElement {
               />
             );
           })}
+          {/* M5 #31 — pagination control for the findings list.
+              Slices the entire `state.findings` (not the per-severity
+              grouped subsets), so the user sees a flat sliding window
+              over all findings regardless of severity bucket. */}
+          <Pagination
+            total={totalCount}
+            page={page}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+            testIdPrefix="optimizer-pagination"
+          />
         </div>
       )}
 

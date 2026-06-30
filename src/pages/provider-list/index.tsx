@@ -43,6 +43,7 @@ import type { Provider } from '../../types/provider';
 import type { GenerateFromCurrentConfigResult } from '../../lib/api/providers';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 
 type LoadState =
   | { kind: 'loading' }
@@ -790,6 +791,11 @@ function Body({
   onEdit,
   onDelete,
 }: BodyProps): ReactElement {
+  // M5 #31 — pagination state for the rendered slice. Reset to 0 when
+  // the row set changes (filter / fresh fetch) so we don't end up
+  // showing an empty page after a reload shrinks the list.
+  const [page, setPage] = useState(0);
+
   if (state.kind === 'loading') {
     return (
       <div data-testid="provider-list-loading" style={emptyStateStyle}>
@@ -807,9 +813,14 @@ function Body({
   if (state.providers.length === 0) {
     return <EmptyState />;
   }
+  // M5 #31 — slice the provider list to the current page. The parent
+  // owns the data; we only own the slice index.
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageProviders = state.providers.slice(pageStart, pageStart + PAGE_SIZE);
   return (
     <ul data-testid="provider-list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-      {state.providers.map((p) => (
+      {pageProviders.map((p) => (
         <ProviderRow
           key={p.id}
           provider={p}
@@ -822,6 +833,13 @@ function Body({
           onDelete={onDelete}
         />
       ))}
+      <Pagination
+        total={state.providers.length}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        testIdPrefix="provider-list-pagination"
+      />
     </ul>
   );
 }

@@ -33,6 +33,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactElement } from 'react';
 import { Database, FileWarning, FolderOpen, Upload } from 'lucide-react';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Pagination } from '../../components/Pagination';
 import {
   importProvidersFromSql,
   parseSqlPreview,
@@ -634,6 +635,11 @@ function PreviewList({
   selected: Set<string>;
   onToggle: (id: string) => void;
 }): ReactElement {
+  // M5 #31 — pagination state for the rendered slice.
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const pageStart = page * PAGE_SIZE;
+  const pageProviders = providers.slice(pageStart, pageStart + PAGE_SIZE);
   return (
     <div
       data-testid="import-sql-provider-list"
@@ -658,7 +664,7 @@ function PreviewList({
         待导入 provider 预览（M5 勾选要导入的行）
       </div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {providers.map((p, i) => {
+        {pageProviders.map((p, i) => {
           const v = validated[i];
           const d = dedup[i];
           const reasonParts: string[] = [];
@@ -731,6 +737,13 @@ function PreviewList({
           );
         })}
       </ul>
+      <Pagination
+        total={providers.length}
+        page={page}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+        testIdPrefix="import-sql-pagination"
+      />
     </div>
   );
 }
