@@ -138,7 +138,7 @@ export default function JsonEditorPage(): ReactElement {
   // Sync scope from currentProject after render.
   useEffect(() => {
     syncScopeFromProject(currentProject);
-  }, [currentProject]);
+  }, [currentProject?.id]);
 
   // M3.11 (A4#12) — 页面 mount 时拉一次文件树(后端 list_editable_jsons)。
   // 拉到的 entries 是当前 active project 下的所有可编辑 .json。
