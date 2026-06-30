@@ -185,9 +185,18 @@ pub fn dispatch_current_project(invoke: Invoke<tauri::Wry>) -> bool {
 // ---------------------------------------------------------------------------
 
 /// M3.13.4 — open native folder picker.
+///
+/// 修复日志 (2026-06-30):
+/// - 之前 `Some(p.to_string())` 会把 `FilePath::Url(...)` 渲染成 `file:///...` 字符串,
+///   不是 absolute path;而且 `into_path()` 在 macOS 上对某些 PathBuf 类型可能 panic。
+/// - 用 `into_path()` + `to_string_lossy().into_owned()`,跟 `commands/project.rs::pick_project_root_dir` 对齐。
+/// - `tauri::async_runtime::block_on` 包 `blocking_pick_folder()` 在某些 macOS
+///   Tauri 版本上会 deadlock (async runtime worker 同时被 dialog 阻塞)
+///   → 改用 `tauri::async_runtime::spawn`,让 dialog 在独立任务线程阻塞,
+///   async runtime 主 worker 不被锁。
 pub fn dispatch_pick_project_root_dir(invoke: Invoke<tauri::Wry>) -> bool {
     let app = invoke.message.webview().app_handle().clone();
-    tauri::async_runtime::block_on(async move {
+    tauri::async_runtime::spawn(async move {
         let result: Result<Option<String>, String> = (|| async {
             let picked = app
                 .dialog()
@@ -195,8 +204,11 @@ pub fn dispatch_pick_project_root_dir(invoke: Invoke<tauri::Wry>) -> bool {
                 .set_title("选择项目根目录")
                 .blocking_pick_folder();
             match picked {
-                Some(p) => Ok(Some(p.to_string())),
                 None => Ok(None),
+                Some(fp) => fp
+                    .into_path()
+                    .map(|p| Some(p.to_string_lossy().into_owned()))
+                    .map_err(|e| format!("无法解析选中目录: {e}")),
             }
         })()
         .await;
