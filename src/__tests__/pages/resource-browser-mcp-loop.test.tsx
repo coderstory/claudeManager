@@ -9,7 +9,7 @@
  * 只 spy invoke 看真实调用序列 + 渲染次数。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { ViewStateProvider } from '../../hooks/useViewState';
 
 const mockInvoke = vi.fn();
@@ -81,8 +81,8 @@ describe('ResourceBrowser (mcp tab) — McpManagementPage loading regression', (
       resolveMcp = res;
     });
 
-    mockInvoke.mockImplementation(async (cmd: string) => {
-      console.log('[IPC]', cmd, 'args=', arguments[1]);
+    mockInvoke.mockImplementation(async (cmd: string, ...args: unknown[]) => {
+      console.log('[IPC]', cmd, 'args=', args[1]);
       if (cmd === 'list_resources') return resourcesPromise;
       if (cmd === 'list_mcp_servers') return mcpPromise;
       return [];
