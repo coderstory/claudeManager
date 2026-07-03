@@ -22,7 +22,7 @@ describe('ThemeProvider 切换', () => {
     expect(document.documentElement.dataset.theme).toBe('liquid-glass');
   });
 
-  it('5 主题都能切换', () => {
+  it('3 主题都能切换', () => {
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
     for (const id of Object.values(THEME_IDS)) {
       act(() => result.current.setTheme(id));
@@ -32,8 +32,8 @@ describe('ThemeProvider 切换', () => {
 
   it('localStorage 持久化主题', () => {
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
-    act(() => result.current.setTheme(THEME_IDS.Dark));
-    expect(localStorage.getItem('ccm.theme')).toBe('dark');
+    act(() => result.current.setTheme(THEME_IDS.LiquidGlass));
+    expect(localStorage.getItem('ccm.theme')).toBe('liquid-glass');
   });
 });
 
@@ -62,8 +62,8 @@ describe('ThemeProvider URL ?theme=xxx 优先级', () => {
     window.history.replaceState({}, '', url.toString());
   }
 
-  it('URL ?theme=editorial 覆盖 localStorage dark', () => {
-    localStorage.setItem('ccm.theme', 'dark');
+  it('URL ?theme=editorial 覆盖 localStorage editorial', () => {
+    localStorage.setItem('ccm.theme', 'editorial');
     setSearch('?theme=editorial');
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
     expect(result.current.theme.id).toBe('editorial');
@@ -77,10 +77,10 @@ describe('ThemeProvider URL ?theme=xxx 优先级', () => {
   });
 
   it('URL 非法 id 静默 fallback 到 localStorage', () => {
-    localStorage.setItem('ccm.theme', 'dark');
+    localStorage.setItem('ccm.theme', 'editorial');
     setSearch('?theme=non-existent-theme');
     const { result } = renderHook(() => useTheme(), { wrapper: ThemeProvider });
-    expect(result.current.theme.id).toBe('dark');
+    expect(result.current.theme.id).toBe('editorial');
   });
 
   it('URL 非法 id 且无 localStorage fallback 到默认 light', () => {

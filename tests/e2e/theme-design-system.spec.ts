@@ -1,5 +1,5 @@
 /**
- * Task 10 e2e — 5 主题切换 + macOS 红黄绿圆点按钮 + 字体加载
+ * Task 10 e2e — 3 主题切换 + macOS 红黄绿圆点按钮 + 字体加载
  *
  * 覆盖:
  *   - ThemeProvider URL ?theme=xxx 切换 (Task 6)
@@ -23,7 +23,7 @@
  *   Inter / JetBrains Mono). document.fonts.forEach 会列出所有已被
  *   FontFaceSet 跟踪的字体 (不论是否被元素引用). 这与 dev server 模式下
  *   @import 加载的 CSS 一致 — 字体声明进 FontFaceSet 即可, 不需要等待
- *   `document.fonts.ready`, 因为 5 主题切换主题间都需要这 4 个字体可用.
+ *   `document.fonts.ready`, 因为 3 主题切换主题间都需要这 4 个字体可用.
  *
  * ## 与 fixtures.ts 的关系
  *
@@ -38,8 +38,8 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? 'tauri://localhost';
 
-test.describe('5 主题切换 (URL ?theme=xxx)', () => {
-  for (const theme of ['light', 'liquid-glass', 'dark', 'editorial', 'pixel']) {
+test.describe('3 主题切换 (URL ?theme=xxx)', () => {
+  for (const theme of ['light', 'liquid-glass', 'editorial']) {
     test(`切换到 ${theme} 主题`, async ({ page }) => {
       await page.goto(`${BASE}/?theme=${theme}`);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -64,8 +64,8 @@ test.describe('macOS 红黄绿圆点按钮', () => {
 
 test.describe('主题持久化 (localStorage)', () => {
   test('刷新后主题不丢失', async ({ page }) => {
-    await page.goto(`${BASE}/?theme=dark`);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.goto(`${BASE}/?theme=editorial`);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'editorial');
 
     // ThemeProvider 把 themeId 写入 localStorage key 'ccm.theme'
     // 第二次访问无 ?theme=xxx → 应从 localStorage 读取
@@ -74,7 +74,7 @@ test.describe('主题持久化 (localStorage)', () => {
       window.history.replaceState({}, '', window.location.pathname);
     });
     await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'editorial');
   });
 });
 

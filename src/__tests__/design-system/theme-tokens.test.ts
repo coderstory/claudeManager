@@ -20,8 +20,8 @@ describe('L1 系统基线', () => {
   });
 });
 
-describe('L2 5 主题调色板', () => {
-  const themes = ['light', 'liquid-glass', 'dark', 'editorial', 'pixel'];
+describe('L2 3 主题调色板', () => {
+  const themes = ['light', 'liquid-glass', 'editorial'];
 
   for (const t of themes) {
     it(`${t} 主题块存在`, () => {
@@ -51,10 +51,10 @@ describe('L2 5 主题调色板', () => {
 
   it('禁止 :root, [data-theme] 合并 (light 除外用 :where(:root))', () => {
     // 不允许 :root, [data-theme="liquid-glass"] 这种合并
-    expect(tokensCss).not.toMatch(/:root,\s*\[data-theme="(liquid-glass|dark|editorial|pixel)"\]/);
+    expect(tokensCss).not.toMatch(/:root,\s*\[data-theme="(liquid-glass|editorial)"\]/);
   });
 
-  it('5 主题 accent 至少 3 种不同色', () => {
+  it('3 主题 accent 至少 3 种不同色', () => {
     const accents = new Set<string>();
     for (const t of themes) {
       const re = new RegExp(`\\[data-theme="${t}"\\][\\s\\S]*?--accent:\\s*([^;]+);`);

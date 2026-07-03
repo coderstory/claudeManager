@@ -1,13 +1,11 @@
 /* === Claude 配置管理器 — 设计系统基线 (CLAUDE.md §4) ===
- * 三层架构: L1 系统基线 (:where(:root) 零特异) + L2 主题调色板 (5 主题)
+ * 三层架构: L1 系统基线 (:where(:root) 零特异) + L2 主题调色板 (3 主题)
  * 所有 UI 必须从这里读 token, 禁止硬编码颜色 / 字号 / 间距.
  *
- * 5 主题平级注册, 切换零混搭.
+ * 3 主题平级注册, 切换零混搭.
  * - light          极简卡片 (Linear/Vercel)
  * - liquid-glass   液态玻璃 (Raycast/macOS)
- * - dark           深色高级 (Warp/Helix)
  * - editorial      瑞士网格 (Notion/Bloomberg)
- * - pixel          像素黑白 (Minecraft)
  */
 
 /* === Reset === */
@@ -19,7 +17,7 @@ html, body, #root {
 
 *, *::before, *::after { box-sizing: border-box; }
 
-/* === L1 系统基线 — 5 主题共享, 零特异性 === */
+/* === L1 系统基线 — 3 主题共享, 零特异性 === */
 :where(:root) {
   /* Spacing 4px 网格 */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
@@ -146,27 +144,7 @@ html, body, #root {
   --duration-fast: 180ms; --duration-normal: 280ms; --duration-slow: 420ms;
 }
 
-/* === L2.3 dark 主题 (Warp/Helix 风) === */
-[data-theme="dark"] {
-  --bg-primary: #0A0A0B; --bg-elevated: #18181B;
-  --bg-overlay: rgba(255,255,255,0.04); --bg-sunken: #09090B;
-  --text-primary: #E4E4E7; --text-secondary: #A1A1AA; --text-muted: #71717A;
-  --accent: #06B6D4; --accent-soft: rgba(6,182,212,0.10); --accent-strong: #22D3EE;
-  --accent-fg-on: #0A0A0B;
-  --success: #10B981; --warning: #FBBF24; --danger: #F87171; --info: #3B82F6;
-  --border: rgba(255,255,255,0.08);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
-  --shadow-md: 0 0 12px rgba(6,182,212,0.15), 0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg: 0 0 24px rgba(6,182,212,0.2), 0 8px 32px rgba(0,0,0,0.6);
-  --card-radius: 6px; --button-radius: 4px;
-  --radius-modal: 8px; --radius-badge: 3px;
-  --font-ui: "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, monospace;
-  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
-  --fs-heading: 16px; --fs-body: 13px;
-  --header-height: 48px; --sidebar-width: 220px;
-  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration-fast: 80ms; --duration-normal: 120ms; --duration-slow: 180ms;
-}
+/* === L2.2 dark 主题 (Warp/Helix 风) — 已删除 (v3.4 主题精简) === */
 
 /* === L2.4 editorial 主题 (Notion/Bloomberg 风) === */
 [data-theme="editorial"] {
@@ -190,49 +168,7 @@ html, body, #root {
   --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms;
 }
 
-/* === L2.5 pixel 主题 (Minecraft 风) === */
-[data-theme="pixel"] {
-  --bg-primary: #C6C6C6; --bg-elevated: #FFFFFF;
-  --bg-overlay: #AAAAAA; --bg-sunken: #DDDDDD;
-  --text-primary: #000000; --text-secondary: #222222; --text-muted: #555555;
-  --accent: #555555; --accent-soft: #DDDDDD; --accent-strong: #222222;
-  --accent-fg-on: #FFFFFF;
-  --success: #5BAA3F; --warning: #FFAA00; --danger: #AA0000; --info: #3F76AA;
-  --border: #000000;
-  --shadow-sm: none; --shadow-md: none; --shadow-lg: none;
-  --card-radius: 0px; --button-radius: 0px;
-  --radius-modal: 0px; --radius-badge: 0px;
-  --font-ui: "Press Start 2P", "ZCOOL KuaiLe", "Courier New", monospace;
-  --font-mono: "Press Start 2P", "ZCOOL KuaiLe", "Courier New", monospace;
-  --fs-heading: 16px; --fs-body: 12px;
-  --header-height: 40px; --sidebar-width: 200px;
-  --ease-default: steps(1, end);
-  --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms;
-}
-
-/* === pixel 主题背景贴图 (base64 16x16 PNG, Minecraft 风) === */
-[data-theme="pixel"] .main {
-  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAm0lEQVR4nGMoOeDxv+ZEwH8YTQxG1sOQv8PlPzJO32CDQhPCDD2Xov7jwy2nglBodMxAifNBNENVvM3/ObVB/7vz3f8XhZuA2c3p9v+RxfGxGfApghk0pdQLpxoGUmyDGQRzKYjNQIpt6GyQQTi9gM02rF4gxTZsAcxAim3YAhirF0iJTqK8gC+AGchJPMhexvACqdFJ0AuEAhgA/zBQT1QiM0UAAAAASUVORK5CYII=);
-  background-size: 16px 16px;
-  background-repeat: repeat;
-}
-[data-theme="pixel"] .sidebar {
-  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAI0lEQVR4nGPo7u7+P3v27P/k0gwgghLMMOqCUReMumCQuAAAPjTEH1rQf4oAAAAASUVORK5CYII=);
-  background-size: 16px 16px;
-  background-repeat: repeat;
-  background-color: #8B8B8B;
-}
-[data-theme="pixel"] .topbar {
-  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAANklEQVR4nGPIDzf7v6Ah5D+5NAMlmkE0w8C7oDvfHcwgl2agRDOIHgQuGPhYGHgXDHwsDLgLAOl1Kl9A64P9AAAAAElFTkSuQmCC);
-  background-size: 16px 16px;
-  background-repeat: repeat;
-}
-[data-theme="pixel"] .card {
-  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAPElEQVR4nGO4c2Lif0oww4sbK/5Tghk+PNz5H4RJtRmmjwEmQKrNGF6AmUgsHvXCqBdo4wVyMQOpfkfHAE0/Xq5LW9yLAAAAAElFTkSuQmCC);
-  background-size: 16px 16px;
-  background-repeat: repeat;
-}
-[data-theme="pixel"] body { background: #5BB4E8; }
+/* === L2.5 pixel 主题 (Minecraft 风) — 已删除 (v3.4 主题精简) === */
 
 /* === body 基线 === */
 body {
